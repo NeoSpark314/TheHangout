@@ -56,13 +56,13 @@ export class DebugUIManager {
 
         // Draw text
         this.context.fillStyle = '#00ffff';
-        this.context.font = 'bold 32px monospace';
+        this.context.font = 'bold 24px monospace';
         this.context.textAlign = 'left';
         this.context.textBaseline = 'top';
 
         const lines = text.split('\n');
         lines.forEach((line, i) => {
-            this.context.fillText(line, 20, 20 + i * 40);
+            this.context.fillText(line, 20, 20 + i * 30);
         });
 
         this.texture.needsUpdate = true;

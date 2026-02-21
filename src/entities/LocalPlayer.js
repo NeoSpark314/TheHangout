@@ -42,6 +42,8 @@ export class LocalPlayer extends PlayerEntity {
         this.pitch = 0;
         this.yaw = 0;
 
+        this.wasSnapTurnPressed = false;
+
         this.initAvatar();
         this.initInput();
     }
@@ -63,7 +65,10 @@ export class LocalPlayer extends PlayerEntity {
         canvas.addEventListener('click', () => canvas.requestPointerLock());
 
         document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === canvas) {
+            const { render } = gameState.managers;
+            const isVR = render?.renderer?.xr?.isPresenting;
+
+            if (document.pointerLockElement === canvas && !isVR) {
                 this.yaw -= e.movementX * this.turnSpeed;
                 this.pitch -= e.movementY * this.turnSpeed;
                 this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
@@ -81,81 +86,178 @@ export class LocalPlayer extends PlayerEntity {
         const { render } = gameState.managers;
         if (!render) return;
 
-        // 1. Apply Orientation inputs to our internal hierarchy
-        // The xrOrigin represents the physical floor space rotation
+        const isVR = render.renderer.xr.isPresenting;
+
+        // --- 1. ORIENTATION ---
+        // Apply yaw to our internal transforms
         this.xrOrigin.rotation.y = this.yaw;
-        // The headPose handles looking up/down
-        this.headPose.rotation.x = this.pitch;
 
-        // Ensure world positions are recalculated
-        this.xrOrigin.updateMatrixWorld(true);
-
-        // 2. Handle Locomotion (move the xrOrigin)
-        const direction = new THREE.Vector3(0, 0, 0);
-        if (this.keys.w) direction.z -= 1;
-        if (this.keys.s) direction.z += 1;
-        if (this.keys.a) direction.x -= 1;
-        if (this.keys.d) direction.x += 1;
-
-        if (direction.lengthSq() > 0) {
-            direction.normalize();
-            // Move relative to the origin's current yaw
-            direction.applyEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'));
-            this.xrOrigin.position.addScaledVector(direction, this.speed * delta);
+        if (!isVR) {
+            this.headPose.rotation.x = this.pitch;
+        } else {
+            // In VR, the HMD transform is handled by the headset.
+            // We clear any simulation offsets.
+            this.headPose.position.set(0, 0, 0);
+            this.headPose.quaternion.set(0, 0, 0, 1);
         }
 
-        // 3. Sync Render Scene (Three.js camera structure)
-        // cameraGroup (Dolly) = xrOrigin
+        // --- 2. SYNC RENDERER TRANSFORMS ---
         render.cameraGroup.position.copy(this.xrOrigin.position);
         render.cameraGroup.quaternion.copy(this.xrOrigin.quaternion);
 
-        // camera (HMD) = headPose
-        render.camera.position.copy(this.headPose.position);
-        render.camera.quaternion.copy(this.headPose.quaternion);
+        if (!isVR) {
+            render.camera.position.copy(this.headPose.position);
+            render.camera.quaternion.copy(this.headPose.quaternion);
+        } else {
+            // In VR, DO NOT overwrite render.camera transform. 
+            // Three.js manages it relative to cameraGroup.
+        }
 
-        // 4. Update Visual Avatar
-        // The avatar feet are at the World X/Z of the active camera
+        // Force a world matrix update on the hierarchy so getWorldPose works
+        render.cameraGroup.updateMatrixWorld(true);
+
+        // --- 3. LOCOMOTION ---
+        const moveVector = new THREE.Vector3(0, 0, 0);
+
+        // Desktop keys
+        if (this.keys.w) moveVector.z -= 1;
+        if (this.keys.s) moveVector.z += 1;
+        if (this.keys.a) moveVector.x -= 1;
+        if (this.keys.d) moveVector.x += 1;
+
+        // VR Joysticks
+        this.updateVRLocomotion(moveVector);
+
+        if (moveVector.lengthSq() > 0) {
+            moveVector.normalize();
+
+            // Extract the FINAL world heading from the camera
+            const headWorldQuat = new THREE.Quaternion();
+            render.camera.getWorldQuaternion(headWorldQuat);
+            const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
+
+            // Move relative to the world-space heading of the head
+            moveVector.applyEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
+            this.xrOrigin.position.addScaledVector(moveVector, this.speed * delta);
+
+            // Re-sync position and update world matrices again to ensure next steps are accurate
+            render.cameraGroup.position.copy(this.xrOrigin.position);
+            render.cameraGroup.updateMatrixWorld(true);
+        }
+
+        // --- 4. VISUAL AVATAR ---
         const headWorldPos = new THREE.Vector3();
-        this.headPose.getWorldPosition(headWorldPos);
+        render.camera.getWorldPosition(headWorldPos);
+        const headWorldQuat = new THREE.Quaternion();
+        render.camera.getWorldQuaternion(headWorldQuat);
+        const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
 
-        // Ground the stick figure at y=0, directly under the head
+        // Avatar feet pinned to ground exactly below head
         this.mesh.position.set(headWorldPos.x, 0, headWorldPos.z);
-
-        // Posture tracking (height change if any)
         this.avatar.updatePosture(headWorldPos.y);
 
-        // Body rotation follows the physical heading (yaw)
-        this.mesh.rotation.y = this.yaw;
+        // Body heading follows head world yaw
+        this.mesh.rotation.y = headEuler.y;
 
-        // Neck orientation (pitch)
-        this.avatar.updateHeadOrientation(this.headPose.quaternion);
+        // Neck rotation (absolute head orientation relative to body yaw)
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
+        const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
+        this.avatar.updateHeadOrientation(localHeadQuat);
 
         // Arms (static relative to origin for now)
         this.avatar.updateArms(this.leftHandPose.position, this.rightHandPose.position);
 
-        // 5. Update Debug UI
+        // --- 5. DEBUG UI ---
         if (gameState.managers.debugUI) {
-            const pos = this.xrOrigin.position;
-            const yawDeg = (this.yaw * 180 / Math.PI).toFixed(1);
-            const debugText = `xrOrigin\nPos: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}\nYaw: ${yawDeg}°`;
+            const oPos = this.xrOrigin.position;
+            const oYaw = (this.yaw * 180 / Math.PI).toFixed(1);
+
+            const hPos = headWorldPos;
+            const hYaw = (headEuler.y * 180 / Math.PI).toFixed(1);
+            const hPitch = (headEuler.x * 180 / Math.PI).toFixed(1);
+
+            const debugText = `ORIGIN\nPos: ${oPos.x.toFixed(2)}, ${oPos.y.toFixed(2)}, ${oPos.z.toFixed(2)}\nYaw: ${oYaw}°\n\nHEAD (World)\nPos: ${hPos.x.toFixed(2)}, ${hPos.y.toFixed(2)}, ${hPos.z.toFixed(2)}\nDir: ${hYaw}°, ${hPitch}°`;
             gameState.managers.debugUI.updateDebugText(debugText);
         }
 
-        // 6. Network Emission
-        if (direction.lengthSq() > 0 || Math.abs(this.yaw) > 0.001) {
+        // --- 6. NETWORK ---
+        if (moveVector.lengthSq() > 0 || Math.abs(this.yaw) > 0.001) {
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
         }
     }
 
+    updateVRLocomotion(moveVector) {
+        const { render } = gameState.managers;
+        if (!render || !render.renderer.xr.isPresenting) return;
+
+        const session = render.renderer.xr.getSession();
+        if (!session) return;
+
+        for (const source of session.inputSources) {
+            if (source.gamepad) {
+                const axes = source.gamepad.axes;
+
+                // Left Stick (Locomotion)
+                if (source.handedness === 'left') {
+                    const xIdx = axes.length >= 4 ? 2 : 0;
+                    const zIdx = axes.length >= 4 ? 3 : 1;
+                    const dx = axes[xIdx] || 0;
+                    const dz = axes[zIdx] || 0;
+
+                    if (Math.abs(dx) > 0.1) moveVector.x += dx;
+                    if (Math.abs(dz) > 0.1) moveVector.z += dz;
+                }
+
+                // Right Stick (Snap Turn)
+                if (source.handedness === 'right') {
+                    const xIdx = axes.length >= 4 ? 2 : 0;
+                    if (axes.length > xIdx && Math.abs(axes[xIdx]) > 0.5) {
+                        if (!this.wasSnapTurnPressed) {
+                            const sign = Math.sign(axes[xIdx]);
+                            const turnAngle = sign * (-Math.PI / 4); // 45 degrees
+                            this.applyTurn(turnAngle);
+                            this.wasSnapTurnPressed = true;
+                            this.triggerHaptic(0.5, 100);
+                        }
+                    } else {
+                        this.wasSnapTurnPressed = false;
+                    }
+                }
+            }
+        }
+    }
+
+    applyTurn(deltaYaw) {
+        this.yaw += deltaYaw;
+    }
+
+    triggerHaptic(intensity, duration) {
+        const { render } = gameState.managers;
+        const session = render?.renderer?.xr?.getSession();
+        if (!session) return;
+
+        for (const source of session.inputSources) {
+            if (source.gamepad && source.gamepad.hapticActuators && source.gamepad.hapticActuators.length > 0) {
+                source.gamepad.hapticActuators[0].pulse(intensity, duration);
+            }
+        }
+    }
+
     getNetworkState() {
-        // Return representative state for network synchronization
+        const headWorldPos = new THREE.Vector3();
+        const headWorldQuat = new THREE.Quaternion();
+        const { render } = gameState.managers;
+
+        render.camera.getWorldPosition(headWorldPos);
+        render.camera.getWorldQuaternion(headWorldQuat);
+
         return {
             position: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z },
             yaw: this.yaw,
-            headHeight: this.headPose.position.y,
+            headHeight: headWorldPos.y,
             head: {
-                position: { x: this.headPose.position.x, y: this.headPose.position.y, z: this.headPose.position.z },
-                quaternion: { x: this.headPose.quaternion.x, y: this.headPose.quaternion.y, z: this.headPose.quaternion.z, w: this.headPose.quaternion.w }
+                position: { x: headWorldPos.x, y: headWorldPos.y, z: headWorldPos.z },
+                quaternion: { x: headWorldQuat.x, y: headWorldQuat.y, z: headWorldQuat.z, w: headWorldQuat.w }
             },
             hands: {
                 left: {
