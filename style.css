@@ -156,6 +156,20 @@ body {
     box-shadow: 0 0 15px var(--primary-color), 0 0 30px var(--primary-color);
 }
 
+.primary-btn.secondary-style {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+    color: #3b82f6;
+    margin-top: 10px;
+}
+
+.primary-btn.secondary-style:hover,
+.primary-btn.secondary-style.gamepad-focus {
+    background: #3b82f6;
+    color: #fff;
+    box-shadow: 0 0 15px #3b82f6, 0 0 30px #3b82f6;
+}
+
 .status {
     margin-top: 1rem;
     color: var(--secondary-color);
