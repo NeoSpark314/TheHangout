@@ -24,6 +24,9 @@ export class RenderManager {
         this.cameraGroup.add(this.camera);
         this.scene.add(this.cameraGroup);
 
+        // Disable Layer 1 on the main camera so we don't see our own head
+        this.camera.layers.disable(1);
+
         // Move camera group back and up slightly to see the floor initially
         this.cameraGroup.position.set(0, 2, 5);
         this.camera.lookAt(0, 0, 0);

@@ -254,3 +254,91 @@ html {
     background: var(--primary-color) !important;
     color: var(--bg-color) !important;
 }
+
+/* --- Face Drawing UI --- */
+.face-panel {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 280px;
+    background: var(--panel-bg);
+    border: 2px solid var(--primary-color);
+    box-shadow: var(--neon-glow);
+    border-radius: var(--border-radius);
+    padding: 10px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.face-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--primary-color);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#face-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+#face-canvas {
+    background: #0a041c;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    cursor: crosshair;
+    touch-action: none;
+    /* Critical for mobile/tablet drawing */
+}
+
+.face-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#face-clear-btn {
+    background: transparent;
+    border: 1px solid var(--secondary-color);
+    color: var(--secondary-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+}
+
+.brush-preview {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    box-shadow: 0 0 5px var(--primary-color);
+}
+
+/* Toggle Button */
+#face-toggle-btn {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 99;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: var(--neon-glow);
+}

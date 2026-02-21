@@ -15,7 +15,8 @@ export const EVENTS = {
     SCENE_READY: 'SCENE_READY',
     PHYSICS_READY: 'PHYSICS_READY',
     LOCAL_PLAYER_MOVED: 'LOCAL_PLAYER_MOVED',
-    INTERACTION_TRIGGERED: 'INTERACTION_TRIGGERED'
+    INTERACTION_TRIGGERED: 'INTERACTION_TRIGGERED',
+    DRAWING_UPDATED: 'DRAWING_UPDATED'
 };
 
 export const PACKET_TYPES = {
@@ -23,6 +24,7 @@ export const PACKET_TYPES = {
     PLAYER_INPUT: 1, // Guest -> Host: Controller & Headset positions
     SPAWN_OBJECT: 2, // Either -> Host: Request to spawn a physics object
     CHAT_MESSAGE: 3, // Broadcast: Text or built-in voice signaling
+    FACE_UPDATE: 4,  // Broadcast: Avatar face drawing data
 };
 
 export const PHYSICS_GROUPS = {

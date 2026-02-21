@@ -44,8 +44,21 @@ export class RemotePlayer {
         // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
         headGeometry.translate(0, headSize / 2, 0);
 
-        // For now, simple magenta filled square for remote
-        this.headMesh = new THREE.Mesh(headGeometry, solidDark);
+        // Face Texture for Remote
+        this.headCanvas = document.createElement('canvas');
+        this.headCanvas.width = 256;
+        this.headCanvas.height = 256;
+        const ctx = this.headCanvas.getContext('2d');
+        ctx.fillStyle = '#0a041c';
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = '#ff00ff';
+        ctx.lineWidth = 10;
+        ctx.strokeRect(10, 10, 236, 236);
+
+        this.headTexture = new THREE.CanvasTexture(this.headCanvas);
+        const headMaterial = new THREE.MeshBasicMaterial({ map: this.headTexture, side: THREE.DoubleSide });
+
+        this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
         const headEdges = new THREE.EdgesGeometry(headGeometry);
         const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
         this.headMesh.add(headOutline);
@@ -110,6 +123,17 @@ export class RemotePlayer {
         }
     }
 
+    setFace(dataURL) {
+        const img = new Image();
+        img.onload = () => {
+            const ctx = this.headCanvas.getContext('2d');
+            ctx.clearRect(0, 0, 256, 256);
+            ctx.drawImage(img, 0, 0);
+            this.headTexture.needsUpdate = true;
+        };
+        img.src = dataURL;
+    }
+
     update(delta) {
         if (!this.mesh) return;
 
@@ -161,7 +185,7 @@ export class RemotePlayer {
             const side = new THREE.Vector3().crossVectors(armDir, down).normalize();
 
             const bendAmount = Math.max(0, 0.4 - dist * 0.5);
-            const bend = new THREE.Vector3(0, -bendAmount, -bendAmount * 0.5);
+            const bend = new THREE.Vector3(0, -bendAmount, bendAmount * 0.5);
             bend.addScaledVector(side, shoulder.x > 0 ? 0.1 : -0.1);
 
             return mid.add(bend);

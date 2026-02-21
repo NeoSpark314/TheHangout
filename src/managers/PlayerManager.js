@@ -57,13 +57,18 @@ export class PlayerManager {
             if (rp) {
                 rp.setTargetState(data);
             }
+        } else if (type === 'FACE') {
+            let rp = gameState.remotePlayers.get(senderId);
+            if (rp) {
+                rp.setFace(data);
+            }
+        }
 
-            // If we are Host, we must relay this input to all OTHER guests so everyone sees everyone!
-            if (gameState.isHost) {
-                for (const [peerId, conn] of gameState.managers.network.connections.entries()) {
-                    if (conn.open && peerId !== senderId) {
-                        gameState.managers.network.sendData(peerId, type, data);
-                    }
+        // If we are Host, we must relay this input/face to all OTHER guests so everyone sees everyone!
+        if (gameState.isHost) {
+            for (const [peerId, conn] of gameState.managers.network.connections.entries()) {
+                if (conn.open && peerId !== senderId) {
+                    gameState.managers.network.sendData(peerId, type, data);
                 }
             }
         }

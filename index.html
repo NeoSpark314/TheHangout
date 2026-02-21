@@ -50,6 +50,23 @@
     </div>
   </div>
 
+  <!-- Drawing UI (Hidden initially) -->
+  <div id="face-ui" class="face-panel" style="display: none;">
+    <div class="face-header">
+      <span>Sketch Your Face</span>
+      <button id="face-close-btn">×</button>
+    </div>
+    <canvas id="face-canvas" width="256" height="256"></canvas>
+    <div class="face-controls">
+      <button id="face-clear-btn">Clear</button>
+      <div class="brush-preview" id="brush-color"></div>
+    </div>
+  </div>
+
+  </div>
+
+  <button id="face-toggle-btn" style="display: none;">☺</button>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 

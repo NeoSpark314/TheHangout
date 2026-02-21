@@ -26,6 +26,7 @@ export class LocalPlayer {
 
         this.initAvatar();
         this.initInput();
+        this.initFaceSync();
     }
 
     initAvatar() {
@@ -77,10 +78,7 @@ export class LocalPlayer {
         this.headMesh.add(headOutline);
 
         this.headMesh.position.y = 0.6; // Position at neck height
-
-        // Hide head from local camera using layers
-        // Default camera is layer 0. We put head on layer 1.
-        this.headMesh.traverse(child => child.layers.set(1));
+        this.headMesh.visible = false; // Hide local head completely to prevent visual artifacts
 
         this.mesh.add(this.headMesh);
 
@@ -230,6 +228,25 @@ export class LocalPlayer {
         // Apply pitch and yaw to camera group (Third person/Desktop)
         render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
+
+        // --- Room Scale Follow ---
+        // If in VR, the user might walk away from the center of the capsule.
+        // We want the physics capsule to move with the HMD's horizontal position.
+        if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
+            const hmdLocalPos = new THREE.Vector3();
+            render.camera.getWorldPosition(hmdLocalPos);
+            // Height is handled by "Funny Spine", we only move X/Z in world space
+            const deltaX = hmdLocalPos.x - pos.x;
+            const deltaZ = hmdLocalPos.z - pos.z;
+
+            // If the user has walked significantly from the center, snap the physics body to them
+            // This prevents the "out of body" experience
+            if (Math.abs(deltaX) > 0.01 || Math.abs(deltaZ) > 0.01) {
+                this.rigidBody.setTranslation({ x: hmdLocalPos.x, y: pos.y, z: hmdLocalPos.z }, true);
+                // The camera group is normally attached to the body, so we don't need to move it manually
+                // as the next update loop will place it at the new body position.
+            }
+        }
 
         // Update dynamic neck height based on camera
         // render.cameraGroup is at the player's root + 0.8 offset (line 223)
@@ -406,6 +423,25 @@ export class LocalPlayer {
         this.updateArms(leftData.rootPos, rightData.rootPos);
     }
 
+    initFaceSync() {
+        eventBus.on(EVENTS.DRAWING_UPDATED, (dataURL) => {
+            const img = new Image();
+            img.onload = () => {
+                const ctx = this.headCanvas.getContext('2d');
+                ctx.clearRect(0, 0, 256, 256);
+                ctx.drawImage(img, 0, 0);
+                this.headTexture.needsUpdate = true;
+
+                // Broadcast to network
+                eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, {
+                    type: 'FACE_UPDATE',
+                    data: dataURL
+                });
+            };
+            img.src = dataURL;
+        });
+    }
+
     updateArms(leftHandPos, rightHandPos) {
         const shoulderY = this.neckHeight - 0.1;
         const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
@@ -425,8 +461,8 @@ export class LocalPlayer {
             // Heuristic for elbow bend: more bend when hand is closer to shoulder
             const bendAmount = Math.max(0, 0.4 - dist * 0.5);
 
-            // Bend result: downwards + slightly inwards/outwards depending on side
-            const bend = new THREE.Vector3(0, -bendAmount, -bendAmount * 0.5);
+            // Bend result: downwards + slightly BACKWARDS (+Z)
+            const bend = new THREE.Vector3(0, -bendAmount, bendAmount * 0.5);
             // Add a bit of "side" flare
             bend.addScaledVector(side, shoulder.x > 0 ? 0.1 : -0.1);
 

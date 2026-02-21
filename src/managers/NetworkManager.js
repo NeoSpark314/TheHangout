@@ -16,6 +16,13 @@ export class NetworkManager {
         // Bind events
         eventBus.on(EVENTS.CREATE_ROOM, () => this.initHost());
         eventBus.on(EVENTS.JOIN_ROOM, (roomId) => this.initGuest(roomId));
+
+        // Listen for face updates to broadcast
+        eventBus.on(EVENTS.NETWORK_DATA_RECEIVED, (e) => {
+            if (e.type === 'FACE_UPDATE' && !e.senderId) {
+                this.broadcast(PACKET_TYPES.FACE_UPDATE, e.data);
+            }
+        });
     }
 
     initHost(customId) {
@@ -92,6 +99,9 @@ export class NetworkManager {
                 case PACKET_TYPES.PLAYER_INPUT:
                     eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, { senderId, type: 'INPUT', data: parsed.payload });
                     break;
+                case PACKET_TYPES.FACE_UPDATE:
+                    eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, { senderId, type: 'FACE', data: parsed.payload });
+                    break;
                 default:
                     console.warn('[NetworkManager] Unknown packet type:', parsed.type);
             }
@@ -158,7 +168,7 @@ export class NetworkManager {
 
             const payload = {
                 position: { x: pos.x, y: pos.y, z: pos.z },
-                yaw: lp.yaw,
+                yaw: lp.worldYaw !== undefined ? lp.worldYaw : lp.yaw,
                 neckHeight: lp.neckHeight,
                 head: headPayload,
                 hands: handsPayload
