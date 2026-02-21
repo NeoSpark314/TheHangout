@@ -112,13 +112,16 @@ export class InputManager {
 
         // D-Pad or Left Stick Y
         const dy = this.gamepad.move.y;
+        const dx = this.gamepad.move.x;
         const dpadUp = gp.buttons[12]?.pressed;
         const dpadDown = gp.buttons[13]?.pressed;
+        const dpadLeft = gp.buttons[14]?.pressed;
+        const dpadRight = gp.buttons[15]?.pressed;
 
-        if (dy < -0.6 || dpadUp) {
+        if (dy < -0.6 || dpadUp || dx < -0.6 || dpadLeft) {
             this.gamepad.navIndex--;
             moved = true;
-        } else if (dy > 0.6 || dpadDown) {
+        } else if (dy > 0.6 || dpadDown || dx > 0.6 || dpadRight) {
             this.gamepad.navIndex++;
             moved = true;
         }

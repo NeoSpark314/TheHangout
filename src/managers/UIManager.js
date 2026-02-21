@@ -114,6 +114,7 @@ export class UIManager {
             this.nameInput.value = `Player-${Math.floor(Math.random() * 10000)}`;
         }
 
+        const storedRoom = localStorage.getItem('hangout_lastRoomId');
         if (storedRoom) {
             this.roomInput.value = storedRoom;
         } else {
