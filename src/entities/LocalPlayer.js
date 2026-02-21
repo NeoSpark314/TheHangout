@@ -140,7 +140,10 @@ export class LocalPlayer extends PlayerEntity {
             render.cameraGroup.updateMatrixWorld(true);
         }
 
-        // --- 4. VISUAL AVATAR ---
+        // --- 4. MAP VR HANDS ---
+        this.updateVRHands();
+
+        // --- 5. VISUAL AVATAR ---
         const headWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(headWorldPos);
         const headWorldQuat = new THREE.Quaternion();
@@ -175,10 +178,48 @@ export class LocalPlayer extends PlayerEntity {
             gameState.managers.debugUI.updateDebugText(debugText);
         }
 
-        // --- 6. NETWORK ---
+        // --- 7. NETWORK ---
         // Note: For network, we send the head world yaw as the 'yaw' to match visuals
         if (moveVector.lengthSq() > 0 || Math.abs(delta) > 0) {
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
+        }
+    }
+
+    updateVRHands() {
+        const { render } = gameState.managers;
+        if (!render || !render.renderer.xr.isPresenting) {
+            this.handStates.left.active = false;
+            this.handStates.right.active = false;
+            return;
+        }
+
+        const session = render.renderer.xr.getSession();
+        if (!session) return;
+
+        // Default to inactive, turn on if source provides a pose
+        this.handStates.left.active = false;
+        this.handStates.right.active = false;
+
+        const frame = render.renderer.xr.getFrame();
+        const referenceSpace = render.renderer.xr.getReferenceSpace();
+
+        if (!frame || !referenceSpace) return;
+
+        for (const source of session.inputSources) {
+            if (source.gripSpace) {
+                const pose = frame.getPose(source.gripSpace, referenceSpace);
+                if (pose) {
+                    if (source.handedness === 'left') {
+                        this.handStates.left.active = true;
+                        this.leftHandPose.position.copy(pose.transform.position);
+                        this.leftHandPose.quaternion.copy(pose.transform.orientation);
+                    } else if (source.handedness === 'right') {
+                        this.handStates.right.active = true;
+                        this.rightHandPose.position.copy(pose.transform.position);
+                        this.rightHandPose.quaternion.copy(pose.transform.orientation);
+                    }
+                }
+            }
         }
     }
 
