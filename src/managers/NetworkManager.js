@@ -33,6 +33,10 @@ export class NetworkManager {
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             gameState.roomId = id;
+            if (gameState.localPlayer) {
+                // Update LocalPlayer ID so broadcasts use the true peerId
+                gameState.managers.entity.updateEntityId(gameState.localPlayer.id, id);
+            }
             eventBus.emit(EVENTS.HOST_READY, id);
         });
 
@@ -52,6 +56,11 @@ export class NetworkManager {
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
             gameState.roomId = hostId;
+
+            if (gameState.localPlayer) {
+                // Update LocalPlayer ID so inputs use the true peerId
+                gameState.managers.entity.updateEntityId(gameState.localPlayer.id, id);
+            }
 
             const conn = this.peer.connect(hostId, { reliable: true });
             this.setupConnection(conn);

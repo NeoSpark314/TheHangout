@@ -39,6 +39,21 @@ export class EntityManager {
     }
 
     /**
+     * Updates an entity's ID dynamically
+     * @param {string} oldId 
+     * @param {string} newId 
+     */
+    updateEntityId(oldId, newId) {
+        if (oldId === newId) return;
+        const entity = this.entities.get(oldId);
+        if (entity) {
+            this.entities.delete(oldId);
+            entity.id = newId;
+            this.entities.set(newId, entity);
+        }
+    }
+
+    /**
      * Retrieves an entity by its unique ID
      * @param {string} id 
      * @returns {NetworkEntity|undefined}

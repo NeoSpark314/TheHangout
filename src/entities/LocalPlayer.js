@@ -63,11 +63,6 @@ export class LocalPlayer extends NetworkEntity {
         // Height is 1.8 total (-0.9 to 0.9 local)
         const colliderDesc = RAPIER.ColliderDesc.capsule(0.6, 0.3); // half-height 0.6 + radius 0.3 = 0.9
         physics.world.createCollider(colliderDesc, this.rigidBody);
-
-        physics.dynamicBodies.push({
-            mesh: this.mesh,
-            rigidBody: this.rigidBody
-        });
     }
 
     initInput() {
@@ -131,6 +126,9 @@ export class LocalPlayer extends NetworkEntity {
 
         // 3. Update Camera Position attached to Player
         const pos = this.rigidBody.translation();
+
+        // Explicitly sync local mesh to rigid body position (previously handled by PhysicsManager)
+        this.mesh.position.set(pos.x, pos.y, pos.z);
 
         // Camera rig is slightly offset towards the top of the capsule
         // We subtract the roomScaleOffset so virtual origin stays stationary when walking
