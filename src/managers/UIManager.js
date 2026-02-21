@@ -7,13 +7,17 @@ export class UIManager {
     constructor() {
         this.overlay = document.getElementById('ui-overlay');
         this.nameInput = document.getElementById('player-name');
+
+        this.createBtn = document.getElementById('create-btn');
+        this.createRoomInput = document.getElementById('create-room-id');
+
         this.joinBtn = document.getElementById('join-btn');
+        this.joinRoomInput = document.getElementById('join-room-id');
+
         this.statusText = document.getElementById('status-text');
         this.inviteContainer = document.getElementById('invite-container');
         this.inviteLinkInput = document.getElementById('invite-link');
         this.copyBtn = document.getElementById('copy-btn');
-        this.manualRoomGroup = document.getElementById('manual-room-group');
-        this.manualRoomInput = document.getElementById('manual-room-id');
         this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
 
         this.init();
@@ -54,13 +58,23 @@ export class UIManager {
         }
 
         // Listen for network events
-        eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => {
-            if (gameState.isHost && !this.roomIdDisplayed) {
+        eventBus.on(EVENTS.HOST_READY, (peerId) => {
+            if (gameState.isHost) {
                 this.showInviteLink(peerId);
                 this.setStatus('Room Created! Share the link, then click Start.');
-                this.joinBtn.style.display = 'none'; // Hide create button
-                if (this.startBtn) this.startBtn.style.display = 'block'; // Show start button
-            } else if (!gameState.isHost) {
+
+                // Hide inputs, show start
+                if (this.createBtn) this.createBtn.parentElement.style.display = 'none';
+                if (this.joinBtn) this.joinBtn.parentElement.style.display = 'none';
+                document.querySelector('.action-separator').style.display = 'none';
+
+                if (this.startBtn) this.startBtn.style.display = 'block';
+            }
+        });
+
+        eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => {
+            // Note: Host no longer receives this for itself due to fix
+            if (!gameState.isHost) {
                 this.setStatus('Connected!');
                 setTimeout(() => this.hideOverlay(), 1000); // Guests auto-join
             }
@@ -69,40 +83,56 @@ export class UIManager {
 
     setupGuestMode(roomId) {
         gameState.isHost = false;
-        this.joinBtn.textContent = 'Join Room';
-        if (this.manualRoomGroup) this.manualRoomGroup.style.display = 'none';
+
+        // Hide create UI
+        if (this.createBtn) this.createBtn.parentElement.style.display = 'none';
+        document.querySelector('.action-separator').style.display = 'none';
+
+        this.joinRoomInput.value = roomId;
 
         this.joinBtn.addEventListener('click', () => {
             const name = this.nameInput.value.trim() || 'Guest';
             gameState.playerName = name;
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
-            eventBus.emit(EVENTS.JOIN_ROOM, roomId);
+            eventBus.emit(EVENTS.JOIN_ROOM, this.joinRoomInput.value.trim() || roomId);
         });
     }
 
     setupDefaultMode() {
-        gameState.isHost = true; // Assume host unless they type a room ID
-        if (this.manualRoomGroup) this.manualRoomGroup.style.display = 'block';
+        // Create Room Flow
+        this.createBtn.addEventListener('click', () => {
+            const name = this.nameInput.value.trim() || 'Host';
+            gameState.playerName = name;
+            const customId = this.createRoomInput.value.trim();
 
+            this.createBtn.disabled = true;
+            this.joinBtn.disabled = true;
+
+            gameState.isHost = true;
+            this.setStatus('Creating room...');
+
+            // Pass custom ID (if any) to CREATE_ROOM event
+            eventBus.emit(EVENTS.CREATE_ROOM, customId);
+        });
+
+        // Join Room Flow
         this.joinBtn.addEventListener('click', () => {
             const name = this.nameInput.value.trim() || 'Player';
             gameState.playerName = name;
-            const manualRoomId = this.manualRoomInput ? this.manualRoomInput.value.trim() : '';
+            const targetId = this.joinRoomInput.value.trim();
 
+            if (!targetId) {
+                this.setStatus('Please enter a Room Name to join.');
+                return;
+            }
+
+            this.createBtn.disabled = true;
             this.joinBtn.disabled = true;
 
-            if (manualRoomId) {
-                // They typed a room ID, act as Guest
-                gameState.isHost = false;
-                this.setStatus('Connecting to host...');
-                eventBus.emit(EVENTS.JOIN_ROOM, manualRoomId);
-            } else {
-                // Creating a room
-                gameState.isHost = true;
-                this.setStatus('Creating room...');
-                eventBus.emit(EVENTS.CREATE_ROOM);
-            }
+            gameState.isHost = false;
+            this.setStatus('Connecting to host...');
+            eventBus.emit(EVENTS.JOIN_ROOM, targetId);
         });
     }
 

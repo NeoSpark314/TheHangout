@@ -23,14 +23,20 @@
         <input type="text" id="player-name" placeholder="Enter your name" />
       </div>
 
-      <div class="input-group" id="manual-room-group" style="display: none;">
-        <label for="manual-room-id">Join an existing Room ID (Optional):</label>
-        <input type="text" id="manual-room-id" placeholder="Leave blank to create a room" />
+      <div class="action-row">
+        <input type="text" id="create-room-id" placeholder="Optional Custom Room Name" />
+        <button id="create-btn" class="primary-btn">Create Room</button>
       </div>
 
-      <button id="join-btn" class="primary-btn">Play</button>
+      <div class="action-separator">or</div>
+
+      <div class="action-row" id="join-room-group">
+        <input type="text" id="join-room-id" placeholder="Room Name to Join" />
+        <button id="join-btn" class="primary-btn">Join Room</button>
+      </div>
+
       <button id="start-btn" class="primary-btn"
-        style="display: none; margin-top: 10px; background-color: #10b981;">Start Game</button>
+        style="display: none; margin-top: 10px; background-color: #10b981; width: 100%;">Start Game</button>
 
       <div id="status-text" class="status"></div>
 

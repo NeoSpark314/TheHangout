@@ -18,13 +18,15 @@ export class NetworkManager {
         eventBus.on(EVENTS.JOIN_ROOM, (roomId) => this.initGuest(roomId));
     }
 
-    initHost() {
-        this.peer = new Peer({ debug: 2 });
+    initHost(customId) {
+        // If customId is provided, PeerJS will attempt to use it.
+        // If not, it generates a random one.
+        this.peer = customId ? new Peer(customId, { debug: 2 }) : new Peer({ debug: 2 });
 
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             gameState.roomId = id;
-            eventBus.emit(EVENTS.PEER_CONNECTED, id);
+            eventBus.emit(EVENTS.HOST_READY, id);
         });
 
         this.peer.on('connection', (conn) => {
@@ -57,12 +59,8 @@ export class NetworkManager {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
 
-            // If we are guest connecting to host
-            if (!gameState.isHost && conn.peer === gameState.roomId) {
-                eventBus.emit(EVENTS.PEER_CONNECTED, conn.peer);
-            } else if (gameState.isHost) {
-                // Broadcast to others if necessary
-            }
+            // Emit connection event so PlayerManager can spawn their avatar
+            eventBus.emit(EVENTS.PEER_CONNECTED, conn.peer);
         });
 
         conn.on('data', (data) => {

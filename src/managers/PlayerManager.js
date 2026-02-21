@@ -46,12 +46,16 @@ export class PlayerManager {
 
     onNetworkData({ senderId, type, data }) {
         if (type === 'INPUT') {
-            const rp = gameState.remotePlayers.get(senderId);
+            let rp = gameState.remotePlayers.get(senderId);
+
+            // If we receive input from a peer we haven't spawned yet, spawn them!
+            if (!rp && senderId !== gameState.managers.network.peer?.id) {
+                this.onPeerConnected(senderId);
+                rp = gameState.remotePlayers.get(senderId);
+            }
+
             if (rp) {
-                rp.setTargetState(data.position, data.yaw);
-            } else if (gameState.isHost) {
-                // As a Host, if we receive an input from a Guest but haven't spawned them yet, we can spawn them
-                // though PEER_CONNECTED should have handled this.
+                rp.setTargetState(data);
             }
 
             // If we are Host, we must relay this input to all OTHER guests so everyone sees everyone!
