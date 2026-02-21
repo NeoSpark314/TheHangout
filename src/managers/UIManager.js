@@ -60,14 +60,8 @@ export class UIManager {
         if (this.voiceBtn) {
             this.voiceBtn.addEventListener('click', async () => {
                 this.ensureAudioContextResumed();
-                const isActive = await gameState.managers.media.toggleMicrophone();
-                if (isActive) {
-                    this.voiceBtn.textContent = 'Disable Voice Chat';
-                    this.voiceBtn.style.backgroundColor = '#ef4444'; // Red for active mic
-                } else {
-                    this.voiceBtn.textContent = 'Enable Voice Chat';
-                    this.voiceBtn.style.backgroundColor = '#3b82f6'; // Blue for idle
-                }
+                await this.toggleVoice();
+                this.saveToStorage();
             });
         }
 
@@ -147,6 +141,12 @@ export class UIManager {
             this.roomInput.value = 'TestRoom';
         }
 
+        const storedVoice = localStorage.getItem('hangout_voiceEnabled');
+        if (storedVoice === 'true') {
+            gameState.voiceEnabled = true;
+            this.updateVoiceButton(true);
+        }
+
         const storedColor = localStorage.getItem('hangout_avatarColor');
         if (storedColor) {
             gameState.avatarConfig.color = storedColor;
@@ -178,6 +178,8 @@ export class UIManager {
         if (gameState.avatarConfig.color) {
             localStorage.setItem('hangout_avatarColor', gameState.avatarConfig.color);
         }
+
+        localStorage.setItem('hangout_voiceEnabled', gameState.voiceEnabled);
 
         // Only save the room ID if it's not a temporary/generated one or if we are actively joining a specific one
         if (room) {
@@ -216,9 +218,16 @@ export class UIManager {
 
         this.roomInput.value = roomId;
 
-        this.joinBtn.addEventListener('click', () => {
+        this.joinBtn.addEventListener('click', async () => {
             const name = this.nameInput.value.trim() || 'Guest';
             gameState.playerName = name;
+
+            // Auto-activate voice if enabled
+            if (gameState.voiceEnabled) {
+                this.ensureAudioContextResumed();
+                await gameState.managers.media.toggleMicrophone(); // Actually start the mic
+            }
+
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
             eventBus.emit(EVENTS.JOIN_ROOM, this.roomInput.value.trim() || roomId);
@@ -227,9 +236,15 @@ export class UIManager {
 
     setupDefaultMode() {
         // Create Room Flow
-        this.createBtn.addEventListener('click', () => {
+        this.createBtn.addEventListener('click', async () => {
             const name = this.nameInput.value.trim() || 'Host';
             gameState.playerName = name;
+
+            // Auto-activate voice if enabled
+            if (gameState.voiceEnabled) {
+                this.ensureAudioContextResumed();
+                await gameState.managers.media.toggleMicrophone();
+            }
 
             // Generate a readable ID if the user didn't provide one
             const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
@@ -249,9 +264,15 @@ export class UIManager {
         });
 
         // Join Room Flow
-        this.joinBtn.addEventListener('click', () => {
+        this.joinBtn.addEventListener('click', async () => {
             const name = this.nameInput.value.trim() || 'Player';
             gameState.playerName = name;
+
+            // Auto-activate voice if enabled
+            if (gameState.voiceEnabled) {
+                this.ensureAudioContextResumed();
+                await gameState.managers.media.toggleMicrophone();
+            }
             const targetId = this.roomInput.value.trim();
 
             if (!targetId) {
@@ -344,5 +365,23 @@ export class UIManager {
         if (this.voiceBtn && this.voiceBtn.offsetParent) elements.push(this.voiceBtn);
 
         return elements;
+    }
+
+    async toggleVoice() {
+        // This only toggles the preference in the menu
+        // Actual mic activation happens on join/host to satisfy browser gesture requirements
+        gameState.voiceEnabled = !gameState.voiceEnabled;
+        this.updateVoiceButton(gameState.voiceEnabled);
+    }
+
+    updateVoiceButton(enabled) {
+        if (!this.voiceBtn) return;
+        if (enabled) {
+            this.voiceBtn.textContent = 'Voice Chat: READY';
+            this.voiceBtn.style.backgroundColor = '#ef4444'; // Red for enabled/ready
+        } else {
+            this.voiceBtn.textContent = 'Enable Voice Chat';
+            this.voiceBtn.style.backgroundColor = '#3b82f6'; // Blue for idle
+        }
     }
 }

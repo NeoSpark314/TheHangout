@@ -8,6 +8,7 @@ class GameState {
         this.avatarConfig = {
             color: '#00ffff' // Default Cyber Cyan
         };
+        this.voiceEnabled = false;
 
         // Entity stores
         this.localPlayer = null;
