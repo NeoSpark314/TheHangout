@@ -67,12 +67,12 @@ html {
     border: 2px solid var(--secondary-color);
     box-shadow: var(--neon-glow-magenta);
     width: 90%;
-    max-width: 400px;
+    max-width: 480px;
     text-align: center;
 }
 
 .panel h1 {
-    font-size: 2rem;
+    font-size: 1.8rem;
     margin-bottom: 0.5rem;
     color: var(--primary-color);
     text-shadow: 0 0 5px var(--primary-color), 0 0 10px var(--primary-color);
@@ -83,7 +83,7 @@ html {
 .panel p {
     color: #cbd5e1;
     margin-bottom: 1.5rem;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 1px;
 }

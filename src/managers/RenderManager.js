@@ -29,7 +29,6 @@ export class RenderManager {
 
         // Move camera group back and up slightly to see the floor initially
         this.cameraGroup.position.set(0, 0, 0);
-        this.camera.lookAt(0, 0, 0);
 
         // Audio Listener
         this.audioListener = new THREE.AudioListener();
@@ -47,6 +46,17 @@ export class RenderManager {
 
         this.container.appendChild(this.renderer.domElement);
 
+        // Initial Menu Camera (High, dramatic angle)
+        this.isMenuMode = true;
+        this.menuRotation = 0;
+
+        // Ensure the camera itself has no local rotation/offset so it follows the group perfectly
+        this.camera.position.set(0, 0, 0);
+        this.camera.rotation.set(0, 0, 0);
+
+        this.cameraGroup.position.set(15, 12, 15);
+        this.cameraGroup.lookAt(0, 0, 0);
+
         this.setupLighting();
         this.createSynthwaveSun();
         this.setupControllers();
@@ -62,6 +72,29 @@ export class RenderManager {
 
         // Handle Window Resize
         window.addEventListener('resize', this.onWindowResize.bind(this), false);
+    }
+
+    switchToPlayerView() {
+        this.isMenuMode = false;
+        // Reset camera tilt from menu mode
+        this.camera.rotation.set(0, 0, 0);
+        // Don't reset position here as LocalPlayer.js initialization will snap it to (0, 1.6, 0)
+    }
+
+    update(delta) {
+        if (!this.isMenuMode) return;
+
+        // Slower, more majestic cinematic rotation
+        this.menuRotation += delta * 0.1;
+        const radius = 18;
+        this.cameraGroup.position.set(
+            Math.cos(this.menuRotation) * radius,
+            12,
+            Math.sin(this.menuRotation) * radius
+        );
+
+        // Point the camera at the center of the platform
+        this.camera.lookAt(0, 0, 0);
     }
 
     isTrueHMD() {

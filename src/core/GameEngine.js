@@ -96,6 +96,7 @@ export class GameEngine {
 
         // 6. Render
         if (gameState.managers.render) {
+            gameState.managers.render.update(delta);
             gameState.managers.render.render();
         }
     }

@@ -38,6 +38,10 @@ async function bootstrap() {
     if (playerInitialized) return;
     if (!id) return;
     playerInitialized = true;
+
+    // Stop cinematic menu rotation
+    gameState.managers.render.switchToPlayerView();
+
     gameState.managers.player.init(id);
   };
 
