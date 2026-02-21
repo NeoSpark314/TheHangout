@@ -12,24 +12,25 @@ export class WorldManager {
 
         if (!render || !physics || !physics.rapierLoaded) return;
 
-        // 1. Create Floor Material
-        const floorMaterial = new THREE.MeshStandardMaterial({
-            color: 0x555555,
-            roughness: 0.8
-        });
-
+        // 1. Create Floor Material (Dark space base)
+        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x050510 });
         const floorGeometry = new THREE.BoxGeometry(50, 0.2, 50);
         const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
         floorMesh.position.y = -0.1; // Offset so top is at y=0
-        floorMesh.receiveShadow = true;
-
         render.add(floorMesh);
+
+        // Add Retro Neon Grid
+        const gridHelper = new THREE.GridHelper(50, 25, 0xff00ff, 0x00ffff); // Magenta center, Cyan outer
+        gridHelper.position.y = 0.01; // Slightly above floor to prevent z-fighting
+        render.add(gridHelper);
         physics.createGround(25); // 25 is half-extent of 50
 
-        // 2. Create some dynamic boxes for testing
-        const boxMaterial = new THREE.MeshStandardMaterial({
-            color: 0xef4444, // Red
-            roughness: 0.5
+        // 2. Create some dynamic boxes for testing (Retro Wireframes)
+        const boxMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ffff, // Cyan
+            wireframe: true,
+            transparent: true,
+            opacity: 0.8
         });
 
         const boxSize = 1;
@@ -37,8 +38,6 @@ export class WorldManager {
 
         for (let i = 0; i < 50; i++) {
             const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-            boxMesh.castShadow = true;
-            boxMesh.receiveShadow = true;
             render.add(boxMesh);
 
             // Random position above the floor

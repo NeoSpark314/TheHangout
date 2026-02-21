@@ -7,7 +7,7 @@ export class RenderManager {
 
         // Scene setup
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        this.scene.background = new THREE.Color(0x0a041c); // Deep retro purple
 
         // Camera setup
         this.camera = new THREE.PerspectiveCamera(
@@ -24,8 +24,8 @@ export class RenderManager {
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // Shadows are disabled for performance and aesthetic reasons in this Phase
+        this.renderer.shadowMap.enabled = false;
         // We will enable WebXR later: this.renderer.xr.enabled = true;
 
         this.container.appendChild(this.renderer.domElement);
@@ -37,26 +37,18 @@ export class RenderManager {
     }
 
     setupLighting() {
-        // Ambient Light
-        const ambientLight = new THREE.AmbientLight(0x404040, 2); // soft white light
+        // Ambient Light (Soft Magenta cast)
+        const ambientLight = new THREE.AmbientLight(0xff00ff, 0.5);
         this.scene.add(ambientLight);
 
-        // Directional Light (Sun)
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        // Hemisphere Light (Cyan from above, purple from below)
+        const hemiLight = new THREE.HemisphereLight(0x00ffff, 0x800080, 1);
+        this.scene.add(hemiLight);
+
+        // Directional Light (Replacing Sun with a distant neon source)
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
         dirLight.position.set(10, 20, 10);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 50;
-
-        // Expand shadow frustum
-        const d = 15;
-        dirLight.shadow.camera.left = -d;
-        dirLight.shadow.camera.right = d;
-        dirLight.shadow.camera.top = d;
-        dirLight.shadow.camera.bottom = -d;
-
+        dirLight.castShadow = false; // explicitly disable
         this.scene.add(dirLight);
     }
 

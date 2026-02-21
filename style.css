@@ -1,17 +1,25 @@
 :root {
-    --primary-color: #6366f1;
-    --primary-hover: #4f46e5;
-    --bg-color: #0f172a;
-    --panel-bg: rgba(30, 41, 59, 0.85);
+    --primary-color: #0ff;
+    /* Neon Cyan */
+    --primary-hover: #00cccc;
+    --secondary-color: #f0f;
+    /* Neon Magenta */
+    --bg-color: #0b0c10;
+    /* Deep Space */
+    --panel-bg: rgba(11, 12, 16, 0.85);
     --text-color: #f8fafc;
-    --border-radius: 12px;
+    --border-radius: 4px;
+    /* Sharper edges for retro feel */
+    --neon-glow: 0 0 10px rgba(0, 255, 255, 0.7), 0 0 20px rgba(0, 255, 255, 0.5);
+    --neon-glow-magenta: 0 0 10px rgba(255, 0, 255, 0.7), 0 0 20px rgba(255, 0, 255, 0.5);
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Courier New', Courier, monospace;
+    /* Retro font */
 }
 
 body,
@@ -21,6 +29,10 @@ html {
     overflow: hidden;
     background-color: var(--bg-color);
     color: var(--text-color);
+    /* Subtle grid background on the UI itself */
+    background-image: linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
 }
 
 #app {
@@ -52,7 +64,8 @@ html {
     background: var(--panel-bg);
     padding: 2rem;
     border-radius: var(--border-radius);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    border: 2px solid var(--secondary-color);
+    box-shadow: var(--neon-glow-magenta);
     width: 90%;
     max-width: 400px;
     text-align: center;
@@ -61,16 +74,18 @@ html {
 .panel h1 {
     font-size: 2rem;
     margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, #a855f7, #6366f1);
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--primary-color);
+    text-shadow: 0 0 5px var(--primary-color), 0 0 10px var(--primary-color);
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 
 .panel p {
-    color: #94a3b8;
+    color: #cbd5e1;
     margin-bottom: 1.5rem;
     font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .input-group {
@@ -82,56 +97,68 @@ html {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #cbd5e1;
+    color: var(--primary-color);
+    text-shadow: 0 0 3px var(--primary-color);
 }
 
 .input-group input {
     width: 100%;
     padding: 0.75rem;
-    border-radius: 8px;
-    border: 1px solid #334155;
-    background: #0f172a;
-    color: var(--text-color);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--primary-color);
+    background: transparent;
+    color: var(--primary-color);
     font-size: 1rem;
     outline: none;
+    box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.2);
 }
 
 .input-group input:focus {
-    border-color: var(--primary-color);
+    border-color: var(--secondary-color);
+    box-shadow: inset 0 0 5px rgba(255, 0, 255, 0.2), var(--neon-glow-magenta);
+    color: var(--secondary-color);
 }
 
 .primary-btn {
     width: 100%;
     padding: 0.75rem;
-    border: none;
-    border-radius: 8px;
-    background: var(--primary-color);
-    color: white;
+    background: transparent;
+    border: 2px solid var(--primary-color);
+    border-radius: var(--border-radius);
+    color: var(--primary-color);
     font-size: 1.1rem;
     font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    box-shadow: var(--neon-glow);
+    text-shadow: 0 0 5px var(--primary-color);
 }
 
 .primary-btn:hover {
-    background: var(--primary-hover);
+    background: var(--primary-color);
+    color: var(--bg-color);
+    box-shadow: 0 0 15px var(--primary-color), 0 0 30px var(--primary-color);
 }
 
 .status {
     margin-top: 1rem;
-    color: #93c5fd;
+    color: var(--secondary-color);
+    text-shadow: 0 0 5px var(--secondary-color);
     font-size: 0.9rem;
     min-height: 1.5em;
+    text-transform: uppercase;
 }
 
 .invite-box {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #334155;
+    border-top: 1px dotted var(--primary-color);
 }
 
 .invite-box p {
-    color: #e2e8f0;
+    color: var(--primary-color);
     margin-bottom: 0.5rem;
 }
 
@@ -143,22 +170,26 @@ html {
 .copy-group input {
     flex-grow: 1;
     padding: 0.5rem;
-    border-radius: 6px;
-    border: 1px solid #334155;
-    background: #0f172a;
-    color: #94a3b8;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--primary-color);
+    background: transparent;
+    color: var(--primary-color);
     font-size: 0.8rem;
 }
 
 .copy-group button {
     padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 6px;
-    background: #334155;
-    color: white;
+    background: transparent;
+    border: 1px solid var(--secondary-color);
+    border-radius: var(--border-radius);
+    color: var(--secondary-color);
     cursor: pointer;
+    transition: all 0.2s;
+    text-shadow: 0 0 3px var(--secondary-color);
 }
 
 .copy-group button:hover {
-    background: #475569;
+    background: var(--secondary-color);
+    color: var(--bg-color);
+    box-shadow: var(--neon-glow-magenta);
 }

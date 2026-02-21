@@ -31,10 +31,10 @@ export class LocalPlayer {
         if (!render || !physics) return;
 
         // 1. Visible Avatar (Capsule)
-        const material = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
+        // Neon Cyan for the local player, using basic material since we disabled shadows and ambient light might not be enough
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
         const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8); // radius: 0.5, length: 1 -> total height: 2
         this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.castShadow = true;
         render.add(this.mesh);
 
         // 2. Physics Body
