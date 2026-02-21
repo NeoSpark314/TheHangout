@@ -9,6 +9,7 @@ import { RenderManager } from './managers/RenderManager.js';
 import { WorldManager } from './managers/WorldManager.js';
 import { PlayerManager } from './managers/PlayerManager.js';
 import { EntityManager } from './managers/EntityManager.js';
+import { DebugUIManager } from './managers/DebugUIManager.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
 
@@ -29,6 +30,12 @@ async function bootstrap() {
 
   // Initialize Local Player (Needs Physics and Render)
   gameState.managers.player.init();
+
+  // Initialize Debug UI (Needs Local Player's headPose eventually, but can start now)
+  gameState.managers.debugUI = new DebugUIManager();
+  if (gameState.localPlayer) {
+    gameState.managers.debugUI.attachTo(gameState.localPlayer.headPose);
+  }
 
   // Generate World
   gameState.managers.world.generateTestWorld();

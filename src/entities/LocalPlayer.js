@@ -130,7 +130,15 @@ export class LocalPlayer extends PlayerEntity {
         // Arms (static relative to origin for now)
         this.avatar.updateArms(this.leftHandPose.position, this.rightHandPose.position);
 
-        // 5. Network Emission
+        // 5. Update Debug UI
+        if (gameState.managers.debugUI) {
+            const pos = this.xrOrigin.position;
+            const yawDeg = (this.yaw * 180 / Math.PI).toFixed(1);
+            const debugText = `xrOrigin\nPos: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}\nYaw: ${yawDeg}°`;
+            gameState.managers.debugUI.updateDebugText(debugText);
+        }
+
+        // 6. Network Emission
         if (direction.lengthSq() > 0 || Math.abs(this.yaw) > 0.001) {
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
         }
