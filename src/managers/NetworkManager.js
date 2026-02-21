@@ -93,6 +93,12 @@ export class NetworkManager {
             this.connections.delete(conn.peer);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, conn.peer);
 
+            // If we are a guest and our connection to the host closed, the session is over
+            if (!gameState.isHost && conn.peer === gameState.roomId) {
+                console.log('[NetworkManager] Host disconnected. Ending session.');
+                eventBus.emit(EVENTS.HOST_DISCONNECTED);
+            }
+
             // If we are the host, inform all other guests that this peer disconnected
             if (gameState.isHost) {
                 this.broadcast(PACKET_TYPES.PEER_DISCONNECT, conn.peer);

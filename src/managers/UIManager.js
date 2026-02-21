@@ -130,6 +130,11 @@ export class UIManager {
             this.setStatus('Ready'); // Clear the "Connecting..." status
         });
 
+        eventBus.on(EVENTS.HOST_DISCONNECTED, () => {
+            this.showError('Host disconnected. Session ended.');
+            this.handleLeave();
+        });
+
         this.loadFromStorage();
     }
 
