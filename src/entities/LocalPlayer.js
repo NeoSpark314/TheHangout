@@ -68,7 +68,8 @@ export class LocalPlayer extends PlayerEntity {
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === canvas) {
+            const isXR = gameState.managers.render?.renderer?.xr?.isPresenting;
+            if (document.pointerLockElement === canvas && !isXR) {
                 this.yaw -= e.movementX * this.turnSpeed;
                 this.pitch -= e.movementY * this.turnSpeed;
 
@@ -92,8 +93,8 @@ export class LocalPlayer extends PlayerEntity {
         const direction = new THREE.Vector3(0, 0, 0);
 
         // Keyboard Input
-        if (this.keys.w) direction.z += 1; // User reported flipped, switching to +Z
-        if (this.keys.s) direction.z -= 1;
+        if (this.keys.w) direction.z -= 1; // Forward is -Z
+        if (this.keys.s) direction.z += 1;
         if (this.keys.a) direction.x -= 1;
         if (this.keys.d) direction.x += 1;
 
@@ -102,9 +103,11 @@ export class LocalPlayer extends PlayerEntity {
 
         direction.normalize();
 
-        // Rotate the movement direction by our current yaw
-        // In VR, this yaw might be influenced by the HMD later, but for now we use this.yaw
-        const euler = new THREE.Euler(0, this.yaw, 0, 'YXZ');
+        const isXR = render.renderer.xr.enabled && render.renderer.xr.isPresenting;
+
+        // Rotate the movement direction by active yaw (HMD in VR, mouse in Desktop)
+        const activeYaw = isXR ? (this.worldYaw !== undefined ? this.worldYaw : this.yaw) : this.yaw;
+        const euler = new THREE.Euler(0, activeYaw, 0, 'YXZ');
         direction.applyEuler(euler);
 
         // 2. Apply movement forces/velocity to physics body
@@ -118,26 +121,21 @@ export class LocalPlayer extends PlayerEntity {
         // 3. Update Camera Position attached to Player
         const pos = this.rigidBody.translation();
 
-        // Explicitly sync local mesh to floor base of rigid body (which is capsule center - 0.9)
+        // Base ground level for capsule
         const groundY = pos.y - 0.9;
-        this.mesh.position.set(pos.x, groundY, pos.z);
 
-        const isXR = render.renderer.xr.enabled && render.renderer.xr.isPresenting;
-
-        // Camera rig is slightly offset towards the top of the capsule for desktop, 
-        // or anchored to the floor for XR
         if (isXR) {
-            render.cameraGroup.position.set(
-                pos.x - this.roomScaleOffset.x,
-                groundY,
-                pos.z - this.roomScaleOffset.z
-            );
+            // Anchor play space center exactly on capsule
+            render.cameraGroup.position.set(pos.x, groundY, pos.z);
+
+            // Sync avatar mesh to TRUE headset offset so it follows bodily physical steps
+            const xrCamera = render.renderer.xr.getCamera(render.camera);
+            const hmdWorldPos = new THREE.Vector3();
+            xrCamera.getWorldPosition(hmdWorldPos);
+            this.mesh.position.set(hmdWorldPos.x, groundY, hmdWorldPos.z);
         } else {
-            render.cameraGroup.position.set(
-                pos.x,
-                groundY + 1.7, // 1.7m eye level for average 1.8m tall player
-                pos.z
-            );
+            render.cameraGroup.position.set(pos.x, groundY + 1.7, pos.z);
+            this.mesh.position.set(pos.x, groundY, pos.z);
         }
 
         // Apply pitch and yaw to camera group (Third person/Desktop)
@@ -233,8 +231,11 @@ export class LocalPlayer extends PlayerEntity {
                 const buttons = source.gamepad.buttons;
 
                 if (source.handedness === 'left' && axes.length >= 4) {
-                    direction.x += axes[2] || 0;
-                    direction.z += axes[3] || 0;
+                    const dx = axes[2] || 0;
+                    const dz = axes[3] || 0;
+                    // Add deadzone
+                    if (Math.abs(dx) > 0.1) direction.x += dx;
+                    if (Math.abs(dz) > 0.1) direction.z += dz;
                 }
 
                 if (source.handedness === 'right') {

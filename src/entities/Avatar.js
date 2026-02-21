@@ -16,17 +16,19 @@ export class Avatar {
         const outlineMaterial = new THREE.LineBasicMaterial({ color: this.color });
         const solidDark = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
 
-        // 1. Head (Flat Square)
-        const headSize = 0.4;
-        const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
-        // Rotate geometry to face forward (-Z)
-        headGeometry.rotateY(Math.PI);
+        // 1. Head (Box)
+        const headSize = 0.3; // 30cm box looks better
+        const headGeometry = new THREE.BoxGeometry(headSize, headSize, headSize);
         // Anchor at bottom center (the neck)
         headGeometry.translate(0, headSize / 2, 0);
 
-        const headMaterial = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
+        const hairMaterial = new THREE.MeshBasicMaterial({ color: 0x050510 });
+        const faceMaterial = new THREE.MeshBasicMaterial({ color: this.color });
+        // Box mapping: +x(0), -x(1), +y(2), -y(3), +z(4), -z(5)
+        // If Avatar forward is -Z, face should be -Z (index 5)
+        const materials = [hairMaterial, hairMaterial, hairMaterial, hairMaterial, hairMaterial, faceMaterial];
 
-        this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
+        this.headMesh = new THREE.Mesh(headGeometry, materials);
         const headEdges = new THREE.EdgesGeometry(headGeometry);
         const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
         this.headMesh.add(headOutline);
