@@ -87,6 +87,10 @@ export class GameEngine {
         }
 
         // 4. World & Entity State Sync
+        if (gameState.managers.room) {
+            gameState.managers.room.update(delta);
+        }
+
         if (gameState.managers.world) {
             gameState.managers.world.update(delta);
         }

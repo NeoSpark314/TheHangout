@@ -27,7 +27,7 @@ export class RoomManager {
         // Update Fog (Shifted for Distant Horizon)
         if (config.skyColor) {
             const fogNear = config.fogNear || 10;
-            const fogFar = config.fogFar || 1000; // Much further to see the mountains
+            const fogFar = config.fogFar || 1000;
 
             if (!this.scene.fog) {
                 this.scene.fog = new THREE.Fog(config.skyColor, fogNear, fogFar);
@@ -38,13 +38,34 @@ export class RoomManager {
             }
         }
 
-        // Create the environment if not already there
-        if (!this.table) {
-            this.createTable();
+        // Create the environment components
+        if (!this.table) this.createTable();
+        if (!this.hills) this.createDistantHills();
+        if (!this.stars) this.createStarfield();
+        if (!this.floor) this.createFloor();
+        if (!this.hologram) this.createHologram();
+        if (!this.podest) this.createPodest();
+        if (!this.decorations) this.createDecorations();
+    }
+
+    update(delta) {
+        // Animate Grid
+        if (this.gridUniforms) {
+            this.gridUniforms.uTime.value += delta;
         }
 
-        if (!this.hills) {
-            this.createDistantHills();
+        // Animate Stars (Very slow rotation)
+        if (this.stars) {
+            this.stars.rotation.y += delta * 0.01;
+            this.stars.rotation.x += delta * 0.005;
+        }
+
+        // Animate Hologram
+        if (this.hologram) {
+            this.hologram.rotation.y += delta * 1.5;
+            this.hologram.rotation.z += delta * 0.5;
+            // Float up and down
+            this.hologram.position.y = 0.5 + Math.sin(Date.now() * 0.002) * 0.05;
         }
     }
 
@@ -56,42 +77,34 @@ export class RoomManager {
         const radius = 400;
         const hillScale = 80;
 
-        // Use a single material for performance
         const mountainMat = new THREE.MeshPhongMaterial({
-            color: 0x100520, // Dark galactic purple
-            emissive: 0x330066, // Brighter glow
+            color: 0x100520,
+            emissive: 0x330066,
             shininess: 10,
             flatShading: true
         });
 
         const wireMat = new THREE.LineBasicMaterial({
-            color: 0xbb00ff, // Brighter neon
+            color: 0xbb00ff,
             transparent: true,
-            opacity: 0.5 // Higher opacity
+            opacity: 0.5
         });
 
         for (let i = 0; i < hillCount; i++) {
             const angle = (i / hillCount) * Math.PI * 2;
-
-            // Randomized peaks
             const h = 20 + Math.random() * hillScale;
             const w = 40 + Math.random() * 60;
 
-            // ConeGeometry creates a perfect pyramid/peak
-            const geo = new THREE.ConeGeometry(w, h, 4); // 4 radial segments = pyramid
+            const geo = new THREE.ConeGeometry(w, h, 4);
             const mountain = new THREE.Mesh(geo, mountainMat);
 
-            // Position in a ring
             mountain.position.set(
                 Math.sin(angle) * radius,
-                h / 2 - 5, // Lower slightly into the ground
+                h / 2 - 5,
                 Math.cos(angle) * radius
             );
-
-            // Random rotation for variety
             mountain.rotation.y = Math.random() * Math.PI;
 
-            // Wireframe overlay for synthwave style
             const edges = new THREE.EdgesGeometry(geo);
             const outline = new THREE.LineSegments(edges, wireMat);
             mountain.add(outline);
@@ -100,86 +113,268 @@ export class RoomManager {
         }
 
         this.scene.add(this.hills);
-        console.log('[RoomManager] Distant mountains generated');
+    }
+
+    createStarfield() {
+        if (!this.scene) return;
+
+        const starCount = 5000;
+        const starGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(starCount * 3);
+        const colors = new Float32Array(starCount * 3);
+        const radius = 800;
+
+        for (let i = 0; i < starCount; i++) {
+            const theta = 2 * Math.PI * Math.random();
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+            positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            positions[i * 3 + 2] = radius * Math.cos(phi);
+
+            const type = Math.random();
+            if (type > 0.8) {
+                colors[i * 3] = 1; colors[i * 3 + 1] = 1; colors[i * 3 + 2] = 1;
+            } else if (type > 0.4) {
+                colors[i * 3] = 0.4; colors[i * 3 + 1] = 1; colors[i * 3 + 2] = 1;
+            } else {
+                colors[i * 3] = 1; colors[i * 3 + 1] = 0.4; colors[i * 3 + 2] = 1;
+            }
+        }
+
+        starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const starMat = new THREE.PointsMaterial({
+            size: 1.8,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.6,
+            sizeAttenuation: true
+        });
+
+        this.stars = new THREE.Points(starGeo, starMat);
+        this.scene.add(this.stars);
+    }
+
+    createFloor() {
+        if (!this.scene) return;
+
+        const floorGeo = new THREE.PlaneGeometry(1000, 1000);
+        const floorMat = new THREE.MeshStandardMaterial({
+            color: 0x020205,
+            metalness: 0.9,
+            roughness: 0.1,
+        });
+        this.floor = new THREE.Mesh(floorGeo, floorMat);
+        this.floor.rotation.x = -Math.PI / 2;
+        this.floor.position.y = -0.05;
+        this.scene.add(this.floor);
+
+        const gridGeo = new THREE.PlaneGeometry(1000, 1000);
+        this.gridUniforms = {
+            uTime: { value: 0 },
+            uColor: { value: new THREE.Color(0x00ffff) },
+            uGridScale: { value: 50.0 }
+        };
+
+        const gridMat = new THREE.ShaderMaterial({
+            uniforms: this.gridUniforms,
+            transparent: true,
+            side: THREE.DoubleSide,
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                varying vec2 vUv;
+                uniform float uTime;
+                uniform vec3 uColor;
+                uniform float uGridScale;
+
+                void main() {
+                    vec2 uv = vUv * uGridScale;
+                    // uv.y += uTime * 0.2; // REMOVED scrolling as per user request
+
+                    vec2 grid = abs(fract(uv - 0.5) - 0.5) / fwidth(uv);
+                    float line = min(grid.x, grid.y);
+                    float mask = 1.0 - min(line, 1.0);
+                    
+                    float dist = distance(vUv, vec2(0.5));
+                    float fade = smoothstep(0.5, 0.0, dist);
+                    float pulse = 0.8 + 0.2 * sin(uTime * 2.5);
+                    
+                    gl_FragColor = vec4(uColor * pulse, mask * fade * 0.7);
+                }
+            `
+        });
+
+        this.grid = new THREE.Mesh(gridGeo, gridMat);
+        this.grid.rotation.x = -Math.PI / 2;
+        this.grid.position.y = 0.01;
+        this.scene.add(this.grid);
     }
 
     createTable() {
         if (!this.scene) return;
 
-        // Cyber-Stube Meeting Table
         const tableGroup = new THREE.Group();
 
-        // Table Top (Hexagon or Large Disc)
-        const topGeo = new THREE.CylinderGeometry(2, 2, 0.1, 6); // Hexagonal table
-        const topMat = new THREE.MeshPhongMaterial({
-            color: 0x1a1a2e, // Deep navy/galactic blue
+        const topGeo = new THREE.CylinderGeometry(2, 2, 0.1, 6);
+        const topMat = new THREE.MeshStandardMaterial({
+            color: 0x1a1a2e,
             emissive: 0x001133,
-            shininess: 100
+            metalness: 0.9,
+            roughness: 0.1
         });
         this.table = new THREE.Mesh(topGeo, topMat);
-        this.table.position.y = 1.0; // Comfortably standing height (was 0.75)
+        this.table.position.y = 1.0;
         tableGroup.add(this.table);
 
-        // Neon Edge for Table
         const edges = new THREE.EdgesGeometry(topGeo);
         const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
         const outline = new THREE.LineSegments(edges, lineMat);
         this.table.add(outline);
 
-        // Central "Data Hub" (Glowing core)
         const coreGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.15, 6);
         const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
         const core = new THREE.Mesh(coreGeo, coreMat);
         core.position.y = 0.05;
         this.table.add(core);
 
-        // Core outline
         const coreEdges = new THREE.EdgesGeometry(coreGeo);
         const coreOutline = new THREE.LineSegments(coreEdges, lineMat);
         core.add(coreOutline);
 
-        // Leg/Base
         const baseGeo = new THREE.CylinderGeometry(0.3, 0.8, 1.0, 6);
         const baseMat = new THREE.MeshBasicMaterial({ color: 0x0a0a1a });
         const base = new THREE.Mesh(baseGeo, baseMat);
-        base.position.y = 1.0 / 2; // Sits on origin
+        base.position.y = 1.0 / 2;
         tableGroup.add(base);
 
         this.scene.add(tableGroup);
-        console.log('[RoomManager] Meeting table created');
 
-        // Add to physics also if we want them to bump into it
         if (gameState.managers.physics) {
-            // Create a static hexagonal area physics (approximated by a box of radius sized 4x1x4)
-            // Height is 1.0
             gameState.managers.physics.createBox(4, { x: 0, y: 0.5, z: 0 }, tableGroup, true);
         }
     }
 
-    /**
-     * Calculates a spawn position and rotation for a player around the table.
-     * @param {number} index - The participant index (0 = Host, 1+ = Guests)
-     */
+    createHologram() {
+        if (!this.table) return;
+
+        const holoGeo = new THREE.IcosahedronGeometry(0.35, 1);
+        const holoMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.5
+        });
+
+        this.hologram = new THREE.Mesh(holoGeo, holoMat);
+        this.hologram.position.y = 0.5;
+        this.table.add(this.hologram);
+    }
+
+    createPodest() {
+        if (!this.scene) return;
+
+        // The Podest: A 10x10 square platform made of block-like segments
+        this.podest = new THREE.Group();
+        const podestSize = 8; // Platform half-extent (8m x 8m)
+        const cubeSize = 1.0;
+
+        const podestMat = new THREE.MeshStandardMaterial({
+            color: 0x0a0a20,
+            metalness: 0.8,
+            roughness: 0.2,
+            emissive: 0x000510
+        });
+
+        const wireMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3 });
+
+        // We'll create a few slightly different height blocks to give it "texture"
+        const blockGeo = new THREE.BoxGeometry(cubeSize, 0.2, cubeSize);
+        const segmentCount = 64; // 8x8 grid
+
+        for (let x = -4; x < 4; x++) {
+            for (let z = -4; z < 4; z++) {
+                const hOffset = Math.random() * 0.05;
+                const segment = new THREE.Mesh(blockGeo, podestMat);
+                segment.position.set(x + 0.5, 0.1 + hOffset, z + 0.5);
+
+                // Edges for each block for that high-detail wireframe look
+                const segmentEdges = new THREE.EdgesGeometry(blockGeo);
+                const segmentOutline = new THREE.LineSegments(segmentEdges, wireMat);
+                segment.add(segmentOutline);
+
+                this.podest.add(segment);
+            }
+        }
+
+        this.scene.add(this.podest);
+
+        // Physics for the podest (Platform) - Single solid box for stability
+        if (gameState.managers.physics) {
+            // Half-extents for an 8x0.2x8 platform
+            gameState.managers.physics.createCuboid(4.0, 0.1, 4.0, { x: 0, y: 0.1, z: 0 }, this.podest, true);
+        }
+    }
+
+    createDecorations() {
+        if (!this.scene) return;
+
+        this.decorations = new THREE.Group();
+        const pillarCount = 12;
+        const radius = 6.0;
+
+        const pillarMat = new THREE.MeshStandardMaterial({
+            color: 0x050515,
+            metalness: 0.9,
+            roughness: 0.1,
+            emissive: 0x001122
+        });
+        const wireMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 });
+
+        for (let i = 0; i < pillarCount; i++) {
+            const angle = (i / pillarCount) * Math.PI * 2;
+            const h = 0.5 + Math.random() * 2.5;
+            const w = 0.4 + Math.random() * 0.6;
+
+            const geo = new THREE.BoxGeometry(w, h, w);
+            const pillar = new THREE.Mesh(geo, pillarMat);
+
+            pillar.position.set(
+                Math.sin(angle) * (radius + Math.random() * 2),
+                h / 2,
+                Math.cos(angle) * (radius + Math.random() * 2)
+            );
+
+            const edges = new THREE.EdgesGeometry(geo);
+            const outline = new THREE.LineSegments(edges, wireMat);
+            pillar.add(outline);
+
+            this.decorations.add(pillar);
+        }
+
+        this.scene.add(this.decorations);
+    }
+
     getSpawnPoint(index) {
         const radius = 2.5;
-        // Start from "South" (front) and go around
         const angle = (index * (Math.PI / 4)) + Math.PI;
-
         const x = Math.sin(angle) * radius;
         const z = Math.cos(angle) * radius;
-
-        // Face the center (table)
         const yaw = angle;
 
         return {
-            position: new THREE.Vector3(x, 0, z),
+            position: new THREE.Vector3(x, 0.2, z), // Spawn ON TOP of the podest
             yaw: yaw
         };
     }
 
-    /**
-     * Called by NetworkManager when a ROOM_CONFIG_UPDATE packet is received.
-     */
     updateConfig(newConfig) {
         gameState.roomConfig = { ...gameState.roomConfig, ...newConfig };
         this.applyConfig(gameState.roomConfig);

@@ -34,27 +34,23 @@ export class PhysicsManager {
     }
 
     /**
-     * Create a rigid body box and register it for sync
+     * Create a rigid body cuboid and register it for sync
      */
-    createBox(size, position, mesh, isStatic = false) {
+    createCuboid(hx, hy, hz, position, mesh, isStatic = false) {
         if (!this.world) return;
 
-        // Create Rigid Body
         const rigidBodyDesc = isStatic
             ? RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
             : RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
-        // Create Collider
         // Rapier cuboid takes half-extents
-        const colliderDesc = RAPIER.ColliderDesc.cuboid(size / 2, size / 2, size / 2);
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz);
         this.world.createCollider(colliderDesc, rigidBody);
 
-        // Only create a networked entity for dynamic objects that need syncing.
-        // Static objects don't move, so they don't need a PhysicsEntity to sync transforms.
         if (!isStatic) {
-            const entityId = `physics-box-${this.nextPhysicsId++}`;
+            const entityId = `physics-cuboid-${this.nextPhysicsId++}`;
             const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
 
             if (gameState.managers.entity) {
@@ -63,6 +59,13 @@ export class PhysicsManager {
         }
 
         return rigidBody;
+    }
+
+    /**
+     * Create a rigid body box (uniform) and register it for sync
+     */
+    createBox(size, position, mesh, isStatic = false) {
+        return this.createCuboid(size / 2, size / 2, size / 2, position, mesh, isStatic);
     }
 
     step(delta) {
