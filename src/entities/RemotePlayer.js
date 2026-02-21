@@ -12,7 +12,7 @@ export class RemotePlayer extends PlayerEntity {
         this.targetPosition = new THREE.Vector3(0, 5, 0);
         this.targetYaw = 0;
 
-        // PlayerEntity provides this.neckHeight, this.headState, and this.handStates
+        // PlayerEntity provides this.headHeight, this.headState, and this.handStates
         // We will use them as our network interpolation targets
 
         this.initAvatar();

@@ -294,4 +294,13 @@ export class LocalPlayer extends PlayerEntity {
             }
         };
     }
+
+    destroy() {
+        super.destroy(); // Call base NetworkEntity.destroy() to set destroyed = true
+        const { render } = gameState.managers;
+        if (render && this.mesh) {
+            render.remove(this.mesh);
+            this.avatar.destroy();
+        }
+    }
 }

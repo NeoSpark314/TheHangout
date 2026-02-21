@@ -77,9 +77,7 @@ export class GameEngine {
         }
 
         // 2. Input / Player
-        if (gameState.managers.player) {
-            gameState.managers.player.update(delta);
-        }
+        // (PlayerManager update loop was removed)
 
         // 3. Physics
         if (gameState.managers.physics) {

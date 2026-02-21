@@ -11,8 +11,6 @@ export class PhysicsManager {
 
         // Counter for generating sequential IDs for physics entities
         this.nextPhysicsId = 0;
-
-        // Note: we can remove the manual network listener here as NetworkManager will genericly handle STATE updates via EntityManager
     }
 
     async init() {

@@ -10,7 +10,6 @@ export class PlayerEntity extends NetworkEntity {
         super(id, type, isAuthority);
 
         this.headHeight = 1.7;
-        this.worldYaw = 0;
 
         this.headState = {
             position: new THREE.Vector3(0, 0.8, 0),

@@ -9,7 +9,6 @@ export const EVENTS = {
     HOST_READY: 'HOST_READY',
     PEER_CONNECTED: 'PEER_CONNECTED',
     PEER_DISCONNECTED: 'PEER_DISCONNECTED',
-    NETWORK_DATA_RECEIVED: 'NETWORK_DATA_RECEIVED',
 
     // Render & Logic
     SCENE_READY: 'SCENE_READY',
@@ -21,13 +20,5 @@ export const EVENTS = {
 export const PACKET_TYPES = {
     STATE_UPDATE: 0, // Host -> Guests: World state (Transform of all dynamic objects + players)
     PLAYER_INPUT: 1, // Guest -> Host: Controller & Headset positions
-    SPAWN_OBJECT: 2, // Either -> Host: Request to spawn a physics object
-    CHAT_MESSAGE: 3, // Broadcast: Text or built-in voice signaling
-};
-
-export const PHYSICS_GROUPS = {
-    TERRAIN: 1, // 0001
-    PLAYER: 2,  // 0010
-    PROP: 4,    // 0100
-    TRIGGER: 8  // 1000
+    PEER_DISCONNECT: 2, // Host -> Guests: Notification that a peer left
 };

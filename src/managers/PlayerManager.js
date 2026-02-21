@@ -26,10 +26,7 @@ export class PlayerManager {
     }
 
     onPeerConnected(peerId) {
-        if (peerId === gameState.roomId && !gameState.isHost) {
-            // Don't spawn an avatar merely for the host connection itself if it's the signaling server
-            // Wait, the host is a player too in a P2P mesh! 
-        }
+
 
         console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
         const rp = new RemotePlayer(peerId);
@@ -43,7 +40,4 @@ export class PlayerManager {
         gameState.managers.entity.removeEntity(peerId);
     }
 
-    update(delta) {
-        // PlayerManager update loop is for high-level manager tasks.
-    }
 }

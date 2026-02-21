@@ -80,6 +80,11 @@ export class NetworkManager {
             console.log(`[NetworkManager] Connection closed: ${conn.peer}`);
             this.connections.delete(conn.peer);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, conn.peer);
+
+            // If we are the host, inform all other guests that this peer disconnected
+            if (gameState.isHost) {
+                this.broadcast(PACKET_TYPES.PEER_DISCONNECT, conn.peer);
+            }
         });
 
         conn.on('error', (err) => {
@@ -107,6 +112,12 @@ export class NetworkManager {
                         this.relayToOthers(senderId, parsed.type, parsed.payload);
                     }
                     break;
+                case PACKET_TYPES.PEER_DISCONNECT:
+                    // Host -> Guest notification that a peer left
+                    if (!gameState.isHost) {
+                        eventBus.emit(EVENTS.PEER_DISCONNECTED, parsed.payload);
+                    }
+                    break;
                 default:
                     console.warn('[NetworkManager] Unknown packet type:', parsed.type);
             }
@@ -119,7 +130,16 @@ export class NetworkManager {
         if (!gameState.managers.entity) return;
 
         for (const stateData of entityStates) {
-            const entity = gameState.managers.entity.getEntity(stateData.id);
+            let entity = gameState.managers.entity.getEntity(stateData.id);
+
+            // Auto-spawn unknown players (learning about them via relayed state updates)
+            if (!entity && (stateData.type === 'LOCAL_PLAYER' || stateData.type === 'REMOTE_PLAYER')) {
+                if (gameState.localPlayer && stateData.id !== gameState.localPlayer.id) {
+                    eventBus.emit(EVENTS.PEER_CONNECTED, stateData.id);
+                    entity = gameState.managers.entity.getEntity(stateData.id);
+                }
+            }
+
             if (entity && !entity.isAuthority) {
                 entity.setNetworkState(stateData.state);
             }
