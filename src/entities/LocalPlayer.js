@@ -99,22 +99,26 @@ export class LocalPlayer {
         const { render } = gameState.managers;
         if (!render || !this.rigidBody) return;
 
-        // 1. Calculate intent direction based on yaw
+        // 1. Calculate intent direction
         const direction = new THREE.Vector3(0, 0, 0);
 
+        // Keyboard Input
         if (this.keys.w) direction.z -= 1;
         if (this.keys.s) direction.z += 1;
         if (this.keys.a) direction.x -= 1;
         if (this.keys.d) direction.x += 1;
 
+        // XR Controller Input
+        this.updateXRInput(direction);
+
         direction.normalize();
 
-        // Rotate the input direction by our yaw (looking angle)
+        // Rotate the movement direction by our current yaw
+        // In VR, this yaw might be influenced by the HMD later, but for now we use this.yaw
         const euler = new THREE.Euler(0, this.yaw, 0, 'YXZ');
         direction.applyEuler(euler);
 
         // 2. Apply movement forces/velocity to physics body
-        // We only mutate X and Z velocity to allow gravity to govern Y
         const currentVel = this.rigidBody.linvel();
         this.rigidBody.setLinvel({
             x: direction.x * this.speed,
@@ -133,12 +137,85 @@ export class LocalPlayer {
         render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
 
-        // 4. Emit event if we moved significantly (can optimize this later)
+        // 4. Emit event if we moved significantly
         if (direction.lengthSq() > 0) {
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, {
                 position: pos,
                 rotation: { pitch: this.pitch, yaw: this.yaw }
             });
+        }
+    }
+
+    updateXRInput(direction) {
+        const { render } = gameState.managers;
+        if (!render || !render.renderer.xr.enabled) return;
+
+        const session = render.renderer.xr.getSession();
+        if (!session) return;
+
+        // Poll XR Input Sources (Controllers)
+        for (const source of session.inputSources) {
+            if (!source.gamepad) continue;
+
+            const axes = source.gamepad.axes; // [thumbstickX, thumbstickY, ...]
+            const buttons = source.gamepad.buttons;
+
+            // Left Hand: Movement (Standard Mapping)
+            if (source.handedness === 'left' && axes.length >= 4) {
+                // axes[2] is X, axes[3] is Y for thumbstick
+                direction.x += axes[2] || 0;
+                direction.z += axes[3] || 0;
+            }
+
+            // Right Hand: Rotation / Jump
+            if (source.handedness === 'right') {
+                // Snap Turn (Simple version)
+                if (axes.length >= 4 && Math.abs(axes[2]) > 0.5) {
+                    // This is a bit sensitive without a debounce, but fine for prototype
+                    this.yaw -= axes[2] * 0.05;
+                }
+
+                // Jump (Button 0 is usually Trigger/A)
+                if (buttons[0].pressed && !this.wasJumpPressed) {
+                    this.jump();
+                    this.wasJumpPressed = true;
+                } else if (!buttons[0].pressed) {
+                    this.wasJumpPressed = false;
+                }
+            }
+        }
+    }
+
+    jump() {
+        if (!this.rigidBody) return;
+
+        // Simple vertical impulse
+        // In a real game, you'd check if grounded, but for this synthwave world we'll allow air-hops or single jump
+        const currentVel = this.rigidBody.linvel();
+
+        // Simple "is near floor" check by position.y
+        const pos = this.rigidBody.translation();
+        if (pos.y < 1.2) { // 1.1 is roughly standing on floor (0.1) with 1.0 half-height
+            this.rigidBody.setLinvel({
+                x: currentVel.x,
+                y: 5.0, // Jump force
+                z: currentVel.z
+            }, true);
+
+            // Haptic Pulse if in VR
+            this.triggerHaptic(0.5, 100);
+        }
+    }
+
+    triggerHaptic(intensity, duration) {
+        const { render } = gameState.managers;
+        const session = render?.renderer?.xr?.getSession();
+        if (!session) return;
+
+        for (const source of session.inputSources) {
+            if (source.gamepad && source.gamepad.hapticActuators && source.gamepad.hapticActuators.length > 0) {
+                source.gamepad.hapticActuators[0].pulse(intensity, duration);
+            }
         }
     }
 }
