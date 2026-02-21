@@ -291,7 +291,10 @@ export class RoomManager {
         this.scene.add(tableGroup);
 
         if (gameState.managers.physics) {
-            gameState.managers.physics.createBox(4, { x: 0, y: 0.5, z: 0 }, tableGroup, true);
+            // Table top: thin disc (2m radius, 0.05m half-height) at y=1.0
+            gameState.managers.physics.createCuboid(2.0, 0.05, 2.0, { x: 0, y: 1.0, z: 0 }, tableGroup, true);
+            // Pedestal: narrow column (0.4m radius, 0.5m half-height) at y=0.5
+            gameState.managers.physics.createCuboid(0.4, 0.5, 0.4, { x: 0, y: 0.5, z: 0 }, null, true);
         }
     }
 

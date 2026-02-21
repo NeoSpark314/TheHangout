@@ -45,11 +45,10 @@ export class PhysicsEntity extends NetworkEntity {
         if (!this.rigidBody) return;
         this.heldBy = null;
         this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        this.rigidBody.wakeUp();
         if (velocity) {
             this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
         }
-        // Wake the body so physics sim picks it up
-        this.rigidBody.wakeUp();
     }
 
     /**
