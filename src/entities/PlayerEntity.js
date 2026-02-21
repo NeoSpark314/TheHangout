@@ -9,7 +9,7 @@ export class PlayerEntity extends NetworkEntity {
     constructor(id, type, isAuthority) {
         super(id, type, isAuthority);
 
-        this.neckHeight = 0.6;
+        this.headHeight = 1.7;
         this.worldYaw = 0;
 
         this.headState = {

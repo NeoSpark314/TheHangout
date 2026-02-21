@@ -118,16 +118,27 @@ export class LocalPlayer extends PlayerEntity {
         // 3. Update Camera Position attached to Player
         const pos = this.rigidBody.translation();
 
-        // Explicitly sync local mesh to rigid body position (previously handled by PhysicsManager)
-        this.mesh.position.set(pos.x, pos.y, pos.z);
+        // Explicitly sync local mesh to floor base of rigid body (which is capsule center - 0.9)
+        const groundY = pos.y - 0.9;
+        this.mesh.position.set(pos.x, groundY, pos.z);
 
-        // Camera rig is slightly offset towards the top of the capsule
-        // We subtract the roomScaleOffset so virtual origin stays stationary when walking
-        render.cameraGroup.position.set(
-            pos.x - this.roomScaleOffset.x,
-            pos.y + 0.8,
-            pos.z - this.roomScaleOffset.z
-        );
+        const isXR = render.renderer.xr.enabled && render.renderer.xr.isPresenting;
+
+        // Camera rig is slightly offset towards the top of the capsule for desktop, 
+        // or anchored to the floor for XR
+        if (isXR) {
+            render.cameraGroup.position.set(
+                pos.x - this.roomScaleOffset.x,
+                groundY,
+                pos.z - this.roomScaleOffset.z
+            );
+        } else {
+            render.cameraGroup.position.set(
+                pos.x,
+                groundY + 1.7, // 1.7m eye level for average 1.8m tall player
+                pos.z
+            );
+        }
 
         // Apply pitch and yaw to camera group (Third person/Desktop)
         render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
@@ -153,25 +164,22 @@ export class LocalPlayer extends PlayerEntity {
             }
         }
 
-        // Update dynamic neck height based on camera
-        // render.cameraGroup is at the player's root + 0.8 offset (line 223)
-        // the xrCamera is the HMD offset from that group.
-        // We want the neck height to be slightly below the camera
+        // Update dynamic headset height to adjust avatar scaling
         const cameraWorldPos = new THREE.Vector3();
-        if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
+        if (isXR) {
             const xrCamera = render.renderer.xr.getCamera(render.camera);
             xrCamera.getWorldPosition(cameraWorldPos);
         } else {
             render.camera.getWorldPosition(cameraWorldPos);
         }
+
         const playerWorldPos = new THREE.Vector3();
         this.mesh.getWorldPosition(playerWorldPos);
 
-        // Height of head above player ground
-        const headHeight = cameraWorldPos.y - playerWorldPos.y;
-        this.neckHeight = Math.max(0.2, headHeight - 0.2); // Neck is ~20cm below eyes
+        // Height of head above the player's ground plane
+        this.headHeight = Math.max(0.4, cameraWorldPos.y - playerWorldPos.y);
 
-        this.avatar.updatePosture(this.neckHeight);
+        this.avatar.updatePosture(this.headHeight);
 
         // Update Local Head Mesh to match camera orientation for others to see
         if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
@@ -336,9 +344,9 @@ export class LocalPlayer extends PlayerEntity {
         };
 
         return {
-            position: { x: pos.x, y: pos.y, z: pos.z },
+            position: { x: pos.x, y: pos.y - 0.9, z: pos.z }, // Broadcast grounded position
             yaw: this.worldYaw !== undefined ? this.worldYaw : this.yaw,
-            neckHeight: this.neckHeight,
+            headHeight: this.headHeight,
             head: headPayload,
             hands: handsPayload
         };

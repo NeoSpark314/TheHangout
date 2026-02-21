@@ -36,7 +36,7 @@ export class RemotePlayer extends PlayerEntity {
     setNetworkState(data) {
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);
         if (data.yaw !== undefined) this.targetYaw = data.yaw;
-        if (data.neckHeight !== undefined) this.neckHeight = data.neckHeight;
+        if (data.headHeight !== undefined) this.headHeight = data.headHeight;
 
         if (data.head) {
             if (data.head.position) this.headState.position.set(data.head.position.x, data.head.position.y, data.head.position.z);
@@ -68,8 +68,8 @@ export class RemotePlayer extends PlayerEntity {
         this.mesh.quaternion.slerp(targetQuaternion, lerpFactor);
 
         // 2. Interpolate Head & Height
-        this.currentNeckHeight = THREE.MathUtils.lerp(this.currentNeckHeight || 0.6, this.neckHeight, lerpFactor);
-        this.avatar.updatePosture(this.currentNeckHeight);
+        this.currentHeadHeight = THREE.MathUtils.lerp(this.currentHeadHeight || 1.7, this.headHeight, lerpFactor);
+        this.avatar.updatePosture(this.currentHeadHeight);
 
         // Calculate and apply slerped head quaternion
         const currentHeadQuat = this.avatar.headMesh.quaternion.clone();

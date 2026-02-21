@@ -7,7 +7,7 @@ export class Avatar {
         this.isLocal = isLocal;
 
         this.mesh = new THREE.Group();
-        this.currentNeckHeight = 0.6;
+        this.currentHeadHeight = 1.7;
 
         this.initVisuals();
     }
@@ -21,7 +21,7 @@ export class Avatar {
         const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
         // Rotate geometry to face forward (-Z)
         headGeometry.rotateY(Math.PI);
-        // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
+        // Anchor at bottom center (the neck)
         headGeometry.translate(0, headSize / 2, 0);
 
         const headMaterial = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
@@ -31,27 +31,22 @@ export class Avatar {
         const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
         this.headMesh.add(headOutline);
 
-        this.headMesh.position.y = 0.6; // Position at neck height
-
-        // Hide local head completely to prevent visual artifacts
-        if (this.isLocal) {
-            this.headMesh.visible = false;
-        }
-
+        this.headMesh.position.y = 1.5; // Default Neck height (1.7 eye level - 0.2)
+        if (this.isLocal) this.headMesh.visible = false;
         this.mesh.add(this.headMesh);
 
-        // 2. Torso (Vertical Line)
+        // 2. Torso (Vertical Line from Neck to Waist)
         const torsoGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.6, 0), // Base of neck
-            new THREE.Vector3(0, -0.2, 0) // Waist
+            new THREE.Vector3(0, 1.5, 0),
+            new THREE.Vector3(0, 0.85, 0)
         ]);
         this.torso = new THREE.Line(torsoGeom, outlineMaterial);
         this.mesh.add(this.torso);
 
-        // 3. Legs
+        // 3. Legs (Waist to floor)
         const legGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.1, 0), new THREE.Vector3(-0.2, -0.9, 0), // Left leg (Waist 1.0m to Floor 0m)
-            new THREE.Vector3(0, 0.1, 0), new THREE.Vector3(0.2, -0.9, 0)   // Right leg
+            new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(-0.2, 0, 0), // Left leg
+            new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(0.2, 0, 0)   // Right leg
         ]);
         this.legs = new THREE.LineSegments(legGeom, outlineMaterial);
         this.mesh.add(this.legs);
@@ -61,7 +56,7 @@ export class Avatar {
             new THREE.Vector3(-0.25, 0, 0), new THREE.Vector3(0.25, 0, 0)
         ]);
         this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
-        this.shoulders.position.y = 0.5; // Start at default
+        this.shoulders.position.y = 1.4; // Slightly below neck
         this.mesh.add(this.shoulders);
 
         // 5. Arms (Shoulder -> Elbow -> Wrist)
@@ -101,18 +96,28 @@ export class Avatar {
         }
     }
 
-    updatePosture(neckHeight) {
-        this.currentNeckHeight = neckHeight;
+    updatePosture(headHeight) {
+        this.currentHeadHeight = headHeight;
 
+        const neckHeight = Math.max(0.4, headHeight - 0.2);
         this.headMesh.position.y = neckHeight;
-        this.shoulders.position.y = neckHeight - 0.1; // Shoulders 10cm below neck
+        this.shoulders.position.y = neckHeight - 0.1;
 
-        // Update Torso Geometry (Shoulder to Waist)
+        const waistHeight = neckHeight * 0.55;
+
+        // Update Torso Geometry
         const torsoPoints = [
             new THREE.Vector3(0, neckHeight, 0),
-            new THREE.Vector3(0, 0.1, 0) // Waist is at 1.0m (0.1 relative to center)
+            new THREE.Vector3(0, waistHeight, 0)
         ];
         this.torso.geometry.setFromPoints(torsoPoints);
+
+        // Update Legs Geometry
+        const legPoints = [
+            new THREE.Vector3(0, waistHeight, 0), new THREE.Vector3(-0.2, 0, 0), // Left leg
+            new THREE.Vector3(0, waistHeight, 0), new THREE.Vector3(0.2, 0, 0)   // Right leg
+        ];
+        this.legs.geometry.setFromPoints(legPoints);
     }
 
     updateHeadOrientation(quaternion) {
@@ -125,7 +130,8 @@ export class Avatar {
     }
 
     updateArms(leftHandPos, rightHandPos) {
-        const shoulderY = this.currentNeckHeight - 0.1;
+        const neckHeight = Math.max(0.4, this.currentHeadHeight - 0.2);
+        const shoulderY = neckHeight - 0.1;
         const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
         const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
 
