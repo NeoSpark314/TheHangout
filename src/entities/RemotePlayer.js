@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Avatar } from './Avatar.js';
 import { PlayerEntity } from './PlayerEntity.js';
 import gameState from '../core/GameState.js';
+import eventBus from '../core/EventBus.js';
+import { EVENTS } from '../utils/Constants.js';
 
 export class RemotePlayer extends PlayerEntity {
     constructor(peerId) {
@@ -14,6 +16,8 @@ export class RemotePlayer extends PlayerEntity {
 
         // PlayerEntity provides this.headHeight, this.headState, and this.handStates
         // We will use them as our network interpolation targets
+
+        this.lastNetworkUpdateTime = performance.now();
 
         this.initAvatar();
     }
@@ -38,6 +42,8 @@ export class RemotePlayer extends PlayerEntity {
         if (data.yaw !== undefined) this.targetYaw = data.yaw;
         if (data.headHeight !== undefined) this.headHeight = data.headHeight;
 
+        this.lastNetworkUpdateTime = performance.now();
+
         if (data.head) {
             if (data.head.position) this.headState.position.set(data.head.position.x, data.head.position.y, data.head.position.z);
             if (data.head.quaternion) this.headState.quaternion.set(data.head.quaternion.x, data.head.quaternion.y, data.head.quaternion.z, data.head.quaternion.w);
@@ -59,6 +65,13 @@ export class RemotePlayer extends PlayerEntity {
 
     update(delta) {
         if (!this.mesh) return;
+
+        // Timeout tracking: If no updates for 5 seconds, mark for destruction (Peer JS missed close event)
+        if (performance.now() - this.lastNetworkUpdateTime > 5000) {
+            console.warn(`[RemotePlayer] Player ${this.peerId} timed out. Destroying.`);
+            eventBus.emit(EVENTS.PEER_DISCONNECTED, this.peerId);
+            return;
+        }
 
         const lerpFactor = 10 * delta;
 
