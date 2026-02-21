@@ -66,6 +66,9 @@ body {
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(8px);
     transition: opacity 0.5s ease;
+    overflow-y: auto;
+    /* Enable scrolling if panel is still too tall */
+    padding: 20px 0;
 }
 
 .panel {
@@ -384,4 +387,62 @@ body {
     position: relative;
     pointer-events: auto;
     overflow: hidden;
+}
+
+/* --- Mobile Landscape Optimization --- */
+@media (max-height: 500px) {
+    .panel {
+        padding: 1rem;
+        width: 95%;
+        max-width: 520px;
+        /* Slightly wider in landscape */
+    }
+
+    .panel h1 {
+        font-size: 1.4rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .panel p {
+        margin-bottom: 0.8rem;
+        font-size: 0.75rem;
+    }
+
+    .input-group {
+        margin-bottom: 0.8rem;
+    }
+
+    .input-group label {
+        margin-bottom: 0.2rem;
+        font-size: 0.9rem;
+    }
+
+    .input-group input {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .action-stack {
+        gap: 5px;
+    }
+
+    .action-row {
+        gap: 5px;
+    }
+
+    .action-row .primary-btn {
+        padding: 8px 10px;
+    }
+
+    .status,
+    .error-msg {
+        margin-top: 2px;
+        font-size: 0.75rem;
+        min-height: 1.2em;
+    }
+
+    .version-info {
+        bottom: 5px;
+        font-size: 0.55rem;
+    }
 }
