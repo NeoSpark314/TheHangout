@@ -16,15 +16,6 @@ export class NetworkManager {
         // Bind events
         eventBus.on(EVENTS.CREATE_ROOM, () => this.initHost());
         eventBus.on(EVENTS.JOIN_ROOM, (roomId) => this.initGuest(roomId));
-
-        // Listen for local face updates to broadcast
-        eventBus.on(EVENTS.DRAWING_UPDATED, (dataURL) => {
-            if (gameState.isHost) {
-                this.broadcast(PACKET_TYPES.FACE_UPDATE, dataURL);
-            } else if (gameState.roomId) {
-                this.sendData(gameState.roomId, PACKET_TYPES.FACE_UPDATE, dataURL);
-            }
-        });
     }
 
     initHost(customId) {
@@ -116,12 +107,6 @@ export class NetworkManager {
                         this.relayToOthers(senderId, parsed.type, parsed.payload);
                     }
                     break;
-                case PACKET_TYPES.FACE_UPDATE:
-                    this.applyFaceUpdate(senderId, parsed.payload);
-                    if (gameState.isHost) {
-                        this.relayToOthers(senderId, parsed.type, parsed.payload);
-                    }
-                    break;
                 default:
                     console.warn('[NetworkManager] Unknown packet type:', parsed.type);
             }
@@ -138,14 +123,6 @@ export class NetworkManager {
             if (entity && !entity.isAuthority) {
                 entity.setNetworkState(stateData.state);
             }
-        }
-    }
-
-    applyFaceUpdate(senderId, data) {
-        if (!gameState.managers.entity) return;
-        const rp = gameState.managers.entity.getEntity(senderId);
-        if (rp && rp.type === 'REMOTE_PLAYER') {
-            rp.setFace(data);
         }
     }
 

@@ -24,29 +24,7 @@ export class Avatar {
         // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
         headGeometry.translate(0, headSize / 2, 0);
 
-        this.headCanvas = document.createElement('canvas');
-        this.headCanvas.width = 256;
-        this.headCanvas.height = 256;
-        this.headCtx = this.headCanvas.getContext('2d');
-
-        // Initial generic face
-        this.headCtx.fillStyle = '#0a041c';
-        this.headCtx.fillRect(0, 0, 256, 256);
-        this.headCtx.strokeStyle = '#' + this.color.toString(16).padStart(6, '0');
-        this.headCtx.lineWidth = 10;
-        this.headCtx.strokeRect(10, 10, 236, 236);
-
-        // Smiley Face Placeholder
-        this.headCtx.beginPath();
-        this.headCtx.arc(80, 80, 20, 0, Math.PI * 2);
-        this.headCtx.arc(176, 80, 20, 0, Math.PI * 2);
-        this.headCtx.stroke();
-        this.headCtx.beginPath();
-        this.headCtx.arc(128, 140, 60, 0.2, Math.PI - 0.2);
-        this.headCtx.stroke();
-
-        this.headTexture = new THREE.CanvasTexture(this.headCanvas);
-        const headMaterial = new THREE.MeshBasicMaterial({ map: this.headTexture, side: THREE.DoubleSide });
+        const headMaterial = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
 
         this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
         const headEdges = new THREE.EdgesGeometry(headGeometry);
@@ -121,16 +99,6 @@ export class Avatar {
             this.mesh.add(rightJoint);
             this.handMeshes.right.push(rightJoint);
         }
-    }
-
-    setFace(dataURL) {
-        const img = new Image();
-        img.onload = () => {
-            this.headCtx.clearRect(0, 0, 256, 256);
-            this.headCtx.drawImage(img, 0, 0);
-            this.headTexture.needsUpdate = true;
-        };
-        img.src = dataURL;
     }
 
     updatePosture(neckHeight) {
@@ -294,7 +262,5 @@ export class Avatar {
                 }
             }
         });
-
-        if (this.headTexture) this.headTexture.dispose();
     }
 }

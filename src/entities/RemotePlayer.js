@@ -57,10 +57,6 @@ export class RemotePlayer extends PlayerEntity {
         }
     }
 
-    setFace(dataURL) {
-        this.avatar.setFace(dataURL);
-    }
-
     update(delta) {
         if (!this.mesh) return;
 

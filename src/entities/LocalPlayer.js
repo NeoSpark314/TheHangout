@@ -29,7 +29,6 @@ export class LocalPlayer extends PlayerEntity {
 
         this.initAvatar();
         this.initInput();
-        this.initFaceSync();
     }
 
     initAvatar() {
@@ -136,8 +135,9 @@ export class LocalPlayer extends PlayerEntity {
 
         // --- Room Scale Follow ---
         if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
+            const xrCamera = render.renderer.xr.getCamera(render.camera);
             const hmdWorldPos = new THREE.Vector3();
-            render.camera.getWorldPosition(hmdWorldPos);
+            xrCamera.getWorldPosition(hmdWorldPos);
 
             // The capsule should move to the headset's horizontal world position
             const deltaX = hmdWorldPos.x - pos.x;
@@ -155,10 +155,15 @@ export class LocalPlayer extends PlayerEntity {
 
         // Update dynamic neck height based on camera
         // render.cameraGroup is at the player's root + 0.8 offset (line 223)
-        // render.camera is the HMD offset from that group.
+        // the xrCamera is the HMD offset from that group.
         // We want the neck height to be slightly below the camera
         const cameraWorldPos = new THREE.Vector3();
-        render.camera.getWorldPosition(cameraWorldPos);
+        if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
+            const xrCamera = render.renderer.xr.getCamera(render.camera);
+            xrCamera.getWorldPosition(cameraWorldPos);
+        } else {
+            render.camera.getWorldPosition(cameraWorldPos);
+        }
         const playerWorldPos = new THREE.Vector3();
         this.mesh.getWorldPosition(playerWorldPos);
 
@@ -170,8 +175,9 @@ export class LocalPlayer extends PlayerEntity {
 
         // Update Local Head Mesh to match camera orientation for others to see
         if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
+            const xrCamera = render.renderer.xr.getCamera(render.camera);
             const hmdWorldQuat = new THREE.Quaternion();
-            render.camera.getWorldQuaternion(hmdWorldQuat);
+            xrCamera.getWorldQuaternion(hmdWorldQuat);
 
             // 1. Update the stick figure body FIRST to follow the HMD's yaw
             const hmdEuler = new THREE.Euler().setFromQuaternion(hmdWorldQuat, 'YXZ');
@@ -301,14 +307,6 @@ export class LocalPlayer extends PlayerEntity {
         // Update Arms to connect to hands (or default positions if no hands tracked)
         this.avatar.updateArms(leftData.rootPos, rightData.rootPos);
     }
-
-    initFaceSync() {
-        eventBus.on(EVENTS.DRAWING_UPDATED, (dataURL) => {
-            this.avatar.setFace(dataURL);
-            // Broadcast is now handled by NetworkManager listening to DRAWING_UPDATED
-        });
-    }
-
 
     getNetworkState() {
         if (!this.rigidBody) return null;

@@ -20,17 +20,7 @@ export class UIManager {
         this.copyBtn = document.getElementById('copy-btn');
         this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
 
-        // Face UI
-        this.faceUi = document.getElementById('face-ui');
-        this.faceCanvas = document.getElementById('face-canvas');
-        this.faceCtx = this.faceCanvas ? this.faceCanvas.getContext('2d') : null;
-        this.faceClearBtn = document.getElementById('face-clear-btn');
-        this.faceCloseBtn = document.getElementById('face-close-btn');
-        this.faceToggleBtn = document.getElementById('face-toggle-btn');
-
-        this.drawing = false;
-        this.lastX = 0;
-        this.lastY = 0;
+        this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
 
         this.init();
     }
@@ -66,12 +56,8 @@ export class UIManager {
         if (this.startBtn) {
             this.startBtn.addEventListener('click', () => {
                 this.hideOverlay();
-                // Show face toggle once game starts
-                if (this.faceToggleBtn) this.faceToggleBtn.style.display = 'flex';
             });
         }
-
-        this.initFaceDrawing();
 
         // Listen for network events
         eventBus.on(EVENTS.HOST_READY, (peerId) => {
@@ -175,85 +161,5 @@ export class UIManager {
                 this.overlay.style.display = 'none';
             }, 500);
         }
-    }
-
-    initFaceDrawing() {
-        if (!this.faceCanvas || !this.faceCtx) return;
-
-        // Setup Brush
-        this.faceCtx.strokeStyle = '#00ffff';
-        this.faceCtx.lineWidth = 12;
-        this.faceCtx.lineCap = 'round';
-        this.faceCtx.lineJoin = 'round';
-
-        const getPos = (e) => {
-            const rect = this.faceCanvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {
-                x: (clientX - rect.left) * (this.faceCanvas.width / rect.width),
-                y: (clientY - rect.top) * (this.faceCanvas.height / rect.height)
-            };
-        };
-
-        const startDrawing = (e) => {
-            this.drawing = true;
-            const { x, y } = getPos(e);
-            this.lastX = x;
-            this.lastY = y;
-        };
-
-        const draw = (e) => {
-            if (!this.drawing) return;
-            e.preventDefault();
-            const { x, y } = getPos(e);
-
-            this.faceCtx.beginPath();
-            this.faceCtx.moveTo(this.lastX, this.lastY);
-            this.faceCtx.lineTo(x, y);
-            this.faceCtx.stroke();
-
-            this.lastX = x;
-            this.lastY = y;
-        };
-
-        const stopDrawing = () => {
-            if (this.drawing) {
-                this.drawing = false;
-                eventBus.emit(EVENTS.DRAWING_UPDATED, this.faceCanvas.toDataURL());
-            }
-        };
-
-        this.faceCanvas.addEventListener('mousedown', startDrawing);
-        this.faceCanvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDrawing);
-
-        this.faceCanvas.addEventListener('touchstart', startDrawing);
-        this.faceCanvas.addEventListener('touchmove', draw);
-        window.addEventListener('touchend', stopDrawing);
-
-        this.faceClearBtn.addEventListener('click', () => {
-            this.faceCtx.fillStyle = '#0a041c';
-            this.faceCtx.fillRect(0, 0, this.faceCanvas.width, this.faceCanvas.height);
-            // Re-stroke border
-            this.faceCtx.strokeStyle = '#00ffff';
-            this.faceCtx.lineWidth = 10;
-            this.faceCtx.strokeRect(10, 10, 236, 236);
-
-            eventBus.emit(EVENTS.DRAWING_UPDATED, this.faceCanvas.toDataURL());
-        });
-
-        this.faceCloseBtn.addEventListener('click', () => {
-            this.faceUi.style.display = 'none';
-            this.faceToggleBtn.style.display = 'flex';
-        });
-
-        this.faceToggleBtn.addEventListener('click', () => {
-            this.faceUi.style.display = 'flex';
-            this.faceToggleBtn.style.display = 'none';
-        });
-
-        // Initial clear to set background
-        this.faceClearBtn.click();
     }
 }
