@@ -18,6 +18,11 @@ export class PlayerManager {
     init() {
         console.log('[PlayerManager] Initializing Local Player');
         gameState.localPlayer = new LocalPlayer();
+
+        // Register the local player with the EntityManager.
+        // It's assigned a temporary ID until NetworkManager assigns a real peer ID if hosting/joining.
+        gameState.managers.entity.addEntity(gameState.localPlayer);
+
         this.initialized = true;
     }
 
@@ -27,48 +32,44 @@ export class PlayerManager {
             // Wait, the host is a player too in a P2P mesh! 
         }
 
-        // For now, spawn a basic remote player stub
         console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
         const rp = new RemotePlayer(peerId);
+
+        // Use EntityManager instead of manual map
+        gameState.managers.entity.addEntity(rp);
+
+        // Keep the legacy map updated just in case other systems (like UI) rely on it
         gameState.remotePlayers.set(peerId, rp);
     }
 
     onPeerDisconnected(peerId) {
         console.log(`[PlayerManager] Removing remote player for ${peerId}`);
-        // Cleanup Three.js meshes and Rapier bodies later
+        gameState.managers.entity.removeEntity(peerId);
         gameState.remotePlayers.delete(peerId);
     }
 
     update(delta) {
-        // Note: The GameEngine loop already calls update on localPlayer and remotePlayers.
-        // The PlayerManager update loop is for high-level manager tasks, which currently is empty.
+        // PlayerManager update loop is for high-level manager tasks.
     }
 
     onNetworkData({ senderId, type, data }) {
-        if (type === 'INPUT') {
-            let rp = gameState.remotePlayers.get(senderId);
+        // We will move generic state sync out of here entirely to NetworkManager.
+        // This method can be removed or used for Player-Manager specific events like "Player Name Changed".
 
-            // If we receive input from a peer we haven't spawned yet, spawn them!
-            if (!rp && senderId !== gameState.managers.network.peer?.id) {
-                this.onPeerConnected(senderId);
-                rp = gameState.remotePlayers.get(senderId);
-            }
-
-            if (rp) {
-                rp.setTargetState(data);
-            }
-        } else if (type === 'FACE') {
-            let rp = gameState.remotePlayers.get(senderId);
-            if (rp) {
+        // As a temporary fallback until NetworkManager is fully refactored, we route FACE updates here
+        // or let NetworkManager handle it genericly later.
+        if (type === 'FACE') {
+            const rp = gameState.managers.entity.getEntity(senderId);
+            if (rp && rp.type === 'REMOTE_PLAYER') {
                 rp.setFace(data);
             }
-        }
 
-        // If we are Host, we must relay this input/face to all OTHER guests so everyone sees everyone!
-        if (gameState.isHost) {
-            for (const [peerId, conn] of gameState.managers.network.connections.entries()) {
-                if (conn.open && peerId !== senderId) {
-                    gameState.managers.network.sendData(peerId, type, data);
+            // Host relays face updates
+            if (gameState.isHost) {
+                for (const [peerId, conn] of gameState.managers.network.connections.entries()) {
+                    if (conn.open && peerId !== senderId) {
+                        gameState.managers.network.sendData(peerId, type, data);
+                    }
                 }
             }
         }

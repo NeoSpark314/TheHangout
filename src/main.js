@@ -8,6 +8,7 @@ import { PhysicsManager } from './managers/PhysicsManager.js';
 import { RenderManager } from './managers/RenderManager.js';
 import { WorldManager } from './managers/WorldManager.js';
 import { PlayerManager } from './managers/PlayerManager.js';
+import { EntityManager } from './managers/EntityManager.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
 
@@ -15,6 +16,7 @@ async function bootstrap() {
   console.log('Bootstrapping TheHangout...');
 
   // Initialize Managers
+  gameState.managers.entity = new EntityManager();
   gameState.managers.ui = new UIManager();
   gameState.managers.network = new NetworkManager();
   gameState.managers.render = new RenderManager();

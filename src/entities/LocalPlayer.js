@@ -1,12 +1,16 @@
 // entities/LocalPlayer.js
 import * as THREE from 'three';
+import { Avatar } from './Avatar.js';
+import { NetworkEntity } from './NetworkEntity.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 
-export class LocalPlayer {
+export class LocalPlayer extends NetworkEntity {
     constructor() {
+        super('local-player-id-temp', 'LOCAL_PLAYER', true); // Temporarily true, id should be assigned by NetworkManager ultimately
+
         this.speed = 5.0;
         this.turnSpeed = 0.002;
 
@@ -22,7 +26,14 @@ export class LocalPlayer {
         this.pitch = 0;
         this.yaw = 0;
 
-        this.neckHeight = 0.6; // Current dynamic neck height
+        this.neckHeight = 0.6; // 1.5m above ground (with 0.9 center)
+        this.roomScaleOffset = new THREE.Vector3(0, 0, 0); // Offset between physics body and virtual origin
+
+        // Hand states for networking
+        this.handStates = {
+            left: { active: false, position: new THREE.Vector3(), quaternion: new THREE.Quaternion() },
+            right: { active: false, position: new THREE.Vector3(), quaternion: new THREE.Quaternion() }
+        };
 
         this.initAvatar();
         this.initInput();
@@ -33,92 +44,9 @@ export class LocalPlayer {
         const { render, physics } = gameState.managers;
         if (!render || !physics) return;
 
-        // --- Visible Avatar (Stick Figure) ---
-        // Create root group for the avatar visual
-        this.mesh = new THREE.Group();
-
-        // Materials (Neon Cyan)
-        const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff });
-        const solidDark = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
-
-        // 1. Head (Flat Square with Canvas Texture)
-        const headSize = 0.4;
-        const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
-        // Rotate geometry to face forward (-Z)
-        headGeometry.rotateY(Math.PI);
-        // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
-        headGeometry.translate(0, headSize / 2, 0);
-
-        // Placeholder Canvas Texture (256x256)
-        this.headCanvas = document.createElement('canvas');
-        this.headCanvas.width = 256;
-        this.headCanvas.height = 256;
-        const ctx = this.headCanvas.getContext('2d');
-        ctx.fillStyle = '#0a041c'; // Dark background
-        ctx.fillRect(0, 0, 256, 256);
-        ctx.strokeStyle = '#00ffff';
-        ctx.lineWidth = 10;
-        ctx.strokeRect(10, 10, 236, 236); // Simple border
-        // Smiley Face Placeholder
-        ctx.beginPath();
-        ctx.arc(80, 80, 20, 0, Math.PI * 2);
-        ctx.arc(176, 80, 20, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(128, 140, 60, 0.2, Math.PI - 0.2);
-        ctx.stroke();
-
-        this.headTexture = new THREE.CanvasTexture(this.headCanvas);
-        const headMaterial = new THREE.MeshBasicMaterial({ map: this.headTexture, side: THREE.DoubleSide });
-
-        this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
-        // Add neon border to head
-        const headEdges = new THREE.EdgesGeometry(headGeometry);
-        const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
-        this.headMesh.add(headOutline);
-
-        this.headMesh.position.y = 0.6; // Position at neck height
-        this.headMesh.visible = false; // Hide local head completely to prevent visual artifacts
-
-        this.mesh.add(this.headMesh);
-
-        // 2. Torso (Vertical Line)
-        const torsoGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.6, 0), // Base of neck
-            new THREE.Vector3(0, -0.2, 0) // Waist
-        ]);
-        this.torso = new THREE.Line(torsoGeom, outlineMaterial);
-        this.mesh.add(this.torso);
-
-        // 3. Legs
-        const legGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-0.15, -0.2, 0), // Left Waist
-            new THREE.Vector3(-0.15, -1.0, 0), // Left Foot
-            new THREE.Vector3(0.15, -0.2, 0),  // Right Waist
-            new THREE.Vector3(0.15, -1.0, 0)   // Right Foot
-        ]);
-        // To draw them as disconnected segments, we need pairs
-        const legsSegments = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(-0.2, -1.0, 0), // Left leg
-            new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0.2, -1.0, 0)  // Right leg
-        ]);
-        this.legs = new THREE.LineSegments(legsSegments, outlineMaterial);
-        this.mesh.add(this.legs);
-
-        // 4. Shoulders (Horizontal Line)
-        const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-0.25, 0, 0), new THREE.Vector3(0.25, 0, 0)
-        ]);
-        this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
-        this.shoulders.position.y = 0.5; // Start at default
-        this.mesh.add(this.shoulders);
-
-        // 5. Arms (Shoulder -> Elbow -> Wrist)
-        this.arms = new THREE.LineSegments(
-            new THREE.BufferGeometry(),
-            outlineMaterial
-        );
-        this.mesh.add(this.arms);
+        // Instantiate unified Avatar entity, marked as local implicitly or explicitly
+        this.avatar = new Avatar({ color: 0x00ffff, isLocal: true });
+        this.mesh = this.avatar.mesh; // Expose the root group for existing code that uses this.mesh
 
         render.add(this.mesh);
 
@@ -132,32 +60,14 @@ export class LocalPlayer {
 
         this.rigidBody = physics.world.createRigidBody(rigidBodyDesc);
 
-        // Height is 2.0 total (-1.0 to 1.0 local)
-        const colliderDesc = RAPIER.ColliderDesc.capsule(0.5, 0.3); // half-height, radius
+        // Height is 1.8 total (-0.9 to 0.9 local)
+        const colliderDesc = RAPIER.ColliderDesc.capsule(0.6, 0.3); // half-height 0.6 + radius 0.3 = 0.9
         physics.world.createCollider(colliderDesc, this.rigidBody);
 
         physics.dynamicBodies.push({
             mesh: this.mesh,
             rigidBody: this.rigidBody
         });
-
-        // --- XR Hand Tracking Visuals ---
-        this.handMeshes = { left: [], right: [] };
-        const jointGeom = new THREE.BoxGeometry(0.015, 0.015, 0.015);
-        const jointMatLeft = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-        const jointMatRight = new THREE.MeshBasicMaterial({ color: 0xff00ff });
-
-        for (let i = 0; i < 25; i++) {
-            const leftJoint = new THREE.Mesh(jointGeom, jointMatLeft);
-            leftJoint.visible = false;
-            this.mesh.add(leftJoint);
-            this.handMeshes.left.push(leftJoint);
-
-            const rightJoint = new THREE.Mesh(jointGeom, jointMatRight);
-            rightJoint.visible = false;
-            this.mesh.add(rightJoint);
-            this.handMeshes.right.push(rightJoint);
-        }
     }
 
     initInput() {
@@ -196,13 +106,13 @@ export class LocalPlayer {
         const direction = new THREE.Vector3(0, 0, 0);
 
         // Keyboard Input
-        if (this.keys.w) direction.z -= 1;
-        if (this.keys.s) direction.z += 1;
+        if (this.keys.w) direction.z += 1; // User reported flipped, switching to +Z
+        if (this.keys.s) direction.z -= 1;
         if (this.keys.a) direction.x -= 1;
         if (this.keys.d) direction.x += 1;
 
-        // XR Controller Input
-        this.updateXRInput(direction);
+        // XR Locomotion Update
+        this.updateXRLocomotion(direction);
 
         direction.normalize();
 
@@ -223,28 +133,33 @@ export class LocalPlayer {
         const pos = this.rigidBody.translation();
 
         // Camera rig is slightly offset towards the top of the capsule
-        render.cameraGroup.position.set(pos.x, pos.y + 0.8, pos.z);
+        // We subtract the roomScaleOffset so virtual origin stays stationary when walking
+        render.cameraGroup.position.set(
+            pos.x - this.roomScaleOffset.x,
+            pos.y + 0.8,
+            pos.z - this.roomScaleOffset.z
+        );
 
         // Apply pitch and yaw to camera group (Third person/Desktop)
         render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
 
         // --- Room Scale Follow ---
-        // If in VR, the user might walk away from the center of the capsule.
-        // We want the physics capsule to move with the HMD's horizontal position.
         if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
-            const hmdLocalPos = new THREE.Vector3();
-            render.camera.getWorldPosition(hmdLocalPos);
-            // Height is handled by "Funny Spine", we only move X/Z in world space
-            const deltaX = hmdLocalPos.x - pos.x;
-            const deltaZ = hmdLocalPos.z - pos.z;
+            const hmdWorldPos = new THREE.Vector3();
+            render.camera.getWorldPosition(hmdWorldPos);
 
-            // If the user has walked significantly from the center, snap the physics body to them
-            // This prevents the "out of body" experience
+            // The capsule should move to the headset's horizontal world position
+            const deltaX = hmdWorldPos.x - pos.x;
+            const deltaZ = hmdWorldPos.z - pos.z;
+
             if (Math.abs(deltaX) > 0.01 || Math.abs(deltaZ) > 0.01) {
-                this.rigidBody.setTranslation({ x: hmdLocalPos.x, y: pos.y, z: hmdLocalPos.z }, true);
-                // The camera group is normally attached to the body, so we don't need to move it manually
-                // as the next update loop will place it at the new body position.
+                // Move physics body to HMD
+                this.rigidBody.setTranslation({ x: hmdWorldPos.x, y: pos.y, z: hmdWorldPos.z }, true);
+
+                // Track how much we moved the body relative to the virtual origin
+                this.roomScaleOffset.x += deltaX;
+                this.roomScaleOffset.z += deltaZ;
             }
         }
 
@@ -261,31 +176,32 @@ export class LocalPlayer {
         const headHeight = cameraWorldPos.y - playerWorldPos.y;
         this.neckHeight = Math.max(0.2, headHeight - 0.2); // Neck is ~20cm below eyes
 
-        // Update avatar pieces to match new neck height
-        this.headMesh.position.y = this.neckHeight;
-        this.shoulders.position.y = this.neckHeight - 0.1; // Shoulders 10cm below neck
-
-        // Update Torso Geometry (Shoulder to Waist)
-        const torsoPoints = [
-            new THREE.Vector3(0, this.neckHeight, 0),
-            new THREE.Vector3(0, -0.2, 0) // Waist is fixed
-        ];
-        this.torso.geometry.setFromPoints(torsoPoints);
+        this.avatar.updatePosture(this.neckHeight);
 
         // Update Local Head Mesh to match camera orientation for others to see
         if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
-            // In VR, the camera world quaternion is the true head orientation
-            const worldQuat = new THREE.Quaternion();
-            render.camera.getWorldQuaternion(worldQuat);
+            const hmdWorldQuat = new THREE.Quaternion();
+            render.camera.getWorldQuaternion(hmdWorldQuat);
 
-            // Convert to local space of the player mesh
+            // 1. Update the stick figure body FIRST to follow the HMD's yaw
+            const hmdEuler = new THREE.Euler().setFromQuaternion(hmdWorldQuat, 'YXZ');
+            this.mesh.rotation.y = hmdEuler.y;
+            this.worldYaw = hmdEuler.y;
+
+            // 2. Calculate head rotation RELATIVE to the newly rotated body
             const playerWorldQuat = new THREE.Quaternion();
             this.mesh.getWorldQuaternion(playerWorldQuat);
-            this.headMesh.quaternion.copy(playerWorldQuat.invert().multiply(worldQuat));
+
+            const localHeadQuat = playerWorldQuat.invert().multiply(hmdWorldQuat);
+            this.avatar.updateHeadOrientation(localHeadQuat);
         } else {
             // In Desktop, head just follows pitch (yaw is handled by body)
-            this.headMesh.rotation.set(this.pitch, 0, 0);
+            this.avatar.updateHeadRotation(new THREE.Euler(this.pitch, 0, 0));
+            this.worldYaw = this.yaw;
         }
+
+        // --- Update XR Avatar Visuals (Hands/Arms) AFTER mesh/body rotation is finalized ---
+        this.updateXRAvatarState();
 
         // 4. Emit event if we moved significantly
         if (direction.lengthSq() > 0) {
@@ -296,17 +212,12 @@ export class LocalPlayer {
         }
     }
 
-    updateXRInput(direction) {
+    updateXRLocomotion(direction) {
         const { render } = gameState.managers;
         if (!render || !render.renderer.xr.enabled) return;
 
         const session = render.renderer.xr.getSession();
         if (!session) return;
-
-        let leftHandActive = false;
-        let rightHandActive = false;
-        const leftHandRoot = new THREE.Vector3();
-        const rightHandRoot = new THREE.Vector3();
 
         // 1. Poll Gamepads for Locomotion/Jumping
         for (const source of session.inputSources) {
@@ -332,6 +243,14 @@ export class LocalPlayer {
                 }
             }
         }
+    }
+
+    updateXRAvatarState() {
+        const { render } = gameState.managers;
+        if (!render || !render.renderer.xr.enabled) return;
+
+        const session = render.renderer.xr.getSession();
+        if (!session) return;
 
         // 2. Poll Hand Tracking
         // In Three.js, getHand(0) and getHand(1) return Groups containing the joints
@@ -339,9 +258,10 @@ export class LocalPlayer {
         const hand1 = render.renderer.xr.getHand(1);
 
         const processHand = (hand, handednessStr) => {
-            const meshes = this.handMeshes[handednessStr];
+            const meshes = this.avatar.handMeshes[handednessStr];
             let active = false;
             let rootPos = new THREE.Vector3();
+            let rootQuat = new THREE.Quaternion();
 
             // Hand joints are populated if tracking is active
             if (hand && hand.joints && Object.keys(hand.joints).length > 0) {
@@ -369,6 +289,7 @@ export class LocalPlayer {
 
                         if (jointName === 'wrist') {
                             rootPos.copy(worldPos);
+                            rootQuat.copy(worldQuat);
                         }
                     } else {
                         meshes[i].visible = false;
@@ -380,11 +301,11 @@ export class LocalPlayer {
                     meshes[i].visible = false;
                 }
             }
-            return { active, rootPos };
+            return { active, rootPos, rootQuat };
         };
 
-        let leftData = { active: false, rootPos: new THREE.Vector3(-0.4, 0, 0) };
-        let rightData = { active: false, rootPos: new THREE.Vector3(0.4, 0, 0) };
+        let leftData = { active: false, rootPos: new THREE.Vector3(-0.4, 0, 0), rootQuat: new THREE.Quaternion() };
+        let rightData = { active: false, rootPos: new THREE.Vector3(0.4, 0, 0), rootQuat: new THREE.Quaternion() };
 
         // 3. Fallback to Controllers if no Hand Tracking
         if (session) {
@@ -400,93 +321,86 @@ export class LocalPlayer {
                         (handedness === 'right' && !rightData.active)) {
 
                         const worldPos = new THREE.Vector3();
+                        const worldQuat = new THREE.Quaternion();
                         controller.getWorldPosition(worldPos);
+                        controller.getWorldQuaternion(worldQuat);
                         this.mesh.worldToLocal(worldPos);
 
                         if (handedness === 'left') {
                             leftData.active = true;
                             leftData.rootPos.copy(worldPos);
+                            leftData.rootQuat.copy(worldQuat);
                         } else {
                             rightData.active = true;
                             rightData.rootPos.copy(worldPos);
+                            rightData.rootQuat.copy(worldQuat);
                         }
                     }
                 }
             }
         }
         // Attempt to determine handedness from underlying inputSources connected to hands.
-        // A robust implementation checks the XRInputSources, but let's assume standard order for local testing or update the arm IK simply.
         if (hand0.visible) leftData = processHand(hand0, 'left');
         if (hand1.visible) rightData = processHand(hand1, 'right');
 
+        // Store for networking
+        this.handStates.left.active = leftData.active;
+        this.handStates.left.position.copy(leftData.rootPos);
+        this.handStates.left.quaternion.copy(leftData.rootQuat);
+
+        this.handStates.right.active = rightData.active;
+        this.handStates.right.position.copy(rightData.rootPos);
+        this.handStates.right.quaternion.copy(rightData.rootQuat);
+
         // Update Arms to connect to hands (or default positions if no hands tracked)
-        this.updateArms(leftData.rootPos, rightData.rootPos);
+        this.avatar.updateArms(leftData.rootPos, rightData.rootPos);
     }
 
     initFaceSync() {
         eventBus.on(EVENTS.DRAWING_UPDATED, (dataURL) => {
-            const img = new Image();
-            img.onload = () => {
-                const ctx = this.headCanvas.getContext('2d');
-                ctx.clearRect(0, 0, 256, 256);
-                ctx.drawImage(img, 0, 0);
-                this.headTexture.needsUpdate = true;
+            this.avatar.setFace(dataURL);
 
-                // Broadcast to network
-                eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, {
-                    type: 'FACE_UPDATE',
-                    data: dataURL
-                });
-            };
-            img.src = dataURL;
+            // Broadcast to network
+            eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, {
+                type: 'FACE_UPDATE',
+                data: dataURL
+            });
         });
     }
 
-    updateArms(leftHandPos, rightHandPos) {
-        const shoulderY = this.neckHeight - 0.1;
-        const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
-        const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
 
-        // Improved Elbow IK Helper
-        const calculateElbow = (shoulder, hand) => {
-            const dist = shoulder.distanceTo(hand);
-            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
+    getNetworkState() {
+        if (!this.rigidBody) return null;
 
-            // Calculate a bend direction that is perpendicular to the arm-line 
-            // and generally points down and slightly out/back
-            const armDir = new THREE.Vector3().subVectors(hand, shoulder).normalize();
-            const down = new THREE.Vector3(0, -1, 0);
-            const side = new THREE.Vector3().crossVectors(armDir, down).normalize();
+        const pos = this.rigidBody.translation();
 
-            // Heuristic for elbow bend: more bend when hand is closer to shoulder
-            const bendAmount = Math.max(0, 0.4 - dist * 0.5);
-
-            // Bend result: downwards + slightly BACKWARDS (+Z)
-            const bend = new THREE.Vector3(0, -bendAmount, bendAmount * 0.5);
-            // Add a bit of "side" flare
-            bend.addScaledVector(side, shoulder.x > 0 ? 0.1 : -0.1);
-
-            return mid.add(bend);
+        // Build Head Payload
+        const headPayload = {
+            position: { x: this.avatar.headMesh.position.x, y: this.avatar.headMesh.position.y, z: this.avatar.headMesh.position.z },
+            quaternion: { x: this.avatar.headMesh.quaternion.x, y: this.avatar.headMesh.quaternion.y, z: this.avatar.headMesh.quaternion.z, w: this.avatar.headMesh.quaternion.w }
         };
 
-        const leftElbow = calculateElbow(leftShoulder, leftHandPos);
-        const rightElbow = calculateElbow(rightShoulder, rightHandPos);
+        // Build Hands Payload
+        const handsPayload = {
+            left: {
+                active: this.handStates.left.active,
+                position: { x: this.handStates.left.position.x, y: this.handStates.left.position.y, z: this.handStates.left.position.z },
+                quaternion: { x: this.handStates.left.quaternion.x, y: this.handStates.left.quaternion.y, z: this.handStates.left.quaternion.z, w: this.handStates.left.quaternion.w }
+            },
+            right: {
+                active: this.handStates.right.active,
+                position: { x: this.handStates.right.position.x, y: this.handStates.right.position.y, z: this.handStates.right.position.z },
+                quaternion: { x: this.handStates.right.quaternion.x, y: this.handStates.right.quaternion.y, z: this.handStates.right.quaternion.z, w: this.handStates.right.quaternion.w }
+            }
+        };
 
-        const positions = new Float32Array([
-            // Left Arm
-            leftShoulder.x, leftShoulder.y, leftShoulder.z,
-            leftElbow.x, leftElbow.y, leftElbow.z,
-            leftElbow.x, leftElbow.y, leftElbow.z,
-            leftHandPos.x, leftHandPos.y, leftHandPos.z,
-            // Right Arm
-            rightShoulder.x, rightShoulder.y, rightShoulder.z,
-            rightElbow.x, rightElbow.y, rightElbow.z,
-            rightElbow.x, rightElbow.y, rightElbow.z,
-            rightHandPos.x, rightHandPos.y, rightHandPos.z
-        ]);
-
-        this.arms.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        this.arms.geometry.computeBoundingSphere();
+        return {
+            position: { x: pos.x, y: pos.y, z: pos.z },
+            yaw: this.worldYaw !== undefined ? this.worldYaw : this.yaw,
+            neckHeight: this.neckHeight,
+            head: headPayload,
+            hands: handsPayload
+        };
     }
 
     jump() {

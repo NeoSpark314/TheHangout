@@ -17,6 +17,7 @@ class GameState {
             physics: null,
             render: null,
             world: null,
+            entity: null,
             ui: null,
             player: null,
             interaction: null,

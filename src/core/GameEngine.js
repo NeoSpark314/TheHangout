@@ -91,20 +91,12 @@ export class GameEngine {
             gameState.managers.world.update(delta);
         }
 
-        // Sync local and remote players
-        if (gameState.localPlayer) {
-            gameState.localPlayer.update(delta);
-        }
-        for (const remotePlayer of gameState.remotePlayers.values()) {
-            remotePlayer.update(delta);
+        // 5. Update All Entities Locally
+        if (gameState.managers.entity) {
+            gameState.managers.entity.update(delta);
         }
 
-        // sync interactables
-        for (const interactable of gameState.interactables.values()) {
-            interactable.update(delta);
-        }
-
-        // 5. Render
+        // 6. Render
         if (gameState.managers.render) {
             gameState.managers.render.render();
         }

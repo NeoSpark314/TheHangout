@@ -1,15 +1,18 @@
-// managers/PhysicsManager.js
 import RAPIER from '@dimforge/rapier3d-compat';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
+import { PhysicsEntity } from '../entities/PhysicsEntity.js';
+import gameState from '../core/GameState.js';
 
 export class PhysicsManager {
     constructor() {
         this.world = null;
-        this.dynamicBodies = []; // Map visual meshes to physics bodies
         this.rapierLoaded = false;
 
-        eventBus.on(EVENTS.NETWORK_DATA_RECEIVED, (e) => this.onNetworkData(e));
+        // Counter for generating sequential IDs for physics entities
+        this.nextPhysicsId = 0;
+
+        // Note: we can remove the manual network listener here as NetworkManager will genericly handle STATE updates via EntityManager
     }
 
     async init() {
@@ -47,9 +50,13 @@ export class PhysicsManager {
         const colliderDesc = RAPIER.ColliderDesc.cuboid(size / 2, size / 2, size / 2);
         this.world.createCollider(colliderDesc, rigidBody);
 
-        // Link for synchronization
-        if (mesh) {
-            this.dynamicBodies.push({ mesh, rigidBody });
+        // Turn this into a networked entity. 
+        // Only the host has authority over physics objects.
+        const entityId = `physics-box-${this.nextPhysicsId++}`;
+        const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
+
+        if (gameState.managers.entity) {
+            gameState.managers.entity.addEntity(physicsEntity);
         }
 
         return rigidBody;
@@ -58,38 +65,9 @@ export class PhysicsManager {
     step(delta) {
         if (!this.rapierLoaded || !this.world) return;
 
-        // We can step the simulation based on delta or a fixed time step.
-        // For simplicity, we just call step(), which uses its configured timestep.
+        // Step the actual physics simulation.
+        // Syncing mesh transforms from rigid bodies is now handled individually 
+        // by each PhysicsEntity during the EntityManager.update() pass.
         this.world.step();
-
-        // Sync physics transforms to visual meshes
-        for (const item of this.dynamicBodies) {
-            const position = item.rigidBody.translation();
-            const rotation = item.rigidBody.rotation();
-
-            item.mesh.position.set(position.x, position.y, position.z);
-            item.mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
-        }
-    }
-
-    onNetworkData({ senderId, type, data }) {
-        if (type === 'STATE' && !gameState.isHost) {
-            // We are a guest receiving authoritative physics state from the host
-            // `data` is an array of body states
-            data.forEach(state => {
-                const bodyObj = this.dynamicBodies[state.id];
-                if (bodyObj && bodyObj.mesh) {
-                    // Snap the visual mesh
-                    bodyObj.mesh.position.set(state.p[0], state.p[1], state.p[2]);
-                    bodyObj.mesh.quaternion.set(state.r[0], state.r[1], state.r[2], state.r[3]);
-
-                    // Also update the local rigid body so guest physical interactions remain somewhat accurate locally
-                    if (bodyObj.rigidBody) {
-                        bodyObj.rigidBody.setTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] }, true);
-                        bodyObj.rigidBody.setRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] }, true);
-                    }
-                }
-            });
-        }
     }
 }

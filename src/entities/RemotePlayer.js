@@ -1,9 +1,11 @@
-// entities/RemotePlayer.js
 import * as THREE from 'three';
+import { Avatar } from './Avatar.js';
+import { NetworkEntity } from './NetworkEntity.js';
 import gameState from '../core/GameState.js';
 
-export class RemotePlayer {
+export class RemotePlayer extends NetworkEntity {
     constructor(peerId) {
+        super(peerId, 'REMOTE_PLAYER', false);
         this.peerId = peerId;
 
         // Physical Interpolation targets
@@ -29,109 +31,43 @@ export class RemotePlayer {
         const { render } = gameState.managers;
         if (!render) return;
 
-        // Create root group
-        this.mesh = new THREE.Group();
-
-        // Neon Magenta Outline for Remote
-        const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
-        const solidDark = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
-
-        // 1. Head (Flat Square)
-        const headSize = 0.4;
-        const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
-        // Rotate geometry to face forward (-Z)
-        headGeometry.rotateY(Math.PI);
-        // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
-        headGeometry.translate(0, headSize / 2, 0);
-
-        // Face Texture for Remote
-        this.headCanvas = document.createElement('canvas');
-        this.headCanvas.width = 256;
-        this.headCanvas.height = 256;
-        const ctx = this.headCanvas.getContext('2d');
-        ctx.fillStyle = '#0a041c';
-        ctx.fillRect(0, 0, 256, 256);
-        ctx.strokeStyle = '#ff00ff';
-        ctx.lineWidth = 10;
-        ctx.strokeRect(10, 10, 236, 236);
-
-        this.headTexture = new THREE.CanvasTexture(this.headCanvas);
-        const headMaterial = new THREE.MeshBasicMaterial({ map: this.headTexture, side: THREE.DoubleSide });
-
-        this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
-        const headEdges = new THREE.EdgesGeometry(headGeometry);
-        const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
-        this.headMesh.add(headOutline);
-        this.headMesh.position.y = 0.6; // Position at neck height
-        this.mesh.add(this.headMesh);
-
-        // 2. Torso
-        const torsoGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.6, 0), new THREE.Vector3(0, -0.2, 0)
-        ]);
-        this.torso = new THREE.Line(torsoGeom, outlineMaterial);
-        this.mesh.add(this.torso);
-
-        // 3. Legs
-        const legsSegments = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(-0.2, -1.0, 0),
-            new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0.2, -1.0, 0)
-        ]);
-        this.legs = new THREE.LineSegments(legsSegments, outlineMaterial);
-        this.mesh.add(this.legs);
-
-        // 4. Shoulders
-        const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-0.25, 0, 0), new THREE.Vector3(0.25, 0, 0)
-        ]);
-        this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
-        this.shoulders.position.y = 0.5;
-        this.mesh.add(this.shoulders);
-
-        // 5. Arms (Shoulder -> Elbow -> Wrist)
-        this.arms = new THREE.LineSegments(new THREE.BufferGeometry(), outlineMaterial);
-        this.mesh.add(this.arms);
+        this.avatar = new Avatar({ color: 0xff00ff, isLocal: false });
+        this.mesh = this.avatar.mesh;
 
         // Start somewhat high up
         this.mesh.position.copy(this.targetPosition);
 
         render.add(this.mesh);
+
         console.log(`[RemotePlayer] Created advanced stick-figure avatar for ${this.peerId}`);
     }
 
-    setTargetState(data) {
+    setNetworkState(data) {
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);
         if (data.yaw !== undefined) this.targetYaw = data.yaw;
         if (data.neckHeight !== undefined) this.targetNeckHeight = data.neckHeight;
 
         if (data.head) {
-            this.targetHead.position.copy(data.head.position);
-            this.targetHead.quaternion.copy(data.head.quaternion);
+            if (data.head.position) this.targetHead.position.set(data.head.position.x, data.head.position.y, data.head.position.z);
+            if (data.head.quaternion) this.targetHead.quaternion.set(data.head.quaternion.x, data.head.quaternion.y, data.head.quaternion.z, data.head.quaternion.w);
         }
 
         if (data.hands) {
             if (data.hands.left) {
                 this.targetHands.left.active = data.hands.left.active;
-                this.targetHands.left.position.copy(data.hands.left.position);
-                this.targetHands.left.quaternion.copy(data.hands.left.quaternion);
+                if (data.hands.left.position) this.targetHands.left.position.set(data.hands.left.position.x, data.hands.left.position.y, data.hands.left.position.z);
+                if (data.hands.left.quaternion) this.targetHands.left.quaternion.set(data.hands.left.quaternion.x, data.hands.left.quaternion.y, data.hands.left.quaternion.z, data.hands.left.quaternion.w);
             }
             if (data.hands.right) {
                 this.targetHands.right.active = data.hands.right.active;
-                this.targetHands.right.position.copy(data.hands.right.position);
-                this.targetHands.right.quaternion.copy(data.hands.right.quaternion);
+                if (data.hands.right.position) this.targetHands.right.position.set(data.hands.right.position.x, data.hands.right.position.y, data.hands.right.position.z);
+                if (data.hands.right.quaternion) this.targetHands.right.quaternion.set(data.hands.right.quaternion.x, data.hands.right.quaternion.y, data.hands.right.quaternion.z, data.hands.right.quaternion.w);
             }
         }
     }
 
     setFace(dataURL) {
-        const img = new Image();
-        img.onload = () => {
-            const ctx = this.headCanvas.getContext('2d');
-            ctx.clearRect(0, 0, 256, 256);
-            ctx.drawImage(img, 0, 0);
-            this.headTexture.needsUpdate = true;
-        };
-        img.src = dataURL;
+        this.avatar.setFace(dataURL);
     }
 
     update(delta) {
@@ -146,75 +82,40 @@ export class RemotePlayer {
 
         // 2. Interpolate Head & Height
         this.currentNeckHeight = THREE.MathUtils.lerp(this.currentNeckHeight || 0.6, this.targetNeckHeight, lerpFactor);
+        this.avatar.updatePosture(this.currentNeckHeight);
 
-        this.headMesh.position.y = this.currentNeckHeight;
-        this.shoulders.position.y = this.currentNeckHeight - 0.1;
+        // Calculate and apply slerped head quaternion
+        const currentHeadQuat = this.avatar.headMesh.quaternion.clone();
+        currentHeadQuat.slerp(this.targetHead.quaternion, lerpFactor);
+        this.avatar.updateHeadOrientation(currentHeadQuat);
 
-        // Update Torso
-        const torsoPoints = [
-            new THREE.Vector3(0, this.currentNeckHeight, 0),
-            new THREE.Vector3(0, -0.2, 0)
-        ];
-        this.torso.geometry.setFromPoints(torsoPoints);
-
-        this.headMesh.quaternion.slerp(this.targetHead.quaternion, lerpFactor);
-
-        // 3. Update Arms IK (Simple direct line from shoulder to hand target)
-        // Convert world hand targets to local space for the arm lines
+        // 3. Update Arms IK
         const leftLocal = this.targetHands.left.position.clone();
         const rightLocal = this.targetHands.right.position.clone();
 
-        // If not active, rest arms
-        if (!this.targetHands.left.active) leftLocal.set(-0.4, 0, 0);
-        if (!this.targetHands.right.active) rightLocal.set(0.4, 0, 0);
+        if (!this.targetHands.left.active) {
+            leftLocal.set(-0.4, 0, 0);
+        }
+        if (!this.targetHands.right.active) {
+            rightLocal.set(0.4, 0, 0);
+        }
 
-        this.updateArms(leftLocal, rightLocal);
-    }
+        this.avatar.updateWristMarkers(this.targetHands.left, this.targetHands.right, lerpFactor);
 
-    updateArms(leftHandPos, rightHandPos) {
-        const shoulderY = (this.currentNeckHeight || 0.6) - 0.1;
-        const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
-        const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
+        // We still need the active local position for the arm IK, 
+        // the wrist markers themselves handle visual toggling.
+        // We override the default local pos if active to point to the wrist marker.
+        if (this.targetHands.left.active) leftLocal.copy(this.avatar.getLeftWristMarkerPosition());
+        if (this.targetHands.right.active) rightLocal.copy(this.avatar.getRightWristMarkerPosition());
 
-        const calculateElbow = (shoulder, hand) => {
-            const dist = shoulder.distanceTo(hand);
-            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
-
-            const armDir = new THREE.Vector3().subVectors(hand, shoulder).normalize();
-            const down = new THREE.Vector3(0, -1, 0);
-            const side = new THREE.Vector3().crossVectors(armDir, down).normalize();
-
-            const bendAmount = Math.max(0, 0.4 - dist * 0.5);
-            const bend = new THREE.Vector3(0, -bendAmount, bendAmount * 0.5);
-            bend.addScaledVector(side, shoulder.x > 0 ? 0.1 : -0.1);
-
-            return mid.add(bend);
-        };
-
-        const leftElbow = calculateElbow(leftShoulder, leftHandPos);
-        const rightElbow = calculateElbow(rightShoulder, rightHandPos);
-
-        const positions = new Float32Array([
-            leftShoulder.x, leftShoulder.y, leftShoulder.z,
-            leftElbow.x, leftElbow.y, leftElbow.z,
-            leftElbow.x, leftElbow.y, leftElbow.z,
-            leftHandPos.x, leftHandPos.y, leftHandPos.z,
-            rightShoulder.x, rightShoulder.y, rightShoulder.z,
-            rightElbow.x, rightElbow.y, rightElbow.z,
-            rightElbow.x, rightElbow.y, rightElbow.z,
-            rightHandPos.x, rightHandPos.y, rightHandPos.z
-        ]);
-
-        this.arms.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        this.arms.geometry.computeBoundingSphere();
+        this.avatar.updateArms(leftLocal, rightLocal);
     }
 
     destroy() {
         const { render } = gameState.managers;
         if (render && this.mesh) {
             render.remove(this.mesh);
-            this.mesh.geometry.dispose();
-            this.mesh.material.dispose();
+            this.avatar.destroy();
         }
     }
 }

@@ -86,18 +86,24 @@ export class NetworkManager {
     }
 
     handleData(senderId, data) {
-        // Parse JSON or binary depending on what we decide
-        // For prototype, we can assume JSON parsing for ease, eventually DataView for binary
         try {
             const parsed = JSON.parse(data);
 
-            // Dispatch based on packet type
             switch (parsed.type) {
                 case PACKET_TYPES.STATE_UPDATE:
-                    eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, { senderId, type: 'STATE', data: parsed.payload });
+                    // Host -> Guest update
+                    if (!gameState.isHost) {
+                        this.applyStateUpdate(parsed.payload);
+                    }
                     break;
                 case PACKET_TYPES.PLAYER_INPUT:
-                    eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, { senderId, type: 'INPUT', data: parsed.payload });
+                    // Guest -> Host input or Host -> Guest relay
+                    this.applyStateUpdate(parsed.payload);
+
+                    // Host relays guest updates to all other guests
+                    if (gameState.isHost) {
+                        this.relayToOthers(senderId, parsed.type, parsed.payload);
+                    }
                     break;
                 case PACKET_TYPES.FACE_UPDATE:
                     eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, { senderId, type: 'FACE', data: parsed.payload });
@@ -107,6 +113,26 @@ export class NetworkManager {
             }
         } catch (e) {
             console.error('[NetworkManager] Failed to parse incoming data', e);
+        }
+    }
+
+    applyStateUpdate(entityStates) {
+        if (!gameState.managers.entity) return;
+
+        for (const stateData of entityStates) {
+            const entity = gameState.managers.entity.getEntity(stateData.id);
+            if (entity && !entity.isAuthority) {
+                entity.setNetworkState(stateData.state);
+            }
+        }
+    }
+
+    relayToOthers(senderId, type, payload) {
+        const data = JSON.stringify({ type, payload });
+        for (const [peerId, conn] of this.connections.entries()) {
+            if (conn.open && peerId !== senderId) {
+                conn.send(data);
+            }
         }
     }
 
@@ -136,73 +162,19 @@ export class NetworkManager {
     }
 
     syncState() {
-        // 1. Everyone syncs their LocalPlayer position
-        if (gameState.localPlayer && gameState.localPlayer.rigidBody) {
-            const pos = gameState.localPlayer.rigidBody.translation();
-            const lp = gameState.localPlayer;
+        if (!gameState.managers.entity) return;
 
-            // Build Head Payload
-            const headPayload = {
-                position: { x: lp.headMesh.position.x, y: lp.headMesh.position.y, z: lp.headMesh.position.z },
-                quaternion: { x: lp.headMesh.quaternion.x, y: lp.headMesh.quaternion.y, z: lp.headMesh.quaternion.z, w: lp.headMesh.quaternion.w }
-            };
+        // Get all states this client is authoritative over
+        const authoritativeStates = gameState.managers.entity.getAuthoritativeStates();
 
-            // Build Hands Payload (Syncing wrist only for now to save bandwidth, full joints could be added later)
-            const handsPayload = {
-                left: { active: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } },
-                right: { active: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } }
-            };
+        if (authoritativeStates.length === 0) return;
 
-            if (lp.handMeshes.left[0] && lp.handMeshes.left[0].visible) {
-                handsPayload.left.active = true;
-                const m = lp.handMeshes.left[0];
-                handsPayload.left.position = { x: m.position.x, y: m.position.y, z: m.position.z };
-                handsPayload.left.quaternion = { x: m.quaternion.x, y: m.quaternion.y, z: m.quaternion.z, w: m.quaternion.w };
-            }
-            if (lp.handMeshes.right[0] && lp.handMeshes.right[0].visible) {
-                handsPayload.right.active = true;
-                const m = lp.handMeshes.right[0];
-                handsPayload.right.position = { x: m.position.x, y: m.position.y, z: m.position.z };
-                handsPayload.right.quaternion = { x: m.quaternion.x, y: m.quaternion.y, z: m.quaternion.z, w: m.quaternion.w };
-            }
-
-            const payload = {
-                position: { x: pos.x, y: pos.y, z: pos.z },
-                yaw: lp.worldYaw !== undefined ? lp.worldYaw : lp.yaw,
-                neckHeight: lp.neckHeight,
-                head: headPayload,
-                hands: handsPayload
-            };
-
-            if (gameState.isHost) {
-                // Host broadcasts its own input to everyone
-                this.broadcast(PACKET_TYPES.PLAYER_INPUT, payload);
-            } else if (gameState.roomId) {
-                // Guest sends its input only to the Host
-                this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, payload);
-            }
-        }
-
-        // 2. Only Host syncs the physics world state
-        if (gameState.isHost && gameState.managers.physics) {
-            const dynamicBodies = gameState.managers.physics.dynamicBodies;
-            const physicsState = [];
-
-            // For simplicity, we send [index, x,y,z, qx,qy,qz,qw]
-            // In a real game, this would be a compressed binary buffer
-            dynamicBodies.forEach((item, index) => {
-                const pos = item.rigidBody.translation();
-                const rot = item.rigidBody.rotation();
-                physicsState.push({
-                    id: index,
-                    p: [pos.x, pos.y, pos.z],
-                    r: [rot.x, rot.y, rot.z, rot.w]
-                });
-            });
-
-            if (physicsState.length > 0) {
-                this.broadcast(PACKET_TYPES.STATE_UPDATE, physicsState);
-            }
+        if (gameState.isHost) {
+            // Host broadcasts its authoritative states (e.g. its own player + all physics props) to everyone
+            this.broadcast(PACKET_TYPES.STATE_UPDATE, authoritativeStates);
+        } else if (gameState.roomId) {
+            // Guest sends its authoritative states (just its own player) to the Host
+            this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
         }
     }
 }
