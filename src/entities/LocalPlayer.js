@@ -4,14 +4,15 @@ import { PlayerEntity } from './PlayerEntity.js';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
+import { MovementSkill } from '../skills/MovementSkill.js';
 
 export class LocalPlayer extends PlayerEntity {
     constructor(id, spawnPos, spawnYaw) {
         super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
 
-        this.speed = 5.0;
-        this.turnSpeed = 0.002;
-
+        // --- Skill System ---
+        this.skills = [];
+        this.activeSkill = null;
 
         // --- Clean Architecture Transforms ---
         // xrOrigin is the physical center of the room (pinned to y=0)
@@ -32,16 +33,48 @@ export class LocalPlayer extends PlayerEntity {
         this.leftHandPose.position.set(-0.35, 1.1, -0.4);
         this.rightHandPose.position.set(0.35, 1.1, -0.4);
 
-        // Input angles
-        this.pitch = 0;
-        this.yaw = spawnYaw || 0;
-        this.xrOrigin.rotation.y = this.yaw;
+        this.xrOrigin.rotation.y = spawnYaw || 0;
 
-        this.wasSnapTurnPressed = false;
+        // Internal: set by MovementSkill so update() can check if movement happened
+        this._lastMoveVector = new THREE.Vector3();
 
         this.initAvatar();
-        this.initInput();
+        this.initSkills(spawnYaw);
     }
+
+    // --- Skill Management ---
+
+    initSkills(spawnYaw) {
+        const movement = new MovementSkill();
+        movement.init(this, spawnYaw);
+        this.addSkill(movement);
+    }
+
+    addSkill(skill) {
+        this.skills.push(skill);
+        if (skill.alwaysActive) {
+            skill.activate(this);
+        }
+    }
+
+    setActiveSkill(id) {
+        // Deactivate current non-always-active skill
+        if (this.activeSkill && !this.activeSkill.alwaysActive) {
+            this.activeSkill.deactivate(this);
+        }
+
+        const skill = this.skills.find(s => s.id === id);
+        if (skill && !skill.alwaysActive) {
+            skill.activate(this);
+            this.activeSkill = skill;
+        }
+    }
+
+    getSkill(id) {
+        return this.skills.find(s => s.id === id);
+    }
+
+    // --- Avatar ---
 
     initAvatar() {
         const { render } = gameState.managers;
@@ -59,104 +92,23 @@ export class LocalPlayer extends PlayerEntity {
         });
     }
 
-    initInput() {
-        // Keyboard and touch are now handled via InputManager
-        const canvas = document.getElementById('app');
-        canvas.addEventListener('click', () => {
-            const { render } = gameState.managers;
-            const isVR = render?.renderer?.xr?.isPresenting;
-            if (!isVR) canvas.requestPointerLock();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            const { render } = gameState.managers;
-            const isVR = render?.renderer?.xr?.isPresenting;
-
-            if (document.pointerLockElement === canvas && !isVR) {
-                // Apply manual yaw/pitch for desktop
-                this.applyTurn(-e.movementX * this.turnSpeed);
-                this.pitch -= e.movementY * this.turnSpeed;
-                this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
-            }
-        });
-    }
-
+    // --- Main Update ---
 
     update(delta) {
         const { render } = gameState.managers;
         if (!render) return;
 
-        const isVR = render.renderer.xr.isPresenting;
-        const activeCamera = render.camera; // In both modes, this is the main tracker
-
-        // --- 1. ORIENTATION (Pitch Only) ---
-        // Yaw is now handled incrementally via applyTurn()
-        if (!isVR) {
-            this.headPose.rotation.x = this.pitch;
-        } else {
-            // Capture physical height and pitch from the VR camera to ensure a smooth transition on exit
-            this.headPose.position.copy(render.camera.position);
-
-            const headEuler = new THREE.Euler().setFromQuaternion(render.camera.quaternion, 'YXZ');
-            this.pitch = headEuler.x;
-        }
-
-        // --- 2. SYNC RENDERER TRANSFORMS ---
-        render.cameraGroup.position.copy(this.xrOrigin.position);
-        render.cameraGroup.quaternion.copy(this.xrOrigin.quaternion);
-
-        if (!isVR) {
-            render.camera.position.copy(this.headPose.position);
-            render.camera.quaternion.copy(this.headPose.quaternion);
-        }
-
-        // Force a world matrix update on the hierarchy
-        render.cameraGroup.updateMatrixWorld(true);
-
-        // --- 3. LOCOMOTION ---
-        const moveVector = new THREE.Vector3(0, 0, 0);
-
-        // 3a. Combined Inputs (Keyboard + Mobile Stick) via InputManager
-        const input = gameState.managers.input;
-        if (input) {
-            const move = input.getMovementVector();
-            moveVector.x = move.x;
-            moveVector.z = move.y; // Forward/Back is Z
-
-            // 3b. Mobile Look Stick
-            const look = input.getLookVector();
-            if (look.x !== 0 || look.y !== 0) {
-                // Adjust sensitivities as needed
-                this.applyTurn(-look.x * this.turnSpeed * 15);
-                this.pitch -= look.y * this.turnSpeed * 15;
-                this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
+        // 1. Update all active skills (movement, etc.)
+        for (const skill of this.skills) {
+            if (skill.alwaysActive || skill === this.activeSkill) {
+                skill.update(delta, this);
             }
         }
 
-        // 3c. VR Joysticks
-        this.updateVRLocomotion(moveVector);
-
-        if (moveVector.lengthSq() > 0) {
-            moveVector.normalize();
-
-            // Extract the FINAL world heading from the camera
-            const headWorldQuat = new THREE.Quaternion();
-            render.camera.getWorldQuaternion(headWorldQuat);
-            const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
-
-            // Move relative to the world-space heading of the head
-            moveVector.applyEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
-            this.xrOrigin.position.addScaledVector(moveVector, this.speed * delta);
-
-            // Update world matrices after translation
-            render.cameraGroup.position.copy(this.xrOrigin.position);
-            render.cameraGroup.updateMatrixWorld(true);
-        }
-
-        // --- 4. MAP VR HANDS ---
+        // 2. Map VR Hands
         this.updateVRHands();
 
-        // --- 5. VISUAL AVATAR ---
+        // 3. Visual Avatar
         const headWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(headWorldPos);
         const finalHeadQuat = new THREE.Quaternion();
@@ -175,20 +127,18 @@ export class LocalPlayer extends PlayerEntity {
         const localHeadQuat = bodyQuat.invert().multiply(finalHeadQuat);
         this.avatar.updateHeadOrientation(localHeadQuat);
 
-        // --- 6. TRANSFORM HANDS TO LOCAL AVATAR SPACE ---
-        // Converts raw XR referenceSpace coordinates into this.mesh local space 
+        // 4. Transform Hands to Local Avatar Space
         this.transformHandsToAvatarSpace();
 
-        // Natively update our own Avatar IK using the cleanly converted coordinates!
+        // Update Avatar IK
         this.avatar.updateWristMarkers(this.handStates.left, this.handStates.right, 1.0);
 
         const leftArmPos = this.handStates.left.active ? this.avatar.getLeftWristMarkerPosition() : new THREE.Vector3(-0.35, 0.85, 0.1);
         const rightArmPos = this.handStates.right.active ? this.avatar.getRightWristMarkerPosition() : new THREE.Vector3(0.35, 0.85, 0.1);
         this.avatar.updateArms(leftArmPos, rightArmPos);
 
-        // --- 7. NETWORK ---
-        // Note: For network, we send the head world yaw as the 'yaw' to match visuals
-        if (moveVector.lengthSq() > 0 || Math.abs(delta) > 0) {
+        // 5. Network
+        if (this._lastMoveVector.lengthSq() > 0 || Math.abs(delta) > 0) {
             this.syncName();
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
         }
@@ -201,6 +151,8 @@ export class LocalPlayer extends PlayerEntity {
         }
     }
 
+    // --- VR Hand Tracking ---
+
     updateVRHands() {
         const { render } = gameState.managers;
         if (!render || !render.renderer.xr.isPresenting) {
@@ -212,7 +164,6 @@ export class LocalPlayer extends PlayerEntity {
         const session = render.renderer.xr.getSession();
         if (!session) return;
 
-        // Default to inactive, turn on if source provides a pose
         this.handStates.left.active = false;
         this.handStates.right.active = false;
 
@@ -223,11 +174,9 @@ export class LocalPlayer extends PlayerEntity {
 
         for (const source of session.inputSources) {
             if (source.hand) {
-                // TRUE HAND TRACKING
                 const handState = source.handedness === 'left' ? this.handStates.left : this.handStates.right;
                 handState.active = true;
 
-                // Track root wrist position to drive the arm IK
                 if (source.gripSpace) {
                     const wristPose = frame.getPose(source.gripSpace, referenceSpace);
                     if (wristPose) {
@@ -237,7 +186,6 @@ export class LocalPlayer extends PlayerEntity {
                     }
                 }
 
-                // Track the 25 individual joints
                 let i = 0;
                 for (const joint of source.hand.values()) {
                     if (i >= 25) break;
@@ -250,14 +198,12 @@ export class LocalPlayer extends PlayerEntity {
                 }
 
             } else if (source.gripSpace) {
-                // FALLBACK TO CONTROLLER GRIP
                 const pose = frame.getPose(source.gripSpace, referenceSpace);
                 if (pose) {
                     const handState = source.handedness === 'left' ? this.handStates.left : this.handStates.right;
                     const handPoseObj = source.handedness === 'left' ? this.leftHandPose : this.rightHandPose;
 
                     handState.active = true;
-                    // Ensure the joint array is visually cleared/hidden for standard controllers
                     for (let i = 0; i < 25; i++) {
                         handState.joints[i].position.set(0, 0, 0);
                     }
@@ -273,17 +219,10 @@ export class LocalPlayer extends PlayerEntity {
         const { render } = gameState.managers;
         if (!render || !render.renderer.xr.isPresenting) return;
 
-        // Ensure matrices are up to date before grabbing Inverse 
         this.mesh.updateMatrixWorld(true);
         this.xrOrigin.updateMatrixWorld(true);
 
-        // LocalPlayer.mesh sits underneath the scene root.
-        // xrOrigin sits underneath the scene root.
-        // WebXR 'referenceSpace' poses are relative to xrOrigin.
-
-        // Helper to transform a local XR coordinate into local Avatar coordinate
         const convertPose = (sourcePos, sourceQuat, targetPos, targetQuat) => {
-            // 1. Get world coordinate of the XR tracking point
             const worldPos = sourcePos.clone();
             worldPos.applyMatrix4(this.xrOrigin.matrixWorld);
 
@@ -292,7 +231,6 @@ export class LocalPlayer extends PlayerEntity {
             this.xrOrigin.getWorldQuaternion(xrOriginQuat);
             worldQuat.premultiply(xrOriginQuat);
 
-            // 2. Convert world coordinate into the Avatar.mesh's local space
             const localPos = this.mesh.worldToLocal(worldPos);
 
             const invMeshQuat = new THREE.Quaternion();
@@ -308,7 +246,6 @@ export class LocalPlayer extends PlayerEntity {
             convertPose(this.leftHandPose.position, this.leftHandPose.quaternion, this.handStates.left.position, this.handStates.left.quaternion);
             for (let i = 0; i < 25; i++) {
                 if (this.handStates.left.joints[i].position.lengthSq() > 0) {
-                    // Joint is active (not zeroed), clone its pre-captured state and convert
                     const rawPos = this.handStates.left.joints[i].position.clone();
                     const rawQuat = this.handStates.left.joints[i].quaternion.clone();
                     convertPose(rawPos, rawQuat, this.handStates.left.joints[i].position, this.handStates.left.joints[i].quaternion);
@@ -320,7 +257,6 @@ export class LocalPlayer extends PlayerEntity {
             convertPose(this.rightHandPose.position, this.rightHandPose.quaternion, this.handStates.right.position, this.handStates.right.quaternion);
             for (let i = 0; i < 25; i++) {
                 if (this.handStates.right.joints[i].position.lengthSq() > 0) {
-                    // Joint is active (not zeroed), clone its pre-captured state and convert
                     const rawPos = this.handStates.right.joints[i].position.clone();
                     const rawQuat = this.handStates.right.joints[i].quaternion.clone();
                     convertPose(rawPos, rawQuat, this.handStates.right.joints[i].position, this.handStates.right.joints[i].quaternion);
@@ -329,80 +265,7 @@ export class LocalPlayer extends PlayerEntity {
         }
     }
 
-    updateVRLocomotion(moveVector) {
-        const { render } = gameState.managers;
-        if (!render || !render.renderer.xr.isPresenting) return;
-
-        const session = render.renderer.xr.getSession();
-        if (!session) return;
-
-        for (const source of session.inputSources) {
-            if (source.gamepad) {
-                const axes = source.gamepad.axes;
-
-                if (source.handedness === 'left') {
-                    const xIdx = axes.length >= 4 ? 2 : 0;
-                    const zIdx = axes.length >= 4 ? 3 : 1;
-                    const dx = axes[xIdx] || 0;
-                    const dz = axes[zIdx] || 0;
-
-                    if (Math.abs(dx) > 0.1) moveVector.x += dx;
-                    if (Math.abs(dz) > 0.1) moveVector.z += dz;
-                }
-
-                if (source.handedness === 'right') {
-                    const xIdx = axes.length >= 4 ? 2 : 0;
-                    if (axes.length > xIdx && Math.abs(axes[xIdx]) > 0.5) {
-                        if (!this.wasSnapTurnPressed) {
-                            const sign = Math.sign(axes[xIdx]);
-                            const turnAngle = sign * (-Math.PI / 4); // 45 degrees
-                            this.applyTurn(turnAngle);
-                            this.wasSnapTurnPressed = true;
-                            this.triggerHaptic(0.5, 100);
-                        }
-                    } else {
-                        this.wasSnapTurnPressed = false;
-                    }
-                }
-            }
-        }
-    }
-
-    applyTurn(deltaYaw) {
-        const { render } = gameState.managers;
-        if (!render) return;
-
-        // 1. Pivot Point: Where the head is in the WORLD currently
-        const pivot = new THREE.Vector3();
-        render.camera.getWorldPosition(pivot);
-
-        // We only care about X/Z for origin pivoting to stay on floor
-        const pivotXZ = new THREE.Vector3(pivot.x, 0, pivot.z);
-
-        // 2. The Math:
-        // Translate origin so head is at 0,0,0 in world
-        // Rotate origin
-        // Translate origin back
-        this.xrOrigin.position.sub(pivotXZ);
-        this.xrOrigin.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), deltaYaw);
-        this.xrOrigin.position.add(pivotXZ);
-
-        // Update internal yaw tracking
-        this.yaw += deltaYaw;
-        this.xrOrigin.rotation.y = this.yaw;
-    }
-
-    triggerHaptic(intensity, duration) {
-        const { render } = gameState.managers;
-        const session = render?.renderer?.xr?.getSession();
-        if (!session) return;
-
-        for (const source of session.inputSources) {
-            if (source.gamepad && source.gamepad.hapticActuators && source.gamepad.hapticActuators.length > 0) {
-                source.gamepad.hapticActuators[0].pulse(intensity, duration);
-            }
-        }
-    }
+    // --- Network ---
 
     getNetworkState() {
         const headWorldPos = new THREE.Vector3();
@@ -427,7 +290,6 @@ export class LocalPlayer extends PlayerEntity {
                 joints: []
             };
 
-            // Only serialize joints if we actually captured valid spatial data
             if (handState.active && handState.joints[0].position.lengthSq() > 0) {
                 for (let i = 0; i < 25; i++) {
                     const j = handState.joints[i];
@@ -441,7 +303,7 @@ export class LocalPlayer extends PlayerEntity {
         };
 
         return {
-            id: this.id, // Explicitly include ID for relay
+            id: this.id,
             type: this.type,
             name: this.name,
             position: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z },
@@ -459,8 +321,18 @@ export class LocalPlayer extends PlayerEntity {
         };
     }
 
+    // --- Cleanup ---
+
     destroy() {
-        super.destroy(); // Call base NetworkEntity.destroy() to set destroyed = true
+        super.destroy();
+
+        // Destroy all skills
+        for (const skill of this.skills) {
+            skill.destroy();
+        }
+        this.skills = [];
+        this.activeSkill = null;
+
         const { render } = gameState.managers;
         if (render && this.mesh) {
             render.remove(this.mesh);
