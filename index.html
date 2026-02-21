@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TheHangout</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <!-- 3D Canvas Container -->
+    <div id="app"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-overlay" class="overlay">
+      <div class="panel">
+        <h1>🎮 TheHangout</h1>
+        <p>A WebXR Multiplayer Playground</p>
+
+        <div class="input-group">
+          <label for="player-name">Name:</label>
+          <input type="text" id="player-name" placeholder="Enter your name" />
+        </div>
+
+        <button id="join-btn" class="primary-btn">Play</button>
+
+        <div id="status-text" class="status"></div>
+
+        <div id="invite-container" class="invite-box" style="display: none;">
+          <p>Share this link to invite others:</p>
+          <div class="copy-group">
+            <input type="text" id="invite-link" readonly />
+            <button id="copy-btn">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
