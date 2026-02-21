@@ -236,12 +236,16 @@ export class Avatar {
                     jointGroup.getWorldQuaternion(worldQuat);
 
                     this.mesh.worldToLocal(worldPos);
+
+                    const invMeshQuat = this.mesh.quaternion.clone().invert();
+                    const localQuat = worldQuat.clone().premultiply(invMeshQuat);
+
                     meshes[i].position.copy(worldPos);
-                    meshes[i].quaternion.copy(worldQuat);
+                    meshes[i].quaternion.copy(localQuat);
 
                     if (jointName === 'wrist') {
                         rootPos.copy(worldPos);
-                        rootQuat.copy(worldQuat);
+                        rootQuat.copy(localQuat);
                     }
                 } else {
                     meshes[i].visible = false;

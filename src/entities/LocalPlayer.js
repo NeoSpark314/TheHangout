@@ -277,11 +277,13 @@ export class LocalPlayer extends PlayerEntity {
                         if (handedness === 'left') {
                             leftData.active = true;
                             leftData.rootPos.copy(worldPos);
-                            leftData.rootQuat.copy(worldQuat);
+                            const invMeshQuat = this.mesh.quaternion.clone().invert();
+                            leftData.rootQuat.copy(worldQuat).premultiply(invMeshQuat);
                         } else {
                             rightData.active = true;
                             rightData.rootPos.copy(worldPos);
-                            rightData.rootQuat.copy(worldQuat);
+                            const invMeshQuat = this.mesh.quaternion.clone().invert();
+                            rightData.rootQuat.copy(worldQuat).premultiply(invMeshQuat);
                         }
                     }
                 }
