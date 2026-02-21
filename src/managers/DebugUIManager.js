@@ -25,14 +25,17 @@ export class DebugUIManager {
         const material = new THREE.MeshBasicMaterial({
             map: this.texture,
             transparent: true,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            depthTest: false, // Ensure it draws over other things
+            depthWrite: false
         });
 
         const geometry = new THREE.PlaneGeometry(0.5, 0.25);
         this.panel = new THREE.Mesh(geometry, material);
 
         // Position it "in front" by default
-        this.panel.position.set(0, 0, -0.5);
+        this.panel.position.set(0, 0, -1); // Move further away to avoid clipping
+        this.panel.renderOrder = 999;
         this.group.add(this.panel);
     }
 

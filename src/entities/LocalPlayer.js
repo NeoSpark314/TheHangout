@@ -87,6 +87,9 @@ export class LocalPlayer extends PlayerEntity {
         // The headPose handles looking up/down
         this.headPose.rotation.x = this.pitch;
 
+        // Ensure world positions are recalculated
+        this.xrOrigin.updateMatrixWorld(true);
+
         // 2. Handle Locomotion (move the xrOrigin)
         const direction = new THREE.Vector3(0, 0, 0);
         if (this.keys.w) direction.z -= 1;

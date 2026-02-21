@@ -33,8 +33,8 @@ async function bootstrap() {
 
   // Initialize Debug UI (Needs Local Player's headPose eventually, but can start now)
   gameState.managers.debugUI = new DebugUIManager();
-  if (gameState.localPlayer) {
-    gameState.managers.debugUI.attachTo(gameState.localPlayer.headPose);
+  if (gameState.managers.render) {
+    gameState.managers.debugUI.attachTo(gameState.managers.render.camera);
   }
 
   // Generate World
