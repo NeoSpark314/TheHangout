@@ -74,8 +74,8 @@ export class Avatar {
         const jointMatLeft = new THREE.MeshBasicMaterial({ color: this.color }); // Use same color
         const jointMatRight = new THREE.MeshBasicMaterial({ color: this.color });
 
-        // Wrist markers for fallback
-        const wristGeom = new THREE.BoxGeometry(0.02, 0.02, 0.05);
+        // Wrist markers for fallback (shortened from 0.05 to 0.02 to remove long orientation lines)
+        const wristGeom = new THREE.BoxGeometry(0.02, 0.02, 0.02);
         this.wristMeshes = {
             left: new THREE.Mesh(wristGeom, jointMatLeft),
             right: new THREE.Mesh(wristGeom, jointMatRight)
@@ -182,7 +182,11 @@ export class Avatar {
     // Updates the generic hand representation. This is primarily for remote avatars
     // or when fine hand tracking joints are not available.
     updateWristMarkers(leftHandInfo, rightHandInfo, lerpFactor = 1.0) {
-        if (!leftHandInfo.active) {
+        // If they have full hand tracking active, hide generic wrists and render the joints
+        const leftHasJoints = leftHandInfo.active && leftHandInfo.joints[0].position.lengthSq() > 0;
+        const rightHasJoints = rightHandInfo.active && rightHandInfo.joints[0].position.lengthSq() > 0;
+
+        if (!leftHandInfo.active || leftHasJoints) {
             this.wristMeshes.left.visible = false;
         } else {
             this.wristMeshes.left.visible = true;
@@ -190,12 +194,37 @@ export class Avatar {
             this.wristMeshes.left.quaternion.slerp(leftHandInfo.quaternion, lerpFactor);
         }
 
-        if (!rightHandInfo.active) {
+        if (!rightHandInfo.active || rightHasJoints) {
             this.wristMeshes.right.visible = false;
         } else {
             this.wristMeshes.right.visible = true;
             this.wristMeshes.right.position.lerp(rightHandInfo.position, lerpFactor);
             this.wristMeshes.right.quaternion.slerp(rightHandInfo.quaternion, lerpFactor);
+        }
+
+        this.updateHands(leftHandInfo, rightHandInfo, lerpFactor);
+    }
+
+    updateHands(leftHandInfo, rightHandInfo, lerpFactor) {
+        const leftHasJoints = leftHandInfo.active && leftHandInfo.joints[0].position.lengthSq() > 0;
+        const rightHasJoints = rightHandInfo.active && rightHandInfo.joints[0].position.lengthSq() > 0;
+
+        for (let i = 0; i < 25; i++) {
+            if (leftHasJoints) {
+                this.handMeshes.left[i].visible = true;
+                this.handMeshes.left[i].position.lerp(leftHandInfo.joints[i].position, lerpFactor);
+                this.handMeshes.left[i].quaternion.slerp(leftHandInfo.joints[i].quaternion, lerpFactor);
+            } else {
+                this.handMeshes.left[i].visible = false;
+            }
+
+            if (rightHasJoints) {
+                this.handMeshes.right[i].visible = true;
+                this.handMeshes.right[i].position.lerp(rightHandInfo.joints[i].position, lerpFactor);
+                this.handMeshes.right[i].quaternion.slerp(rightHandInfo.joints[i].quaternion, lerpFactor);
+            } else {
+                this.handMeshes.right[i].visible = false;
+            }
         }
     }
 

@@ -206,18 +206,48 @@ export class LocalPlayer extends PlayerEntity {
         if (!frame || !referenceSpace) return;
 
         for (const source of session.inputSources) {
-            if (source.gripSpace) {
+            if (source.hand) {
+                // TRUE HAND TRACKING
+                const handState = source.handedness === 'left' ? this.handStates.left : this.handStates.right;
+                handState.active = true;
+
+                // Track root wrist position to drive the arm IK
+                if (source.gripSpace) {
+                    const wristPose = frame.getPose(source.gripSpace, referenceSpace);
+                    if (wristPose) {
+                        const handPoseObj = source.handedness === 'left' ? this.leftHandPose : this.rightHandPose;
+                        handPoseObj.position.copy(wristPose.transform.position);
+                        handPoseObj.quaternion.copy(wristPose.transform.orientation);
+                    }
+                }
+
+                // Track the 25 individual joints
+                let i = 0;
+                for (const joint of source.hand.values()) {
+                    if (i >= 25) break;
+                    const jointPose = frame.getJointPose(joint, referenceSpace);
+                    if (jointPose) {
+                        handState.joints[i].position.copy(jointPose.transform.position);
+                        handState.joints[i].quaternion.copy(jointPose.transform.orientation);
+                    }
+                    i++;
+                }
+
+            } else if (source.gripSpace) {
+                // FALLBACK TO CONTROLLER GRIP
                 const pose = frame.getPose(source.gripSpace, referenceSpace);
                 if (pose) {
-                    if (source.handedness === 'left') {
-                        this.handStates.left.active = true;
-                        this.leftHandPose.position.copy(pose.transform.position);
-                        this.leftHandPose.quaternion.copy(pose.transform.orientation);
-                    } else if (source.handedness === 'right') {
-                        this.handStates.right.active = true;
-                        this.rightHandPose.position.copy(pose.transform.position);
-                        this.rightHandPose.quaternion.copy(pose.transform.orientation);
+                    const handState = source.handedness === 'left' ? this.handStates.left : this.handStates.right;
+                    const handPoseObj = source.handedness === 'left' ? this.leftHandPose : this.rightHandPose;
+
+                    handState.active = true;
+                    // Ensure the joint array is visually cleared/hidden for standard controllers
+                    for (let i = 0; i < 25; i++) {
+                        handState.joints[i].position.set(0, 0, 0);
                     }
+
+                    handPoseObj.position.copy(pose.transform.position);
+                    handPoseObj.quaternion.copy(pose.transform.orientation);
                 }
             }
         }
@@ -313,6 +343,27 @@ export class LocalPlayer extends PlayerEntity {
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
 
+        const serializeHand = (handState, handPose) => {
+            const data = {
+                active: handState.active,
+                position: { x: handPose.position.x, y: handPose.position.y, z: handPose.position.z },
+                quaternion: { x: handPose.quaternion.x, y: handPose.quaternion.y, z: handPose.quaternion.z, w: handPose.quaternion.w },
+                joints: []
+            };
+
+            // Only serialize joints if we actually captured valid spatial data
+            if (handState.active && handState.joints[0].position.lengthSq() > 0) {
+                for (let i = 0; i < 25; i++) {
+                    const j = handState.joints[i];
+                    data.joints.push({
+                        p: { x: j.position.x, y: j.position.y, z: j.position.z },
+                        q: { x: j.quaternion.x, y: j.quaternion.y, z: j.quaternion.z, w: j.quaternion.w }
+                    });
+                }
+            }
+            return data;
+        };
+
         return {
             position: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z },
             yaw: bodyYaw,
@@ -322,16 +373,8 @@ export class LocalPlayer extends PlayerEntity {
                 quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
             hands: {
-                left: {
-                    active: true,
-                    position: { x: this.leftHandPose.position.x, y: this.leftHandPose.position.y, z: this.leftHandPose.position.z },
-                    quaternion: { x: 0, y: 0, z: 0, w: 1 }
-                },
-                right: {
-                    active: true,
-                    position: { x: this.rightHandPose.position.x, y: this.rightHandPose.position.y, z: this.rightHandPose.position.z },
-                    quaternion: { x: 0, y: 0, z: 0, w: 1 }
-                }
+                left: serializeHand(this.handStates.left, this.leftHandPose),
+                right: serializeHand(this.handStates.right, this.rightHandPose)
             }
         };
     }

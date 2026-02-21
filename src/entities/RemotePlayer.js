@@ -50,16 +50,22 @@ export class RemotePlayer extends PlayerEntity {
         }
 
         if (data.hands) {
-            if (data.hands.left) {
-                this.handStates.left.active = data.hands.left.active;
-                if (data.hands.left.position) this.handStates.left.position.set(data.hands.left.position.x, data.hands.left.position.y, data.hands.left.position.z);
-                if (data.hands.left.quaternion) this.handStates.left.quaternion.set(data.hands.left.quaternion.x, data.hands.left.quaternion.y, data.hands.left.quaternion.z, data.hands.left.quaternion.w);
-            }
-            if (data.hands.right) {
-                this.handStates.right.active = data.hands.right.active;
-                if (data.hands.right.position) this.handStates.right.position.set(data.hands.right.position.x, data.hands.right.position.y, data.hands.right.position.z);
-                if (data.hands.right.quaternion) this.handStates.right.quaternion.set(data.hands.right.quaternion.x, data.hands.right.quaternion.y, data.hands.right.quaternion.z, data.hands.right.quaternion.w);
-            }
+            const deserializeHand = (netHand, localHand) => {
+                localHand.active = netHand.active;
+                if (netHand.position) localHand.position.set(netHand.position.x, netHand.position.y, netHand.position.z);
+                if (netHand.quaternion) localHand.quaternion.set(netHand.quaternion.x, netHand.quaternion.y, netHand.quaternion.z, netHand.quaternion.w);
+
+                if (netHand.joints && netHand.joints.length === 25) {
+                    for (let i = 0; i < 25; i++) {
+                        const jData = netHand.joints[i];
+                        localHand.joints[i].position.set(jData.p.x, jData.p.y, jData.p.z);
+                        localHand.joints[i].quaternion.set(jData.q.x, jData.q.y, jData.q.z, jData.q.w);
+                    }
+                }
+            };
+
+            if (data.hands.left) deserializeHand(data.hands.left, this.handStates.left);
+            if (data.hands.right) deserializeHand(data.hands.right, this.handStates.right);
         }
     }
 

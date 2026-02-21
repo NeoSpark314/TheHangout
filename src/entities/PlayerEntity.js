@@ -16,9 +16,25 @@ export class PlayerEntity extends NetworkEntity {
             quaternion: new THREE.Quaternion()
         };
 
+        const createHandState = (offsetX) => {
+            const state = {
+                active: false,
+                position: new THREE.Vector3(offsetX, 0, 0),
+                quaternion: new THREE.Quaternion(),
+                joints: []
+            };
+            for (let i = 0; i < 25; i++) {
+                state.joints.push({
+                    position: new THREE.Vector3(),
+                    quaternion: new THREE.Quaternion()
+                });
+            }
+            return state;
+        };
+
         this.handStates = {
-            left: { active: false, position: new THREE.Vector3(-0.4, 0, 0), quaternion: new THREE.Quaternion() },
-            right: { active: false, position: new THREE.Vector3(0.4, 0, 0), quaternion: new THREE.Quaternion() }
+            left: createHandState(-0.4),
+            right: createHandState(0.4)
         };
     }
 }
