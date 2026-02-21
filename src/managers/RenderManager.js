@@ -45,7 +45,7 @@ export class RenderManager {
 
         // Add VR Button with Hand Tracking support
         const vrButton = VRButton.createButton(this.renderer, {
-            sessionInit: { optionalFeatures: ['hand-tracking'] }
+            optionalFeatures: ['hand-tracking']
         });
         this.container.appendChild(vrButton);
 
@@ -126,18 +126,6 @@ export class RenderManager {
         for (let i = 0; i < 2; i++) {
             const controller = this.renderer.xr.getController(i);
 
-            // Neon Line for controller direction (pointer)
-            const geometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(0, 0, -1)
-            ]);
-            const material = new THREE.LineBasicMaterial({
-                color: i === 0 ? 0x00ffff : 0xff00ff // Cyan left, Magenta right
-            });
-            const line = new THREE.Line(geometry, material);
-            line.scale.z = 5;
-
-            controller.add(line);
             this.cameraGroup.add(controller);
             this.controllers.push(controller);
 
