@@ -84,6 +84,13 @@ export class RemotePlayer extends PlayerEntity {
             eventBus.emit(EVENTS.REMOTE_NAME_UPDATED, { peerId: this.peerId, name: this.name });
         }
 
+        if (data.avatarConfig && data.avatarConfig.color !== this.avatarColor) {
+            this.avatarColor = data.avatarConfig.color;
+            if (this.avatar) {
+                this.avatar.setColor(this.avatarColor);
+            }
+        }
+
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);
         if (data.yaw !== undefined) this.targetYaw = data.yaw;
         if (data.headHeight !== undefined) this.headHeight = data.headHeight;

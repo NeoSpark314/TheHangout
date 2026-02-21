@@ -129,6 +129,35 @@ export class Avatar {
         this.nameTag = null;
     }
 
+    setColor(color) {
+        this.color = color;
+        const colorObj = new THREE.Color(color);
+
+        // Update Materials
+        this.mesh.traverse((child) => {
+            if (child.isLine || child.isLineSegments) {
+                child.material.color.copy(colorObj);
+            }
+            if (child.isMesh && child.geometry.type === 'BoxGeometry' && !child.name.includes('Hand')) {
+                // Head face material is the last one in the heads materials array
+                if (child === this.headMesh) {
+                    child.material[5].color.copy(colorObj);
+                } else if (child.name === 'wrist') {
+                    child.material.color.copy(colorObj);
+                }
+            }
+            // Hand joints
+            if (child.isMesh && (child.material.name === 'jointMat' || child.geometry.type === 'BoxGeometry')) {
+                if (child.material && child.material.color) child.material.color.copy(colorObj);
+            }
+        });
+
+        // Update Name Tag
+        if (this.nameTag && gameState.playerName) {
+            this.setName(gameState.playerName);
+        }
+    }
+
     setName(name) {
         if (!name) {
             if (this.nameTag) {
@@ -155,7 +184,13 @@ export class Avatar {
         context.font = 'bold 60px Inter, Arial, sans-serif';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
-        context.fillStyle = '#' + this.color.toString(16).padStart(6, '0');
+
+        // Handle both numeric and string colors
+        const fillStyle = typeof this.color === 'string' && this.color.startsWith('#')
+            ? this.color
+            : '#' + this.color.toString(16).padStart(6, '0');
+
+        context.fillStyle = fillStyle;
         context.shadowColor = 'rgba(0, 0, 0, 0.8)';
         context.shadowBlur = 4;
         context.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);

@@ -5,6 +5,9 @@ class GameState {
         this.isHost = false;
         this.roomId = null;
         this.playerName = 'Player';
+        this.avatarConfig = {
+            color: '#00ffff' // Default Cyber Cyan
+        };
 
         // Entity stores
         this.localPlayer = null;

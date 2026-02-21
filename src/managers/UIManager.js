@@ -13,6 +13,11 @@ export class UIManager {
         this.roomInput = document.getElementById('room-id');
         this.copyRoomBtn = document.getElementById('copy-room-btn');
 
+        this.avatarBtn = document.getElementById('avatar-btn');
+        this.avatarDialog = document.getElementById('avatar-dialog');
+        this.closeAvatarBtn = document.getElementById('close-avatar-btn');
+        this.avatarColorInput = document.getElementById('avatar-color');
+
         // Handle Orientation Change to reposition joysticks
         window.addEventListener('orientationchange', () => {
             if (this.isMobile && this.overlay.style.display === 'none') {
@@ -76,6 +81,27 @@ export class UIManager {
             this.saveToStorage();
         });
 
+        // Avatar Customization
+        if (this.avatarBtn) {
+            this.avatarBtn.addEventListener('click', () => {
+                this.avatarDialog.style.display = 'flex';
+            });
+        }
+
+        if (this.closeAvatarBtn) {
+            this.closeAvatarBtn.addEventListener('click', () => {
+                this.avatarDialog.style.display = 'none';
+            });
+        }
+
+        if (this.avatarColorInput) {
+            this.avatarColorInput.addEventListener('input', () => {
+                gameState.avatarConfig.color = this.avatarColorInput.value;
+                this.saveToStorage();
+                eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, gameState.avatarConfig);
+            });
+        }
+
 
 
         // Listen for network events
@@ -121,6 +147,12 @@ export class UIManager {
             this.roomInput.value = 'TestRoom';
         }
 
+        const storedColor = localStorage.getItem('hangout_avatarColor');
+        if (storedColor) {
+            gameState.avatarConfig.color = storedColor;
+            if (this.avatarColorInput) this.avatarColorInput.value = storedColor;
+        }
+
         // Initialize gameState immediately
         gameState.playerName = this.nameInput.value.trim();
 
@@ -141,6 +173,10 @@ export class UIManager {
             localStorage.setItem('hangout_playerName', name);
             gameState.playerName = name;
             eventBus.emit(EVENTS.LOCAL_NAME_UPDATED, name);
+        }
+
+        if (gameState.avatarConfig.color) {
+            localStorage.setItem('hangout_avatarColor', gameState.avatarConfig.color);
         }
 
         // Only save the room ID if it's not a temporary/generated one or if we are actively joining a specific one

@@ -47,9 +47,16 @@ export class LocalPlayer extends PlayerEntity {
         const { render } = gameState.managers;
         if (!render) return;
 
-        this.avatar = new Avatar({ color: 0x00ffff, isLocal: true });
+        this.avatar = new Avatar({ color: gameState.avatarConfig.color || 0x00ffff, isLocal: true });
         this.mesh = this.avatar.mesh;
         render.add(this.mesh);
+
+        // Listen for live customization updates
+        eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config) => {
+            if (this.avatar) {
+                this.avatar.setColor(config.color);
+            }
+        });
     }
 
     initInput() {
@@ -460,7 +467,8 @@ export class LocalPlayer extends PlayerEntity {
             hands: {
                 left: serializeHand(this.handStates.left),
                 right: serializeHand(this.handStates.right)
-            }
+            },
+            avatarConfig: gameState.avatarConfig
         };
     }
 
