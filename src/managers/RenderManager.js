@@ -71,8 +71,14 @@ export class RenderManager {
             this.container.appendChild(vrButton);
         }
 
-        // Handle Window Resize
+        // Handle Window Resize and Orientation Change
         window.addEventListener('resize', this.onWindowResize.bind(this), false);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => this.onWindowResize(), 100);
+        }, false);
+
+        // Initial call to ensure correct size
+        this.onWindowResize();
     }
 
     switchToPlayerView() {

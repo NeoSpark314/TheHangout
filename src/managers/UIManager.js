@@ -13,6 +13,13 @@ export class UIManager {
         this.roomInput = document.getElementById('room-id');
         this.copyRoomBtn = document.getElementById('copy-room-btn');
 
+        // Handle Orientation Change to reposition joysticks
+        window.addEventListener('orientationchange', () => {
+            if (this.isMobile && this.overlay.style.display === 'none') {
+                gameState.managers.input.initMobileJoysticks();
+            }
+        });
+
         this.statusText = document.getElementById('status-text');
         this.errorText = document.getElementById('error-text');
 
