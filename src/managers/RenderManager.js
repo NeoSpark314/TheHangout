@@ -47,19 +47,39 @@ export class RenderManager {
 
         this.container.appendChild(this.renderer.domElement);
 
-        // Add VR Button with Hand Tracking support
-        const vrButton = VRButton.createButton(this.renderer, {
-            optionalFeatures: ['hand-tracking']
-        });
-        this.container.appendChild(vrButton);
-
         this.setupLighting();
         this.createSynthwaveSun();
         this.setupControllers();
 
+        // Add VR Button ONLY if we detect a true HMD (Quest, Vision Pro, or PC desktop)
+        // This prevents the button from showing up on iPhones/Android phones that just support generic 'cardboard'
+        if (this.isTrueHMD()) {
+            const vrButton = VRButton.createButton(this.renderer, {
+                optionalFeatures: ['hand-tracking']
+            });
+            this.container.appendChild(vrButton);
+        }
+
         // Handle Window Resize
         window.addEventListener('resize', this.onWindowResize.bind(this), false);
     }
+
+    isTrueHMD() {
+        const ua = navigator.userAgent;
+
+        // 1. Explicitly allow known standalone VR headsets
+        const isStandaloneXR = /OculusBrowser|PicoBrowser|ViveBrowser|AppleVision/i.test(ua);
+        if (isStandaloneXR) return true;
+
+        // 2. Filter out common mobile phones and tablets
+        // These browsers technically support WebXR (Cardboard/WebVR legacy) but we want to skip them
+        const isMobilePhone = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+
+        // 3. If it's NOT a mobile phone, we assume it's a Desktop/Laptop (PCVR support)
+        // If it IS a mobile phone, we only allow it if it matched the standalone check above
+        return !isMobilePhone;
+    }
+
 
     setupLighting() {
         // Ambient Light (Soft Magenta cast)
