@@ -34,6 +34,14 @@ export class RemotePlayer extends PlayerEntity {
                     this.positionalAudio.stop();
                 }
                 try {
+                    // Chrome WebRTC Bug Workaround: WebAudio stream is silent unless attached to a playing HTML element
+                    if (!this.audioElement) {
+                        this.audioElement = new Audio();
+                        this.audioElement.muted = true; // VERY important: mute HTML audio so we only hear PositionalAudio 
+                    }
+                    this.audioElement.srcObject = data.stream;
+                    this.audioElement.play().catch(e => console.warn('[RemotePlayer] Auto-play blocked for hidden audio:', e));
+
                     this.positionalAudio.setMediaStreamSource(data.stream);
                 } catch (e) {
                     console.error('[RemotePlayer] Failed to set media stream source:', e);
@@ -153,6 +161,12 @@ export class RemotePlayer extends PlayerEntity {
 
     destroy() {
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
+
+        if (this.audioElement) {
+            this.audioElement.pause();
+            this.audioElement.srcObject = null;
+            this.audioElement = null;
+        }
 
         if (this.positionalAudio) {
             if (this.positionalAudio.hasPlaybackControl) {
