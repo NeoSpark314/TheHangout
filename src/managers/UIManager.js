@@ -22,6 +22,8 @@ export class UIManager {
 
         this.statusText = document.getElementById('status-text');
         this.errorText = document.getElementById('error-text');
+        this.versionInfo = document.getElementById('app-version');
+        this.shaInfo = document.getElementById('git-sha');
 
         // Detect mobile (non-HMD) for dual sticks
         this.isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
@@ -107,6 +109,14 @@ export class UIManager {
             this.roomInput.value = storedRoom;
         } else {
             this.roomInput.value = 'TestRoom';
+        }
+
+        // Set version and SHA
+        if (this.versionInfo) {
+            this.versionInfo.textContent = `v${__APP_VERSION__}`;
+        }
+        if (this.shaInfo) {
+            this.shaInfo.textContent = `build: ${__GIT_SHA__}`;
         }
     }
 

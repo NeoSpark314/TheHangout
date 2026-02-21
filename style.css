@@ -12,6 +12,7 @@
     /* Sharper edges for retro feel */
     --neon-glow: 0 0 10px rgba(0, 255, 255, 0.7), 0 0 20px rgba(0, 255, 255, 0.5);
     --neon-glow-magenta: 0 0 10px rgba(255, 0, 255, 0.7), 0 0 20px rgba(255, 0, 255, 0.5);
+    --muted-text: #64748b;
 }
 
 * {
@@ -336,6 +337,29 @@ body {
     justify-content: center;
     align-items: center;
     box-shadow: var(--neon-glow);
+}
+
+/* --- Version Info --- */
+.version-info {
+    position: absolute;
+    bottom: 15px;
+    font-size: 0.65rem;
+    color: var(--muted-text);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 8px;
+    border-radius: 2px;
+    pointer-events: none;
+    user-select: none;
+}
+
+.bottom-left {
+    left: 20px;
+}
+
+.bottom-right {
+    right: 20px;
 }
 
 /* --- Mobile HUD & Joysticks --- */

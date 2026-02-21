@@ -1,10 +1,24 @@
 import { defineConfig } from 'vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
+import { execSync } from 'child_process'
+
+// Get Git SHA
+let gitSha = ''
+try {
+    gitSha = execSync('git rev-parse --short HEAD').toString().trim()
+} catch (e) {
+    console.warn('Could not get git sha', e)
+    gitSha = 'unknown'
+}
 
 export default defineConfig({
     plugins: [
         basicSsl()
     ],
+    define: {
+        __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0alpha'),
+        __GIT_SHA__: JSON.stringify(gitSha)
+    },
     server: {
         https: true,
         host: true // Exposes the server to your local network
