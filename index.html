@@ -1,40 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TheHangout</title>
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
-    <!-- 3D Canvas Container -->
-    <div id="app"></div>
 
-    <!-- UI Overlay -->
-    <div id="ui-overlay" class="overlay">
-      <div class="panel">
-        <h1>🎮 TheHangout</h1>
-        <p>A WebXR Multiplayer Playground</p>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TheHangout</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
 
-        <div class="input-group">
-          <label for="player-name">Name:</label>
-          <input type="text" id="player-name" placeholder="Enter your name" />
-        </div>
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="app"></div>
 
-        <button id="join-btn" class="primary-btn">Play</button>
+  <!-- UI Overlay -->
+  <div id="ui-overlay" class="overlay">
+    <div class="panel">
+      <h1>🎮 TheHangout</h1>
+      <p>A WebXR Multiplayer Playground</p>
 
-        <div id="status-text" class="status"></div>
+      <div class="input-group">
+        <label for="player-name">Name:</label>
+        <input type="text" id="player-name" placeholder="Enter your name" />
+      </div>
 
-        <div id="invite-container" class="invite-box" style="display: none;">
-          <p>Share this link to invite others:</p>
-          <div class="copy-group">
-            <input type="text" id="invite-link" readonly />
-            <button id="copy-btn">Copy</button>
-          </div>
+      <div class="input-group" id="manual-room-group" style="display: none;">
+        <label for="manual-room-id">Join an existing Room ID (Optional):</label>
+        <input type="text" id="manual-room-id" placeholder="Leave blank to create a room" />
+      </div>
+
+      <button id="join-btn" class="primary-btn">Play</button>
+      <button id="start-btn" class="primary-btn"
+        style="display: none; margin-top: 10px; background-color: #10b981;">Start Game</button>
+
+      <div id="status-text" class="status"></div>
+
+      <div id="invite-container" class="invite-box" style="display: none;">
+        <p>Share this link to invite others:</p>
+        <div class="copy-group">
+          <input type="text" id="invite-link" readonly />
+          <button id="copy-btn">Copy</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <script type="module" src="/src/main.js"></script>
-  </body>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
 </html>

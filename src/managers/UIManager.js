@@ -12,6 +12,9 @@ export class UIManager {
         this.inviteContainer = document.getElementById('invite-container');
         this.inviteLinkInput = document.getElementById('invite-link');
         this.copyBtn = document.getElementById('copy-btn');
+        this.manualRoomGroup = document.getElementById('manual-room-group');
+        this.manualRoomInput = document.getElementById('manual-room-id');
+        this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
 
         this.init();
     }
@@ -22,43 +25,84 @@ export class UIManager {
         const roomIdToJoin = urlParams.get('room');
 
         if (roomIdToJoin) {
-            // Guest mode
-            gameState.isHost = false;
-            this.joinBtn.textContent = 'Join Room';
-            this.joinBtn.addEventListener('click', () => {
-                const name = this.nameInput.value.trim() || 'Guest';
-                gameState.playerName = name;
-                this.setStatus('Connecting to host...');
-                eventBus.emit(EVENTS.JOIN_ROOM, roomIdToJoin);
-            });
+            // Guest mode via URL
+            this.setupGuestMode(roomIdToJoin);
         } else {
-            // Host mode
-            gameState.isHost = true;
-            this.joinBtn.textContent = 'Create Room';
-            this.joinBtn.addEventListener('click', () => {
-                const name = this.nameInput.value.trim() || 'Host';
-                gameState.playerName = name;
-                this.setStatus('Creating room...');
-                eventBus.emit(EVENTS.CREATE_ROOM);
-            });
+            // Default mode: can create or manually join
+            this.setupDefaultMode();
         }
 
         this.copyBtn.addEventListener('click', () => {
             this.inviteLinkInput.select();
-            document.execCommand('copy');
+            // Use modern clipboard API if available
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(this.inviteLinkInput.value);
+            } else {
+                document.execCommand('copy');
+            }
             this.copyBtn.textContent = 'Copied!';
             setTimeout(() => {
                 this.copyBtn.textContent = 'Copy';
             }, 2000);
         });
 
+        // The Start button actually hides the UI and drops them into the game
+        if (this.startBtn) {
+            this.startBtn.addEventListener('click', () => {
+                this.hideOverlay();
+            });
+        }
+
         // Listen for network events
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => {
             if (gameState.isHost && !this.roomIdDisplayed) {
                 this.showInviteLink(peerId);
+                this.setStatus('Room Created! Share the link, then click Start.');
+                this.joinBtn.style.display = 'none'; // Hide create button
+                if (this.startBtn) this.startBtn.style.display = 'block'; // Show start button
+            } else if (!gameState.isHost) {
+                this.setStatus('Connected!');
+                setTimeout(() => this.hideOverlay(), 1000); // Guests auto-join
             }
-            this.setStatus('Connected!');
-            setTimeout(() => this.hideOverlay(), 1000);
+        });
+    }
+
+    setupGuestMode(roomId) {
+        gameState.isHost = false;
+        this.joinBtn.textContent = 'Join Room';
+        if (this.manualRoomGroup) this.manualRoomGroup.style.display = 'none';
+
+        this.joinBtn.addEventListener('click', () => {
+            const name = this.nameInput.value.trim() || 'Guest';
+            gameState.playerName = name;
+            this.setStatus('Connecting to host...');
+            this.joinBtn.disabled = true;
+            eventBus.emit(EVENTS.JOIN_ROOM, roomId);
+        });
+    }
+
+    setupDefaultMode() {
+        gameState.isHost = true; // Assume host unless they type a room ID
+        if (this.manualRoomGroup) this.manualRoomGroup.style.display = 'block';
+
+        this.joinBtn.addEventListener('click', () => {
+            const name = this.nameInput.value.trim() || 'Player';
+            gameState.playerName = name;
+            const manualRoomId = this.manualRoomInput ? this.manualRoomInput.value.trim() : '';
+
+            this.joinBtn.disabled = true;
+
+            if (manualRoomId) {
+                // They typed a room ID, act as Guest
+                gameState.isHost = false;
+                this.setStatus('Connecting to host...');
+                eventBus.emit(EVENTS.JOIN_ROOM, manualRoomId);
+            } else {
+                // Creating a room
+                gameState.isHost = true;
+                this.setStatus('Creating room...');
+                eventBus.emit(EVENTS.CREATE_ROOM);
+            }
         });
     }
 
