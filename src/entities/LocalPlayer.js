@@ -186,16 +186,19 @@ export class LocalPlayer extends NetworkEntity {
             this.mesh.rotation.y = hmdEuler.y;
             this.worldYaw = hmdEuler.y;
 
+            this.mesh.updateMatrixWorld(true);
+
             // 2. Calculate head rotation RELATIVE to the newly rotated body
-            const playerWorldQuat = new THREE.Quaternion();
-            this.mesh.getWorldQuaternion(playerWorldQuat);
+            const playerWorldQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, hmdEuler.y, 0, 'YXZ'));
 
             const localHeadQuat = playerWorldQuat.invert().multiply(hmdWorldQuat);
             this.avatar.updateHeadOrientation(localHeadQuat);
         } else {
             // In Desktop, head just follows pitch (yaw is handled by body)
-            this.avatar.updateHeadRotation(new THREE.Euler(this.pitch, 0, 0));
             this.worldYaw = this.yaw;
+            this.mesh.rotation.y = this.worldYaw;
+            this.mesh.updateMatrixWorld(true);
+            this.avatar.updateHeadRotation(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
         }
 
         // --- Update XR Avatar Visuals (Hands/Arms) AFTER mesh/body rotation is finalized ---
