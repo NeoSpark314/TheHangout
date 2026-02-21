@@ -87,8 +87,11 @@ export class LocalPlayer extends PlayerEntity {
         if (!isVR) {
             this.headPose.rotation.x = this.pitch;
         } else {
-            this.headPose.position.set(0, 0, 0);
-            this.headPose.quaternion.set(0, 0, 0, 1);
+            // Capture physical height and pitch from the VR camera to ensure a smooth transition on exit
+            this.headPose.position.copy(render.camera.position);
+
+            const headEuler = new THREE.Euler().setFromQuaternion(render.camera.quaternion, 'YXZ');
+            this.pitch = headEuler.x;
         }
 
         // --- 2. SYNC RENDERER TRANSFORMS ---
