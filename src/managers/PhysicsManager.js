@@ -68,6 +68,36 @@ export class PhysicsManager {
         return this.createCuboid(size / 2, size / 2, size / 2, position, mesh, isStatic);
     }
 
+    /**
+     * Create a grabbable dynamic rigid body and register it
+     */
+    createGrabbable(size, position, mesh) {
+        if (!this.world) return null;
+
+        const hs = size / 2; // half-extent
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(position.x, position.y, position.z);
+
+        const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(hs, hs, hs)
+            .setRestitution(0.4)  // Slight bounce
+            .setFriction(0.8);
+        this.world.createCollider(colliderDesc, rigidBody);
+
+        const entityId = `grabbable-${this.nextPhysicsId++}`;
+        const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody, {
+            grabbable: true,
+            spawnPosition: position
+        });
+
+        if (gameState.managers.entity) {
+            gameState.managers.entity.addEntity(physicsEntity);
+        }
+
+        return physicsEntity;
+    }
+
     step(delta) {
         if (!this.rapierLoaded || !this.world) return;
 

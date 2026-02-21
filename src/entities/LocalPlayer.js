@@ -5,6 +5,7 @@ import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 import { MovementSkill } from '../skills/MovementSkill.js';
+import { GrabSkill } from '../skills/GrabSkill.js';
 
 export class LocalPlayer extends PlayerEntity {
     constructor(id, spawnPos, spawnYaw) {
@@ -48,6 +49,10 @@ export class LocalPlayer extends PlayerEntity {
         const movement = new MovementSkill();
         movement.init(this, spawnYaw);
         this.addSkill(movement);
+
+        const grab = new GrabSkill();
+        this.addSkill(grab);
+        this.setActiveSkill('grab');
     }
 
     addSkill(skill) {

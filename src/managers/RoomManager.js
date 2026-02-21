@@ -63,6 +63,7 @@ export class RoomManager {
         if (!this.hologram) this.createHologram();
         if (!this.podest) this.createPodest();
         if (!this.decorations) this.createDecorations();
+        if (!this.grabbablesSpawned) this.createGrabbables();
 
         // Architectural Centralization: Sun, Lights, and Ground Physics
         if (!this.lights) this.setupLighting();
@@ -466,6 +467,54 @@ export class RoomManager {
             position: new THREE.Vector3(x, 0.2, z), // Spawn ON TOP of the podest
             yaw: yaw
         };
+    }
+
+    createGrabbables() {
+        const physics = gameState.managers.physics;
+        const render = gameState.managers.render;
+        if (!physics || !render || !this.scene) return;
+
+        this.grabbablesSpawned = true;
+
+        const cubeSize = 0.12;
+        const cubeCount = 6;
+        const tableRadius = 1.0; // Arrange cubes in a circle on the table
+        const tableY = 1.15;     // Just above the table surface
+
+        const colors = [
+            0xff0055, // Hot pink
+            0x00ff88, // Neon green
+            0x5500ff, // Purple
+            0xff8800, // Orange
+            0x00ccff, // Cyan
+            0xffff00  // Yellow
+        ];
+
+        for (let i = 0; i < cubeCount; i++) {
+            const angle = (i / cubeCount) * Math.PI * 2;
+            const x = Math.sin(angle) * tableRadius;
+            const z = Math.cos(angle) * tableRadius;
+            const position = { x, y: tableY, z };
+
+            const geo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+            const mat = new THREE.MeshStandardMaterial({
+                color: colors[i],
+                emissive: colors[i],
+                emissiveIntensity: 0.3,
+                metalness: 0.6,
+                roughness: 0.3
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, tableY, z);
+
+            const edges = new THREE.EdgesGeometry(geo);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+            mesh.add(new THREE.LineSegments(edges, lineMat));
+
+            this.scene.add(mesh);
+
+            physics.createGrabbable(cubeSize, position, mesh);
+        }
     }
 
     updateConfig(newConfig) {
