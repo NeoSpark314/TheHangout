@@ -71,7 +71,7 @@ export class RemotePlayer extends PlayerEntity {
         this.currentHeadHeight = THREE.MathUtils.lerp(this.currentHeadHeight || 1.7, this.headHeight, lerpFactor);
         this.avatar.updatePosture(this.currentHeadHeight);
 
-        // Calculate and apply slerped head quaternion
+        // Apply relative slerped head quaternion
         const currentHeadQuat = this.avatar.headMesh.quaternion.clone();
         currentHeadQuat.slerp(this.headState.quaternion, lerpFactor);
         this.avatar.updateHeadOrientation(currentHeadQuat);

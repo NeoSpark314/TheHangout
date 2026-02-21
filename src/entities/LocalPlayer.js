@@ -247,17 +247,25 @@ export class LocalPlayer extends PlayerEntity {
         const headWorldPos = new THREE.Vector3();
         const headWorldQuat = new THREE.Quaternion();
         const { render } = gameState.managers;
+        if (!render) return {};
 
+        render.camera.updateMatrixWorld(true);
         render.camera.getWorldPosition(headWorldPos);
         render.camera.getWorldQuaternion(headWorldQuat);
 
+        const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
+        const bodyYaw = headEuler.y;
+
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
+        const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
+
         return {
             position: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z },
-            yaw: this.yaw,
+            yaw: bodyYaw,
             headHeight: headWorldPos.y,
             head: {
                 position: { x: headWorldPos.x, y: headWorldPos.y, z: headWorldPos.z },
-                quaternion: { x: headWorldQuat.x, y: headWorldQuat.y, z: headWorldQuat.z, w: headWorldQuat.w }
+                quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
             hands: {
                 left: {
