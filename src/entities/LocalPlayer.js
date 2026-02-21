@@ -125,11 +125,13 @@ export class LocalPlayer {
         // 3. Update Camera Position attached to Player
         const pos = this.rigidBody.translation();
 
-        // Camera is slightly offset towards the top of the capsule
-        render.camera.position.set(pos.x, pos.y + 0.8, pos.z);
+        // Camera rig is slightly offset towards the top of the capsule
+        render.cameraGroup.position.set(pos.x, pos.y + 0.8, pos.z);
 
-        // Apply pitch and yaw to camera
-        render.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+        // Apply pitch and yaw to camera group (Third person/Desktop)
+        // In XR, the camera itself will have its rotation overridden by the HMD
+        render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
+        render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
 
         // 4. Emit event if we moved significantly (can optimize this later)
         if (direction.lengthSq() > 0) {

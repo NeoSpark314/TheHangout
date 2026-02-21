@@ -193,3 +193,20 @@ html {
     color: var(--bg-color);
     box-shadow: var(--neon-glow-magenta);
 }
+
+/* WebXR VR Button Styling */
+#VRButton {
+    z-index: 100 !important;
+    border: 1px solid var(--primary-color) !important;
+    background: var(--bg-color) !important;
+    color: var(--primary-color) !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    text-transform: uppercase !important;
+    letter-spacing: 2px !important;
+    box-shadow: var(--neon-glow) !important;
+}
+
+#VRButton:hover {
+    background: var(--primary-color) !important;
+    color: var(--bg-color) !important;
+}

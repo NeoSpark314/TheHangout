@@ -29,9 +29,14 @@ export class GameEngine {
         this.lastTime = performance.now();
         console.log('[GameEngine] Engine started.');
 
-        // Use requestAnimationFrame for the Game Loop
-        this.loop = this.loop.bind(this);
-        requestAnimationFrame(this.loop);
+        // Use RenderManager's setAnimationLoop for WebXR compatibility
+        if (gameState.managers.render) {
+            this.loop = this.loop.bind(this);
+            gameState.managers.render.setAnimationLoop(this.loop);
+        } else {
+            this.loop = this.loop.bind(this);
+            requestAnimationFrame(this.loop);
+        }
     }
 
     stop() {
@@ -41,6 +46,9 @@ export class GameEngine {
     loop(currentTime) {
         if (!this.isRunning) return;
 
+        // If currentTime is not provided (unlikely with setAnimationLoop but safe)
+        if (currentTime === undefined) currentTime = performance.now();
+
         // Calculate delta time in seconds
         const delta = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
@@ -48,7 +56,10 @@ export class GameEngine {
 
         this.update(delta);
 
-        requestAnimationFrame(this.loop);
+        // No need to call requestAnimationFrame manually when using setAnimationLoop
+        if (!gameState.managers.render) {
+            requestAnimationFrame(this.loop);
+        }
     }
 
     /**

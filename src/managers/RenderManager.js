@@ -1,5 +1,6 @@
 // managers/RenderManager.js
 import * as THREE from 'three';
+import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 
 export class RenderManager {
     constructor() {
@@ -16,8 +17,15 @@ export class RenderManager {
             0.1,
             1000
         );
-        // Move camera back and up slightly to see the floor
-        this.camera.position.set(0, 2, 5);
+
+        // XR Camera Group (The "Dolly")
+        // In XR, we move the parent of the camera to position the user in the world
+        this.cameraGroup = new THREE.Group();
+        this.cameraGroup.add(this.camera);
+        this.scene.add(this.cameraGroup);
+
+        // Move camera group back and up slightly to see the floor initially
+        this.cameraGroup.position.set(0, 2, 5);
         this.camera.lookAt(0, 0, 0);
 
         // Renderer setup
@@ -26,12 +34,19 @@ export class RenderManager {
         this.renderer.setPixelRatio(window.devicePixelRatio);
         // Shadows are disabled for performance and aesthetic reasons in this Phase
         this.renderer.shadowMap.enabled = false;
-        // We will enable WebXR later: this.renderer.xr.enabled = true;
+
+        // WebXR Enable
+        this.renderer.xr.enabled = true;
 
         this.container.appendChild(this.renderer.domElement);
 
+        // Add VR Button
+        const vrButton = VRButton.createButton(this.renderer);
+        this.container.appendChild(vrButton);
+
         this.setupLighting();
         this.createSynthwaveSun();
+        this.setupControllers();
 
         // Handle Window Resize
         window.addEventListener('resize', this.onWindowResize.bind(this), false);
@@ -100,6 +115,34 @@ export class RenderManager {
         this.scene.add(sun);
     }
 
+    setupControllers() {
+        this.controllers = [];
+
+        for (let i = 0; i < 2; i++) {
+            const controller = this.renderer.xr.getController(i);
+
+            // Neon Line for controller direction (pointer)
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, -1)
+            ]);
+            const material = new THREE.LineBasicMaterial({
+                color: i === 0 ? 0x00ffff : 0xff00ff // Cyan left, Magenta right
+            });
+            const line = new THREE.Line(geometry, material);
+            line.scale.z = 5;
+
+            controller.add(line);
+            this.cameraGroup.add(controller);
+            this.controllers.push(controller);
+
+            // Gaze/Select logic can be added here
+            controller.addEventListener('selectstart', () => {
+                console.log(`Controller ${i} triggered selectstart`);
+            });
+        }
+    }
+
     add(object3D) {
         this.scene.add(object3D);
     }
@@ -116,5 +159,9 @@ export class RenderManager {
 
     render() {
         this.renderer.render(this.scene, this.camera);
+    }
+
+    setAnimationLoop(callback) {
+        this.renderer.setAnimationLoop(callback);
     }
 }
