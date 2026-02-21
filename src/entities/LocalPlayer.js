@@ -188,19 +188,6 @@ export class LocalPlayer extends PlayerEntity {
         const rightArmPos = this.handStates.right.active ? this.avatar.getRightWristMarkerPosition() : new THREE.Vector3(0.35, 0.85, 0.1);
         this.avatar.updateArms(leftArmPos, rightArmPos);
 
-        // --- 7. DEBUG UI ---
-        if (gameState.managers.debugUI) {
-            const oPos = this.xrOrigin.position;
-            const oYaw = (this.yaw * 180 / Math.PI).toFixed(1);
-
-            const hPos = headWorldPos;
-            const hYaw = (headEuler.y * 180 / Math.PI).toFixed(1);
-            const hPitch = (headEuler.x * 180 / Math.PI).toFixed(1);
-
-            const debugText = `ORIGIN\nPos: ${oPos.x.toFixed(2)}, ${oPos.y.toFixed(2)}, ${oPos.z.toFixed(2)}\nYaw: ${oYaw}°\n\nHEAD (World)\nPos: ${hPos.x.toFixed(2)}, ${hPos.y.toFixed(2)}, ${hPos.z.toFixed(2)}\nDir: ${hYaw}°, ${hPitch}°`;
-            gameState.managers.debugUI.updateDebugText(debugText);
-        }
-
         // --- 7. NETWORK ---
         // Note: For network, we send the head world yaw as the 'yaw' to match visuals
         if (moveVector.lengthSq() > 0 || Math.abs(delta) > 0) {

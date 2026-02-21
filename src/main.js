@@ -9,7 +9,7 @@ import { RenderManager } from './managers/RenderManager.js';
 import { WorldManager } from './managers/WorldManager.js';
 import { PlayerManager } from './managers/PlayerManager.js';
 import { EntityManager } from './managers/EntityManager.js';
-import { DebugUIManager } from './managers/DebugUIManager.js';
+// import { DebugUIManager } from './managers/DebugUIManager.js';
 import { MediaManager } from './managers/MediaManager.js';
 import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
@@ -68,11 +68,13 @@ async function bootstrap() {
     }
   });
 
+  /*
   // Initialize Debug UI (Needs Local Player's headPose eventually, but can start now)
   gameState.managers.debugUI = new DebugUIManager();
   if (gameState.managers.render) {
     gameState.managers.debugUI.attachTo(gameState.managers.render.camera);
   }
+  */
 
   // Generate World
   gameState.managers.world.generateTestWorld();
