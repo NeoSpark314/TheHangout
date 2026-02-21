@@ -25,8 +25,6 @@ export class LocalPlayer extends PlayerEntity {
         this.pitch = 0;
         this.yaw = 0;
 
-        this.roomScaleOffset = new THREE.Vector3(0, 0, 0); // Offset between physics body and virtual origin
-
         this.initAvatar();
         this.initInput();
     }
@@ -89,126 +87,114 @@ export class LocalPlayer extends PlayerEntity {
         const { render } = gameState.managers;
         if (!render || !this.rigidBody) return;
 
-        // 1. Calculate intent direction
+        // 1. Calculate intent direction (World Space)
         const direction = new THREE.Vector3(0, 0, 0);
 
-        // Keyboard Input
+        // Keyboard Input (Flat/Desktop style)
         if (this.keys.w) direction.z -= 1; // Forward is -Z
         if (this.keys.s) direction.z += 1;
         if (this.keys.a) direction.x -= 1;
         if (this.keys.d) direction.x += 1;
 
-        // XR Locomotion Update
+        // XR Locomotion Update (Joysticks)
         this.updateXRLocomotion(direction);
 
         direction.normalize();
 
         const isXR = render.renderer.xr.enabled && render.renderer.xr.isPresenting;
-
-        // Rotate the movement direction by active yaw (HMD in VR, mouse in Desktop)
-        const activeYaw = isXR ? (this.worldYaw !== undefined ? this.worldYaw : this.yaw) : this.yaw;
-        const euler = new THREE.Euler(0, activeYaw, 0, 'YXZ');
-        direction.applyEuler(euler);
-
-        // 2. Apply movement forces/velocity to physics body
-        const currentVel = this.rigidBody.linvel();
-        this.rigidBody.setLinvel({
-            x: direction.x * this.speed,
-            y: currentVel.y,
-            z: direction.z * this.speed
-        }, true);
-
-        // 3. Update Camera Position attached to Player
-        const pos = this.rigidBody.translation();
-
-        // Base ground level for capsule
-        const groundY = pos.y - 0.9;
-
+        let activeCamera = render.camera;
         if (isXR) {
-            // Anchor play space center exactly on capsule
-            render.cameraGroup.position.set(pos.x, groundY, pos.z);
+            activeCamera = render.renderer.xr.getCamera(render.camera);
+        }
 
-            // Sync avatar mesh to TRUE headset offset so it follows bodily physical steps
-            const xrCamera = render.renderer.xr.getCamera(render.camera);
-            const hmdWorldPos = new THREE.Vector3();
-            xrCamera.getWorldPosition(hmdWorldPos);
-            this.mesh.position.set(hmdWorldPos.x, groundY, hmdWorldPos.z);
+        // Apply intent relative to the active view orientation
+        // For Desktop, we use `this.yaw`. 
+        // For VR, we want to walk where we are physically looking, so we extract HMD yaw.
+        let moveYaw = this.yaw;
+        if (isXR) {
+            const hmdQuat = new THREE.Quaternion();
+            activeCamera.getWorldQuaternion(hmdQuat);
+            const hmdEuler = new THREE.Euler().setFromQuaternion(hmdQuat, 'YXZ');
+            moveYaw = hmdEuler.y;
+        }
+
+        const moveEuler = new THREE.Euler(0, moveYaw, 0, 'YXZ');
+        direction.applyEuler(moveEuler);
+
+        // 2. Apply explicit translation to the Virtual Origin (xrOrigin / cameraGroup)
+        // Note: For now, we move the origin manually based on speed.
+        // We do *not* use physics to move the origin directly, we use physics just for collisions.
+        // We will move the camera, then snap the body to the active camera.
+        const frameSpeed = this.speed * delta;
+        render.cameraGroup.position.x += direction.x * frameSpeed;
+        render.cameraGroup.position.z += direction.z * frameSpeed;
+
+        // In Desktop, update the camera rig pitch/yaw directly
+        if (!isXR) {
+            render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
+            render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
+            // Desktop Camera is positioned at 1.7m manually (simulate an average height player)
+            render.camera.position.set(0, 1.7, 0);
         } else {
-            render.cameraGroup.position.set(pos.x, groundY + 1.7, pos.z);
-            this.mesh.position.set(pos.x, groundY, pos.z);
+            // Provide a manual rotation method for VR via joystick if needed in `updateXRLocomotion`
+            // The cameraGroup rotation handles the artificial XR turning
+            render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         }
 
-        // Apply pitch and yaw to camera group (Third person/Desktop)
-        render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
-        render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
-
-        // --- Room Scale Follow ---
-        if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
-            const xrCamera = render.renderer.xr.getCamera(render.camera);
-            const hmdWorldPos = new THREE.Vector3();
-            xrCamera.getWorldPosition(hmdWorldPos);
-
-            // The capsule should move to the headset's horizontal world position
-            const deltaX = hmdWorldPos.x - pos.x;
-            const deltaZ = hmdWorldPos.z - pos.z;
-
-            if (Math.abs(deltaX) > 0.01 || Math.abs(deltaZ) > 0.01) {
-                // Move physics body to HMD
-                this.rigidBody.setTranslation({ x: hmdWorldPos.x, y: pos.y, z: hmdWorldPos.z }, true);
-
-                // Track how much we moved the body relative to the virtual origin
-                this.roomScaleOffset.x += deltaX;
-                this.roomScaleOffset.z += deltaZ;
-            }
-        }
-
-        // Update dynamic headset height to adjust avatar scaling
+        // 3. Snap Physics Body precisely beneath the Active Camera (Head)
         const cameraWorldPos = new THREE.Vector3();
-        if (isXR) {
-            const xrCamera = render.renderer.xr.getCamera(render.camera);
-            xrCamera.getWorldPosition(cameraWorldPos);
-        } else {
-            render.camera.getWorldPosition(cameraWorldPos);
-        }
+        activeCamera.getWorldPosition(cameraWorldPos);
 
+        const currentVel = this.rigidBody.linvel();
+
+        // Let physics dictate Y (gravity), but force X and Z to match where the head is.
+        // The capsule half-height is 0.6, plus 0.3 radius, so the center is 0.9m above the ground.
+        // We maintain the physical center Y, but snap X and Z.
+        const pos = this.rigidBody.translation();
+        this.rigidBody.setTranslation({ x: cameraWorldPos.x, y: pos.y, z: cameraWorldPos.z }, true);
+
+        // We can zero out the manual X/Z velocities in Rapier to prevent momentum fighting since we are snapping position
+        this.rigidBody.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true);
+
+        // 4. Update Visual Avatar Mesh Root
+        // The mesh should be grounded at the very bottom of the physics capsule
+        const groundY = pos.y - 0.9;
+        this.mesh.position.set(cameraWorldPos.x, groundY, cameraWorldPos.z);
+
+        // 5. Update heights and Head logic
         const playerWorldPos = new THREE.Vector3();
-        this.mesh.getWorldPosition(playerWorldPos);
+        this.mesh.getWorldPosition(playerWorldPos); // ground position
 
-        // Height of head above the player's ground plane
+        // Calculate dynamic head height
         this.headHeight = Math.max(0.4, cameraWorldPos.y - playerWorldPos.y);
-
         this.avatar.updatePosture(this.headHeight);
 
-        // Update Local Head Mesh to match camera orientation for others to see
-        if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
-            const xrCamera = render.renderer.xr.getCamera(render.camera);
+        // Update body rotation to face HMD yaw so others see the body follow the head
+        if (isXR) {
             const hmdWorldQuat = new THREE.Quaternion();
-            xrCamera.getWorldQuaternion(hmdWorldQuat);
+            activeCamera.getWorldQuaternion(hmdWorldQuat);
 
-            // 1. Update the stick figure body FIRST to follow the HMD's yaw
             const hmdEuler = new THREE.Euler().setFromQuaternion(hmdWorldQuat, 'YXZ');
             this.mesh.rotation.y = hmdEuler.y;
             this.worldYaw = hmdEuler.y;
 
             this.mesh.updateMatrixWorld(true);
 
-            // 2. Calculate head rotation RELATIVE to the newly rotated body
+            // Calculate head rotation RELATIVE to the newly rotated body
             const playerWorldQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, hmdEuler.y, 0, 'YXZ'));
-
             const localHeadQuat = playerWorldQuat.invert().multiply(hmdWorldQuat);
             this.avatar.updateHeadOrientation(localHeadQuat);
         } else {
-            // In Desktop, head just follows pitch (yaw is handled by body)
             this.worldYaw = this.yaw;
             this.mesh.rotation.y = this.worldYaw;
             this.mesh.updateMatrixWorld(true);
             this.avatar.updateHeadRotation(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
         }
 
-        // --- Update XR Avatar Visuals (Hands/Arms) AFTER mesh/body rotation is finalized ---
+        // 6. Update XR Hands/Arms
         this.updateXRAvatarState();
 
-        // 4. Emit event if we moved significantly
+        // 7. Network Emission
         if (direction.lengthSq() > 0) {
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, {
                 position: pos,
@@ -239,6 +225,7 @@ export class LocalPlayer extends PlayerEntity {
                 }
 
                 if (source.handedness === 'right') {
+                    // Snap-turn / Smooth-turn on right stick X
                     if (axes.length >= 4 && Math.abs(axes[2]) > 0.5) {
                         this.yaw -= axes[2] * 0.05;
                     }
@@ -345,7 +332,7 @@ export class LocalPlayer extends PlayerEntity {
         };
 
         return {
-            position: { x: pos.x, y: pos.y - 0.9, z: pos.z }, // Broadcast grounded position
+            position: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, // Broadcast true grounded head coords
             yaw: this.worldYaw !== undefined ? this.worldYaw : this.yaw,
             headHeight: this.headHeight,
             head: headPayload,
