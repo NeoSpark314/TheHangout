@@ -61,6 +61,10 @@ export class RemotePlayer extends PlayerEntity {
                         localHand.joints[i].position.set(jData.p.x, jData.p.y, jData.p.z);
                         localHand.joints[i].quaternion.set(jData.q.x, jData.q.y, jData.q.z, jData.q.w);
                     }
+                } else {
+                    for (let i = 0; i < 25; i++) {
+                        localHand.joints[i].position.set(0, 0, 0);
+                    }
                 }
             };
 

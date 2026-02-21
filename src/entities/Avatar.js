@@ -9,10 +9,20 @@ export class Avatar {
         this.mesh = new THREE.Group();
         this.currentHeadHeight = 1.7;
 
-        this.initVisuals();
+        this.initAvatar();
     }
 
-    initVisuals() {
+    // Standard WebXR hand mapping indices for drawing skeleton lines
+    static HAND_INDICES = [
+        0, 1, 1, 2, 2, 3, 3, 4,       // thumb
+        0, 5, 5, 6, 6, 7, 7, 8,       // index
+        0, 9, 9, 10, 10, 11, 11, 12,  // middle
+        0, 13, 13, 14, 14, 15, 15, 16,// ring
+        0, 17, 17, 18, 18, 19, 19, 20,// pinky
+        5, 9, 9, 13, 13, 17           // knuckles bridging
+    ];
+
+    initAvatar() {
         const outlineMaterial = new THREE.LineBasicMaterial({ color: this.color });
         const solidDark = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
 
@@ -70,11 +80,21 @@ export class Avatar {
 
         // 6. XR Hand Tracking Visuals
         this.handMeshes = { left: [], right: [] };
-        const jointGeom = new THREE.BoxGeometry(0.015, 0.015, 0.015);
+        // Shrink the joints to small knuckles
+        const jointGeom = new THREE.BoxGeometry(0.005, 0.005, 0.005);
         const jointMatLeft = new THREE.MeshBasicMaterial({ color: this.color }); // Use same color
         const jointMatRight = new THREE.MeshBasicMaterial({ color: this.color });
 
-        // Wrist markers for fallback (shortened from 0.05 to 0.02 to remove long orientation lines)
+        // Hand Skeleton Lines
+        const handLineMat = new THREE.LineBasicMaterial({ color: this.color });
+        this.handLines = {
+            left: new THREE.LineSegments(new THREE.BufferGeometry(), handLineMat),
+            right: new THREE.LineSegments(new THREE.BufferGeometry(), handLineMat)
+        };
+        this.mesh.add(this.handLines.left);
+        this.mesh.add(this.handLines.right);
+
+        // Wrist markers for fallback
         const wristGeom = new THREE.BoxGeometry(0.02, 0.02, 0.02);
         this.wristMeshes = {
             left: new THREE.Mesh(wristGeom, jointMatLeft),
@@ -209,6 +229,9 @@ export class Avatar {
         const leftHasJoints = leftHandInfo.active && leftHandInfo.joints[0].position.lengthSq() > 0;
         const rightHasJoints = rightHandInfo.active && rightHandInfo.joints[0].position.lengthSq() > 0;
 
+        let leftLinePositions = leftHasJoints ? [] : null;
+        let rightLinePositions = rightHasJoints ? [] : null;
+
         for (let i = 0; i < 25; i++) {
             if (leftHasJoints) {
                 this.handMeshes.left[i].visible = true;
@@ -226,14 +249,37 @@ export class Avatar {
                 this.handMeshes.right[i].visible = false;
             }
         }
+
+        // Update Skeleton Lines
+        if (leftHasJoints) {
+            for (let i = 0; i < Avatar.HAND_INDICES.length; i++) {
+                const jointObj = this.handMeshes.left[Avatar.HAND_INDICES[i]];
+                leftLinePositions.push(jointObj.position.x, jointObj.position.y, jointObj.position.z);
+            }
+            this.handLines.left.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(leftLinePositions), 3));
+            this.handLines.left.visible = true;
+        } else {
+            this.handLines.left.visible = false;
+        }
+
+        if (rightHasJoints) {
+            for (let i = 0; i < Avatar.HAND_INDICES.length; i++) {
+                const jointObj = this.handMeshes.right[Avatar.HAND_INDICES[i]];
+                rightLinePositions.push(jointObj.position.x, jointObj.position.y, jointObj.position.z);
+            }
+            this.handLines.right.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rightLinePositions), 3));
+            this.handLines.right.visible = true;
+        } else {
+            this.handLines.right.visible = false;
+        }
     }
 
     getLeftWristMarkerPosition() {
-        return this.wristMeshes.left.position;
+        return this.handMeshes.left[0].visible ? this.handMeshes.left[0].position : this.wristMeshes.left.position;
     }
 
     getRightWristMarkerPosition() {
-        return this.wristMeshes.right.position;
+        return this.handMeshes.right[0].visible ? this.handMeshes.right[0].position : this.wristMeshes.right.position;
     }
 
     getHeadPosition() {
