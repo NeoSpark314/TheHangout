@@ -7,23 +7,31 @@ import { EVENTS } from '../utils/Constants.js';
 export class HUDManager {
     constructor() {
         this.group = new THREE.Group();
-        this.canvas = document.createElement('canvas');
-        this.context = this.canvas.getContext('2d');
-        this.texture = null;
-        this.mesh = null;
 
-        // Configuration
-        this.canvas.width = 512;
-        this.canvas.height = 512;
+        // --- Panel 1: Participants (Top-Left) ---
+        this.listCanvas = document.createElement('canvas');
+        this.listContext = this.listCanvas.getContext('2d');
+        this.listCanvas.width = 512;
+        this.listCanvas.height = 512;
+        this.listTexture = null;
+        this.listMesh = null;
+
+        // --- Panel 2: Notifications (Bottom-Center) ---
+        this.noteCanvas = document.createElement('canvas');
+        this.noteContext = this.noteCanvas.getContext('2d');
+        this.noteCanvas.width = 1024; // Wider for text
+        this.noteCanvas.height = 256;
+        this.noteTexture = null;
+        this.noteMesh = null;
+
         this.opacity = 0.8;
-
         this.notifications = []; // { text, startTime, duration }
-        this.maxNotifications = 3;
+        this.maxNotifications = 1; // Only show most recent in the new centered spot? Or stack?
         this.playerNames = [];
 
         this.init();
 
-        // Listen for network events
+        // Listen for events
         eventBus.on(EVENTS.PEER_CONNECTED, () => this.updatePlayerList());
         eventBus.on(EVENTS.PEER_DISCONNECTED, () => this.updatePlayerList());
         eventBus.on(EVENTS.LOCAL_NAME_UPDATED, () => this.updatePlayerList());
@@ -37,26 +45,36 @@ export class HUDManager {
     }
 
     init() {
-        // Create 3D Mesh
-        const geometry = new THREE.PlaneGeometry(0.5, 0.5);
-        this.texture = new THREE.CanvasTexture(this.canvas);
-        const material = new THREE.MeshBasicMaterial({
-            map: this.texture,
+        // --- List Panel Mesh ---
+        const listGeo = new THREE.PlaneGeometry(0.5, 0.5);
+        this.listTexture = new THREE.CanvasTexture(this.listCanvas);
+        const listMat = new THREE.MeshBasicMaterial({
+            map: this.listTexture,
             transparent: true,
             opacity: this.opacity,
             depthTest: false,
             depthWrite: false
         });
+        this.listMesh = new THREE.Mesh(listGeo, listMat);
+        this.listMesh.renderOrder = 999;
+        this.listMesh.position.set(-0.5, 0.25, -1.0); // Top-Left, further back for comfort
+        this.group.add(this.listMesh);
 
-        this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.renderOrder = 999;
+        // --- Notification Panel Mesh ---
+        const noteGeo = new THREE.PlaneGeometry(1.0, 0.25);
+        this.noteTexture = new THREE.CanvasTexture(this.noteCanvas);
+        const noteMat = new THREE.MeshBasicMaterial({
+            map: this.noteTexture,
+            transparent: true,
+            opacity: this.opacity,
+            depthTest: false,
+            depthWrite: false
+        });
+        this.noteMesh = new THREE.Mesh(noteGeo, noteMat);
+        this.noteMesh.renderOrder = 1000;
+        this.noteMesh.position.set(0, -0.35, -1.0); // Bottom-Center
+        this.group.add(this.noteMesh);
 
-        // Position in view (top-right-ish)
-        // Note: This matches the camera's local space
-        this.mesh.position.set(0.4, 0.25, -0.6);
-        this.group.add(this.mesh);
-
-        // Update the HUD initially
         this.draw();
     }
 
@@ -65,12 +83,10 @@ export class HUDManager {
         if (!entityMgr) return;
 
         this.playerNames = [];
-        // Add self
         if (gameState.playerName) {
             this.playerNames.push(`${gameState.playerName} (YOU)`);
         }
 
-        // Add others
         const entities = entityMgr.entities;
         for (const entity of entities.values()) {
             if (entity.type === 'REMOTE_PLAYER' && entity.name) {
@@ -88,7 +104,6 @@ export class HUDManager {
             duration: duration
         });
 
-        // Keep list manageable
         if (this.notifications.length > this.maxNotifications) {
             this.notifications.shift();
         }
@@ -97,7 +112,6 @@ export class HUDManager {
     }
 
     update() {
-        // Clean up expired notifications
         const now = performance.now();
         const initialCount = this.notifications.length;
         this.notifications = this.notifications.filter(n => (now - n.startTime) < n.duration);
@@ -105,58 +119,65 @@ export class HUDManager {
         if (this.notifications.length !== initialCount) {
             this.draw();
         }
-
-        // Smoothly follow camera? 
-        // For now, it's just a child of the camera group/camera itself in main.js
     }
 
     draw() {
-        const ctx = this.context;
-        const w = this.canvas.width;
-        const h = this.canvas.height;
+        // --- Draw List Panel ---
+        const lctx = this.listContext;
+        const lw = this.listCanvas.width;
+        const lh = this.listCanvas.height;
 
-        ctx.clearRect(0, 0, w, h);
+        lctx.clearRect(0, 0, lw, lh);
+        lctx.save();
+        lctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        this.drawRoundedRect(lctx, 0, 0, 250, 40 + (this.playerNames.length * 30), 15);
+        lctx.fill();
 
-        // --- 1. Draw Player List (Top Right) ---
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        // Rounded background box
-        this.drawRoundedRect(ctx, w - 210, 10, 200, 30 + (this.playerNames.length * 25), 10);
-        ctx.fill();
+        lctx.font = 'bold 28px Inter, Arial, sans-serif';
+        lctx.fillStyle = '#00ffff';
+        lctx.fillText('PARTICIPANTS:', 20, 45);
 
-        ctx.font = 'bold 24px Inter, Arial, sans-serif';
-        ctx.fillStyle = '#00ffff'; // Cyber Cyan
-        ctx.fillText('PARTICIPANTS:', w - 200, 40);
-
-        ctx.font = '18px Inter, Arial, sans-serif';
-        ctx.fillStyle = '#ffffff';
+        lctx.font = '22px Inter, Arial, sans-serif';
+        lctx.fillStyle = '#ffffff';
         this.playerNames.forEach((name, i) => {
-            ctx.fillText(name, w - 200, 70 + (i * 25));
+            lctx.fillText(name, 20, 85 + (i * 30));
         });
-        ctx.restore();
+        lctx.restore();
+        if (this.listTexture) this.listTexture.needsUpdate = true;
 
-        // --- 2. Draw Notifications (Bottom Center) ---
+        // --- Draw Notification Panel ---
+        const nctx = this.noteContext;
+        const nw = this.noteCanvas.width;
+        const nh = this.noteCanvas.height;
+
+        nctx.clearRect(0, 0, nw, nh);
         if (this.notifications.length > 0) {
-            ctx.save();
-            ctx.textAlign = 'center';
-            this.notifications.forEach((n, i) => {
-                const age = performance.now() - n.startTime;
-                const opacity = Math.min(1.0, 1.0 - (age / n.duration) * 2.0); // Fade out in last half
+            const n = this.notifications[0]; // Just show topmost/latest
+            const age = performance.now() - n.startTime;
+            const opacity = Math.min(1.0, 1.0 - (age / n.duration) * 1.5);
 
-                if (opacity > 0) {
-                    ctx.fillStyle = `rgba(255, 0, 255, ${opacity * 0.8})`; // Neon Pink
-                    this.drawRoundedRect(ctx, w / 2 - 200, h - 100 - (i * 50), 400, 40, 5);
-                    ctx.fill();
+            if (opacity > 0) {
+                nctx.save();
+                nctx.globalAlpha = opacity;
+                nctx.textAlign = 'center';
 
-                    ctx.font = '20px Inter, Arial, sans-serif';
-                    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                    ctx.fillText(n.text, w / 2, h - 75 - (i * 50));
-                }
-            });
-            ctx.restore();
+                // Horizon OS style pill
+                nctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                this.drawRoundedRect(nctx, nw / 2 - 300, nh / 2 - 30, 600, 60, 30);
+                nctx.fill();
+
+                // Border glow
+                nctx.strokeStyle = '#ff00ff';
+                nctx.lineWidth = 2;
+                nctx.stroke();
+
+                nctx.font = 'bold 24px Inter, Arial, sans-serif';
+                nctx.fillStyle = '#ffffff';
+                nctx.fillText(n.text, nw / 2, nh / 2 + 8);
+                nctx.restore();
+            }
         }
-
-        if (this.texture) this.texture.needsUpdate = true;
+        if (this.noteTexture) this.noteTexture.needsUpdate = true;
     }
 
     drawRoundedRect(ctx, x, y, width, height, radius) {
