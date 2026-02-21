@@ -9,6 +9,12 @@ class GameState {
             color: '#00ffff' // Default Cyber Cyan
         };
         this.voiceEnabled = false;
+        this.roomConfig = {
+            environment: 'cyber-stube',
+            skyColor: '#0b0c10',
+            fogNear: 5,
+            fogFar: 25
+        };
 
         // Entity stores
         this.localPlayer = null;

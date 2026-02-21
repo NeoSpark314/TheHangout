@@ -6,7 +6,7 @@ import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 
 export class LocalPlayer extends PlayerEntity {
-    constructor(id) {
+    constructor(id, spawnPos, spawnYaw) {
         super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
 
         this.speed = 5.0;
@@ -18,6 +18,7 @@ export class LocalPlayer extends PlayerEntity {
         // --- Clean Architecture Transforms ---
         // xrOrigin is the physical center of the room (pinned to y=0)
         this.xrOrigin = new THREE.Object3D();
+        if (spawnPos) this.xrOrigin.position.copy(spawnPos);
 
         // These poses are relative to the xrOrigin
         this.headPose = new THREE.Object3D();
@@ -35,7 +36,8 @@ export class LocalPlayer extends PlayerEntity {
 
         // Input angles
         this.pitch = 0;
-        this.yaw = 0;
+        this.yaw = spawnYaw || 0;
+        this.xrOrigin.rotation.y = this.yaw;
 
         this.wasSnapTurnPressed = false;
 

@@ -31,6 +31,7 @@ export const PACKET_TYPES = {
     STATE_UPDATE: 0, // Host -> Guests: World state (Transform of all dynamic objects + players)
     PLAYER_INPUT: 1, // Guest -> Host: Controller & Headset positions
     PEER_DISCONNECT: 2, // Host -> Guests: Notification that a peer left
+    ROOM_CONFIG_UPDATE: 3
 };
 
 export const INPUT_CONFIG = {

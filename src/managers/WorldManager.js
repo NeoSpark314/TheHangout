@@ -25,38 +25,10 @@ export class WorldManager {
         render.add(gridHelper);
         physics.createGround(25); // 25 is half-extent of 50
 
-        // 2. Create some dynamic boxes for testing (Retro Wireframes)
-        const boxMaterial = new THREE.MeshBasicMaterial({
-            color: 0x050510 // Dark solid color matching the floor
-        });
-
-        const boxOutlineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff }); // Neon Cyan
-
-        const boxSize = 1;
-        const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
-        const boxEdges = new THREE.EdgesGeometry(boxGeometry);
-
-        for (let i = 0; i < 50; i++) {
-            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-
-            // Add the glowing neon edge outline
-            const outline = new THREE.LineSegments(boxEdges, boxOutlineMaterial);
-            boxMesh.add(outline);
-
-            render.add(boxMesh);
-
-            // Random position above the floor
-            const startPos = {
-                x: (Math.random() - 0.5) * 10,
-                y: 5 + Math.random() * 10,
-                z: (Math.random() - 0.5) * 10
-            };
-
-            physics.createBox(boxSize, startPos, boxMesh);
-        }
+        physics.createGround(25); // 25 is half-extent of 50
 
         this.initialized = true;
-        console.log('[WorldManager] Test world generated');
+        console.log('[WorldManager] Test world generated (Cubes removed)');
     }
 
     update(delta) {

@@ -80,6 +80,11 @@ export class NetworkManager {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
 
+            // If we are the host, send the current room config to the new guest immediately
+            if (gameState.isHost) {
+                this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, gameState.roomConfig);
+            }
+
             // Emit connection event so PlayerManager can spawn their avatar
             eventBus.emit(EVENTS.PEER_CONNECTED, conn.peer);
         });
@@ -134,6 +139,15 @@ export class NetworkManager {
                     // Host -> Guest notification that a peer left
                     if (!gameState.isHost) {
                         eventBus.emit(EVENTS.PEER_DISCONNECTED, parsed.payload);
+                    }
+                    break;
+                case PACKET_TYPES.ROOM_CONFIG_UPDATE:
+                    // Host -> Guest room setting update
+                    if (!gameState.isHost) {
+                        console.log('[NetworkManager] Received Room Config Update');
+                        if (gameState.managers.room) {
+                            gameState.managers.room.updateConfig(parsed.payload);
+                        }
                     }
                     break;
                 default:

@@ -34,13 +34,16 @@ export class PhysicsManager {
     }
 
     /**
-     * Create a dynamic rigid body box and register it for sync
+     * Create a rigid body box and register it for sync
      */
-    createBox(size, position, mesh) {
+    createBox(size, position, mesh, isStatic = false) {
         if (!this.world) return;
 
         // Create Rigid Body
-        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z);
+        const rigidBodyDesc = isStatic
+            ? RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
+            : RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z);
+
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
         // Create Collider
@@ -48,13 +51,15 @@ export class PhysicsManager {
         const colliderDesc = RAPIER.ColliderDesc.cuboid(size / 2, size / 2, size / 2);
         this.world.createCollider(colliderDesc, rigidBody);
 
-        // Turn this into a networked entity. 
-        // Only the host has authority over physics objects.
-        const entityId = `physics-box-${this.nextPhysicsId++}`;
-        const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
+        // Only create a networked entity for dynamic objects that need syncing.
+        // Static objects don't move, so they don't need a PhysicsEntity to sync transforms.
+        if (!isStatic) {
+            const entityId = `physics-box-${this.nextPhysicsId++}`;
+            const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
 
-        if (gameState.managers.entity) {
-            gameState.managers.entity.addEntity(physicsEntity);
+            if (gameState.managers.entity) {
+                gameState.managers.entity.addEntity(physicsEntity);
+            }
         }
 
         return rigidBody;

@@ -13,6 +13,7 @@ import { DebugUIManager } from './managers/DebugUIManager.js';
 import { MediaManager } from './managers/MediaManager.js';
 import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
+import { RoomManager } from './managers/RoomManager.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
 
@@ -30,6 +31,7 @@ async function bootstrap() {
   gameState.managers.player = new PlayerManager();
   gameState.managers.input = new InputManager();
   gameState.managers.hud = new HUDManager();
+  gameState.managers.room = new RoomManager();
 
   // Attach HUD to camera
   if (gameState.managers.render) {
@@ -74,6 +76,11 @@ async function bootstrap() {
 
   // Generate World
   gameState.managers.world.generateTestWorld();
+
+  // Initialize Room (Atmosphere)
+  if (gameState.managers.render) {
+    gameState.managers.room.init(gameState.managers.render.scene);
+  }
 
   // Initialize and load Engine
   const engine = new GameEngine();
