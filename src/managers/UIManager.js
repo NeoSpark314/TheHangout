@@ -274,4 +274,19 @@ export class UIManager {
             }
         }
     }
+
+    getNavigableElements() {
+        if (!this.overlay || this.overlay.style.display === 'none') return [];
+
+        const elements = [];
+        // Sequential navigation order
+        if (this.nameInput && this.nameInput.offsetParent) elements.push(this.nameInput);
+        if (this.roomInput && this.roomInput.offsetParent) elements.push(this.roomInput);
+        if (this.copyRoomBtn && this.copyRoomBtn.offsetParent) elements.push(this.copyRoomBtn);
+        if (this.createBtn && this.createBtn.offsetParent) elements.push(this.createBtn);
+        if (this.joinBtn && this.joinBtn.offsetParent) elements.push(this.joinBtn);
+        if (this.voiceBtn && this.voiceBtn.offsetParent) elements.push(this.voiceBtn);
+
+        return elements;
+    }
 }
