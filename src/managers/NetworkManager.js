@@ -14,7 +14,7 @@ export class NetworkManager {
         this.timeSinceLastSync = 0;
 
         // Bind events
-        eventBus.on(EVENTS.CREATE_ROOM, () => this.initHost());
+        eventBus.on(EVENTS.CREATE_ROOM, (customId) => this.initHost(customId));
         eventBus.on(EVENTS.JOIN_ROOM, (roomId) => this.initGuest(roomId));
     }
 

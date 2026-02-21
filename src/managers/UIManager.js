@@ -20,7 +20,8 @@ export class UIManager {
         this.copyBtn = document.getElementById('copy-btn');
         this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
 
-        this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
+        this.debugHostBtn = document.getElementById('debug-host-btn');
+        this.debugJoinBtn = document.getElementById('debug-join-btn');
 
         this.init();
     }
@@ -81,6 +82,77 @@ export class UIManager {
                 setTimeout(() => this.hideOverlay(), 1000); // Guests auto-join
             }
         });
+
+        this.loadFromStorage();
+        this.setupDebugButtons();
+    }
+
+    loadFromStorage() {
+        const storedName = localStorage.getItem('hangout_playerName');
+        if (storedName) {
+            this.nameInput.value = storedName;
+        } else {
+            // Generate a random name if none exists
+            this.nameInput.value = `Player-${Math.floor(Math.random() * 10000)}`;
+        }
+
+        const storedRoom = localStorage.getItem('hangout_lastRoomId');
+        if (storedRoom) {
+            this.joinRoomInput.value = storedRoom;
+        }
+    }
+
+    saveToStorage() {
+        if (this.nameInput.value.trim()) {
+            localStorage.setItem('hangout_playerName', this.nameInput.value.trim());
+        }
+        if (this.joinRoomInput.value.trim() && !gameState.isHost) {
+            localStorage.setItem('hangout_lastRoomId', this.joinRoomInput.value.trim());
+        }
+    }
+
+    generateReadableRoomId() {
+        const adjs = ['neon', 'cyber', 'retro', 'pixel', 'synth', 'hyper', 'quantum', 'turbo', 'holo', 'astro'];
+        const nouns = ['tiger', 'rider', 'runner', 'punk', 'wave', 'grid', 'nexus', 'core', 'blade', 'nova'];
+        const num = Math.floor(Math.random() * 100);
+
+        const adj = adjs[Math.floor(Math.random() * adjs.length)];
+        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+
+        return `${adj}-${noun}-${num}`;
+    }
+
+    setupDebugButtons() {
+        if (this.debugHostBtn) {
+            this.debugHostBtn.addEventListener('click', () => {
+                const name = this.nameInput.value.trim() || 'DebugHost';
+                gameState.playerName = name;
+                gameState.isHost = true;
+
+                this.disableAllButtons();
+                this.setStatus('Creating Local Debug Room...');
+                eventBus.emit(EVENTS.CREATE_ROOM, 'local-debug');
+            });
+        }
+
+        if (this.debugJoinBtn) {
+            this.debugJoinBtn.addEventListener('click', () => {
+                const name = this.nameInput.value.trim() || 'DebugGuest';
+                gameState.playerName = name;
+                gameState.isHost = false;
+
+                this.disableAllButtons();
+                this.setStatus('Joining Local Debug Room...');
+                eventBus.emit(EVENTS.JOIN_ROOM, 'local-debug');
+            });
+        }
+    }
+
+    disableAllButtons() {
+        if (this.createBtn) this.createBtn.disabled = true;
+        if (this.joinBtn) this.joinBtn.disabled = true;
+        if (this.debugHostBtn) this.debugHostBtn.disabled = true;
+        if (this.debugJoinBtn) this.debugJoinBtn.disabled = true;
     }
 
     setupGuestMode(roomId) {
@@ -106,15 +178,18 @@ export class UIManager {
         this.createBtn.addEventListener('click', () => {
             const name = this.nameInput.value.trim() || 'Host';
             gameState.playerName = name;
-            const customId = this.createRoomInput.value.trim();
 
-            this.createBtn.disabled = true;
-            this.joinBtn.disabled = true;
+            // Generate a readable ID if the user didn't provide one
+            const customId = this.createRoomInput.value.trim() || this.generateReadableRoomId();
+
+            this.disableAllButtons();
+
+            this.saveToStorage();
 
             gameState.isHost = true;
             this.setStatus('Creating room...');
 
-            // Pass custom ID (if any) to CREATE_ROOM event
+            // Pass custom ID to CREATE_ROOM event
             eventBus.emit(EVENTS.CREATE_ROOM, customId);
         });
 
@@ -129,8 +204,9 @@ export class UIManager {
                 return;
             }
 
-            this.createBtn.disabled = true;
-            this.joinBtn.disabled = true;
+            this.disableAllButtons();
+
+            this.saveToStorage();
 
             gameState.isHost = false;
             this.setStatus('Connecting to host...');

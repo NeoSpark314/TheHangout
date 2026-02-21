@@ -195,6 +195,38 @@ html {
     letter-spacing: 2px;
 }
 
+.debug-section {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255, 255, 0, 0.4);
+}
+
+.debug-label {
+    color: #ffff00 !important;
+    margin-bottom: 5px !important;
+    font-size: 0.8rem !important;
+}
+
+.debug-btn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: 1px solid #ffff00;
+    border-radius: var(--border-radius);
+    color: #ffff00;
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 5px rgba(255, 255, 0, 0.3);
+}
+
+.debug-btn:hover {
+    background: rgba(255, 255, 0, 0.2);
+    box-shadow: 0 0 10px rgba(255, 255, 0, 0.6);
+}
+
 .invite-box {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
