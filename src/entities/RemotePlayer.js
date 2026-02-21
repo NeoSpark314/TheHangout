@@ -63,8 +63,8 @@ export class RemotePlayer extends PlayerEntity {
         // Setup Positional Audio
         if (render.audioListener) {
             this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
-            this.positionalAudio.setRefDistance(2); // Start dropping volume at 2 meters
-            this.positionalAudio.setRolloffFactor(1.5);
+            this.positionalAudio.setRefDistance(3); // Start dropping volume at 3 meters
+            this.positionalAudio.setRolloffFactor(1.0); // Slower dropoff curve
             this.positionalAudio.setDistanceModel('exponential');
             // Attach audio to the head so it comes from their mouth
             this.avatar.headMesh.add(this.positionalAudio);
