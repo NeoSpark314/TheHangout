@@ -11,15 +11,10 @@ export class UIManager {
         this.createBtn = document.getElementById('create-btn');
         this.joinBtn = document.getElementById('join-btn');
         this.roomInput = document.getElementById('room-id');
+        this.copyRoomBtn = document.getElementById('copy-room-btn');
 
         this.statusText = document.getElementById('status-text');
         this.errorText = document.getElementById('error-text');
-        this.inviteContainer = document.getElementById('invite-container');
-        this.inviteLinkInput = document.getElementById('invite-link');
-        this.copyBtn = document.getElementById('copy-btn');
-        this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
-
-
 
         this.init();
     }
@@ -39,19 +34,9 @@ export class UIManager {
 
         this.voiceBtn = document.getElementById('voice-btn');
 
-        this.copyBtn.addEventListener('click', () => {
-            this.inviteLinkInput.select();
-            // Use modern clipboard API if available
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(this.inviteLinkInput.value);
-            } else {
-                document.execCommand('copy');
-            }
-            this.copyBtn.textContent = 'Copied!';
-            setTimeout(() => {
-                this.copyBtn.textContent = 'Copy';
-            }, 2000);
-        });
+        if (this.copyRoomBtn) {
+            this.copyRoomBtn.addEventListener('click', () => this.handleInlineCopy());
+        }
 
         // Voice chat toggle
         if (this.voiceBtn) {
@@ -68,25 +53,15 @@ export class UIManager {
             });
         }
 
-        // The Start button actually hides the UI and drops them into the game
-        if (this.startBtn) {
-            this.startBtn.addEventListener('click', () => {
-                this.ensureAudioContextResumed();
-                this.hideOverlay();
-            });
-        }
+
 
         // Listen for network events
         eventBus.on(EVENTS.HOST_READY, (peerId) => {
             if (gameState.isHost) {
-                this.showInviteLink(peerId);
-                this.setStatus('Room Created! Share the link, then click Start.');
-
-                // Hide inputs, show start
-                const actionStack = this.roomInput.closest('.action-stack');
-                if (actionStack) actionStack.style.display = 'none';
-
-                if (this.startBtn) this.startBtn.style.display = 'block';
+                this.setStatus('Room Created! Starting...');
+                this.ensureAudioContextResumed();
+                // One-click host: hide immediately
+                setTimeout(() => this.hideOverlay(), 1000);
             }
         });
 
@@ -218,14 +193,21 @@ export class UIManager {
         });
     }
 
-    showInviteLink(roomId) {
-        this.roomIdDisplayed = true;
-        this.inviteContainer.style.display = 'block';
-
-        // Generate URL
+    handleInlineCopy() {
+        const roomId = this.roomInput.value.trim() || 'TestRoom';
         const url = new URL(window.location.href);
         url.searchParams.set('room', roomId);
-        this.inviteLinkInput.value = url.toString();
+
+        const originalIcon = this.copyRoomBtn.textContent;
+        navigator.clipboard.writeText(url.toString()).then(() => {
+            this.copyRoomBtn.textContent = '✅';
+            setTimeout(() => {
+                this.copyRoomBtn.textContent = originalIcon;
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            this.setStatus('Copy failed.');
+        });
     }
 
     setStatus(msg) {
