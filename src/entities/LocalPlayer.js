@@ -6,8 +6,8 @@ import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 
 export class LocalPlayer extends PlayerEntity {
-    constructor() {
-        super('local-player-id-temp', 'LOCAL_PLAYER', true);
+    constructor(id) {
+        super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
 
         this.speed = 5.0;
         this.turnSpeed = 0.002;

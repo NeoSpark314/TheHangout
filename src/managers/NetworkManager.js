@@ -26,10 +26,6 @@ export class NetworkManager {
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             gameState.roomId = id;
-            if (gameState.localPlayer) {
-                // Update LocalPlayer ID so broadcasts use the true peerId
-                gameState.managers.entity.updateEntityId(gameState.localPlayer.id, id);
-            }
             if (gameState.managers.media) {
                 gameState.managers.media.bindPeer(this.peer);
             }
@@ -43,6 +39,13 @@ export class NetworkManager {
 
         this.peer.on('error', (err) => {
             console.error('[NetworkManager] Host Peer Error:', err);
+            let msg = 'Room Creation Error';
+            if (err.type === 'unavailable-id') {
+                msg = 'Room Name already taken! Choose another.';
+            } else {
+                msg = `Error: ${err.type}`;
+            }
+            eventBus.emit(EVENTS.NETWORK_ERROR, msg);
         });
     }
 
@@ -52,11 +55,6 @@ export class NetworkManager {
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
             gameState.roomId = hostId;
-
-            if (gameState.localPlayer) {
-                // Update LocalPlayer ID so inputs use the true peerId
-                gameState.managers.entity.updateEntityId(gameState.localPlayer.id, id);
-            }
 
             if (gameState.managers.media) {
                 gameState.managers.media.bindPeer(this.peer);
@@ -68,6 +66,13 @@ export class NetworkManager {
 
         this.peer.on('error', (err) => {
             console.error('[NetworkManager] Guest Peer Error:', err);
+            let msg = 'Connection Error';
+            if (err.type === 'peer-unavailable') {
+                msg = 'Room not found! Check the name.';
+            } else {
+                msg = `Error: ${err.type}`;
+            }
+            eventBus.emit(EVENTS.NETWORK_ERROR, msg);
         });
     }
 

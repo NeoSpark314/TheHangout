@@ -30,8 +30,28 @@ async function bootstrap() {
   // Wait for Physics
   await gameState.managers.physics.init();
 
-  // Initialize Local Player (Needs Physics and Render)
-  gameState.managers.player.init();
+  // Initialize Local Player (Deferred until room join/create)
+  // gameState.managers.player.init();
+
+  let playerInitialized = false;
+  const initPlayerOnce = (id) => {
+    if (playerInitialized) return;
+    if (!id) return;
+    playerInitialized = true;
+    gameState.managers.player.init(id);
+  };
+
+  eventBus.on(EVENTS.HOST_READY, (id) => initPlayerOnce(id));
+  eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => {
+    // If we are a guest, we connect to the host. PEER_CONNECTED fires when the connection opens.
+    // However, we need our OWN id for the local player.
+    // Fortunately, NetworkManager assigns the local peer ID to gameState.roomId as soon as 'open' fires.
+    // Wait, actually NetworkManager has the peer ID as this.peer.id.
+    const localId = gameState.managers.network.peer?.id;
+    if (!gameState.isHost && localId) {
+      initPlayerOnce(localId);
+    }
+  });
 
   // Initialize Debug UI (Needs Local Player's headPose eventually, but can start now)
   gameState.managers.debugUI = new DebugUIManager();

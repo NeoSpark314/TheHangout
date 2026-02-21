@@ -9,19 +9,17 @@ export class UIManager {
         this.nameInput = document.getElementById('player-name');
 
         this.createBtn = document.getElementById('create-btn');
-        this.createRoomInput = document.getElementById('create-room-id');
-
         this.joinBtn = document.getElementById('join-btn');
-        this.joinRoomInput = document.getElementById('join-room-id');
+        this.roomInput = document.getElementById('room-id');
 
         this.statusText = document.getElementById('status-text');
+        this.errorText = document.getElementById('error-text');
         this.inviteContainer = document.getElementById('invite-container');
         this.inviteLinkInput = document.getElementById('invite-link');
         this.copyBtn = document.getElementById('copy-btn');
         this.startBtn = document.getElementById('start-btn'); // New button to actually start the 3D scene
 
-        this.debugHostBtn = document.getElementById('debug-host-btn');
-        this.debugJoinBtn = document.getElementById('debug-join-btn');
+
 
         this.init();
     }
@@ -85,9 +83,8 @@ export class UIManager {
                 this.setStatus('Room Created! Share the link, then click Start.');
 
                 // Hide inputs, show start
-                if (this.createBtn) this.createBtn.parentElement.style.display = 'none';
-                if (this.joinBtn) this.joinBtn.parentElement.style.display = 'none';
-                document.querySelector('.action-separator').style.display = 'none';
+                const actionStack = this.roomInput.closest('.action-stack');
+                if (actionStack) actionStack.style.display = 'none';
 
                 if (this.startBtn) this.startBtn.style.display = 'block';
             }
@@ -101,8 +98,13 @@ export class UIManager {
             }
         });
 
+        eventBus.on(EVENTS.NETWORK_ERROR, (err) => {
+            this.showError(err);
+            this.enableAllButtons();
+            this.setStatus('Ready'); // Clear the "Connecting..." status
+        });
+
         this.loadFromStorage();
-        this.setupDebugButtons();
     }
 
     loadFromStorage() {
@@ -116,7 +118,9 @@ export class UIManager {
 
         const storedRoom = localStorage.getItem('hangout_lastRoomId');
         if (storedRoom) {
-            this.joinRoomInput.value = storedRoom;
+            this.roomInput.value = storedRoom;
+        } else {
+            this.roomInput.value = 'TestRoom';
         }
     }
 
@@ -124,8 +128,8 @@ export class UIManager {
         if (this.nameInput.value.trim()) {
             localStorage.setItem('hangout_playerName', this.nameInput.value.trim());
         }
-        if (this.joinRoomInput.value.trim() && !gameState.isHost) {
-            localStorage.setItem('hangout_lastRoomId', this.joinRoomInput.value.trim());
+        if (this.roomInput.value.trim() && !gameState.isHost) {
+            localStorage.setItem('hangout_lastRoomId', this.roomInput.value.trim());
         }
     }
 
@@ -140,54 +144,32 @@ export class UIManager {
         return `${adj}-${noun}-${num}`;
     }
 
-    setupDebugButtons() {
-        if (this.debugHostBtn) {
-            this.debugHostBtn.addEventListener('click', () => {
-                const name = this.nameInput.value.trim() || 'DebugHost';
-                gameState.playerName = name;
-                gameState.isHost = true;
 
-                this.disableAllButtons();
-                this.setStatus('Creating Local Debug Room...');
-                eventBus.emit(EVENTS.CREATE_ROOM, 'local-debug');
-            });
-        }
-
-        if (this.debugJoinBtn) {
-            this.debugJoinBtn.addEventListener('click', () => {
-                const name = this.nameInput.value.trim() || 'DebugGuest';
-                gameState.playerName = name;
-                gameState.isHost = false;
-
-                this.disableAllButtons();
-                this.setStatus('Joining Local Debug Room...');
-                eventBus.emit(EVENTS.JOIN_ROOM, 'local-debug');
-            });
-        }
-    }
 
     disableAllButtons() {
         if (this.createBtn) this.createBtn.disabled = true;
         if (this.joinBtn) this.joinBtn.disabled = true;
-        if (this.debugHostBtn) this.debugHostBtn.disabled = true;
-        if (this.debugJoinBtn) this.debugJoinBtn.disabled = true;
+    }
+
+    enableAllButtons() {
+        if (this.createBtn) this.createBtn.disabled = false;
+        if (this.joinBtn) this.joinBtn.disabled = false;
     }
 
     setupGuestMode(roomId) {
         gameState.isHost = false;
 
-        // Hide create UI
-        if (this.createBtn) this.createBtn.parentElement.style.display = 'none';
-        document.querySelector('.action-separator').style.display = 'none';
+        // Hide create button since we are in guest mode (direct link)
+        if (this.createBtn) this.createBtn.style.display = 'none';
 
-        this.joinRoomInput.value = roomId;
+        this.roomInput.value = roomId;
 
         this.joinBtn.addEventListener('click', () => {
             const name = this.nameInput.value.trim() || 'Guest';
             gameState.playerName = name;
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
-            eventBus.emit(EVENTS.JOIN_ROOM, this.joinRoomInput.value.trim() || roomId);
+            eventBus.emit(EVENTS.JOIN_ROOM, this.roomInput.value.trim() || roomId);
         });
     }
 
@@ -198,9 +180,12 @@ export class UIManager {
             gameState.playerName = name;
 
             // Generate a readable ID if the user didn't provide one
-            const customId = this.createRoomInput.value.trim() || this.generateReadableRoomId();
+            const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
 
             this.disableAllButtons();
+
+            // Clear any old UI errors
+            this.clearError();
 
             this.saveToStorage();
 
@@ -215,7 +200,7 @@ export class UIManager {
         this.joinBtn.addEventListener('click', () => {
             const name = this.nameInput.value.trim() || 'Player';
             gameState.playerName = name;
-            const targetId = this.joinRoomInput.value.trim();
+            const targetId = this.roomInput.value.trim();
 
             if (!targetId) {
                 this.setStatus('Please enter a Room Name to join.');
@@ -223,6 +208,7 @@ export class UIManager {
             }
 
             this.disableAllButtons();
+            this.clearError();
 
             this.saveToStorage();
 
@@ -245,6 +231,18 @@ export class UIManager {
     setStatus(msg) {
         if (this.statusText) {
             this.statusText.textContent = msg;
+        }
+    }
+
+    showError(msg) {
+        if (this.errorText) {
+            this.errorText.textContent = msg;
+        }
+    }
+
+    clearError() {
+        if (this.errorText) {
+            this.errorText.textContent = "";
         }
     }
 

@@ -14,9 +14,9 @@ export class PlayerManager {
         eventBus.on(EVENTS.PEER_DISCONNECTED, (peerId) => this.onPeerDisconnected(peerId));
     }
 
-    init() {
-        console.log('[PlayerManager] Initializing Local Player');
-        gameState.localPlayer = new LocalPlayer();
+    init(id) {
+        console.log('[PlayerManager] Initializing Local Player with ID:', id);
+        gameState.localPlayer = new LocalPlayer(id);
 
         // Register the local player with the EntityManager.
         // It's assigned a temporary ID until NetworkManager assigns a real peer ID if hosting/joining.
