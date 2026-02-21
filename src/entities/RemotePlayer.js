@@ -17,10 +17,16 @@ export class RemotePlayer {
         const { render } = gameState.managers;
         if (!render) return;
 
-        // Create a distinct color for remote players (Neon Magenta)
-        const material = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+        // Create a distinct color for remote players (Neon Magenta Outline, dark solid body)
+        const material = new THREE.MeshBasicMaterial({ color: 0x050510 });
         const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
         this.mesh = new THREE.Mesh(geometry, material);
+
+        // Neon Magenta Outline
+        const edges = new THREE.EdgesGeometry(geometry);
+        const outlineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
+        const outline = new THREE.LineSegments(edges, outlineMaterial);
+        this.mesh.add(outline);
 
         // Start somewhat high up
         this.mesh.position.copy(this.targetPosition);

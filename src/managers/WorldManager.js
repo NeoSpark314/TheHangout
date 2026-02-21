@@ -27,17 +27,22 @@ export class WorldManager {
 
         // 2. Create some dynamic boxes for testing (Retro Wireframes)
         const boxMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ffff, // Cyan
-            wireframe: true,
-            transparent: true,
-            opacity: 0.8
+            color: 0x050510 // Dark solid color matching the floor
         });
+
+        const boxOutlineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff }); // Neon Cyan
 
         const boxSize = 1;
         const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
+        const boxEdges = new THREE.EdgesGeometry(boxGeometry);
 
         for (let i = 0; i < 50; i++) {
             const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+
+            // Add the glowing neon edge outline
+            const outline = new THREE.LineSegments(boxEdges, boxOutlineMaterial);
+            boxMesh.add(outline);
+
             render.add(boxMesh);
 
             // Random position above the floor
