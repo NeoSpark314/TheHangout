@@ -12,13 +12,8 @@ export class LocalPlayer extends PlayerEntity {
         this.speed = 5.0;
         this.turnSpeed = 0.002;
 
-        // Movement intent
-        this.keys = {
-            w: false,
-            a: false,
-            s: false,
-            d: false,
-        };
+        // Legacy movement intent replaced by InputManager
+
 
         // --- Clean Architecture Transforms ---
         // xrOrigin is the physical center of the room (pinned to y=0)
@@ -58,11 +53,13 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     initInput() {
-        window.addEventListener('keydown', (e) => this.onKeyChange(e.key.toLowerCase(), true));
-        window.addEventListener('keyup', (e) => this.onKeyChange(e.key.toLowerCase(), false));
-
+        // Keyboard and touch are now handled via InputManager
         const canvas = document.getElementById('app');
-        canvas.addEventListener('click', () => canvas.requestPointerLock());
+        canvas.addEventListener('click', () => {
+            const { render } = gameState.managers;
+            const isVR = render?.renderer?.xr?.isPresenting;
+            if (!isVR) canvas.requestPointerLock();
+        });
 
         document.addEventListener('mousemove', (e) => {
             const { render } = gameState.managers;
@@ -77,11 +74,6 @@ export class LocalPlayer extends PlayerEntity {
         });
     }
 
-    onKeyChange(key, isDown) {
-        if (this.keys.hasOwnProperty(key)) {
-            this.keys[key] = isDown;
-        }
-    }
 
     update(delta) {
         const { render } = gameState.managers;
@@ -114,13 +106,24 @@ export class LocalPlayer extends PlayerEntity {
         // --- 3. LOCOMOTION ---
         const moveVector = new THREE.Vector3(0, 0, 0);
 
-        // Desktop keys
-        if (this.keys.w) moveVector.z -= 1;
-        if (this.keys.s) moveVector.z += 1;
-        if (this.keys.a) moveVector.x -= 1;
-        if (this.keys.d) moveVector.x += 1;
+        // 3a. Combined Inputs (Keyboard + Mobile Stick) via InputManager
+        const input = gameState.managers.input;
+        if (input) {
+            const move = input.getMovementVector();
+            moveVector.x = move.x;
+            moveVector.z = move.y; // Forward/Back is Z
 
-        // VR Joysticks
+            // 3b. Mobile Look Stick
+            const look = input.getLookVector();
+            if (look.x !== 0 || look.y !== 0) {
+                // Adjust sensitivities as needed
+                this.applyTurn(-look.x * this.turnSpeed * 15);
+                this.pitch -= look.y * this.turnSpeed * 15;
+                this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
+            }
+        }
+
+        // 3c. VR Joysticks
         this.updateVRLocomotion(moveVector);
 
         if (moveVector.lengthSq() > 0) {

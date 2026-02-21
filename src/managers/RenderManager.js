@@ -44,6 +44,7 @@ export class RenderManager {
         // WebXR Enable
         this.renderer.xr.enabled = true;
 
+        this.renderer.domElement.style.display = 'block';
         this.container.appendChild(this.renderer.domElement);
 
         // Initial Menu Camera (High, dramatic angle)

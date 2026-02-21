@@ -16,6 +16,10 @@ export class UIManager {
         this.statusText = document.getElementById('status-text');
         this.errorText = document.getElementById('error-text');
 
+        // Detect mobile (non-HMD) for dual sticks
+        this.isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
+            !/OculusBrowser|PicoBrowser|ViveBrowser|AppleVision/i.test(navigator.userAgent);
+
         this.init();
     }
 
@@ -233,6 +237,15 @@ export class UIManager {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
                 this.overlay.style.display = 'none';
+
+                // Show mobile joysticks if on phone/tablet
+                if (this.isMobile) {
+                    const hud = document.getElementById('mobile-hud');
+                    if (hud) {
+                        hud.style.display = 'flex';
+                        gameState.managers.input.initMobileJoysticks();
+                    }
+                }
             }, 500);
         }
     }
