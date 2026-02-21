@@ -208,4 +208,14 @@ export class NetworkManager {
             this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
         }
     }
+
+    disconnect() {
+        if (this.peer) {
+            this.peer.destroy();
+            this.peer = null;
+        }
+        this.connections.clear();
+        gameState.roomId = null;
+        console.log('[NetworkManager] Disconnected and destroyed peer.');
+    }
 }

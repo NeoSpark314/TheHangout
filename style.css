@@ -227,6 +227,21 @@ body {
     height: 45px;
 }
 
+.leave-style {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.leave-style:hover {
+    background: #ef4444;
+    box-shadow: 0 0 20px #ef4444;
+}
+
 .icon-btn:hover,
 .icon-btn.gamepad-focus {
     background: rgba(255, 0, 255, 0.4);

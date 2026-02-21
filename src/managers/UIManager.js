@@ -17,6 +17,7 @@ export class UIManager {
         this.avatarDialog = document.getElementById('avatar-dialog');
         this.closeAvatarBtn = document.getElementById('close-avatar-btn');
         this.avatarColorInput = document.getElementById('avatar-color');
+        this.leaveBtn = document.getElementById('leave-btn');
 
         // Handle Orientation Change to reposition joysticks
         window.addEventListener('orientationchange', () => {
@@ -94,6 +95,12 @@ export class UIManager {
                 this.saveToStorage();
                 eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, gameState.avatarConfig);
                 this.updateAvatarButtonColor(gameState.avatarConfig.color);
+            });
+        }
+
+        if (this.leaveBtn) {
+            this.leaveBtn.addEventListener('click', () => {
+                this.handleLeave();
             });
         }
 
@@ -334,6 +341,8 @@ export class UIManager {
             setTimeout(() => {
                 this.overlay.style.display = 'none';
 
+                if (this.leaveBtn) this.leaveBtn.style.display = 'flex';
+
                 // Show mobile joysticks if on phone/tablet
                 if (this.isMobile) {
                     const hud = document.getElementById('mobile-hud');
@@ -392,5 +401,49 @@ export class UIManager {
         this.avatarBtn.style.backgroundColor = `${color}33`; // 20% opacity (hex 33)
         this.avatarBtn.style.borderColor = color;
         this.avatarBtn.style.boxShadow = `0 0 10px ${color}88`;
+    }
+
+    handleLeave() {
+        if (this.leaveBtn) this.leaveBtn.style.display = 'none';
+
+        // 1. Cleanup Network
+        if (gameState.managers.network) {
+            gameState.managers.network.disconnect();
+        }
+
+        // 2. Cleanup Media
+        if (gameState.managers.media) {
+            gameState.managers.media.stopMicrophone();
+        }
+
+        // 3. Cleanup Entities (Except local player identity)
+        if (gameState.managers.entity) {
+            // We need a way to clear all remote players
+            // For now, emitters or manual loop
+            const entities = Array.from(gameState.managers.entity.entities.values());
+            entities.forEach(entity => {
+                if (entity.type !== 'LOCAL_PLAYER') {
+                    gameState.managers.entity.removeEntity(entity.id);
+                }
+            });
+        }
+
+        // 4. Show Overlay
+        this.showOverlay();
+
+        this.setStatus('Ready');
+        this.enableAllButtons();
+    }
+
+    showOverlay() {
+        if (this.overlay) {
+            this.overlay.style.display = 'flex';
+            // Force a reflow for transition
+            this.overlay.offsetHeight;
+            this.overlay.style.opacity = '1';
+        }
+
+        const hud = document.getElementById('mobile-hud');
+        if (hud) hud.style.display = 'none';
     }
 }
