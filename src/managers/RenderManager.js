@@ -31,6 +31,10 @@ export class RenderManager {
         this.cameraGroup.position.set(0, 0, 0);
         this.camera.lookAt(0, 0, 0);
 
+        // Audio Listener
+        this.audioListener = new THREE.AudioListener();
+        this.camera.add(this.audioListener);
+
         // Renderer setup
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);

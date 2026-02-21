@@ -39,6 +39,8 @@ export class UIManager {
             this.setupDefaultMode();
         }
 
+        this.voiceBtn = document.getElementById('voice-btn');
+
         this.copyBtn.addEventListener('click', () => {
             this.inviteLinkInput.select();
             // Use modern clipboard API if available
@@ -53,9 +55,25 @@ export class UIManager {
             }, 2000);
         });
 
+        // Voice chat toggle
+        if (this.voiceBtn) {
+            this.voiceBtn.addEventListener('click', async () => {
+                this.ensureAudioContextResumed();
+                const isActive = await gameState.managers.media.toggleMicrophone();
+                if (isActive) {
+                    this.voiceBtn.textContent = 'Disable Voice Chat';
+                    this.voiceBtn.style.backgroundColor = '#ef4444'; // Red for active mic
+                } else {
+                    this.voiceBtn.textContent = 'Enable Voice Chat';
+                    this.voiceBtn.style.backgroundColor = '#3b82f6'; // Blue for idle
+                }
+            });
+        }
+
         // The Start button actually hides the UI and drops them into the game
         if (this.startBtn) {
             this.startBtn.addEventListener('click', () => {
+                this.ensureAudioContextResumed();
                 this.hideOverlay();
             });
         }
@@ -236,6 +254,14 @@ export class UIManager {
             setTimeout(() => {
                 this.overlay.style.display = 'none';
             }, 500);
+        }
+    }
+
+    ensureAudioContextResumed() {
+        if (gameState.managers.render && gameState.managers.render.audioListener) {
+            if (gameState.managers.render.audioListener.context.state === 'suspended') {
+                gameState.managers.render.audioListener.context.resume();
+            }
         }
     }
 }

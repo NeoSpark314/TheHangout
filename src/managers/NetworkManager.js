@@ -30,6 +30,9 @@ export class NetworkManager {
                 // Update LocalPlayer ID so broadcasts use the true peerId
                 gameState.managers.entity.updateEntityId(gameState.localPlayer.id, id);
             }
+            if (gameState.managers.media) {
+                gameState.managers.media.bindPeer(this.peer);
+            }
             eventBus.emit(EVENTS.HOST_READY, id);
         });
 
@@ -53,6 +56,10 @@ export class NetworkManager {
             if (gameState.localPlayer) {
                 // Update LocalPlayer ID so inputs use the true peerId
                 gameState.managers.entity.updateEntityId(gameState.localPlayer.id, id);
+            }
+
+            if (gameState.managers.media) {
+                gameState.managers.media.bindPeer(this.peer);
             }
 
             const conn = this.peer.connect(hostId, { reliable: true });

@@ -22,6 +22,7 @@ class GameState {
             interaction: null,
             asset: null,
             debugUI: null,
+            media: null
         };
 
         // Timing

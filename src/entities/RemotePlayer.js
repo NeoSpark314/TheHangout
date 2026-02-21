@@ -20,6 +20,26 @@ export class RemotePlayer extends PlayerEntity {
         this.lastNetworkUpdateTime = performance.now();
 
         this.initAvatar();
+
+        this.onVoiceStream = this.onVoiceStream.bind(this);
+        eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
+    }
+
+    onVoiceStream(data) {
+        if (data.peerId === this.peerId) {
+            console.log(`[RemotePlayer] Attaching voice stream to avatar ${this.peerId}`);
+            if (this.positionalAudio) {
+                // Remove old stream if it exists
+                if (this.positionalAudio.hasPlaybackControl) {
+                    this.positionalAudio.stop();
+                }
+                try {
+                    this.positionalAudio.setMediaStreamSource(data.stream);
+                } catch (e) {
+                    console.error('[RemotePlayer] Failed to set media stream source:', e);
+                }
+            }
+        }
     }
 
     initAvatar() {
@@ -31,6 +51,16 @@ export class RemotePlayer extends PlayerEntity {
 
         // Start somewhat high up
         this.mesh.position.copy(this.targetPosition);
+
+        // Setup Positional Audio
+        if (render.audioListener) {
+            this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
+            this.positionalAudio.setRefDistance(2); // Start dropping volume at 2 meters
+            this.positionalAudio.setRolloffFactor(1.5);
+            this.positionalAudio.setDistanceModel('exponential');
+            // Attach audio to the head so it comes from their mouth
+            this.avatar.headMesh.add(this.positionalAudio);
+        }
 
         render.add(this.mesh);
 
@@ -122,6 +152,18 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     destroy() {
+        eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
+
+        if (this.positionalAudio) {
+            if (this.positionalAudio.hasPlaybackControl) {
+                this.positionalAudio.stop();
+            }
+            if (this.positionalAudio.source) {
+                this.positionalAudio.disconnect();
+            }
+            this.avatar.headMesh.remove(this.positionalAudio);
+        }
+
         const { render } = gameState.managers;
         if (render && this.mesh) {
             render.remove(this.mesh);

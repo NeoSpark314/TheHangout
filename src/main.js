@@ -10,6 +10,7 @@ import { WorldManager } from './managers/WorldManager.js';
 import { PlayerManager } from './managers/PlayerManager.js';
 import { EntityManager } from './managers/EntityManager.js';
 import { DebugUIManager } from './managers/DebugUIManager.js';
+import { MediaManager } from './managers/MediaManager.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
 
@@ -20,6 +21,7 @@ async function bootstrap() {
   gameState.managers.entity = new EntityManager();
   gameState.managers.ui = new UIManager();
   gameState.managers.network = new NetworkManager();
+  gameState.managers.media = new MediaManager();
   gameState.managers.render = new RenderManager();
   gameState.managers.physics = new PhysicsManager();
   gameState.managers.world = new WorldManager();
