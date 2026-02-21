@@ -28,7 +28,7 @@ export class RenderManager {
         this.camera.layers.disable(1);
 
         // Move camera group back and up slightly to see the floor initially
-        this.cameraGroup.position.set(0, 2, 5);
+        this.cameraGroup.position.set(0, 0, 0);
         this.camera.lookAt(0, 0, 0);
 
         // Renderer setup
