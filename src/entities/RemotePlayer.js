@@ -38,6 +38,8 @@ export class RemotePlayer {
         // 1. Head (Flat Square)
         const headSize = 0.4;
         const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
+        // Rotate geometry to face forward (-Z)
+        headGeometry.rotateY(Math.PI);
         // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
         headGeometry.translate(0, headSize / 2, 0);
 

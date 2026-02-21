@@ -41,6 +41,8 @@ export class LocalPlayer {
         // 1. Head (Flat Square with Canvas Texture)
         const headSize = 0.4;
         const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
+        // Rotate geometry to face forward (-Z)
+        headGeometry.rotateY(Math.PI);
         // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
         headGeometry.translate(0, headSize / 2, 0);
 
@@ -73,6 +75,11 @@ export class LocalPlayer {
         this.headMesh.add(headOutline);
 
         this.headMesh.position.y = 0.6; // Position at neck height
+
+        // Hide head from local camera using layers
+        // Default camera is layer 0. We put head on layer 1.
+        this.headMesh.traverse(child => child.layers.set(1));
+
         this.mesh.add(this.headMesh);
 
         // 2. Torso (Vertical Line)
@@ -332,12 +339,37 @@ export class LocalPlayer {
             return { active, rootPos };
         };
 
-        // We need to figure out which hand is which since getHand(0) isn't guaranteed left/right
-        // We'll rely on inputSources mapping if possible, but Three.js handles it internally sometimes.
-        // For simplicity in this step, we'll try processing both and updating the arms.
         let leftData = { active: false, rootPos: new THREE.Vector3(-0.4, 0, 0) };
         let rightData = { active: false, rootPos: new THREE.Vector3(0.4, 0, 0) };
 
+        // 3. Fallback to Controllers if no Hand Tracking
+        if (session) {
+            for (let i = 0; i < 2; i++) {
+                const controller = render.renderer.xr.getController(i);
+                const handSource = session.inputSources[i];
+
+                if (controller && handSource) {
+                    const handedness = handSource.handedness;
+
+                    // Only use controller if hand tracking isn't already driving this hand
+                    if ((handedness === 'left' && !leftData.active) ||
+                        (handedness === 'right' && !rightData.active)) {
+
+                        const worldPos = new THREE.Vector3();
+                        controller.getWorldPosition(worldPos);
+                        this.mesh.worldToLocal(worldPos);
+
+                        if (handedness === 'left') {
+                            leftData.active = true;
+                            leftData.rootPos.copy(worldPos);
+                        } else {
+                            rightData.active = true;
+                            rightData.rootPos.copy(worldPos);
+                        }
+                    }
+                }
+            }
+        }
         // Attempt to determine handedness from underlying inputSources connected to hands.
         // A robust implementation checks the XRInputSources, but let's assume standard order for local testing or update the arm IK simply.
         if (hand0.visible) leftData = processHand(hand0, 'left');
