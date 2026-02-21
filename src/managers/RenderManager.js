@@ -40,8 +40,10 @@ export class RenderManager {
 
         this.container.appendChild(this.renderer.domElement);
 
-        // Add VR Button
-        const vrButton = VRButton.createButton(this.renderer);
+        // Add VR Button with Hand Tracking support
+        const vrButton = VRButton.createButton(this.renderer, {
+            sessionInit: { optionalFeatures: ['hand-tracking'] }
+        });
         this.container.appendChild(vrButton);
 
         this.setupLighting();

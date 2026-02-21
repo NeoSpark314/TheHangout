@@ -131,9 +131,38 @@ export class NetworkManager {
         // 1. Everyone syncs their LocalPlayer position
         if (gameState.localPlayer && gameState.localPlayer.rigidBody) {
             const pos = gameState.localPlayer.rigidBody.translation();
+            const lp = gameState.localPlayer;
+
+            // Build Head Payload
+            const headPayload = {
+                position: { x: lp.headMesh.position.x, y: lp.headMesh.position.y, z: lp.headMesh.position.z },
+                quaternion: { x: lp.headMesh.quaternion.x, y: lp.headMesh.quaternion.y, z: lp.headMesh.quaternion.z, w: lp.headMesh.quaternion.w }
+            };
+
+            // Build Hands Payload (Syncing wrist only for now to save bandwidth, full joints could be added later)
+            const handsPayload = {
+                left: { active: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } },
+                right: { active: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } }
+            };
+
+            if (lp.handMeshes.left[0] && lp.handMeshes.left[0].visible) {
+                handsPayload.left.active = true;
+                const m = lp.handMeshes.left[0];
+                handsPayload.left.position = { x: m.position.x, y: m.position.y, z: m.position.z };
+                handsPayload.left.quaternion = { x: m.quaternion.x, y: m.quaternion.y, z: m.quaternion.z, w: m.quaternion.w };
+            }
+            if (lp.handMeshes.right[0] && lp.handMeshes.right[0].visible) {
+                handsPayload.right.active = true;
+                const m = lp.handMeshes.right[0];
+                handsPayload.right.position = { x: m.position.x, y: m.position.y, z: m.position.z };
+                handsPayload.right.quaternion = { x: m.quaternion.x, y: m.quaternion.y, z: m.quaternion.z, w: m.quaternion.w };
+            }
+
             const payload = {
                 position: { x: pos.x, y: pos.y, z: pos.z },
-                yaw: gameState.localPlayer.yaw
+                yaw: lp.yaw,
+                head: headPayload,
+                hands: handsPayload
             };
 
             if (gameState.isHost) {

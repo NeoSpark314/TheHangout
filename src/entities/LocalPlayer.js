@@ -30,41 +30,118 @@ export class LocalPlayer {
         const { render, physics } = gameState.managers;
         if (!render || !physics) return;
 
-        // 1. Visible Avatar (Capsule)
-        // Solid dark capsule with Neon Cyan edges
-        const material = new THREE.MeshBasicMaterial({ color: 0x050510 });
-        const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8); // radius: 0.5, length: 1 -> total height: 2
-        this.mesh = new THREE.Mesh(geometry, material);
+        // --- Visible Avatar (Stick Figure) ---
+        // Create root group for the avatar visual
+        this.mesh = new THREE.Group();
 
-        // Add neon outline
-        const edges = new THREE.EdgesGeometry(geometry);
+        // Materials (Neon Cyan)
         const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff });
-        const outline = new THREE.LineSegments(edges, outlineMaterial);
-        this.mesh.add(outline);
+        const solidDark = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
+
+        // 1. Head (Flat Square with Canvas Texture)
+        const headSize = 0.4;
+        const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
+
+        // Placeholder Canvas Texture (256x256)
+        this.headCanvas = document.createElement('canvas');
+        this.headCanvas.width = 256;
+        this.headCanvas.height = 256;
+        const ctx = this.headCanvas.getContext('2d');
+        ctx.fillStyle = '#0a041c'; // Dark background
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 10;
+        ctx.strokeRect(10, 10, 236, 236); // Simple border
+        // Smiley Face Placeholder
+        ctx.beginPath();
+        ctx.arc(80, 80, 20, 0, Math.PI * 2);
+        ctx.arc(176, 80, 20, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(128, 140, 60, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+
+        this.headTexture = new THREE.CanvasTexture(this.headCanvas);
+        const headMaterial = new THREE.MeshBasicMaterial({ map: this.headTexture, side: THREE.DoubleSide });
+
+        this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
+        // Add neon border to head
+        const headEdges = new THREE.EdgesGeometry(headGeometry);
+        const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
+        this.headMesh.add(headOutline);
+
+        this.headMesh.position.y = 0.8; // Offset from center of physics body
+        this.mesh.add(this.headMesh);
+
+        // 2. Torso (Vertical Line)
+        const torsoGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0.6, 0), // Base of neck
+            new THREE.Vector3(0, -0.2, 0) // Waist
+        ]);
+        this.torso = new THREE.Line(torsoGeom, outlineMaterial);
+        this.mesh.add(this.torso);
+
+        // 3. Legs
+        const legGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-0.15, -0.2, 0), // Left Waist
+            new THREE.Vector3(-0.15, -1.0, 0), // Left Foot
+            new THREE.Vector3(0.15, -0.2, 0),  // Right Waist
+            new THREE.Vector3(0.15, -1.0, 0)   // Right Foot
+        ]);
+        // To draw them as disconnected segments, we need pairs
+        const legsSegments = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(-0.2, -1.0, 0), // Left leg
+            new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0.2, -1.0, 0)  // Right leg
+        ]);
+        this.legs = new THREE.LineSegments(legsSegments, outlineMaterial);
+        this.mesh.add(this.legs);
+
+        // Default Arms (When not in VR or no controllers)
+        const armsSegments = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(-0.4, 0.0, 0), // Left arm (resting)
+            new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(0.4, 0.0, 0)   // Right arm (resting)
+        ]);
+        this.arms = new THREE.LineSegments(armsSegments, outlineMaterial);
+        this.mesh.add(this.arms);
 
         render.add(this.mesh);
 
-        // 2. Physics Body
+        // --- Physics Body ---
         const startPos = { x: 0, y: 5, z: 0 };
 
-        // Create Kinematic or Dynamic body
-        // For a player, a dynamic capsule or character controller is better.
-        // For this prototype, we'll use a dynamic rigid body with locked rotations (upright).
+        // Keep dynamic capsule for physical interaction/collisions
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(startPos.x, startPos.y, startPos.z)
             .lockRotations();
 
         this.rigidBody = physics.world.createRigidBody(rigidBodyDesc);
 
-        // Capsule height in Rapier is half-height of the cylindrical part
-        const colliderDesc = RAPIER.ColliderDesc.capsule(0.5, 0.5);
+        // Height is 2.0 total (-1.0 to 1.0 local)
+        const colliderDesc = RAPIER.ColliderDesc.capsule(0.5, 0.3); // half-height, radius
         physics.world.createCollider(colliderDesc, this.rigidBody);
 
-        // Register mesh sync manually since we handle it specifically for camera
         physics.dynamicBodies.push({
             mesh: this.mesh,
             rigidBody: this.rigidBody
         });
+
+        // --- XR Hand Tracking Visuals ---
+        this.handMeshes = { left: [], right: [] };
+        const jointGeom = new THREE.BoxGeometry(0.015, 0.015, 0.015);
+        const jointMatLeft = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const jointMatRight = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+
+        for (let i = 0; i < 25; i++) {
+            const leftJoint = new THREE.Mesh(jointGeom, jointMatLeft);
+            leftJoint.visible = false;
+            this.mesh.add(leftJoint);
+            this.handMeshes.left.push(leftJoint);
+
+            const rightJoint = new THREE.Mesh(jointGeom, jointMatRight);
+            rightJoint.visible = false;
+            this.mesh.add(rightJoint);
+            this.handMeshes.right.push(rightJoint);
+        }
     }
 
     initInput() {
@@ -153,37 +230,114 @@ export class LocalPlayer {
         const session = render.renderer.xr.getSession();
         if (!session) return;
 
-        // Poll XR Input Sources (Controllers)
+        let leftHandActive = false;
+        let rightHandActive = false;
+        const leftHandRoot = new THREE.Vector3();
+        const rightHandRoot = new THREE.Vector3();
+
+        // 1. Poll Gamepads for Locomotion/Jumping
         for (const source of session.inputSources) {
-            if (!source.gamepad) continue;
+            if (source.gamepad) {
+                const axes = source.gamepad.axes;
+                const buttons = source.gamepad.buttons;
 
-            const axes = source.gamepad.axes; // [thumbstickX, thumbstickY, ...]
-            const buttons = source.gamepad.buttons;
-
-            // Left Hand: Movement (Standard Mapping)
-            if (source.handedness === 'left' && axes.length >= 4) {
-                // axes[2] is X, axes[3] is Y for thumbstick
-                direction.x += axes[2] || 0;
-                direction.z += axes[3] || 0;
-            }
-
-            // Right Hand: Rotation / Jump
-            if (source.handedness === 'right') {
-                // Snap Turn (Simple version)
-                if (axes.length >= 4 && Math.abs(axes[2]) > 0.5) {
-                    // This is a bit sensitive without a debounce, but fine for prototype
-                    this.yaw -= axes[2] * 0.05;
+                if (source.handedness === 'left' && axes.length >= 4) {
+                    direction.x += axes[2] || 0;
+                    direction.z += axes[3] || 0;
                 }
 
-                // Jump (Button 0 is usually Trigger/A)
-                if (buttons[0].pressed && !this.wasJumpPressed) {
-                    this.jump();
-                    this.wasJumpPressed = true;
-                } else if (!buttons[0].pressed) {
-                    this.wasJumpPressed = false;
+                if (source.handedness === 'right') {
+                    if (axes.length >= 4 && Math.abs(axes[2]) > 0.5) {
+                        this.yaw -= axes[2] * 0.05;
+                    }
+                    if (buttons[0].pressed && !this.wasJumpPressed) {
+                        this.jump();
+                        this.wasJumpPressed = true;
+                    } else if (!buttons[0].pressed) {
+                        this.wasJumpPressed = false;
+                    }
                 }
             }
         }
+
+        // 2. Poll Hand Tracking
+        // In Three.js, getHand(0) and getHand(1) return Groups containing the joints
+        const hand0 = render.renderer.xr.getHand(0);
+        const hand1 = render.renderer.xr.getHand(1);
+
+        const processHand = (hand, handednessStr) => {
+            const meshes = this.handMeshes[handednessStr];
+            let active = false;
+            let rootPos = new THREE.Vector3();
+
+            // Hand joints are populated if tracking is active
+            if (hand && hand.joints && Object.keys(hand.joints).length > 0) {
+                active = true;
+                // Convert world space joints to player local space
+                let i = 0;
+                for (const [jointName, jointGroup] of Object.entries(hand.joints)) {
+                    if (i >= 25) break;
+
+                    if (jointGroup.visible) {
+                        meshes[i].visible = true;
+
+                        // Get world position/rotation
+                        const worldPos = new THREE.Vector3();
+                        const worldQuat = new THREE.Quaternion();
+                        jointGroup.getWorldPosition(worldPos);
+                        jointGroup.getWorldQuaternion(worldQuat);
+
+                        // Convert to LocalPlayer mesh space
+                        this.mesh.worldToLocal(worldPos);
+                        meshes[i].position.copy(worldPos);
+
+                        // Simplify rotation sync for now
+                        meshes[i].quaternion.copy(worldQuat);
+
+                        if (jointName === 'wrist') {
+                            rootPos.copy(worldPos);
+                        }
+                    } else {
+                        meshes[i].visible = false;
+                    }
+                    i++;
+                }
+            } else {
+                for (let i = 0; i < 25; i++) {
+                    meshes[i].visible = false;
+                }
+            }
+            return { active, rootPos };
+        };
+
+        // We need to figure out which hand is which since getHand(0) isn't guaranteed left/right
+        // We'll rely on inputSources mapping if possible, but Three.js handles it internally sometimes.
+        // For simplicity in this step, we'll try processing both and updating the arms.
+        let leftData = { active: false, rootPos: new THREE.Vector3(-0.4, 0, 0) };
+        let rightData = { active: false, rootPos: new THREE.Vector3(0.4, 0, 0) };
+
+        // Attempt to determine handedness from underlying inputSources connected to hands.
+        // A robust implementation checks the XRInputSources, but let's assume standard order for local testing or update the arm IK simply.
+        if (hand0.visible) leftData = processHand(hand0, 'left');
+        if (hand1.visible) rightData = processHand(hand1, 'right');
+
+        // Update Arms to connect to hands (or default positions if no hands tracked)
+        this.updateArms(leftData.rootPos, rightData.rootPos);
+    }
+
+    updateArms(leftHandPos, rightHandPos) {
+        // Torso neck/shoulder position is roughly (0, 0.5, 0)
+        const shoulder = new THREE.Vector3(0, 0.5, 0);
+
+        const positions = new Float32Array([
+            shoulder.x, shoulder.y, shoulder.z,
+            leftHandPos.x, leftHandPos.y, leftHandPos.z,
+            shoulder.x, shoulder.y, shoulder.z,
+            rightHandPos.x, rightHandPos.y, rightHandPos.z
+        ]);
+
+        this.arms.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        this.arms.geometry.computeBoundingSphere();
     }
 
     jump() {
