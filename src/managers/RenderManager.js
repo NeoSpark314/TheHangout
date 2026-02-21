@@ -58,8 +58,6 @@ export class RenderManager {
         this.cameraGroup.position.set(15, 12, 15);
         this.cameraGroup.lookAt(0, 0, 0);
 
-        this.setupLighting();
-        this.createSynthwaveSun();
         this.setupControllers();
 
         // Add VR Button ONLY if we detect a true HMD (Quest, Vision Pro, or PC desktop)
@@ -123,68 +121,6 @@ export class RenderManager {
     }
 
 
-    setupLighting() {
-        // Ambient Light (Soft Magenta cast)
-        const ambientLight = new THREE.AmbientLight(0xff00ff, 0.5);
-        this.scene.add(ambientLight);
-
-        // Hemisphere Light (Cyan from above, purple from below)
-        const hemiLight = new THREE.HemisphereLight(0x00ffff, 0x800080, 1);
-        this.scene.add(hemiLight);
-
-        // Directional Light (Replacing Sun with a distant neon source)
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        dirLight.position.set(10, 20, 10);
-        dirLight.castShadow = false; // explicitly disable
-        this.scene.add(dirLight);
-    }
-
-    createSynthwaveSun() {
-        // Large distant circle for the synthwave sun
-        const sunGeom = new THREE.CircleGeometry(120, 64);
-        const sunMat = new THREE.ShaderMaterial({
-            uniforms: {
-                topColor: { value: new THREE.Color(0xff8000) }, // Orange
-                bottomColor: { value: new THREE.Color(0xff0080) } // Pink/Magenta
-            },
-            vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: `
-                varying vec2 vUv;
-                uniform vec3 topColor;
-                uniform vec3 bottomColor;
-                void main() {
-                    float y = vUv.y;
-                    // Classic 80s gradient: Pink at the bottom, Orange at the top
-                    vec3 color = mix(bottomColor, topColor, y);
-                    
-                    // Retro Striped Effect
-                    // Stripes get thicker towards the bottom (y=0)
-                    float period = 0.08;
-                    float gapWidth = 0.04 * (1.0 - y); 
-                    if (mod(y, period) < gapWidth) discard;
-                    
-                    gl_FragColor = vec4(color, 1.0);
-                }
-            `,
-            transparent: true,
-            side: THREE.DoubleSide
-        });
-
-        const sun = new THREE.Mesh(sunGeom, sunMat);
-
-        // Place it far in the distance, slightly above the horizon
-        sun.position.set(0, 60, -600);
-        // Make sure it faces the camera area
-        sun.lookAt(0, 60, 0);
-
-        this.scene.add(sun);
-    }
 
     setupControllers() {
         this.controllers = [];

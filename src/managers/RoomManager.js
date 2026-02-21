@@ -46,6 +46,16 @@ export class RoomManager {
         if (!this.hologram) this.createHologram();
         if (!this.podest) this.createPodest();
         if (!this.decorations) this.createDecorations();
+
+        // Architectural Centralization: Sun, Lights, and Ground Physics
+        if (!this.lights) this.setupLighting();
+        if (!this.sun) this.createSynthwaveSun();
+
+        // Ground physics (Authority moved from WorldManager)
+        if (gameState.managers.physics && !this.groundPhysics) {
+            gameState.managers.physics.createGround(25);
+            this.groundPhysics = true;
+        }
     }
 
     update(delta) {
@@ -360,6 +370,66 @@ export class RoomManager {
         }
 
         this.scene.add(this.decorations);
+    }
+
+    setupLighting() {
+        if (!this.scene) return;
+        this.lights = new THREE.Group();
+
+        // Ambient Light (Soft Magenta cast)
+        const ambientLight = new THREE.AmbientLight(0xff00ff, 0.5);
+        this.lights.add(ambientLight);
+
+        // Hemisphere Light (Cyan from above, purple from below)
+        const hemiLight = new THREE.HemisphereLight(0x00ffff, 0x800080, 1);
+        this.lights.add(hemiLight);
+
+        // Directional Light
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight.position.set(10, 20, 10);
+        this.lights.add(dirLight);
+
+        this.scene.add(this.lights);
+    }
+
+    createSynthwaveSun() {
+        if (!this.scene) return;
+
+        const sunGeom = new THREE.CircleGeometry(120, 64);
+        const sunMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor: { value: new THREE.Color(0xff8000) },
+                bottomColor: { value: new THREE.Color(0xff0080) }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                varying vec2 vUv;
+                uniform vec3 topColor;
+                uniform vec3 bottomColor;
+                void main() {
+                    float y = vUv.y;
+                    vec3 color = mix(bottomColor, topColor, y);
+                    float period = 0.08;
+                    float gapWidth = 0.04 * (1.0 - y); 
+                    if (mod(y, period) < gapWidth) discard;
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            `,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        this.sun = new THREE.Mesh(sunGeom, sunMat);
+        this.sun.position.set(0, 60, -600);
+        this.sun.lookAt(0, 60, 0);
+
+        this.scene.add(this.sun);
     }
 
     getSpawnPoint(index) {

@@ -8,15 +8,10 @@ export class WorldManager {
     }
 
     generateTestWorld() {
-        const { physics } = gameState.managers;
-
-        if (!physics || !physics.rapierLoaded) return;
-
-        // Ground physics collider (Visuals handled by RoomManager)
-        physics.createGround(25); // 25 is half-extent of 50
-
+        // Core physics world is initialized in PhysicsManager.
+        // Architectural physics (ground, walls) now managed by RoomManager to align with 'vibe' configs.
         this.initialized = true;
-        console.log('[WorldManager] World physics initialized');
+        console.log('[WorldManager] Initialized (Architecture moved to RoomManager)');
     }
 
     update(delta) {
