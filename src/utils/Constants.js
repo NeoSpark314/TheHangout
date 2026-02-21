@@ -28,3 +28,9 @@ export const PACKET_TYPES = {
     PLAYER_INPUT: 1, // Guest -> Host: Controller & Headset positions
     PEER_DISCONNECT: 2, // Host -> Guests: Notification that a peer left
 };
+
+export const INPUT_CONFIG = {
+    GAMEPAD_LOOK_SENSITIVITY: 1.5,
+    MOBILE_LOOK_SENSITIVITY: 0.6,
+    DEADZONE: 0.15
+};

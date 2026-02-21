@@ -1,7 +1,7 @@
 // managers/InputManager.js
 import eventBus from '../core/EventBus.js';
 import gameState from '../core/GameState.js';
-import { EVENTS } from '../utils/Constants.js';
+import { EVENTS, INPUT_CONFIG } from '../utils/Constants.js';
 import { VirtualJoystick } from '../utils/VirtualJoystick.js';
 
 export class InputManager {
@@ -24,7 +24,7 @@ export class InputManager {
             navCooldown: 0
         };
 
-        this.DEADZONE = 0.15;
+        this.deadzone = INPUT_CONFIG.DEADZONE;
 
         this.initKeyboard();
     }
@@ -68,7 +68,7 @@ export class InputManager {
         }
 
         // 1. Axes (Deadzones)
-        const applyDeadzone = (val) => Math.abs(val) < this.DEADZONE ? 0 : val;
+        const applyDeadzone = (val) => Math.abs(val) < this.deadzone ? 0 : val;
 
         this.gamepad.move.x = applyDeadzone(gp.axes[0] || 0);
         this.gamepad.move.y = applyDeadzone(gp.axes[1] || 0);
@@ -181,15 +181,15 @@ export class InputManager {
     getLookVector() {
         const v = { x: 0, y: 0 };
 
-        // 1. Gamepad
-        v.x += this.gamepad.look.x;
-        v.y += this.gamepad.look.y;
+        // 1. Gamepad (Apply independent sensitivity)
+        v.x += this.gamepad.look.x * INPUT_CONFIG.GAMEPAD_LOOK_SENSITIVITY;
+        v.y += this.gamepad.look.y * INPUT_CONFIG.GAMEPAD_LOOK_SENSITIVITY;
 
-        // 2. Mobile Joystick
+        // 2. Mobile Joystick (Apply independent sensitivity)
         if (this.joysticks.look) {
             const jv = this.joysticks.look.getVector();
-            v.x += jv.x;
-            v.y += jv.y;
+            v.x += jv.x * INPUT_CONFIG.MOBILE_LOOK_SENSITIVITY;
+            v.y += jv.y * INPUT_CONFIG.MOBILE_LOOK_SENSITIVITY;
         }
         return v;
     }
