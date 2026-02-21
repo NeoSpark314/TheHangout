@@ -61,19 +61,22 @@ export class RemotePlayer {
         this.legs = new THREE.LineSegments(legsSegments, outlineMaterial);
         this.mesh.add(this.legs);
 
-        // 4. Arms
-        const armsSegments = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(-0.4, 0.0, 0),
-            new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(0.4, 0.0, 0)
+        // 4. Shoulders
+        const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-0.25, 0.5, 0), new THREE.Vector3(0.25, 0.5, 0)
         ]);
-        this.arms = new THREE.LineSegments(armsSegments, outlineMaterial);
+        this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
+        this.mesh.add(this.shoulders);
+
+        // 5. Arms (Shoulder -> Elbow -> Wrist)
+        this.arms = new THREE.LineSegments(new THREE.BufferGeometry(), outlineMaterial);
         this.mesh.add(this.arms);
 
         // Start somewhat high up
         this.mesh.position.copy(this.targetPosition);
 
         render.add(this.mesh);
-        console.log(`[RemotePlayer] Created stick-figure avatar for ${this.peerId}`);
+        console.log(`[RemotePlayer] Created advanced stick-figure avatar for ${this.peerId}`);
     }
 
     setTargetState(data) {
@@ -126,12 +129,26 @@ export class RemotePlayer {
     }
 
     updateArms(leftHandPos, rightHandPos) {
-        const shoulder = new THREE.Vector3(0, 0.5, 0);
+        const leftShoulder = new THREE.Vector3(-0.25, 0.5, 0);
+        const rightShoulder = new THREE.Vector3(0.25, 0.5, 0);
+
+        const calculateElbow = (shoulder, hand) => {
+            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
+            const bend = new THREE.Vector3(shoulder.x > 0 ? 0.1 : -0.1, -0.2, -0.1);
+            return mid.add(bend);
+        };
+
+        const leftElbow = calculateElbow(leftShoulder, leftHandPos);
+        const rightElbow = calculateElbow(rightShoulder, rightHandPos);
 
         const positions = new Float32Array([
-            shoulder.x, shoulder.y, shoulder.z,
+            leftShoulder.x, leftShoulder.y, leftShoulder.z,
+            leftElbow.x, leftElbow.y, leftElbow.z,
+            leftElbow.x, leftElbow.y, leftElbow.z,
             leftHandPos.x, leftHandPos.y, leftHandPos.z,
-            shoulder.x, shoulder.y, shoulder.z,
+            rightShoulder.x, rightShoulder.y, rightShoulder.z,
+            rightElbow.x, rightElbow.y, rightElbow.z,
+            rightElbow.x, rightElbow.y, rightElbow.z,
             rightHandPos.x, rightHandPos.y, rightHandPos.z
         ]);
 

@@ -96,12 +96,18 @@ export class LocalPlayer {
         this.legs = new THREE.LineSegments(legsSegments, outlineMaterial);
         this.mesh.add(this.legs);
 
-        // Default Arms (When not in VR or no controllers)
-        const armsSegments = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(-0.4, 0.0, 0), // Left arm (resting)
-            new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(0.4, 0.0, 0)   // Right arm (resting)
+        // 4. Shoulders (Horizontal Line)
+        const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-0.25, 0.5, 0), new THREE.Vector3(0.25, 0.5, 0)
         ]);
-        this.arms = new THREE.LineSegments(armsSegments, outlineMaterial);
+        this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
+        this.mesh.add(this.shoulders);
+
+        // 5. Arms (Shoulder -> Elbow -> Wrist)
+        this.arms = new THREE.LineSegments(
+            new THREE.BufferGeometry(),
+            outlineMaterial
+        );
         this.mesh.add(this.arms);
 
         render.add(this.mesh);
@@ -210,9 +216,23 @@ export class LocalPlayer {
         render.cameraGroup.position.set(pos.x, pos.y + 0.8, pos.z);
 
         // Apply pitch and yaw to camera group (Third person/Desktop)
-        // In XR, the camera itself will have its rotation overridden by the HMD
         render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
+
+        // Update Local Head Mesh to match camera orientation for others to see
+        if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
+            // In VR, the camera world quaternion is the true head orientation
+            const worldQuat = new THREE.Quaternion();
+            render.camera.getWorldQuaternion(worldQuat);
+
+            // Convert to local space of the player mesh
+            const playerWorldQuat = new THREE.Quaternion();
+            this.mesh.getWorldQuaternion(playerWorldQuat);
+            this.headMesh.quaternion.copy(playerWorldQuat.invert().multiply(worldQuat));
+        } else {
+            // In Desktop, head just follows pitch (yaw is handled by body)
+            this.headMesh.rotation.set(this.pitch, 0, 0);
+        }
 
         // 4. Emit event if we moved significantly
         if (direction.lengthSq() > 0) {
@@ -326,13 +346,31 @@ export class LocalPlayer {
     }
 
     updateArms(leftHandPos, rightHandPos) {
-        // Torso neck/shoulder position is roughly (0, 0.5, 0)
-        const shoulder = new THREE.Vector3(0, 0.5, 0);
+        const leftShoulder = new THREE.Vector3(-0.25, 0.5, 0);
+        const rightShoulder = new THREE.Vector3(0.25, 0.5, 0);
+
+        // Simple Elbow IK Helper
+        const calculateElbow = (shoulder, hand) => {
+            // Midpoint
+            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
+            // Bend direction: down and slightly out
+            const bend = new THREE.Vector3(shoulder.x > 0 ? 0.1 : -0.1, -0.2, -0.1);
+            return mid.add(bend);
+        };
+
+        const leftElbow = calculateElbow(leftShoulder, leftHandPos);
+        const rightElbow = calculateElbow(rightShoulder, rightHandPos);
 
         const positions = new Float32Array([
-            shoulder.x, shoulder.y, shoulder.z,
+            // Left Arm
+            leftShoulder.x, leftShoulder.y, leftShoulder.z,
+            leftElbow.x, leftElbow.y, leftElbow.z,
+            leftElbow.x, leftElbow.y, leftElbow.z,
             leftHandPos.x, leftHandPos.y, leftHandPos.z,
-            shoulder.x, shoulder.y, shoulder.z,
+            // Right Arm
+            rightShoulder.x, rightShoulder.y, rightShoulder.z,
+            rightElbow.x, rightElbow.y, rightElbow.z,
+            rightElbow.x, rightElbow.y, rightElbow.z,
             rightHandPos.x, rightHandPos.y, rightHandPos.z
         ]);
 
