@@ -162,10 +162,18 @@ export class LocalPlayer extends PlayerEntity {
         const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
         this.avatar.updateHeadOrientation(localHeadQuat);
 
-        // Standard hand offsets
-        this.avatar.updateArms(this.leftHandPose.position, this.rightHandPose.position);
+        // --- 6. TRANSFORM HANDS TO LOCAL AVATAR SPACE ---
+        // Converts raw XR referenceSpace coordinates into this.mesh local space 
+        this.transformHandsToAvatarSpace();
 
-        // --- 5. DEBUG UI ---
+        // Natively update our own Avatar IK using the cleanly converted coordinates!
+        this.avatar.updateWristMarkers(this.handStates.left, this.handStates.right, 1.0);
+
+        const leftArmPos = this.handStates.left.active ? this.avatar.getLeftWristMarkerPosition() : this.leftHandPose.position;
+        const rightArmPos = this.handStates.right.active ? this.avatar.getRightWristMarkerPosition() : this.rightHandPose.position;
+        this.avatar.updateArms(leftArmPos, rightArmPos);
+
+        // --- 7. DEBUG UI ---
         if (gameState.managers.debugUI) {
             const oPos = this.xrOrigin.position;
             const oYaw = (this.yaw * 180 / Math.PI).toFixed(1);
@@ -248,6 +256,66 @@ export class LocalPlayer extends PlayerEntity {
 
                     handPoseObj.position.copy(pose.transform.position);
                     handPoseObj.quaternion.copy(pose.transform.orientation);
+                }
+            }
+        }
+    }
+
+    transformHandsToAvatarSpace() {
+        const { render } = gameState.managers;
+        if (!render || !render.renderer.xr.isPresenting) return;
+
+        // Ensure matrices are up to date before grabbing Inverse 
+        this.mesh.updateMatrixWorld(true);
+        this.xrOrigin.updateMatrixWorld(true);
+
+        // LocalPlayer.mesh sits underneath the scene root.
+        // xrOrigin sits underneath the scene root.
+        // WebXR 'referenceSpace' poses are relative to xrOrigin.
+
+        // Helper to transform a local XR coordinate into local Avatar coordinate
+        const convertPose = (sourcePos, sourceQuat, targetPos, targetQuat) => {
+            // 1. Get world coordinate of the XR tracking point
+            const worldPos = sourcePos.clone();
+            worldPos.applyMatrix4(this.xrOrigin.matrixWorld);
+
+            const worldQuat = sourceQuat.clone();
+            const xrOriginQuat = new THREE.Quaternion();
+            this.xrOrigin.getWorldQuaternion(xrOriginQuat);
+            worldQuat.premultiply(xrOriginQuat);
+
+            // 2. Convert world coordinate into the Avatar.mesh's local space
+            const localPos = this.mesh.worldToLocal(worldPos);
+
+            const invMeshQuat = new THREE.Quaternion();
+            this.mesh.getWorldQuaternion(invMeshQuat);
+            invMeshQuat.invert();
+            const localQuat = worldQuat.clone().premultiply(invMeshQuat);
+
+            targetPos.copy(localPos);
+            targetQuat.copy(localQuat);
+        };
+
+        if (this.handStates.left.active) {
+            convertPose(this.leftHandPose.position, this.leftHandPose.quaternion, this.handStates.left.position, this.handStates.left.quaternion);
+            for (let i = 0; i < 25; i++) {
+                if (this.handStates.left.joints[i].position.lengthSq() > 0) {
+                    // Joint is active (not zeroed), clone its pre-captured state and convert
+                    const rawPos = this.handStates.left.joints[i].position.clone();
+                    const rawQuat = this.handStates.left.joints[i].quaternion.clone();
+                    convertPose(rawPos, rawQuat, this.handStates.left.joints[i].position, this.handStates.left.joints[i].quaternion);
+                }
+            }
+        }
+
+        if (this.handStates.right.active) {
+            convertPose(this.rightHandPose.position, this.rightHandPose.quaternion, this.handStates.right.position, this.handStates.right.quaternion);
+            for (let i = 0; i < 25; i++) {
+                if (this.handStates.right.joints[i].position.lengthSq() > 0) {
+                    // Joint is active (not zeroed), clone its pre-captured state and convert
+                    const rawPos = this.handStates.right.joints[i].position.clone();
+                    const rawQuat = this.handStates.right.joints[i].quaternion.clone();
+                    convertPose(rawPos, rawQuat, this.handStates.right.joints[i].position, this.handStates.right.joints[i].quaternion);
                 }
             }
         }
@@ -343,11 +411,11 @@ export class LocalPlayer extends PlayerEntity {
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
 
-        const serializeHand = (handState, handPose) => {
+        const serializeHand = (handState) => {
             const data = {
                 active: handState.active,
-                position: { x: handPose.position.x, y: handPose.position.y, z: handPose.position.z },
-                quaternion: { x: handPose.quaternion.x, y: handPose.quaternion.y, z: handPose.quaternion.z, w: handPose.quaternion.w },
+                position: { x: handState.position.x, y: handState.position.y, z: handState.position.z },
+                quaternion: { x: handState.quaternion.x, y: handState.quaternion.y, z: handState.quaternion.z, w: handState.quaternion.w },
                 joints: []
             };
 
@@ -373,8 +441,8 @@ export class LocalPlayer extends PlayerEntity {
                 quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
             hands: {
-                left: serializeHand(this.handStates.left, this.leftHandPose),
-                right: serializeHand(this.handStates.right, this.rightHandPose)
+                left: serializeHand(this.handStates.left),
+                right: serializeHand(this.handStates.right)
             }
         };
     }
