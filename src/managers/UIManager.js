@@ -93,6 +93,7 @@ export class UIManager {
                 gameState.avatarConfig.color = this.avatarColorInput.value;
                 this.saveToStorage();
                 eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, gameState.avatarConfig);
+                this.updateAvatarButtonColor(gameState.avatarConfig.color);
             });
         }
 
@@ -151,6 +152,7 @@ export class UIManager {
         if (storedColor) {
             gameState.avatarConfig.color = storedColor;
             if (this.avatarColorInput) this.avatarColorInput.value = storedColor;
+            this.updateAvatarButtonColor(storedColor);
         }
 
         // Initialize gameState immediately
@@ -383,5 +385,12 @@ export class UIManager {
             this.voiceBtn.textContent = 'Enable Voice Chat';
             this.voiceBtn.style.backgroundColor = '#3b82f6'; // Blue for idle
         }
+    }
+
+    updateAvatarButtonColor(color) {
+        if (!this.avatarBtn) return;
+        this.avatarBtn.style.backgroundColor = `${color}33`; // 20% opacity (hex 33)
+        this.avatarBtn.style.borderColor = color;
+        this.avatarBtn.style.boxShadow = `0 0 10px ${color}88`;
     }
 }
