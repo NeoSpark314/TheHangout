@@ -1,5 +1,5 @@
 // main.js
-import './style.css';
+import '../style.css';
 import { GameEngine } from './core/GameEngine.js';
 import gameState from './core/GameState.js';
 import { UIManager } from './managers/UIManager.js';
