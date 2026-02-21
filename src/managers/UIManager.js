@@ -66,6 +66,16 @@ export class UIManager {
             });
         }
 
+        // --- Instant Sync ---
+        this.nameInput.addEventListener('input', () => {
+            gameState.playerName = this.nameInput.value.trim();
+            this.saveToStorage();
+        });
+
+        this.roomInput.addEventListener('input', () => {
+            this.saveToStorage();
+        });
+
 
 
         // Listen for network events
@@ -104,12 +114,14 @@ export class UIManager {
             this.nameInput.value = `Player-${Math.floor(Math.random() * 10000)}`;
         }
 
-        const storedRoom = localStorage.getItem('hangout_lastRoomId');
         if (storedRoom) {
             this.roomInput.value = storedRoom;
         } else {
             this.roomInput.value = 'TestRoom';
         }
+
+        // Initialize gameState immediately
+        gameState.playerName = this.nameInput.value.trim();
 
         // Set version and SHA
         if (this.versionInfo) {
@@ -121,11 +133,17 @@ export class UIManager {
     }
 
     saveToStorage() {
-        if (this.nameInput.value.trim()) {
-            localStorage.setItem('hangout_playerName', this.nameInput.value.trim());
+        const name = this.nameInput.value.trim();
+        const room = this.roomInput.value.trim();
+
+        if (name) {
+            localStorage.setItem('hangout_playerName', name);
+            gameState.playerName = name;
         }
-        if (this.roomInput.value.trim() && !gameState.isHost) {
-            localStorage.setItem('hangout_lastRoomId', this.roomInput.value.trim());
+
+        // Only save the room ID if it's not a temporary/generated one or if we are actively joining a specific one
+        if (room) {
+            localStorage.setItem('hangout_lastRoomId', room);
         }
     }
 
