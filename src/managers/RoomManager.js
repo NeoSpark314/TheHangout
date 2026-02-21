@@ -100,9 +100,8 @@ export class RoomManager {
         if (!this.scene) return;
 
         this.hills = new THREE.Group();
-        const hillCount = 24;
+        const hillCount = 36;
         const radius = 400;
-        const hillScale = 80;
 
         const mountainMat = new THREE.MeshPhongMaterial({
             color: 0x100520,
@@ -119,8 +118,14 @@ export class RoomManager {
 
         for (let i = 0; i < hillCount; i++) {
             const angle = (i / hillCount) * Math.PI * 2;
-            const h = 20 + this.random() * hillScale;
-            const w = 40 + this.random() * 60;
+
+            // Sun is at (0, 60, -600) i.e. angle π. Suppress height near the sun
+            // so it's always clearly visible. cos(angle) < -0.5 means roughly behind the sun.
+            const zDir = Math.cos(angle); // -1 = directly behind sun
+            const sunClearance = zDir < -0.5 ? 0.3 : 1.0;
+
+            const h = (40 + this.random() * 120) * sunClearance;
+            const w = 50 + this.random() * 80;
 
             const geo = new THREE.ConeGeometry(w, h, 4);
             const mountain = new THREE.Mesh(geo, mountainMat);
