@@ -107,7 +107,7 @@ export class RoomManager {
         const z = Math.cos(angle) * radius;
 
         // Face the center (table)
-        const yaw = angle + Math.PI;
+        const yaw = angle;
 
         return {
             position: new THREE.Vector3(x, 0, z),
