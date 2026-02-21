@@ -41,6 +41,8 @@ export class LocalPlayer {
         // 1. Head (Flat Square with Canvas Texture)
         const headSize = 0.4;
         const headGeometry = new THREE.PlaneGeometry(headSize, headSize);
+        // Offset geometry so anchor (0,0,0) is at the bottom edge (the neck)
+        headGeometry.translate(0, headSize / 2, 0);
 
         // Placeholder Canvas Texture (256x256)
         this.headCanvas = document.createElement('canvas');
@@ -70,7 +72,7 @@ export class LocalPlayer {
         const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
         this.headMesh.add(headOutline);
 
-        this.headMesh.position.y = 0.8; // Offset from center of physics body
+        this.headMesh.position.y = 0.6; // Position at neck height
         this.mesh.add(this.headMesh);
 
         // 2. Torso (Vertical Line)
@@ -346,15 +348,28 @@ export class LocalPlayer {
     }
 
     updateArms(leftHandPos, rightHandPos) {
-        const leftShoulder = new THREE.Vector3(-0.25, 0.5, 0);
-        const rightShoulder = new THREE.Vector3(0.25, 0.5, 0);
+        const leftShoulder = new THREE.Vector3(-0.25, 0.6, 0);
+        const rightShoulder = new THREE.Vector3(0.25, 0.6, 0);
 
-        // Simple Elbow IK Helper
+        // Improved Elbow IK Helper
         const calculateElbow = (shoulder, hand) => {
-            // Midpoint
+            const dist = shoulder.distanceTo(hand);
             const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
-            // Bend direction: down and slightly out
-            const bend = new THREE.Vector3(shoulder.x > 0 ? 0.1 : -0.1, -0.2, -0.1);
+
+            // Calculate a bend direction that is perpendicular to the arm-line 
+            // and generally points down and slightly out/back
+            const armDir = new THREE.Vector3().subVectors(hand, shoulder).normalize();
+            const down = new THREE.Vector3(0, -1, 0);
+            const side = new THREE.Vector3().crossVectors(armDir, down).normalize();
+
+            // Heuristic for elbow bend: more bend when hand is closer to shoulder
+            const bendAmount = Math.max(0, 0.4 - dist * 0.5);
+
+            // Bend result: downwards + slightly inwards/outwards depending on side
+            const bend = new THREE.Vector3(0, -bendAmount, -bendAmount * 0.5);
+            // Add a bit of "side" flare
+            bend.addScaledVector(side, shoulder.x > 0 ? 0.1 : -0.1);
+
             return mid.add(bend);
         };
 
