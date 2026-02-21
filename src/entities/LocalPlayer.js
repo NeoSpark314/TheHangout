@@ -69,7 +69,8 @@ export class LocalPlayer extends PlayerEntity {
             const isVR = render?.renderer?.xr?.isPresenting;
 
             if (document.pointerLockElement === canvas && !isVR) {
-                this.yaw -= e.movementX * this.turnSpeed;
+                // Apply manual yaw/pitch for desktop
+                this.applyTurn(-e.movementX * this.turnSpeed);
                 this.pitch -= e.movementY * this.turnSpeed;
                 this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
             }
@@ -87,16 +88,13 @@ export class LocalPlayer extends PlayerEntity {
         if (!render) return;
 
         const isVR = render.renderer.xr.isPresenting;
+        const activeCamera = render.camera; // In both modes, this is the main tracker
 
-        // --- 1. ORIENTATION ---
-        // Apply yaw to our internal transforms
-        this.xrOrigin.rotation.y = this.yaw;
-
+        // --- 1. ORIENTATION (Pitch Only) ---
+        // Yaw is now handled incrementally via applyTurn()
         if (!isVR) {
             this.headPose.rotation.x = this.pitch;
         } else {
-            // In VR, the HMD transform is handled by the headset.
-            // We clear any simulation offsets.
             this.headPose.position.set(0, 0, 0);
             this.headPose.quaternion.set(0, 0, 0, 1);
         }
@@ -108,12 +106,9 @@ export class LocalPlayer extends PlayerEntity {
         if (!isVR) {
             render.camera.position.copy(this.headPose.position);
             render.camera.quaternion.copy(this.headPose.quaternion);
-        } else {
-            // In VR, DO NOT overwrite render.camera transform. 
-            // Three.js manages it relative to cameraGroup.
         }
 
-        // Force a world matrix update on the hierarchy so getWorldPose works
+        // Force a world matrix update on the hierarchy
         render.cameraGroup.updateMatrixWorld(true);
 
         // --- 3. LOCOMOTION ---
@@ -140,7 +135,7 @@ export class LocalPlayer extends PlayerEntity {
             moveVector.applyEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
             this.xrOrigin.position.addScaledVector(moveVector, this.speed * delta);
 
-            // Re-sync position and update world matrices again to ensure next steps are accurate
+            // Update world matrices after translation
             render.cameraGroup.position.copy(this.xrOrigin.position);
             render.cameraGroup.updateMatrixWorld(true);
         }
@@ -164,7 +159,7 @@ export class LocalPlayer extends PlayerEntity {
         const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
         this.avatar.updateHeadOrientation(localHeadQuat);
 
-        // Arms (static relative to origin for now)
+        // Standard hand offsets
         this.avatar.updateArms(this.leftHandPose.position, this.rightHandPose.position);
 
         // --- 5. DEBUG UI ---
@@ -181,7 +176,8 @@ export class LocalPlayer extends PlayerEntity {
         }
 
         // --- 6. NETWORK ---
-        if (moveVector.lengthSq() > 0 || Math.abs(this.yaw) > 0.001) {
+        // Note: For network, we send the head world yaw as the 'yaw' to match visuals
+        if (moveVector.lengthSq() > 0 || Math.abs(delta) > 0) {
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
         }
     }
@@ -197,7 +193,6 @@ export class LocalPlayer extends PlayerEntity {
             if (source.gamepad) {
                 const axes = source.gamepad.axes;
 
-                // Left Stick (Locomotion)
                 if (source.handedness === 'left') {
                     const xIdx = axes.length >= 4 ? 2 : 0;
                     const zIdx = axes.length >= 4 ? 3 : 1;
@@ -208,7 +203,6 @@ export class LocalPlayer extends PlayerEntity {
                     if (Math.abs(dz) > 0.1) moveVector.z += dz;
                 }
 
-                // Right Stick (Snap Turn)
                 if (source.handedness === 'right') {
                     const xIdx = axes.length >= 4 ? 2 : 0;
                     if (axes.length > xIdx && Math.abs(axes[xIdx]) > 0.5) {
@@ -228,7 +222,27 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     applyTurn(deltaYaw) {
+        const { render } = gameState.managers;
+        if (!render) return;
+
+        // 1. Pivot Point: Where the head is in the WORLD currently
+        const pivot = new THREE.Vector3();
+        render.camera.getWorldPosition(pivot);
+
+        // We only care about X/Z for origin pivoting to stay on floor
+        const pivotXZ = new THREE.Vector3(pivot.x, 0, pivot.z);
+
+        // 2. The Math:
+        // Translate origin so head is at 0,0,0 in world
+        // Rotate origin
+        // Translate origin back
+        this.xrOrigin.position.sub(pivotXZ);
+        this.xrOrigin.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), deltaYaw);
+        this.xrOrigin.position.add(pivotXZ);
+
+        // Update internal yaw tracking
         this.yaw += deltaYaw;
+        this.xrOrigin.rotation.y = this.yaw;
     }
 
     triggerHaptic(intensity, duration) {
@@ -249,7 +263,6 @@ export class LocalPlayer extends PlayerEntity {
         const { render } = gameState.managers;
         if (!render) return {};
 
-        render.camera.updateMatrixWorld(true);
         render.camera.getWorldPosition(headWorldPos);
         render.camera.getWorldQuaternion(headWorldQuat);
 
