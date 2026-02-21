@@ -141,7 +141,7 @@ export class RenderManager {
 
     createSynthwaveSun() {
         // Large distant circle for the synthwave sun
-        const sunGeom = new THREE.CircleGeometry(40, 64);
+        const sunGeom = new THREE.CircleGeometry(120, 64);
         const sunMat = new THREE.ShaderMaterial({
             uniforms: {
                 topColor: { value: new THREE.Color(0xff8000) }, // Orange
@@ -179,9 +179,9 @@ export class RenderManager {
         const sun = new THREE.Mesh(sunGeom, sunMat);
 
         // Place it far in the distance, slightly above the horizon
-        sun.position.set(0, 15, -150);
+        sun.position.set(0, 60, -600);
         // Make sure it faces the camera area
-        sun.lookAt(0, 15, 0);
+        sun.lookAt(0, 60, 0);
 
         this.scene.add(sun);
     }

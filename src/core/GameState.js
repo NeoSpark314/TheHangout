@@ -13,7 +13,7 @@ class GameState {
             environment: 'cyber-stube',
             skyColor: '#0b0c10',
             fogNear: 5,
-            fogFar: 25
+            fogFar: 1000
         };
 
         // Entity stores

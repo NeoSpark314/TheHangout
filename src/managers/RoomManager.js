@@ -24,14 +24,17 @@ export class RoomManager {
             this.scene.background = new THREE.Color(config.skyColor);
         }
 
-        // Update Fog
+        // Update Fog (Shifted for Distant Horizon)
         if (config.skyColor) {
+            const fogNear = config.fogNear || 10;
+            const fogFar = config.fogFar || 1000; // Much further to see the mountains
+
             if (!this.scene.fog) {
-                this.scene.fog = new THREE.Fog(config.skyColor, config.fogNear || 5, config.fogFar || 25);
+                this.scene.fog = new THREE.Fog(config.skyColor, fogNear, fogFar);
             } else {
                 this.scene.fog.color.set(config.skyColor);
-                this.scene.fog.near = config.fogNear || 5;
-                this.scene.fog.far = config.fogFar || 25;
+                this.scene.fog.near = fogNear;
+                this.scene.fog.far = fogFar;
             }
         }
 
@@ -39,6 +42,65 @@ export class RoomManager {
         if (!this.table) {
             this.createTable();
         }
+
+        if (!this.hills) {
+            this.createDistantHills();
+        }
+    }
+
+    createDistantHills() {
+        if (!this.scene) return;
+
+        this.hills = new THREE.Group();
+        const hillCount = 24;
+        const radius = 400;
+        const hillScale = 80;
+
+        // Use a single material for performance
+        const mountainMat = new THREE.MeshPhongMaterial({
+            color: 0x100520, // Dark galactic purple
+            emissive: 0x330066, // Brighter glow
+            shininess: 10,
+            flatShading: true
+        });
+
+        const wireMat = new THREE.LineBasicMaterial({
+            color: 0xbb00ff, // Brighter neon
+            transparent: true,
+            opacity: 0.5 // Higher opacity
+        });
+
+        for (let i = 0; i < hillCount; i++) {
+            const angle = (i / hillCount) * Math.PI * 2;
+
+            // Randomized peaks
+            const h = 20 + Math.random() * hillScale;
+            const w = 40 + Math.random() * 60;
+
+            // ConeGeometry creates a perfect pyramid/peak
+            const geo = new THREE.ConeGeometry(w, h, 4); // 4 radial segments = pyramid
+            const mountain = new THREE.Mesh(geo, mountainMat);
+
+            // Position in a ring
+            mountain.position.set(
+                Math.sin(angle) * radius,
+                h / 2 - 5, // Lower slightly into the ground
+                Math.cos(angle) * radius
+            );
+
+            // Random rotation for variety
+            mountain.rotation.y = Math.random() * Math.PI;
+
+            // Wireframe overlay for synthwave style
+            const edges = new THREE.EdgesGeometry(geo);
+            const outline = new THREE.LineSegments(edges, wireMat);
+            mountain.add(outline);
+
+            this.hills.add(mountain);
+        }
+
+        this.scene.add(this.hills);
+        console.log('[RoomManager] Distant mountains generated');
     }
 
     createTable() {
