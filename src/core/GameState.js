@@ -8,7 +8,6 @@ class GameState {
 
         // Entity stores
         this.localPlayer = null;
-        this.remotePlayers = new Map(); // peerId -> RemotePlayer
         this.interactables = new Map(); // objectId -> Interactable
 
         // Core Managers

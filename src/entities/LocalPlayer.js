@@ -1,13 +1,12 @@
-// entities/LocalPlayer.js
 import * as THREE from 'three';
 import { Avatar } from './Avatar.js';
-import { NetworkEntity } from './NetworkEntity.js';
+import { PlayerEntity } from './PlayerEntity.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 
-export class LocalPlayer extends NetworkEntity {
+export class LocalPlayer extends PlayerEntity {
     constructor() {
         super('local-player-id-temp', 'LOCAL_PLAYER', true); // Temporarily true, id should be assigned by NetworkManager ultimately
 
@@ -26,14 +25,7 @@ export class LocalPlayer extends NetworkEntity {
         this.pitch = 0;
         this.yaw = 0;
 
-        this.neckHeight = 0.6; // 1.5m above ground (with 0.9 center)
         this.roomScaleOffset = new THREE.Vector3(0, 0, 0); // Offset between physics body and virtual origin
-
-        // Hand states for networking
-        this.handStates = {
-            left: { active: false, position: new THREE.Vector3(), quaternion: new THREE.Quaternion() },
-            right: { active: false, position: new THREE.Vector3(), quaternion: new THREE.Quaternion() }
-        };
 
         this.initAvatar();
         this.initInput();
@@ -258,53 +250,6 @@ export class LocalPlayer extends NetworkEntity {
         const hand0 = render.renderer.xr.getHand(0);
         const hand1 = render.renderer.xr.getHand(1);
 
-        const processHand = (hand, handednessStr) => {
-            const meshes = this.avatar.handMeshes[handednessStr];
-            let active = false;
-            let rootPos = new THREE.Vector3();
-            let rootQuat = new THREE.Quaternion();
-
-            // Hand joints are populated if tracking is active
-            if (hand && hand.joints && Object.keys(hand.joints).length > 0) {
-                active = true;
-                // Convert world space joints to player local space
-                let i = 0;
-                for (const [jointName, jointGroup] of Object.entries(hand.joints)) {
-                    if (i >= 25) break;
-
-                    if (jointGroup.visible) {
-                        meshes[i].visible = true;
-
-                        // Get world position/rotation
-                        const worldPos = new THREE.Vector3();
-                        const worldQuat = new THREE.Quaternion();
-                        jointGroup.getWorldPosition(worldPos);
-                        jointGroup.getWorldQuaternion(worldQuat);
-
-                        // Convert to LocalPlayer mesh space
-                        this.mesh.worldToLocal(worldPos);
-                        meshes[i].position.copy(worldPos);
-
-                        // Simplify rotation sync for now
-                        meshes[i].quaternion.copy(worldQuat);
-
-                        if (jointName === 'wrist') {
-                            rootPos.copy(worldPos);
-                            rootQuat.copy(worldQuat);
-                        }
-                    } else {
-                        meshes[i].visible = false;
-                    }
-                    i++;
-                }
-            } else {
-                for (let i = 0; i < 25; i++) {
-                    meshes[i].visible = false;
-                }
-            }
-            return { active, rootPos, rootQuat };
-        };
-
         let leftData = { active: false, rootPos: new THREE.Vector3(-0.4, 0, 0), rootQuat: new THREE.Quaternion() };
         let rightData = { active: false, rootPos: new THREE.Vector3(0.4, 0, 0), rootQuat: new THREE.Quaternion() };
 
@@ -341,8 +286,8 @@ export class LocalPlayer extends NetworkEntity {
             }
         }
         // Attempt to determine handedness from underlying inputSources connected to hands.
-        if (hand0.visible) leftData = processHand(hand0, 'left');
-        if (hand1.visible) rightData = processHand(hand1, 'right');
+        if (hand0.visible) leftData = this.avatar.processXRHand(hand0, 'left');
+        if (hand1.visible) rightData = this.avatar.processXRHand(hand1, 'right');
 
         // Store for networking
         this.handStates.left.active = leftData.active;
@@ -360,12 +305,7 @@ export class LocalPlayer extends NetworkEntity {
     initFaceSync() {
         eventBus.on(EVENTS.DRAWING_UPDATED, (dataURL) => {
             this.avatar.setFace(dataURL);
-
-            // Broadcast to network
-            eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, {
-                type: 'FACE_UPDATE',
-                data: dataURL
-            });
+            // Broadcast is now handled by NetworkManager listening to DRAWING_UPDATED
         });
     }
 
@@ -376,9 +316,11 @@ export class LocalPlayer extends NetworkEntity {
         const pos = this.rigidBody.translation();
 
         // Build Head Payload
+        const headPos = this.avatar.getHeadPosition();
+        const headQuat = this.avatar.getHeadQuaternion();
         const headPayload = {
-            position: { x: this.avatar.headMesh.position.x, y: this.avatar.headMesh.position.y, z: this.avatar.headMesh.position.z },
-            quaternion: { x: this.avatar.headMesh.quaternion.x, y: this.avatar.headMesh.quaternion.y, z: this.avatar.headMesh.quaternion.z, w: this.avatar.headMesh.quaternion.w }
+            position: { x: headPos.x, y: headPos.y, z: headPos.z },
+            quaternion: { x: headQuat.x, y: headQuat.y, z: headQuat.z, w: headQuat.w }
         };
 
         // Build Hands Payload

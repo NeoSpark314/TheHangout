@@ -17,10 +17,12 @@ export class NetworkManager {
         eventBus.on(EVENTS.CREATE_ROOM, () => this.initHost());
         eventBus.on(EVENTS.JOIN_ROOM, (roomId) => this.initGuest(roomId));
 
-        // Listen for face updates to broadcast
-        eventBus.on(EVENTS.NETWORK_DATA_RECEIVED, (e) => {
-            if (e.type === 'FACE_UPDATE' && !e.senderId) {
-                this.broadcast(PACKET_TYPES.FACE_UPDATE, e.data);
+        // Listen for local face updates to broadcast
+        eventBus.on(EVENTS.DRAWING_UPDATED, (dataURL) => {
+            if (gameState.isHost) {
+                this.broadcast(PACKET_TYPES.FACE_UPDATE, dataURL);
+            } else if (gameState.roomId) {
+                this.sendData(gameState.roomId, PACKET_TYPES.FACE_UPDATE, dataURL);
             }
         });
     }
@@ -115,7 +117,10 @@ export class NetworkManager {
                     }
                     break;
                 case PACKET_TYPES.FACE_UPDATE:
-                    eventBus.emit(EVENTS.NETWORK_DATA_RECEIVED, { senderId, type: 'FACE', data: parsed.payload });
+                    this.applyFaceUpdate(senderId, parsed.payload);
+                    if (gameState.isHost) {
+                        this.relayToOthers(senderId, parsed.type, parsed.payload);
+                    }
                     break;
                 default:
                     console.warn('[NetworkManager] Unknown packet type:', parsed.type);
@@ -133,6 +138,14 @@ export class NetworkManager {
             if (entity && !entity.isAuthority) {
                 entity.setNetworkState(stateData.state);
             }
+        }
+    }
+
+    applyFaceUpdate(senderId, data) {
+        if (!gameState.managers.entity) return;
+        const rp = gameState.managers.entity.getEntity(senderId);
+        if (rp && rp.type === 'REMOTE_PLAYER') {
+            rp.setFace(data);
         }
     }
 
