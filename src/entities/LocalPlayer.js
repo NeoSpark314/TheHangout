@@ -68,7 +68,7 @@ export class LocalPlayer extends PlayerEntity {
         document.addEventListener('mousemove', (e) => {
             const isXR = gameState.managers.render?.renderer?.xr?.isPresenting;
             if (document.pointerLockElement === canvas && !isXR) {
-                this.yaw -= e.movementX * this.turnSpeed;
+                this.applyTurn(-e.movementX * this.turnSpeed);
                 this.pitch -= e.movementY * this.turnSpeed;
 
                 // Clamp pitch to avoid flipping
@@ -108,8 +108,6 @@ export class LocalPlayer extends PlayerEntity {
             // Desktop simulate 1.7m headset, local to cameraGroup
             render.camera.position.set(0, 1.7, 0);
             render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
-            // Desktop yaw is historically applied to cameraGroup
-            render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         }
 
         // Apply intent relative to the active view orientation
@@ -141,9 +139,7 @@ export class LocalPlayer extends PlayerEntity {
         const groundY = pos.y - 0.9;
 
         // Ensure XR floor tracking: Lock cameraGroup Y directly to the physics floor bound
-        if (isXR) {
-            render.cameraGroup.position.y = groundY;
-        }
+        render.cameraGroup.position.y = groundY;
 
         this.mesh.position.set(cameraWorldPos.x, groundY, cameraWorldPos.z);
 
@@ -360,14 +356,14 @@ export class LocalPlayer extends PlayerEntity {
         if (!render) return;
 
         const isXR = render.renderer.xr.enabled && render.renderer.xr.isPresenting;
-        if (!isXR) return;
+        const activeCamera = isXR ? render.renderer.xr.getCamera(render.camera) : render.camera;
 
         // When a user physically walks away from the virtual center `cameraGroup`,
         // rotating the `cameraGroup` swings them in a wide arc.
         // To pivot them exactly where they stand, we find the local physical HMD offset in X/Z,
         // rotate it by the new angle, and subtract the difference from the `cameraGroup` position.
 
-        const xrCamera = render.renderer.xr.getCamera(render.camera);
+        const xrCamera = activeCamera;
 
         // 1. Get the current absolute position of the HMD in world space
         const cameraWorldPosBefore = new THREE.Vector3();
