@@ -192,7 +192,15 @@ export class LocalPlayer extends PlayerEntity {
         // --- 7. NETWORK ---
         // Note: For network, we send the head world yaw as the 'yaw' to match visuals
         if (moveVector.lengthSq() > 0 || Math.abs(delta) > 0) {
+            this.syncName();
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
+        }
+    }
+
+    syncName() {
+        if (gameState.playerName && this.name !== gameState.playerName) {
+            this.name = gameState.playerName;
+            this.avatar.setName(this.name);
         }
     }
 
@@ -436,6 +444,9 @@ export class LocalPlayer extends PlayerEntity {
         };
 
         return {
+            id: this.id, // Explicitly include ID for relay
+            type: this.type,
+            name: this.name,
             position: { x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z },
             yaw: bodyYaw,
             headHeight: headWorldPos.y,

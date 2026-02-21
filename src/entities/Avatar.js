@@ -124,6 +124,68 @@ export class Avatar {
             this.mesh.add(rightJoint);
             this.handMeshes.right.push(rightJoint);
         }
+
+        // 7. Name Tag
+        this.nameTag = null;
+    }
+
+    setName(name) {
+        if (!name) {
+            if (this.nameTag) {
+                this.mesh.remove(this.nameTag);
+                if (this.nameTag.material.map) this.nameTag.material.map.dispose();
+                this.nameTag.material.dispose();
+                this.nameTag = null;
+            }
+            return;
+        }
+
+        // Create canvas for text
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 512;
+        canvas.height = 128;
+
+        // Background (optional rounded rect)
+        context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        context.roundRect(0, 0, canvas.width, canvas.height, 20);
+        context.fill();
+
+        // Text
+        context.font = 'bold 60px Inter, Arial, sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillStyle = '#' + this.color.toString(16).padStart(6, '0');
+        context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        context.shadowBlur = 4;
+        context.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+
+        if (this.nameTag) {
+            // Update existing
+            const oldMap = this.nameTag.material.map;
+            this.nameTag.material.map = texture;
+            if (oldMap) oldMap.dispose();
+            this.nameTag.material.needsUpdate = true;
+        } else {
+            // Create new sprite
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            this.nameTag = new THREE.Sprite(spriteMaterial);
+            this.nameTag.scale.set(1.0, 0.25, 1.0); // Aspect ratio 4:1
+            this.mesh.add(this.nameTag);
+        }
+
+        this.updateNameTagPosition();
+    }
+
+    updateNameTagPosition() {
+        if (this.nameTag) {
+            // Position slightly above head
+            this.nameTag.position.y = this.headMesh.position.y + 0.45;
+        }
     }
 
     updatePosture(headHeight) {
@@ -148,6 +210,8 @@ export class Avatar {
             new THREE.Vector3(0, waistHeight, 0), new THREE.Vector3(0.2, 0, 0)   // Right leg
         ];
         this.legs.geometry.setFromPoints(legPoints);
+
+        this.updateNameTagPosition();
     }
 
     updateHeadOrientation(quaternion) {
@@ -362,5 +426,10 @@ export class Avatar {
                 }
             }
         });
+
+        if (this.nameTag) {
+            if (this.nameTag.material.map) this.nameTag.material.map.dispose();
+            this.nameTag.material.dispose();
+        }
     }
 }

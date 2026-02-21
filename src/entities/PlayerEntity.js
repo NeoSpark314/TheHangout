@@ -9,6 +9,7 @@ export class PlayerEntity extends NetworkEntity {
     constructor(id, type, isAuthority) {
         super(id, type, isAuthority);
 
+        this.name = '';
         this.headHeight = 1.7;
 
         this.headState = {

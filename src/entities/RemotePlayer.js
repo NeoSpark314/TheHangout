@@ -76,6 +76,11 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     setNetworkState(data) {
+        if (data.name !== undefined && data.name !== this.name) {
+            this.name = data.name;
+            this.avatar.setName(this.name);
+        }
+
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);
         if (data.yaw !== undefined) this.targetYaw = data.yaw;
         if (data.headHeight !== undefined) this.headHeight = data.headHeight;
