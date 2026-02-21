@@ -159,6 +159,7 @@ export class NetworkManager {
             const payload = {
                 position: { x: pos.x, y: pos.y, z: pos.z },
                 yaw: lp.yaw,
+                neckHeight: lp.neckHeight,
                 head: headPayload,
                 hands: handsPayload
             };

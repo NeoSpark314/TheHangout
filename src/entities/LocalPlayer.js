@@ -22,6 +22,8 @@ export class LocalPlayer {
         this.pitch = 0;
         this.yaw = 0;
 
+        this.neckHeight = 0.6; // Current dynamic neck height
+
         this.initAvatar();
         this.initInput();
     }
@@ -107,9 +109,10 @@ export class LocalPlayer {
 
         // 4. Shoulders (Horizontal Line)
         const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-0.25, 0.5, 0), new THREE.Vector3(0.25, 0.5, 0)
+            new THREE.Vector3(-0.25, 0, 0), new THREE.Vector3(0.25, 0, 0)
         ]);
         this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
+        this.shoulders.position.y = 0.5; // Start at default
         this.mesh.add(this.shoulders);
 
         // 5. Arms (Shoulder -> Elbow -> Wrist)
@@ -227,6 +230,30 @@ export class LocalPlayer {
         // Apply pitch and yaw to camera group (Third person/Desktop)
         render.cameraGroup.rotation.set(0, this.yaw, 0, 'YXZ');
         render.camera.rotation.set(this.pitch, 0, 0, 'YXZ');
+
+        // Update dynamic neck height based on camera
+        // render.cameraGroup is at the player's root + 0.8 offset (line 223)
+        // render.camera is the HMD offset from that group.
+        // We want the neck height to be slightly below the camera
+        const cameraWorldPos = new THREE.Vector3();
+        render.camera.getWorldPosition(cameraWorldPos);
+        const playerWorldPos = new THREE.Vector3();
+        this.mesh.getWorldPosition(playerWorldPos);
+
+        // Height of head above player ground
+        const headHeight = cameraWorldPos.y - playerWorldPos.y;
+        this.neckHeight = Math.max(0.2, headHeight - 0.2); // Neck is ~20cm below eyes
+
+        // Update avatar pieces to match new neck height
+        this.headMesh.position.y = this.neckHeight;
+        this.shoulders.position.y = this.neckHeight - 0.1; // Shoulders 10cm below neck
+
+        // Update Torso Geometry (Shoulder to Waist)
+        const torsoPoints = [
+            new THREE.Vector3(0, this.neckHeight, 0),
+            new THREE.Vector3(0, -0.2, 0) // Waist is fixed
+        ];
+        this.torso.geometry.setFromPoints(torsoPoints);
 
         // Update Local Head Mesh to match camera orientation for others to see
         if (render.renderer.xr.enabled && render.renderer.xr.isPresenting) {
@@ -380,8 +407,9 @@ export class LocalPlayer {
     }
 
     updateArms(leftHandPos, rightHandPos) {
-        const leftShoulder = new THREE.Vector3(-0.25, 0.6, 0);
-        const rightShoulder = new THREE.Vector3(0.25, 0.6, 0);
+        const shoulderY = this.neckHeight - 0.1;
+        const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
+        const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
 
         // Improved Elbow IK Helper
         const calculateElbow = (shoulder, hand) => {

@@ -9,6 +9,7 @@ export class RemotePlayer {
         // Physical Interpolation targets
         this.targetPosition = new THREE.Vector3(0, 5, 0);
         this.targetYaw = 0;
+        this.targetNeckHeight = 0.6;
 
         // XR Targets (Head & Hands)
         this.targetHead = {
@@ -68,9 +69,10 @@ export class RemotePlayer {
 
         // 4. Shoulders
         const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-0.25, 0.5, 0), new THREE.Vector3(0.25, 0.5, 0)
+            new THREE.Vector3(-0.25, 0, 0), new THREE.Vector3(0.25, 0, 0)
         ]);
         this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
+        this.shoulders.position.y = 0.5;
         this.mesh.add(this.shoulders);
 
         // 5. Arms (Shoulder -> Elbow -> Wrist)
@@ -87,6 +89,7 @@ export class RemotePlayer {
     setTargetState(data) {
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);
         if (data.yaw !== undefined) this.targetYaw = data.yaw;
+        if (data.neckHeight !== undefined) this.targetNeckHeight = data.neckHeight;
 
         if (data.head) {
             this.targetHead.position.copy(data.head.position);
@@ -117,8 +120,19 @@ export class RemotePlayer {
         const targetQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.targetYaw, 0, 'YXZ'));
         this.mesh.quaternion.slerp(targetQuaternion, lerpFactor);
 
-        // 2. Interpolate Head
-        this.headMesh.position.lerp(this.targetHead.position, lerpFactor);
+        // 2. Interpolate Head & Height
+        this.currentNeckHeight = THREE.MathUtils.lerp(this.currentNeckHeight || 0.6, this.targetNeckHeight, lerpFactor);
+
+        this.headMesh.position.y = this.currentNeckHeight;
+        this.shoulders.position.y = this.currentNeckHeight - 0.1;
+
+        // Update Torso
+        const torsoPoints = [
+            new THREE.Vector3(0, this.currentNeckHeight, 0),
+            new THREE.Vector3(0, -0.2, 0)
+        ];
+        this.torso.geometry.setFromPoints(torsoPoints);
+
         this.headMesh.quaternion.slerp(this.targetHead.quaternion, lerpFactor);
 
         // 3. Update Arms IK (Simple direct line from shoulder to hand target)
@@ -134,8 +148,9 @@ export class RemotePlayer {
     }
 
     updateArms(leftHandPos, rightHandPos) {
-        const leftShoulder = new THREE.Vector3(-0.25, 0.6, 0);
-        const rightShoulder = new THREE.Vector3(0.25, 0.6, 0);
+        const shoulderY = (this.currentNeckHeight || 0.6) - 0.1;
+        const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
+        const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
 
         const calculateElbow = (shoulder, hand) => {
             const dist = shoulder.distanceTo(hand);
