@@ -174,7 +174,7 @@ export class RoomManager {
         const floorMat = new THREE.MeshStandardMaterial({
             color: 0x020205,
             metalness: 0.9,
-            roughness: 0.1,
+            roughness: 0.45, // Softened from 0.1
         });
         this.floor = new THREE.Mesh(floorGeo, floorMat);
         this.floor.rotation.x = -Math.PI / 2;
@@ -238,7 +238,7 @@ export class RoomManager {
             color: 0x1a1a2e,
             emissive: 0x001133,
             metalness: 0.9,
-            roughness: 0.1
+            roughness: 0.4 // Softened from 0.1
         });
         this.table = new THREE.Mesh(topGeo, topMat);
         this.table.position.y = 1.0;
@@ -299,7 +299,7 @@ export class RoomManager {
         const podestMat = new THREE.MeshStandardMaterial({
             color: 0x0a0a20,
             metalness: 0.8,
-            roughness: 0.2,
+            roughness: 0.5, // Softened from 0.2
             emissive: 0x000510
         });
 
@@ -384,9 +384,10 @@ export class RoomManager {
         const hemiLight = new THREE.HemisphereLight(0x00ffff, 0x800080, 1);
         this.lights.add(hemiLight);
 
-        // Directional Light
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        dirLight.position.set(10, 20, 10);
+        // Directional Light (Aligned with the Synthwave Sun)
+        // Sun is at (0, 60, -600), so we place the light at a similar vector
+        const dirLight = new THREE.DirectionalLight(0xffaa88, 1.2); // Warm sun-kissed pink/orange
+        dirLight.position.set(0, 60, -600);
         this.lights.add(dirLight);
 
         this.scene.add(this.lights);
