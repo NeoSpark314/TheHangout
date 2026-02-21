@@ -175,6 +175,7 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     destroy() {
+        super.destroy();
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
 
         if (this.audioElement) {

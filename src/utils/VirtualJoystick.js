@@ -119,6 +119,7 @@ export class VirtualJoystick {
     handleEnd(e) {
         this.active = false;
         this.base.style.opacity = '0.2';
+        this.stick.style.transform = 'translate(-50%, -50%)';
         this.vector = { x: 0, y: 0 };
     }
 

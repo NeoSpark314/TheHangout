@@ -7,6 +7,18 @@ import { PACKET_TYPES } from '../utils/Constants.js';
 export class RoomManager {
     constructor() {
         this.scene = null;
+        this._seed = 0;
+    }
+
+    /**
+     * Seeded PRNG (mulberry32). Produces deterministic values 0..1 from this._seed.
+     */
+    random() {
+        this._seed |= 0;
+        this._seed = (this._seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(this._seed ^ (this._seed >>> 15), 1 | this._seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
     init(scene) {
@@ -36,6 +48,11 @@ export class RoomManager {
                 this.scene.fog.near = fogNear;
                 this.scene.fog.far = fogFar;
             }
+        }
+
+        // Seed the PRNG from config (host-generated, synced to guests)
+        if (config.seed !== undefined) {
+            this._seed = config.seed;
         }
 
         // Create the environment components
@@ -102,8 +119,8 @@ export class RoomManager {
 
         for (let i = 0; i < hillCount; i++) {
             const angle = (i / hillCount) * Math.PI * 2;
-            const h = 20 + Math.random() * hillScale;
-            const w = 40 + Math.random() * 60;
+            const h = 20 + this.random() * hillScale;
+            const w = 40 + this.random() * 60;
 
             const geo = new THREE.ConeGeometry(w, h, 4);
             const mountain = new THREE.Mesh(geo, mountainMat);
@@ -113,7 +130,7 @@ export class RoomManager {
                 h / 2 - 5,
                 Math.cos(angle) * radius
             );
-            mountain.rotation.y = Math.random() * Math.PI;
+            mountain.rotation.y = this.random() * Math.PI;
 
             const edges = new THREE.EdgesGeometry(geo);
             const outline = new THREE.LineSegments(edges, wireMat);
@@ -135,14 +152,14 @@ export class RoomManager {
         const radius = 800;
 
         for (let i = 0; i < starCount; i++) {
-            const theta = 2 * Math.PI * Math.random();
-            const phi = Math.acos(2 * Math.random() - 1);
+            const theta = 2 * Math.PI * this.random();
+            const phi = Math.acos(2 * this.random() - 1);
 
             positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
             positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
             positions[i * 3 + 2] = radius * Math.cos(phi);
 
-            const type = Math.random();
+            const type = this.random();
             if (type > 0.8) {
                 colors[i * 3] = 1; colors[i * 3 + 1] = 1; colors[i * 3 + 2] = 1;
             } else if (type > 0.4) {
@@ -311,7 +328,7 @@ export class RoomManager {
 
         for (let x = -4; x < 4; x++) {
             for (let z = -4; z < 4; z++) {
-                const hOffset = Math.random() * 0.05;
+                const hOffset = this.random() * 0.05;
                 const segment = new THREE.Mesh(blockGeo, podestMat);
                 segment.position.set(x + 0.5, 0.1 + hOffset, z + 0.5);
 
@@ -350,16 +367,16 @@ export class RoomManager {
 
         for (let i = 0; i < pillarCount; i++) {
             const angle = (i / pillarCount) * Math.PI * 2;
-            const h = 0.5 + Math.random() * 2.5;
-            const w = 0.4 + Math.random() * 0.6;
+            const h = 0.5 + this.random() * 2.5;
+            const w = 0.4 + this.random() * 0.6;
 
             const geo = new THREE.BoxGeometry(w, h, w);
             const pillar = new THREE.Mesh(geo, pillarMat);
 
             pillar.position.set(
-                Math.sin(angle) * (radius + Math.random() * 2),
+                Math.sin(angle) * (radius + this.random() * 2),
                 h / 2,
-                Math.cos(angle) * (radius + Math.random() * 2)
+                Math.cos(angle) * (radius + this.random() * 2)
             );
 
             const edges = new THREE.EdgesGeometry(geo);
@@ -447,7 +464,46 @@ export class RoomManager {
     }
 
     updateConfig(newConfig) {
+        const oldSeed = gameState.roomConfig.seed;
         gameState.roomConfig = { ...gameState.roomConfig, ...newConfig };
+
+        // If the seed changed, tear down procedural elements so they get rebuilt
+        if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
+            this.clearProceduralElements();
+        }
+
         this.applyConfig(gameState.roomConfig);
+    }
+
+    /**
+     * Removes all seed-dependent procedural scene elements so they can be
+     * re-created with a new seed. Deterministic elements (table, floor,
+     * hologram, lights, sun, physics) are left untouched.
+     */
+    clearProceduralElements() {
+        const remove = (obj) => {
+            if (!obj) return;
+            this.scene.remove(obj);
+            obj.traverse((child) => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(m => m.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+            });
+        };
+
+        remove(this.hills);
+        remove(this.stars);
+        remove(this.podest);
+        remove(this.decorations);
+
+        this.hills = null;
+        this.stars = null;
+        this.podest = null;
+        this.decorations = null;
     }
 }

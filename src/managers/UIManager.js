@@ -2,6 +2,7 @@
 import eventBus from '../core/EventBus.js';
 import gameState from '../core/GameState.js';
 import { EVENTS } from '../utils/Constants.js';
+import { isMobile } from '../utils/DeviceUtils.js';
 
 export class UIManager {
     constructor() {
@@ -31,9 +32,7 @@ export class UIManager {
         this.versionInfo = document.getElementById('app-version');
         this.shaInfo = document.getElementById('git-sha');
 
-        // Detect mobile (non-HMD) for dual sticks
-        this.isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
-            !/OculusBrowser|PicoBrowser|ViveBrowser|AppleVision/i.test(navigator.userAgent);
+        this.isMobile = isMobile;
 
         this.init();
     }

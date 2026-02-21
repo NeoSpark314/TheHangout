@@ -254,9 +254,6 @@ export class Avatar {
         this.headMesh.quaternion.copy(quaternion);
     }
 
-    updateHeadRotation(euler) {
-        this.headMesh.rotation.copy(euler);
-    }
 
     updateArms(leftHandPos, rightHandPos) {
         const neckHeight = Math.max(0.4, this.currentHeadHeight - 0.2);
@@ -402,50 +399,6 @@ export class Avatar {
         return this.headMesh.quaternion;
     }
 
-    processXRHand(hand, handednessStr) {
-        const meshes = this.handMeshes[handednessStr];
-        let active = false;
-        let rootPos = new THREE.Vector3();
-        let rootQuat = new THREE.Quaternion();
-
-        if (hand && hand.joints && Object.keys(hand.joints).length > 0) {
-            active = true;
-            let i = 0;
-            for (const [jointName, jointGroup] of Object.entries(hand.joints)) {
-                if (i >= 25) break;
-
-                if (jointGroup.visible) {
-                    meshes[i].visible = true;
-
-                    const worldPos = new THREE.Vector3();
-                    const worldQuat = new THREE.Quaternion();
-                    jointGroup.getWorldPosition(worldPos);
-                    jointGroup.getWorldQuaternion(worldQuat);
-
-                    this.mesh.worldToLocal(worldPos);
-
-                    const invMeshQuat = this.mesh.quaternion.clone().invert();
-                    const localQuat = worldQuat.clone().premultiply(invMeshQuat);
-
-                    meshes[i].position.copy(worldPos);
-                    meshes[i].quaternion.copy(localQuat);
-
-                    if (jointName === 'wrist') {
-                        rootPos.copy(worldPos);
-                        rootQuat.copy(localQuat);
-                    }
-                } else {
-                    meshes[i].visible = false;
-                }
-                i++;
-            }
-        } else {
-            for (let i = 0; i < 25; i++) {
-                meshes[i].visible = false;
-            }
-        }
-        return { active, rootPos, rootQuat };
-    }
 
     destroy() {
         this.mesh.traverse((object) => {

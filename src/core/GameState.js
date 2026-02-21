@@ -13,30 +13,28 @@ class GameState {
             environment: 'cyber-stube',
             skyColor: '#0b0c10',
             fogNear: 5,
-            fogFar: 1000
+            fogFar: 1000,
+            seed: Math.floor(Math.random() * 2147483647)
         };
 
         // Entity stores
         this.localPlayer = null;
-        this.interactables = new Map(); // objectId -> Interactable
 
         // Core Managers
         this.managers = {
-            network: null,
-            physics: null,
-            render: null,
-            world: null,
             entity: null,
             ui: null,
+            network: null,
+            media: null,
+            render: null,
+            physics: null,
             player: null,
-            interaction: null,
-            asset: null,
-            debugUI: null,
-            media: null
+            input: null,
+            hud: null,
+            room: null
         };
 
         // Timing
-        this.clock = null;
         this.deltaTime = 0;
     }
 }

@@ -1,6 +1,7 @@
 // managers/RenderManager.js
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import { isTrueHMD } from '../utils/DeviceUtils.js';
 
 export class RenderManager {
     constructor() {
@@ -62,7 +63,7 @@ export class RenderManager {
 
         // Add VR Button ONLY if we detect a true HMD (Quest, Vision Pro, or PC desktop)
         // This prevents the button from showing up on iPhones/Android phones that just support generic 'cardboard'
-        if (this.isTrueHMD()) {
+        if (isTrueHMD) {
             const vrButton = VRButton.createButton(this.renderer, {
                 optionalFeatures: ['hand-tracking']
             });
@@ -104,21 +105,6 @@ export class RenderManager {
         this.camera.lookAt(0, 0, 0);
     }
 
-    isTrueHMD() {
-        const ua = navigator.userAgent;
-
-        // 1. Explicitly allow known standalone VR headsets
-        const isStandaloneXR = /OculusBrowser|PicoBrowser|ViveBrowser|AppleVision/i.test(ua);
-        if (isStandaloneXR) return true;
-
-        // 2. Filter out common mobile phones and tablets
-        // These browsers technically support WebXR (Cardboard/WebVR legacy) but we want to skip them
-        const isMobilePhone = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-
-        // 3. If it's NOT a mobile phone, we assume it's a Desktop/Laptop (PCVR support)
-        // If it IS a mobile phone, we only allow it if it matched the standalone check above
-        return !isMobilePhone;
-    }
 
 
 

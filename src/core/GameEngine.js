@@ -15,9 +15,6 @@ export class GameEngine {
     async initialize() {
         console.log('[GameEngine] Initializing...');
 
-        // We will instantiate managers here later.
-        // For now, we prepare the loop.
-
         eventBus.on(EVENTS.SCENE_READY, () => {
             this.start();
         });
@@ -89,10 +86,6 @@ export class GameEngine {
         // 4. World & Entity State Sync
         if (gameState.managers.room) {
             gameState.managers.room.update(delta);
-        }
-
-        if (gameState.managers.world) {
-            gameState.managers.world.update(delta);
         }
 
         // 5. Update All Entities Locally

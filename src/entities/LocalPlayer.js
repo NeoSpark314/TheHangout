@@ -12,8 +12,6 @@ export class LocalPlayer extends PlayerEntity {
         this.speed = 5.0;
         this.turnSpeed = 0.002;
 
-        // Legacy movement intent replaced by InputManager
-
 
         // --- Clean Architecture Transforms ---
         // xrOrigin is the physical center of the room (pinned to y=0)
@@ -161,20 +159,20 @@ export class LocalPlayer extends PlayerEntity {
         // --- 5. VISUAL AVATAR ---
         const headWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(headWorldPos);
-        const headWorldQuat = new THREE.Quaternion();
-        render.camera.getWorldQuaternion(headWorldQuat);
-        const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
+        const finalHeadQuat = new THREE.Quaternion();
+        render.camera.getWorldQuaternion(finalHeadQuat);
+        const finalHeadEuler = new THREE.Euler().setFromQuaternion(finalHeadQuat, 'YXZ');
 
         // Avatar feet pinned to ground exactly below head
         this.mesh.position.set(headWorldPos.x, 0, headWorldPos.z);
         this.avatar.updatePosture(headWorldPos.y);
 
         // Body heading follows head world yaw
-        this.mesh.rotation.y = headEuler.y;
+        this.mesh.rotation.y = finalHeadEuler.y;
 
         // Neck rotation (absolute head orientation relative to body yaw)
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, finalHeadEuler.y, 0, 'YXZ'));
+        const localHeadQuat = bodyQuat.invert().multiply(finalHeadQuat);
         this.avatar.updateHeadOrientation(localHeadQuat);
 
         // --- 6. TRANSFORM HANDS TO LOCAL AVATAR SPACE ---

@@ -6,10 +6,8 @@ import { UIManager } from './managers/UIManager.js';
 import { NetworkManager } from './managers/NetworkManager.js';
 import { PhysicsManager } from './managers/PhysicsManager.js';
 import { RenderManager } from './managers/RenderManager.js';
-import { WorldManager } from './managers/WorldManager.js';
 import { PlayerManager } from './managers/PlayerManager.js';
 import { EntityManager } from './managers/EntityManager.js';
-// import { DebugUIManager } from './managers/DebugUIManager.js';
 import { MediaManager } from './managers/MediaManager.js';
 import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
@@ -27,7 +25,6 @@ async function bootstrap() {
   gameState.managers.media = new MediaManager();
   gameState.managers.render = new RenderManager();
   gameState.managers.physics = new PhysicsManager();
-  gameState.managers.world = new WorldManager();
   gameState.managers.player = new PlayerManager();
   gameState.managers.input = new InputManager();
   gameState.managers.hud = new HUDManager();
@@ -40,9 +37,6 @@ async function bootstrap() {
 
   // Wait for Physics
   await gameState.managers.physics.init();
-
-  // Initialize Local Player (Deferred until room join/create)
-  // gameState.managers.player.init();
 
   let playerInitialized = false;
   const initPlayerOnce = (id) => {
@@ -68,16 +62,6 @@ async function bootstrap() {
     }
   });
 
-  /*
-  // Initialize Debug UI (Needs Local Player's headPose eventually, but can start now)
-  gameState.managers.debugUI = new DebugUIManager();
-  if (gameState.managers.render) {
-    gameState.managers.debugUI.attachTo(gameState.managers.render.camera);
-  }
-  */
-
-  // Generate World
-  gameState.managers.world.generateTestWorld();
 
   // Initialize Room (Atmosphere)
   if (gameState.managers.render) {
