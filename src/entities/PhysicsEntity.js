@@ -104,18 +104,33 @@ export class PhysicsEntity extends NetworkEntity {
     setNetworkState(state) {
         if (!this.rigidBody || !this.mesh) return;
 
+        const wasHeld = this.heldBy;
         this.heldBy = state.h || null;
+
+        // Toggle body type: kinematic while held (no local physics fighting),
+        // dynamic when free (local physics takes over between updates)
+        if (this.heldBy && !wasHeld) {
+            this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        } else if (!this.heldBy && wasHeld) {
+            this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+            this.rigidBody.wakeUp();
+        }
 
         // Snap the visual mesh
         this.mesh.position.set(state.p[0], state.p[1], state.p[2]);
         this.mesh.quaternion.set(state.r[0], state.r[1], state.r[2], state.r[3]);
 
         // Snap the local rigid body
-        this.rigidBody.setTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] }, true);
-        this.rigidBody.setRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] }, true);
+        if (this.heldBy) {
+            this.rigidBody.setNextKinematicTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] });
+            this.rigidBody.setNextKinematicRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] });
+        } else {
+            this.rigidBody.setTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] }, true);
+            this.rigidBody.setRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] }, true);
+        }
 
-        // Apply velocity if not held (so thrown objects continue moving on remote)
-        if (!this.heldBy && state.v) {
+        // Apply velocity on release so thrown objects continue moving on remote
+        if (!this.heldBy && wasHeld && state.v) {
             this.rigidBody.setLinvel({ x: state.v[0], y: state.v[1], z: state.v[2] }, true);
         }
     }
