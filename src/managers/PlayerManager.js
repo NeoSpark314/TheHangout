@@ -12,6 +12,7 @@ export class PlayerManager {
         // Listen to network events to spawn/despawn remote avatars
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => this.onPeerConnected(peerId));
         eventBus.on(EVENTS.PEER_DISCONNECTED, (peerId) => this.onPeerDisconnected(peerId));
+        eventBus.on(EVENTS.NETWORK_DATA_RECEIVED, (e) => this.onNetworkData(e));
     }
 
     init() {
@@ -41,5 +42,26 @@ export class PlayerManager {
     update(delta) {
         // Note: The GameEngine loop already calls update on localPlayer and remotePlayers.
         // The PlayerManager update loop is for high-level manager tasks, which currently is empty.
+    }
+
+    onNetworkData({ senderId, type, data }) {
+        if (type === 'INPUT') {
+            const rp = gameState.remotePlayers.get(senderId);
+            if (rp) {
+                rp.setTargetState(data.position, data.yaw);
+            } else if (gameState.isHost) {
+                // As a Host, if we receive an input from a Guest but haven't spawned them yet, we can spawn them
+                // though PEER_CONNECTED should have handled this.
+            }
+
+            // If we are Host, we must relay this input to all OTHER guests so everyone sees everyone!
+            if (gameState.isHost) {
+                for (const [peerId, conn] of gameState.managers.network.connections.entries()) {
+                    if (conn.open && peerId !== senderId) {
+                        gameState.managers.network.sendData(peerId, type, data);
+                    }
+                }
+            }
+        }
     }
 }

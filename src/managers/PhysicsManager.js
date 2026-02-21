@@ -8,6 +8,8 @@ export class PhysicsManager {
         this.world = null;
         this.dynamicBodies = []; // Map visual meshes to physics bodies
         this.rapierLoaded = false;
+
+        eventBus.on(EVENTS.NETWORK_DATA_RECEIVED, (e) => this.onNetworkData(e));
     }
 
     async init() {
@@ -67,6 +69,27 @@ export class PhysicsManager {
 
             item.mesh.position.set(position.x, position.y, position.z);
             item.mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        }
+    }
+
+    onNetworkData({ senderId, type, data }) {
+        if (type === 'STATE' && !gameState.isHost) {
+            // We are a guest receiving authoritative physics state from the host
+            // `data` is an array of body states
+            data.forEach(state => {
+                const bodyObj = this.dynamicBodies[state.id];
+                if (bodyObj && bodyObj.mesh) {
+                    // Snap the visual mesh
+                    bodyObj.mesh.position.set(state.p[0], state.p[1], state.p[2]);
+                    bodyObj.mesh.quaternion.set(state.r[0], state.r[1], state.r[2], state.r[3]);
+
+                    // Also update the local rigid body so guest physical interactions remain somewhat accurate locally
+                    if (bodyObj.rigidBody) {
+                        bodyObj.rigidBody.setTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] }, true);
+                        bodyObj.rigidBody.setRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] }, true);
+                    }
+                }
+            });
         }
     }
 }
