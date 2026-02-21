@@ -104,10 +104,10 @@ export class RemotePlayer extends PlayerEntity {
         const rightLocal = this.handStates.right.position.clone();
 
         if (!this.handStates.left.active) {
-            leftLocal.set(-0.4, 0, 0);
+            leftLocal.set(-0.35, 0.85, 0.1);
         }
         if (!this.handStates.right.active) {
-            rightLocal.set(0.4, 0, 0);
+            rightLocal.set(0.35, 0.85, 0.1);
         }
 
         this.avatar.updateWristMarkers(this.handStates.left, this.handStates.right, lerpFactor);

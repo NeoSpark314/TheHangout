@@ -169,8 +169,8 @@ export class LocalPlayer extends PlayerEntity {
         // Natively update our own Avatar IK using the cleanly converted coordinates!
         this.avatar.updateWristMarkers(this.handStates.left, this.handStates.right, 1.0);
 
-        const leftArmPos = this.handStates.left.active ? this.avatar.getLeftWristMarkerPosition() : this.leftHandPose.position;
-        const rightArmPos = this.handStates.right.active ? this.avatar.getRightWristMarkerPosition() : this.rightHandPose.position;
+        const leftArmPos = this.handStates.left.active ? this.avatar.getLeftWristMarkerPosition() : new THREE.Vector3(-0.35, 0.85, 0.1);
+        const rightArmPos = this.handStates.right.active ? this.avatar.getRightWristMarkerPosition() : new THREE.Vector3(0.35, 0.85, 0.1);
         this.avatar.updateArms(leftArmPos, rightArmPos);
 
         // --- 7. DEBUG UI ---

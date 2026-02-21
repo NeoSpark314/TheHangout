@@ -12,14 +12,13 @@ export class Avatar {
         this.initAvatar();
     }
 
-    // Standard WebXR hand mapping indices for drawing skeleton lines
+    // Standard WebXR hand mapping indices for drawing skeleton lines (0 is wrist)
     static HAND_INDICES = [
-        0, 1, 1, 2, 2, 3, 3, 4,       // thumb
-        0, 5, 5, 6, 6, 7, 7, 8,       // index
-        0, 9, 9, 10, 10, 11, 11, 12,  // middle
-        0, 13, 13, 14, 14, 15, 15, 16,// ring
-        0, 17, 17, 18, 18, 19, 19, 20,// pinky
-        5, 9, 9, 13, 13, 17           // knuckles bridging
+        0, 1, 1, 2, 2, 3, 3, 4,     // thumb
+        0, 5, 5, 6, 6, 7, 7, 8, 8, 9,   // index
+        0, 10, 10, 11, 11, 12, 12, 13, 13, 14,  // middle
+        0, 15, 15, 16, 16, 17, 17, 18, 18, 19,  // ring
+        0, 20, 20, 21, 21, 22, 22, 23, 23, 24   // pinky
     ];
 
     initAvatar() {
@@ -85,12 +84,21 @@ export class Avatar {
         const jointMatLeft = new THREE.MeshBasicMaterial({ color: this.color }); // Use same color
         const jointMatRight = new THREE.MeshBasicMaterial({ color: this.color });
 
-        // Hand Skeleton Lines
+        // Hand Skeleton Lines (24 bones * 2 vertices per bone * 3 coordinates)
         const handLineMat = new THREE.LineBasicMaterial({ color: this.color });
+
+        const leftGeom = new THREE.BufferGeometry();
+        leftGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Avatar.HAND_INDICES.length * 3), 3));
+        const rightGeom = new THREE.BufferGeometry();
+        rightGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(Avatar.HAND_INDICES.length * 3), 3));
+
         this.handLines = {
-            left: new THREE.LineSegments(new THREE.BufferGeometry(), handLineMat),
-            right: new THREE.LineSegments(new THREE.BufferGeometry(), handLineMat)
+            left: new THREE.LineSegments(leftGeom, handLineMat),
+            right: new THREE.LineSegments(rightGeom, handLineMat)
         };
+        this.handLines.left.frustumCulled = false;
+        this.handLines.right.frustumCulled = false;
+
         this.mesh.add(this.handLines.left);
         this.mesh.add(this.handLines.right);
 
@@ -229,9 +237,6 @@ export class Avatar {
         const leftHasJoints = leftHandInfo.active && leftHandInfo.joints[0].position.lengthSq() > 0;
         const rightHasJoints = rightHandInfo.active && rightHandInfo.joints[0].position.lengthSq() > 0;
 
-        let leftLinePositions = leftHasJoints ? [] : null;
-        let rightLinePositions = rightHasJoints ? [] : null;
-
         for (let i = 0; i < 25; i++) {
             if (leftHasJoints) {
                 this.handMeshes.left[i].visible = true;
@@ -252,22 +257,30 @@ export class Avatar {
 
         // Update Skeleton Lines
         if (leftHasJoints) {
+            const positions = this.handLines.left.geometry.attributes.position.array;
+            let ptr = 0;
             for (let i = 0; i < Avatar.HAND_INDICES.length; i++) {
                 const jointObj = this.handMeshes.left[Avatar.HAND_INDICES[i]];
-                leftLinePositions.push(jointObj.position.x, jointObj.position.y, jointObj.position.z);
+                positions[ptr++] = jointObj.position.x;
+                positions[ptr++] = jointObj.position.y;
+                positions[ptr++] = jointObj.position.z;
             }
-            this.handLines.left.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(leftLinePositions), 3));
+            this.handLines.left.geometry.attributes.position.needsUpdate = true;
             this.handLines.left.visible = true;
         } else {
             this.handLines.left.visible = false;
         }
 
         if (rightHasJoints) {
+            const positions = this.handLines.right.geometry.attributes.position.array;
+            let ptr = 0;
             for (let i = 0; i < Avatar.HAND_INDICES.length; i++) {
                 const jointObj = this.handMeshes.right[Avatar.HAND_INDICES[i]];
-                rightLinePositions.push(jointObj.position.x, jointObj.position.y, jointObj.position.z);
+                positions[ptr++] = jointObj.position.x;
+                positions[ptr++] = jointObj.position.y;
+                positions[ptr++] = jointObj.position.z;
             }
-            this.handLines.right.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(rightLinePositions), 3));
+            this.handLines.right.geometry.attributes.position.needsUpdate = true;
             this.handLines.right.visible = true;
         } else {
             this.handLines.right.visible = false;
