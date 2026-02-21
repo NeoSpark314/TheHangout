@@ -78,7 +78,10 @@ export class RemotePlayer extends PlayerEntity {
     setNetworkState(data) {
         if (data.name !== undefined && data.name !== this.name) {
             this.name = data.name;
-            this.avatar.setName(this.name);
+            if (this.avatar) {
+                this.avatar.setName(this.name);
+            }
+            eventBus.emit(EVENTS.REMOTE_NAME_UPDATED, { peerId: this.peerId, name: this.name });
         }
 
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);

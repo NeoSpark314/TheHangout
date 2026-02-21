@@ -140,6 +140,7 @@ export class UIManager {
         if (name) {
             localStorage.setItem('hangout_playerName', name);
             gameState.playerName = name;
+            eventBus.emit(EVENTS.LOCAL_NAME_UPDATED, name);
         }
 
         // Only save the room ID if it's not a temporary/generated one or if we are actively joining a specific one

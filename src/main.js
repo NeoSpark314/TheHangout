@@ -11,6 +11,7 @@ import { PlayerManager } from './managers/PlayerManager.js';
 import { EntityManager } from './managers/EntityManager.js';
 import { DebugUIManager } from './managers/DebugUIManager.js';
 import { MediaManager } from './managers/MediaManager.js';
+import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
@@ -28,6 +29,12 @@ async function bootstrap() {
   gameState.managers.world = new WorldManager();
   gameState.managers.player = new PlayerManager();
   gameState.managers.input = new InputManager();
+  gameState.managers.hud = new HUDManager();
+
+  // Attach HUD to camera
+  if (gameState.managers.render) {
+    gameState.managers.render.camera.add(gameState.managers.hud.group);
+  }
 
   // Wait for Physics
   await gameState.managers.physics.init();

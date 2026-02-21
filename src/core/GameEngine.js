@@ -96,7 +96,12 @@ export class GameEngine {
             gameState.managers.entity.update(delta);
         }
 
-        // 6. Render
+        // 6. HUD
+        if (gameState.managers.hud) {
+            gameState.managers.hud.update(delta);
+        }
+
+        // 7. Render
         if (gameState.managers.render) {
             gameState.managers.render.update(delta);
             gameState.managers.render.render();

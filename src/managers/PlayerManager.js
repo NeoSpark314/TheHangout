@@ -31,13 +31,24 @@ export class PlayerManager {
         console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
         const rp = new RemotePlayer(peerId);
 
+        if (gameState.managers.hud) {
+            // Generic notification removed; HUDManager now notifies when name arrives
+        }
+
         // Use EntityManager instead of manual map
         gameState.managers.entity.addEntity(rp);
     }
 
     onPeerDisconnected(peerId) {
         console.log(`[PlayerManager] Removing remote player for ${peerId}`);
+        const entity = gameState.managers.entity.getEntity(peerId);
+        const name = entity ? (entity.name || 'Somebody') : 'Somebody';
+
         gameState.managers.entity.removeEntity(peerId);
+
+        if (gameState.managers.hud) {
+            gameState.managers.hud.showNotification(`${name} left the hangout.`);
+        }
     }
 
 }
