@@ -77,8 +77,10 @@ export class RenderManager {
             setTimeout(() => this.onWindowResize(), 100);
         }, false);
 
-        // Initial call to ensure correct size
+        // Initial calls to ensure correct size after DOM/CSS settling
         this.onWindowResize();
+        setTimeout(() => this.onWindowResize(), 10);
+        setTimeout(() => this.onWindowResize(), 100);
     }
 
     switchToPlayerView() {
@@ -209,9 +211,12 @@ export class RenderManager {
     }
 
     onWindowResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setSize(width, height);
     }
 
     render() {

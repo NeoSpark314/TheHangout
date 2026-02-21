@@ -24,12 +24,6 @@
 
 html,
 body {
-    margin: 0;
-    padding: 0;
-}
-
-body,
-html {
     width: 100%;
     height: 100%;
     margin: 0;
@@ -48,17 +42,19 @@ html {
     width: 100%;
     height: 100%;
     z-index: 1;
+    overflow: hidden;
     margin: 0;
     padding: 0;
+}
+
+#app canvas {
+    display: block;
 }
 
 /* UI Overlay */
 .overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
+    inset: 0;
     z-index: 10;
     display: flex;
     justify-content: center;
@@ -344,9 +340,9 @@ html {
     position: fixed;
     bottom: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
-    /* Changed to full height to catch touches anywhere if needed, or keep 50% if preferred */
+    width: 100%;
+    height: 50%;
+    /* Repositioned to bottom half for ergonomics */
     z-index: 5;
     pointer-events: none;
     display: none;
