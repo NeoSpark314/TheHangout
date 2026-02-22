@@ -62,6 +62,54 @@ export class PhysicsManager {
     }
 
     /**
+     * Create a rigid body hexagon (cylinder-like) and register it for sync.
+     * Often used for the central table.
+     */
+    createHexagon(radius, height, position, mesh, isStatic = false) {
+        if (!this.world) return;
+
+        const rigidBodyDesc = isStatic
+            ? RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
+            : RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z);
+
+        const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+
+        // Generate vertices for a 6-sided prism (hexagon)
+        const vertices = new Float32Array(12 * 3); // 6 top + 6 bottom vertices
+        const hh = height / 2;
+
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+
+            // Top vertex
+            vertices[i * 3] = x;
+            vertices[i * 3 + 1] = hh;
+            vertices[i * 3 + 2] = z;
+
+            // Bottom vertex
+            vertices[(i + 6) * 3] = x;
+            vertices[(i + 6) * 3 + 1] = -hh;
+            vertices[(i + 6) * 3 + 2] = z;
+        }
+
+        const colliderDesc = RAPIER.ColliderDesc.convexHull(vertices);
+        this.world.createCollider(colliderDesc, rigidBody);
+
+        if (!isStatic) {
+            const entityId = `physics-hexagon-${this.nextPhysicsId++}`;
+            const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
+
+            if (gameState.managers.entity) {
+                gameState.managers.entity.addEntity(physicsEntity);
+            }
+        }
+
+        return rigidBody;
+    }
+
+    /**
      * Create a rigid body box (uniform) and register it for sync
      */
     createBox(size, position, mesh, isStatic = false) {
