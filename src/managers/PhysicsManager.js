@@ -47,6 +47,7 @@ export class PhysicsManager {
         const groundBody = this.world.createRigidBody(groundBodyDesc);
 
         const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, halfHeight, size);
+        groundColliderDesc.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(groundColliderDesc, groundBody);
     }
 
@@ -194,10 +195,10 @@ export class PhysicsManager {
 
             if (now - lastTime1 > this.collisionCooldown && now - lastTime2 > this.collisionCooldown) {
                 // Map force to intensity (0 to 1)
-                // Rapier force can be high; let's normalize around a reasonable value
-                const intensity = Math.min(maxForce / 20, 1.0);
+                // Cubes have small mass, so force is low. Normalize around 5.
+                const intensity = Math.min(maxForce / 5, 1.0);
                 
-                if (intensity > 0.1) {
+                if (intensity > 0.02) {
                     eventBus.emit(EVENTS.ENTITY_COLLIDED, { intensity });
                     this.lastCollisionTime.set(handle1, now);
                     this.lastCollisionTime.set(handle2, now);
