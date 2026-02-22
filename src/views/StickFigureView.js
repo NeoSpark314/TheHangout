@@ -209,13 +209,13 @@ export class StickFigureView extends EntityView {
         if (state.handStates) {
             this.updateWristMarkers(state.handStates.left, state.handStates.right, lerpFactor);
 
-            // Arm IK
+            // Arm IK fallbacks (relaxed idle pose)
             const leftArmPos = state.handStates.left.active
                 ? this.getLeftWristMarkerPosition()
-                : new THREE.Vector3(-0.35, 0.85, 0.1);
+                : new THREE.Vector3(-0.25, 0.7, -0.05); // Relaxed at side
             const rightArmPos = state.handStates.right.active
                 ? this.getRightWristMarkerPosition()
-                : new THREE.Vector3(0.35, 0.85, 0.1);
+                : new THREE.Vector3(0.25, 0.7, -0.05); // Relaxed at side
             this.updateArms(leftArmPos, rightArmPos);
         }
 
@@ -354,15 +354,24 @@ export class StickFigureView extends EntityView {
             const dist = shoulder.distanceTo(hand);
             const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
 
-            const armDir = new THREE.Vector3().subVectors(hand, shoulder).normalize();
-            const down = new THREE.Vector3(0, -1, 0);
-            const side = new THREE.Vector3().crossVectors(armDir, down).normalize();
+            // Vector from shoulder to hand
+            const armVec = new THREE.Vector3().subVectors(hand, shoulder);
+            const armLen = armVec.length();
+            const armDir = armVec.clone().normalize();
 
-            const bendAmount = Math.max(0, 0.4 - dist * 0.5);
-            const bend = new THREE.Vector3(0, -bendAmount, bendAmount * 0.5);
-            bend.addScaledVector(side, shoulder.x > 0 ? 0.1 : -0.1);
+            // Desired bend amount (elbow point distance from the center line)
+            // Using a fixed segment length heuristic (e.g. 0.45m upper arm and forearm)
+            const segmentLen = 0.4;
+            const bendDist = Math.sqrt(Math.max(0, segmentLen * segmentLen - (armLen / 2) * (armLen / 2)));
 
-            return mid.add(bend);
+            // "Hint" vector to determine elbow direction (out and slightly down/back)
+            const side = shoulder.x > 0 ? 1 : -1;
+            const hint = new THREE.Vector3(side * 0.5, -0.2, 0.2).normalize();
+
+            // Project hint onto the plane perpendicular to the arm direction
+            const projection = hint.clone().projectOnPlane(armDir).normalize();
+
+            return mid.addScaledVector(projection, bendDist);
         };
 
         const leftElbow = calculateElbow(leftShoulder, leftHandPos);
