@@ -3,6 +3,7 @@
 class GameState {
     constructor() {
         this.isHost = false;
+        this.isDedicatedHost = false;
         this.roomId = null;
         this.playerName = 'Player';
         this.avatarConfig = {

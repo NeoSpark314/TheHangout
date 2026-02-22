@@ -148,6 +148,15 @@ export class NetworkManager {
                         if (gameState.managers.room) {
                             gameState.managers.room.updateConfig(parsed.payload);
                         }
+
+                        // If dedicated host, remove phantom RemotePlayer created for the host
+                        if (parsed.payload.isDedicatedHost && gameState.roomId) {
+                            const hostEntity = gameState.managers.entity?.getEntity(gameState.roomId);
+                            if (hostEntity && hostEntity.type === 'REMOTE_PLAYER') {
+                                console.log('[NetworkManager] Removing phantom host avatar (dedicated host mode)');
+                                gameState.managers.entity.removeEntity(gameState.roomId);
+                            }
+                        }
                     }
                     break;
                 default:
@@ -166,7 +175,9 @@ export class NetworkManager {
 
             // Auto-spawn unknown players (learning about them via relayed state updates)
             if (!entity && (stateData.type === 'LOCAL_PLAYER' || stateData.type === 'REMOTE_PLAYER')) {
-                if (gameState.localPlayer && stateData.id !== gameState.localPlayer.id) {
+                // Don't auto-spawn ourselves; dedicated host has no localPlayer so always spawn
+                const isOwnEntity = gameState.localPlayer && stateData.id === gameState.localPlayer.id;
+                if (!isOwnEntity) {
                     eventBus.emit(EVENTS.PEER_CONNECTED, stateData.id);
                     entity = gameState.managers.entity.getEntity(stateData.id);
                 }

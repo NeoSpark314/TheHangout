@@ -12,6 +12,7 @@ import { MediaManager } from './managers/MediaManager.js';
 import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
 import { RoomManager } from './managers/RoomManager.js';
+import { SpectatorEntity } from './entities/SpectatorEntity.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
 
@@ -45,9 +46,14 @@ async function bootstrap() {
     playerInitialized = true;
 
     // Stop cinematic menu rotation
-    gameState.managers.render.switchToPlayerView();
-
-    gameState.managers.player.init(id);
+    if (gameState.isDedicatedHost) {
+      gameState.managers.render.switchToSpectatorView();
+      const spectator = new SpectatorEntity(id);
+      gameState.managers.entity.addEntity(spectator);
+    } else {
+      gameState.managers.render.switchToPlayerView();
+      gameState.managers.player.init(id);
+    }
   };
 
   eventBus.on(EVENTS.HOST_READY, (id) => initPlayerOnce(id));

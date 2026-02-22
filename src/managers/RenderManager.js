@@ -89,6 +89,13 @@ export class RenderManager {
         // Don't reset position here as LocalPlayer.js initialization will snap it to (0, 1.6, 0)
     }
 
+    switchToSpectatorView() {
+        this.isMenuMode = false;
+        // Position at an elevated overview point
+        this.cameraGroup.position.set(0, 8, 10);
+        this.camera.rotation.set(-0.4, Math.PI, 0, 'YXZ');
+    }
+
     update(delta) {
         if (!this.isMenuMode) return;
 

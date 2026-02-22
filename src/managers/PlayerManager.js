@@ -15,6 +15,12 @@ export class PlayerManager {
     }
 
     init(id) {
+        if (gameState.isDedicatedHost) {
+            console.log('[PlayerManager] Dedicated Host mode — skipping local player init.');
+            this.initialized = true;
+            return;
+        }
+
         console.log('[PlayerManager] Initializing Local Player with ID:', id);
 
         // Get procedural spawn point
@@ -35,6 +41,12 @@ export class PlayerManager {
     }
 
     onPeerConnected(peerId) {
+        // Don't spawn a RemotePlayer for the dedicated host — they have no avatar
+        if (gameState.roomConfig?.isDedicatedHost && peerId === gameState.roomId) {
+            console.log(`[PlayerManager] Skipping avatar for dedicated host ${peerId}`);
+            return;
+        }
+
         console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
         const rp = new RemotePlayer(peerId);
 

@@ -10,6 +10,7 @@ export class UIManager {
         this.nameInput = document.getElementById('player-name');
 
         this.createBtn = document.getElementById('create-btn');
+        this.dedicatedHostBtn = document.getElementById('dedicated-host-btn');
         this.joinBtn = document.getElementById('join-btn');
         this.roomInput = document.getElementById('room-id');
         this.copyRoomBtn = document.getElementById('copy-room-btn');
@@ -215,11 +216,13 @@ export class UIManager {
 
     disableAllButtons() {
         if (this.createBtn) this.createBtn.disabled = true;
+        if (this.dedicatedHostBtn) this.dedicatedHostBtn.disabled = true;
         if (this.joinBtn) this.joinBtn.disabled = true;
     }
 
     enableAllButtons() {
         if (this.createBtn) this.createBtn.disabled = false;
+        if (this.dedicatedHostBtn) this.dedicatedHostBtn.disabled = false;
         if (this.joinBtn) this.joinBtn.disabled = false;
     }
 
@@ -275,6 +278,32 @@ export class UIManager {
             // Pass custom ID to CREATE_ROOM event
             eventBus.emit(EVENTS.CREATE_ROOM, customId);
         });
+
+        // Dedicated Host Flow
+        if (this.dedicatedHostBtn) {
+            this.dedicatedHostBtn.addEventListener('click', async () => {
+                gameState.playerName = 'Host';
+
+                // Auto-activate voice if enabled
+                if (gameState.voiceEnabled) {
+                    this.ensureAudioContextResumed();
+                    await gameState.managers.media.toggleMicrophone();
+                }
+
+                const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
+
+                this.disableAllButtons();
+                this.clearError();
+                this.saveToStorage();
+
+                gameState.isHost = true;
+                gameState.isDedicatedHost = true;
+                gameState.roomConfig.isDedicatedHost = true;
+                this.setStatus('Creating dedicated room...');
+
+                eventBus.emit(EVENTS.CREATE_ROOM, customId);
+            });
+        }
 
         // Join Room Flow
         this.joinBtn.addEventListener('click', async () => {
@@ -347,8 +376,8 @@ export class UIManager {
 
                 if (this.leaveBtn) this.leaveBtn.style.display = 'flex';
 
-                // Show mobile joysticks if on phone/tablet
-                if (this.isMobile) {
+                // Show mobile joysticks if on phone/tablet (not for spectator)
+                if (this.isMobile && !gameState.isDedicatedHost) {
                     const hud = document.getElementById('mobile-hud');
                     if (hud) {
                         hud.style.display = 'flex';
@@ -376,6 +405,7 @@ export class UIManager {
         if (this.roomInput && this.roomInput.offsetParent) elements.push(this.roomInput);
         if (this.copyRoomBtn && this.copyRoomBtn.offsetParent) elements.push(this.copyRoomBtn);
         if (this.createBtn && this.createBtn.offsetParent) elements.push(this.createBtn);
+        if (this.dedicatedHostBtn && this.dedicatedHostBtn.offsetParent) elements.push(this.dedicatedHostBtn);
         if (this.joinBtn && this.joinBtn.offsetParent) elements.push(this.joinBtn);
         if (this.voiceBtn && this.voiceBtn.offsetParent) elements.push(this.voiceBtn);
 
@@ -432,7 +462,10 @@ export class UIManager {
             });
         }
 
-        // 4. Show Overlay
+        // 4. Reset dedicated host flag
+        gameState.isDedicatedHost = false;
+
+        // 5. Show Overlay
         this.showOverlay();
 
         this.setStatus('Ready');
