@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
@@ -29,10 +30,12 @@ export class PhysicsManager {
      */
     createGround(size = 50) {
         if (!this.world) return;
-        // Ground is a thin box. We set its top surface at y=0.
-        // half-height is 0.1, so we translate down by 0.1.
-        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, 0.1, size)
-            .setTranslation(0, -0.1, 0);
+        // Visual floor is at y = -0.05.
+        // We create a 1m thick ground collider.
+        // Top surface should be at -0.05, so center is at -0.05 - 0.5 = -0.55.
+        const halfHeight = 0.5;
+        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, halfHeight, size)
+            .setTranslation(0, -0.05 - halfHeight, 0);
         this.world.createCollider(groundColliderDesc);
     }
 
@@ -65,8 +68,8 @@ export class PhysicsManager {
     }
 
     /**
-     * Create a rigid body hexagon (cylinder-like) and register it for sync.
-     * Often used for the central table.
+     * Create a hexagonal collision shape by overlapping three cuboids.
+     * This is generally more stable than a convex hull for flat surfaces.
      */
     createHexagon(radius, height, position, mesh, isStatic = false) {
         if (!this.world) return;
@@ -77,35 +80,35 @@ export class PhysicsManager {
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
-        // Generate vertices for a 6-sided prism (hexagon)
-        const vertices = new Float32Array(12 * 3); // 6 top + 6 bottom vertices
+        // A hexagon can be approximated by 3 overlapping cuboids rotated by 60 degrees.
+        // For a radius R (center to vertex), the width of the cuboid (face to face) is R * sqrt(3).
+        // Wait, CylinderGeometry radius is center-to-vertex.
+        // So width of one rectangle is Radius * 2, and the other dimension is Radius * sqrt(3).
         const hh = height / 2;
+        const hx = radius;               // length (vertex to vertex)
+        const hz = radius * 0.866;       // width (face to face / 2) -> R * sin(60)
 
-        for (let i = 0; i < 6; i++) {
-            // Align with Three.js CylinderGeometry (radialSegments: 6)
-            // Three.js uses (x = sin, z = cos) which starts at (0, R)
-            const angle = (i / 6) * Math.PI * 2;
-            const x = Math.sin(angle) * radius;
-            const z = Math.cos(angle) * radius;
+        // Create 3 colliders at the same position but rotated
+        const baseDesc = RAPIER.ColliderDesc.cuboid(hx, hh, hz);
 
-            // Top vertex
-            vertices[i * 3] = x;
-            vertices[i * 3 + 1] = hh;
-            vertices[i * 3 + 2] = z;
+        // 0 degrees
+        this.world.createCollider(baseDesc, rigidBody);
 
-            // Bottom vertex
-            vertices[(i + 6) * 3] = x;
-            vertices[(i + 6) * 3 + 1] = -hh;
-            vertices[(i + 6) * 3 + 2] = z;
-        }
+        // 60 degrees (rotate around Y)
+        const q60 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 3);
+        const desc60 = RAPIER.ColliderDesc.cuboid(hx, hh, hz)
+            .setRotation({ x: q60.x, y: q60.y, z: q60.z, w: q60.w });
+        this.world.createCollider(desc60, rigidBody);
 
-        const colliderDesc = RAPIER.ColliderDesc.convexHull(vertices);
-        this.world.createCollider(colliderDesc, rigidBody);
+        // 120 degrees
+        const q120 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 2 * Math.PI / 3);
+        const desc120 = RAPIER.ColliderDesc.cuboid(hx, hh, hz)
+            .setRotation({ x: q120.x, y: q120.y, z: q120.z, w: q120.w });
+        this.world.createCollider(desc120, rigidBody);
 
         if (!isStatic) {
             const entityId = `physics-hexagon-${this.nextPhysicsId++}`;
             const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
-
             if (gameState.managers.entity) {
                 gameState.managers.entity.addEntity(physicsEntity);
             }

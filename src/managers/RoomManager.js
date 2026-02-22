@@ -482,7 +482,7 @@ export class RoomManager {
         const cubeSize = 0.12;
         const cubeCount = 6;
         const tableRadius = 1.0; // Arrange cubes in a circle on the table
-        const tableY = 1.15;     // Just above the table surface
+        const tableY = 1.85;     // Higher up so they drop to the table
 
         const colors = [
             0xff0055, // Hot pink

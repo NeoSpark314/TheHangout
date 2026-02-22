@@ -210,10 +210,16 @@ export class PhysicsEntity extends NetworkEntity {
 
                 // ONLY snap physics if the visual mesh has moved enough to matter.
                 // This allows Rapier to put the body to SLEEP if the network state is stationary.
-                // Threshold increased to be more permissive of sleep.
-                if (dsq > 0.0005) {
+                // Threshold increased to 0.001 (1mm) to be more permissive of sleep.
+                if (dsq > 0.001) {
                     this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, true);
                     this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, true);
+                } else if (!this.rigidBody.isSleeping()) {
+                    // If we are very close to target and not moving, help it sleep
+                    const linvel = this.rigidBody.linvel();
+                    if (Math.abs(linvel.x) < 0.01 && Math.abs(linvel.y) < 0.01 && Math.abs(linvel.z) < 0.01) {
+                        this.rigidBody.sleep();
+                    }
                 }
             }
         }
