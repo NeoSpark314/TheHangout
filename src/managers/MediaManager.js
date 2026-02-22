@@ -8,6 +8,12 @@ export class MediaManager {
         this.localStream = null;
         this.calls = new Map(); // peerId -> mediaConnection
 
+        // --- Audio Analysis for Mouth Animation ---
+        this.audioContext = null;
+        this.localSource = null;
+        this.localAnalyser = null;
+        this.freqData = null;
+
         // Listen for new connections so we can dial them if we have an active mic
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => {
             if (this.localStream && gameState.managers.network && gameState.managers.network.peer) {
@@ -39,6 +45,16 @@ export class MediaManager {
             this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             console.log('[MediaManager] Microphone access granted.');
 
+            // Setup local analyser
+            if (!this.audioContext) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            this.localSource = this.audioContext.createMediaStreamSource(this.localStream);
+            this.localAnalyser = this.audioContext.createAnalyser();
+            this.localAnalyser.fftSize = 32; // Smallest for performance
+            this.localSource.connect(this.localAnalyser);
+            this.freqData = new Uint8Array(this.localAnalyser.frequencyBinCount);
+
             // Hang up any stale calls just in case
             for (const call of this.calls.values()) {
                 call.close();
@@ -63,6 +79,13 @@ export class MediaManager {
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => track.stop());
             this.localStream = null;
+
+            if (this.localSource) {
+                this.localSource.disconnect();
+                this.localSource = null;
+            }
+            this.localAnalyser = null;
+
             console.log('[MediaManager] Microphone stopped.');
 
             // Close all active outbound/inbound calls
@@ -120,5 +143,19 @@ export class MediaManager {
             console.error(`[MediaManager] Call error with ${call.peer}:`, err);
             this.calls.delete(call.peer);
         });
+    }
+
+    /**
+     * @returns {number} Normalized 0-1 volume level
+     */
+    getLocalVolume() {
+        if (!this.localAnalyser) return 0;
+        this.localAnalyser.getByteFrequencyData(this.freqData);
+        let sum = 0;
+        for (let i = 0; i < this.freqData.length; i++) {
+            sum += this.freqData[i];
+        }
+        const volume = sum / this.freqData.length;
+        return Math.min(1.0, volume / 128.0); // Simple thresholded normalization
     }
 }

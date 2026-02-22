@@ -244,6 +244,23 @@ export class StickFigureView extends EntityView {
             this.updateArms(leftArmPos, rightArmPos);
         }
 
+        // Mouth Animation (Voice-Reactive Scaling)
+        if (state.audioLevel !== undefined) {
+            // Apply volume to mouth scale
+            // audioLevel is normalized 0-1. We scale Y (height) for an "opening" effect.
+            // Minimum scale is 1 (closed/flat), Max is 5-8 range.
+            const targetMouthScale = 1.0 + (state.audioLevel * 10.0);
+
+            // Smooth the scaling to avoid flickering
+            const animLerp = 0.5; // Snap faster for responsiveness
+            this.mouth.scale.y = THREE.MathUtils.lerp(this.mouth.scale.y, targetMouthScale, animLerp);
+
+            // If very quiet, snap back to default
+            if (state.audioLevel < 0.05) {
+                this.mouth.scale.y = 1.0;
+            }
+        }
+
         // Name
         if (state.name !== undefined && state.name !== this._lastName) {
             this._lastName = state.name;
@@ -271,6 +288,8 @@ export class StickFigureView extends EntityView {
                     child.material[5].color.copy(colorObj);
                 } else if (child.name === 'wrist') {
                     child.material.color.copy(colorObj);
+                } else if (child === this.mouth || child === this.leftEye || child === this.rightEye) {
+                    // Do not tint facial features, keep them black
                 }
             }
             if (child.isMesh && (child.material.name === 'jointMat' || child.geometry.type === 'BoxGeometry')) {

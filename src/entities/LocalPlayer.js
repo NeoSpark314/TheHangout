@@ -153,6 +153,7 @@ export class LocalPlayer extends PlayerEntity {
             name: this.name,
             color: gameState.avatarConfig.color,
             isLocal: true,
+            audioLevel: gameState.managers.media ? gameState.managers.media.getLocalVolume() : 0,
             lerpFactor: 1.0
         }, delta);
 

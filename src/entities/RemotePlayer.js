@@ -34,9 +34,10 @@ export class RemotePlayer extends PlayerEntity {
         // Start somewhat high up
         this.mesh.position.copy(this.targetPosition);
 
-        // --- Positional Audio ---
+        // --- Positional Audio & Analysis ---
         this.positionalAudio = null;
         this.audioElement = null;
+        this.audioAnalyser = null;
 
         const { render } = gameState.managers;
         if (render?.audioListener) {
@@ -70,6 +71,9 @@ export class RemotePlayer extends PlayerEntity {
                     this.audioElement.play().catch(e => console.warn('[RemotePlayer] Auto-play blocked for hidden audio:', e));
 
                     this.positionalAudio.setMediaStreamSource(data.stream);
+
+                    // Setup analyser for mouth animation
+                    this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
                 } catch (e) {
                     console.error('[RemotePlayer] Failed to set media stream source:', e);
                 }
@@ -134,6 +138,9 @@ export class RemotePlayer extends PlayerEntity {
 
         const lerpFactor = 15 * delta; // Increased from 10 to 15 for better snappiness
 
+        // Get volume level for mouth animation
+        const audioLevel = this.audioAnalyser ? this.audioAnalyser.getAverageFrequency() / 128.0 : 0;
+
         // Push state to view — view handles all interpolation and rendering
         // SYNC FIX [PHASE 3]: We pass the raw network target (this.headState.quaternion) 
         // directly to the view. If we slerp it here first, we get a "double slerp" 
@@ -146,6 +153,7 @@ export class RemotePlayer extends PlayerEntity {
             handStates: this.handStates,
             name: this.name,
             color: this.avatarColor,
+            audioLevel: audioLevel,
             lerpFactor: lerpFactor
         }, delta);
     }
