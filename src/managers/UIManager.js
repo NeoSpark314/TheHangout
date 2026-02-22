@@ -175,9 +175,25 @@ export class UIManager {
         const storedColor = localStorage.getItem('hangout_avatarColor');
         if (storedColor) {
             gameState.avatarConfig.color = storedColor;
-            if (this.avatarColorInput) this.avatarColorInput.value = storedColor;
-            this.updateAvatarButtonColor(storedColor);
+        } else {
+            // Generate a vibrant cyberpunk color if none exists
+            const palette = [
+                '#00ffff', // Cyber Cyan
+                '#ff00ff', // Neon Pink
+                '#39ff14', // Neon Green
+                '#fffd01', // Neon Yellow
+                '#ff3131', // Neon Red
+                '#bc13fe', // Neon Purple
+                '#ff5e00', // Neon Orange
+                '#00ff08'  // Matrix Green
+            ];
+            const randomColor = palette[Math.floor(Math.random() * palette.length)];
+            gameState.avatarConfig.color = randomColor;
+            localStorage.setItem('hangout_avatarColor', randomColor);
         }
+
+        if (this.avatarColorInput) this.avatarColorInput.value = gameState.avatarConfig.color;
+        this.updateAvatarButtonColor(gameState.avatarConfig.color);
 
         // Initialize gameState immediately
         gameState.playerName = this.nameInput.value.trim();
