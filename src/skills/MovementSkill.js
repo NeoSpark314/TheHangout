@@ -49,13 +49,13 @@ export class MovementSkill extends Skill {
 
         this._onCanvasClick = () => {
             const { render } = gameState.managers;
-            const isVR = render?.renderer?.xr?.isPresenting;
+            const isVR = render?.isXRPresenting();
             if (!isVR) canvas.requestPointerLock();
         };
 
         this._onMouseMove = (e) => {
             const { render } = gameState.managers;
-            const isVR = render?.renderer?.xr?.isPresenting;
+            const isVR = render?.isXRPresenting();
 
             if (document.pointerLockElement === canvas && !isVR) {
                 this.applyTurn(player, -e.movementX * this.turnSpeed);
@@ -73,7 +73,7 @@ export class MovementSkill extends Skill {
         const { render } = gameState.managers;
         if (!render) return;
 
-        const isVR = render.renderer.xr.isPresenting;
+        const isVR = render.isXRPresenting();
 
         // --- 1. ORIENTATION (Pitch Only) ---
         if (!isVR) {

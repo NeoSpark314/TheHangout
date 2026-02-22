@@ -141,6 +141,28 @@ export class RenderManager {
         this.scene.remove(object3D);
     }
 
+    // --- XR Convenience Accessors ---
+
+    isXRPresenting() {
+        return this.renderer.xr.isPresenting;
+    }
+
+    getXRSession() {
+        return this.renderer.xr.getSession();
+    }
+
+    getXRFrame() {
+        return this.renderer.xr.getFrame();
+    }
+
+    getXRReferenceSpace() {
+        return this.renderer.xr.getReferenceSpace();
+    }
+
+    getXRController(index) {
+        return this.renderer.xr.getController(index);
+    }
+
     onWindowResize() {
         const width = window.innerWidth;
         const height = window.innerHeight;

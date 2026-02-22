@@ -45,13 +45,13 @@ export class GrabSkill extends Skill {
 
     update(delta, player) {
         const { render } = gameState.managers;
-        if (!render || !render.renderer.xr.isPresenting) return;
+        if (!render || !render.isXRPresenting()) return;
 
-        const session = render.renderer.xr.getSession();
+        const session = render.getXRSession();
         if (!session) return;
 
-        const frame = render.renderer.xr.getFrame();
-        const referenceSpace = render.renderer.xr.getReferenceSpace();
+        const frame = render.getXRFrame();
+        const referenceSpace = render.getXRReferenceSpace();
         if (!frame || !referenceSpace) return;
 
         // Get all grabbable entities
