@@ -69,6 +69,30 @@ export class StickFigureView extends EntityView {
         if (this.isLocal) this.headMesh.visible = false;
         this.mesh.add(this.headMesh);
 
+        // 1a. Facial Features (Eyes & Mouth)
+        const featureMat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black features
+
+        // Eyes
+        const eyeGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8);
+        eyeGeom.rotateX(Math.PI / 2); // Point forward
+
+        this.leftEye = new THREE.Mesh(eyeGeom, featureMat);
+        this.leftEye.position.set(-0.07, headSize * 0.7, -(headDepth / 2 + 0.01)); // Moved to negative Z
+        this.headMesh.add(this.leftEye);
+
+        this.rightEye = new THREE.Mesh(eyeGeom, featureMat);
+        this.rightEye.position.set(0.07, headSize * 0.7, -(headDepth / 2 + 0.01)); // Moved to negative Z
+        this.headMesh.add(this.rightEye);
+
+        // Mouth
+        const mouthGeom = new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8);
+        mouthGeom.rotateZ(Math.PI / 2); // Horizontal
+        mouthGeom.rotateX(Math.PI / 2); // Face forward
+
+        this.mouth = new THREE.Mesh(mouthGeom, featureMat);
+        this.mouth.position.set(0, headSize * 0.3, -(headDepth / 2 + 0.01));
+        this.headMesh.add(this.mouth);
+
         // 2. Torso
         const torsoGeom = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, 1.5, 0),
