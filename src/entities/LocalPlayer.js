@@ -116,6 +116,9 @@ export class LocalPlayer extends PlayerEntity {
         // 2. Map VR Hands
         this.updateVRHands();
 
+        // 2b. Map Desktop Hands (IK follow held object)
+        this.updateDesktopHands();
+
         // 3. Compute visual state and push to view
         const headWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(headWorldPos);
@@ -230,6 +233,37 @@ export class LocalPlayer extends PlayerEntity {
                     handPoseObj.quaternion.copy(pose.transform.orientation);
                 }
             }
+        }
+    }
+
+    /**
+     * Desktop fallback: If holding an object with mouse/keyboard,
+     * position the avatar's hand to reach for it.
+     */
+    updateDesktopHands() {
+        const { render } = gameState.managers;
+        if (!render || render.renderer.xr.isPresenting) return;
+
+        const grabSkill = this.getSkill('grab');
+        if (grabSkill && grabSkill.desktopHeld) {
+            const heldObj = grabSkill.desktopHeld;
+            
+            // Hand follows object in world space, but we need it local to avatar mesh
+            this.mesh.updateMatrixWorld(true);
+            
+            // Right hand reaches out
+            this.handStates.right.active = true;
+            this.handStates.right.position.copy(heldObj.mesh.position);
+            this.mesh.worldToLocal(this.handStates.right.position);
+            
+            // Apply slight offset so hand isn't perfectly centered in the cube
+            this.handStates.right.position.y -= 0.05;
+            this.handStates.right.position.z += 0.05;
+
+            // Hand rotation follows head/camera yaw
+            this.handStates.right.quaternion.copy(this.view.headMesh.quaternion);
+
+            // Left hand remains in relaxed idle (active = false)
         }
     }
 
