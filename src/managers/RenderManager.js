@@ -91,9 +91,11 @@ export class RenderManager {
 
     switchToSpectatorView() {
         this.isMenuMode = false;
+        // Reset all rotations to avoid compound issues from menu mode
+        this.cameraGroup.rotation.set(0, 0, 0);
+        this.camera.rotation.set(0, 0, 0);
         // Position at an elevated overview point
         this.cameraGroup.position.set(0, 8, 10);
-        this.camera.rotation.set(-0.4, Math.PI, 0, 'YXZ');
     }
 
     update(delta) {

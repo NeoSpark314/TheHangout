@@ -84,7 +84,8 @@ export class HUDManager {
 
         this.playerNames = [];
         if (gameState.playerName) {
-            this.playerNames.push(`${gameState.playerName} (YOU)`);
+            const suffix = gameState.isDedicatedHost ? '(SPECTATOR)' : '(YOU)';
+            this.playerNames.push(`${gameState.isDedicatedHost ? 'Host' : gameState.playerName} ${suffix}`);
         }
 
         const entities = entityMgr.entities;
