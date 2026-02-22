@@ -48,7 +48,7 @@ async function bootstrap() {
     // Stop cinematic menu rotation
     if (gameState.isDedicatedHost) {
       gameState.managers.render.switchToSpectatorView();
-      const spectator = new SpectatorEntity(id);
+      const spectator = new SpectatorEntity(id, true);
       gameState.managers.entity.addEntity(spectator);
     } else {
       gameState.managers.render.switchToPlayerView();

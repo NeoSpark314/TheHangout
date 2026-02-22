@@ -4,28 +4,43 @@ import { NetworkEntity } from './NetworkEntity.js';
 import gameState from '../core/GameState.js';
 
 /**
- * A lightweight entity for the Dedicated Host.
- * Shows a small floating orb indicator and provides free-fly spectator camera.
- * Broadcasts position so guests can see where the host is.
+ * Dedicated Host spectator entity.
+ *
+ * Follows the Unified Entity Pattern (see NetworkEntity.js):
+ *   Authority  (host)  → free-fly camera controls, broadcasts position
+ *   Non-Auth   (guest) → receives position, lerps orb smoothly
+ *
+ * Both modes share the same visual: a glowing orb with a spinning ring
+ * and a "HOST" name tag.
  */
 export class SpectatorEntity extends NetworkEntity {
-    constructor(id) {
-        super(id, 'SPECTATOR', true); // Authoritative — broadcasts position
-
-        this.moveSpeed = 8;
-        this.lookSpeed = 0.002;
-        this.pitch = 0;
-        this.yaw = 0;
-        this.isPointerLocked = false;
+    constructor(id, isAuthority = false) {
+        super(id, 'SPECTATOR', isAuthority);
 
         this.mesh = null;
+        this.ring = null;
+
+        // Non-authority interpolation target
+        this.targetPosition = new THREE.Vector3(0, 8, 10);
+
+        // Authority-only: camera control state
+        if (this.isAuthority) {
+            this.moveSpeed = 8;
+            this.lookSpeed = 0.002;
+            this.pitch = 0;
+            this.yaw = 0;
+            this.isPointerLocked = false;
+        }
+
         this.initVisual();
-        this.initControls();
+
+        if (this.isAuthority) {
+            this.initControls();
+        }
     }
 
-    /**
-     * Create a small floating orb as the host's visual indicator.
-     */
+    // ─── Visual (shared by both modes) ───────────────────────────────
+
     initVisual() {
         const { render } = gameState.managers;
         if (!render) return;
@@ -50,13 +65,7 @@ export class SpectatorEntity extends NetworkEntity {
         this.ring = new THREE.Mesh(ringGeometry, ringMaterial);
         this.mesh.add(this.ring);
 
-        // Name tag "HOST"
-        this.createNameTag();
-
-        render.add(this.mesh);
-    }
-
-    createNameTag() {
+        // "HOST" name tag
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = 256;
@@ -74,11 +83,16 @@ export class SpectatorEntity extends NetworkEntity {
 
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-        this.nameSprite = new THREE.Sprite(spriteMaterial);
-        this.nameSprite.scale.set(0.5, 0.125, 1);
-        this.nameSprite.position.y = 0.35;
-        this.mesh.add(this.nameSprite);
+        const nameSprite = new THREE.Sprite(spriteMaterial);
+        nameSprite.scale.set(0.5, 0.125, 1);
+        nameSprite.position.y = 0.35;
+        this.mesh.add(nameSprite);
+
+        this.mesh.position.copy(this.targetPosition);
+        render.add(this.mesh);
     }
+
+    // ─── Authority-only: camera controls ─────────────────────────────
 
     initControls() {
         const { render } = gameState.managers;
@@ -86,7 +100,6 @@ export class SpectatorEntity extends NetworkEntity {
 
         const canvas = render.renderer.domElement;
 
-        // Pointer lock for mouse look
         canvas.addEventListener('click', () => {
             if (!this.isPointerLocked) {
                 canvas.requestPointerLock();
@@ -97,7 +110,6 @@ export class SpectatorEntity extends NetworkEntity {
             this.isPointerLocked = document.pointerLockElement === canvas;
         });
 
-        // Mouse look
         document.addEventListener('mousemove', (e) => {
             if (!this.isPointerLocked) return;
             this.yaw -= e.movementX * this.lookSpeed;
@@ -106,59 +118,73 @@ export class SpectatorEntity extends NetworkEntity {
         });
     }
 
+    // ─── Update (branches on authority) ──────────────────────────────
+
     update(delta) {
+        if (this.isAuthority) {
+            this.updateAuthority(delta);
+        } else {
+            this.updateRemote(delta);
+        }
+
+        // Shared: spin the ring
+        if (this.ring) {
+            this.ring.rotation.x += delta * 1.5;
+            this.ring.rotation.y += delta * 0.8;
+        }
+    }
+
+    /** Authority: drive camera, sync orb position to camera. */
+    updateAuthority(delta) {
         const { render, input } = gameState.managers;
         if (!render || !input) return;
 
-        // Get movement from InputManager (keyboard/gamepad)
         const moveVec = input.getMovementVector();
 
-        // Build directional vectors from yaw
         const forward = new THREE.Vector3(
-            -Math.sin(this.yaw),
-            0,
-            -Math.cos(this.yaw)
+            -Math.sin(this.yaw), 0, -Math.cos(this.yaw)
         );
         const right = new THREE.Vector3(
-            Math.cos(this.yaw),
-            0,
-            -Math.sin(this.yaw)
+            Math.cos(this.yaw), 0, -Math.sin(this.yaw)
         );
 
-        // Apply movement to cameraGroup
         const velocity = new THREE.Vector3();
         velocity.addScaledVector(forward, -moveVec.y * this.moveSpeed * delta);
         velocity.addScaledVector(right, moveVec.x * this.moveSpeed * delta);
         render.cameraGroup.position.add(velocity);
 
-        // Apply rotation to cameraGroup (not camera, to avoid compound rotations)
         render.cameraGroup.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
 
-        // Update orb position to follow camera
+        // Sync orb to camera world position
         if (this.mesh) {
             const camWorldPos = new THREE.Vector3();
             render.camera.getWorldPosition(camWorldPos);
             this.mesh.position.copy(camWorldPos);
-
-            // Make ring slowly spin for visual flair
-            if (this.ring) {
-                this.ring.rotation.x += delta * 1.5;
-                this.ring.rotation.y += delta * 0.8;
-            }
         }
     }
 
+    /** Non-authority: lerp orb toward received target position. */
+    updateRemote(delta) {
+        if (!this.mesh) return;
+        this.mesh.position.lerp(this.targetPosition, 8 * delta);
+    }
+
+    // ─── Network (Unified Entity Pattern) ────────────────────────────
+
     getNetworkState() {
         if (!this.mesh) return null;
-
         return {
             p: [this.mesh.position.x, this.mesh.position.y, this.mesh.position.z]
         };
     }
 
     setNetworkState(state) {
-        // Spectator doesn't receive state from others
+        if (state.p) {
+            this.targetPosition.set(state.p[0], state.p[1], state.p[2]);
+        }
     }
+
+    // ─── Cleanup ─────────────────────────────────────────────────────
 
     destroy() {
         super.destroy();
@@ -175,7 +201,7 @@ export class SpectatorEntity extends NetworkEntity {
             });
         }
 
-        if (document.pointerLockElement) {
+        if (this.isAuthority && document.pointerLockElement) {
             document.exitPointerLock();
         }
     }

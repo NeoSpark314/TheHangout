@@ -1,7 +1,31 @@
 // entities/NetworkEntity.js
-
 /**
- * Base class/interface for all entities that exist in the synced game world.
+ * UNIFIED ENTITY PATTERN
+ * ═══════════════════════
+ * Every entity that exists in the synced game world extends this class.
+ * Each subclass handles BOTH roles in a single class via `isAuthority`:
+ *
+ *   Authority (isAuthority = true):
+ *     - This client "owns" the entity and simulates it (physics, input, AI, etc.)
+ *     - getNetworkState() serializes the entity's current state for broadcast
+ *     - update() drives the entity from local sources (camera, input, physics engine)
+ *
+ *   Non-Authority (isAuthority = false):
+ *     - Another client owns this entity; we just render it
+ *     - setNetworkState(state) applies received state (snap or interpolation target)
+ *     - update() interpolates visuals toward the received target state
+ *
+ * Authority can TRANSFER at runtime (e.g., grab transfers a prop from host to grabber).
+ * The SAME mesh and visual setup are used in both modes.
+ *
+ * This pattern means adding a new synced entity (gun, vehicle, NPC) requires only:
+ *   1. Extend NetworkEntity
+ *   2. Implement getNetworkState() / setNetworkState() / update()
+ *   3. Register with EntityManager — sync happens automatically
+ *
+ * Canonical example: PhysicsEntity, SpectatorEntity
+ * Current exception: LocalPlayer / RemotePlayer (split justified by complexity;
+ *   350+ lines of VR tracking & skills vs 200 lines of interpolation)
  */
 export class NetworkEntity {
     constructor(id, type, isAuthority = false) {
