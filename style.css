@@ -193,6 +193,31 @@ body {
     width: 100%;
 }
 
+/* Network mode indicator */
+.network-mode-badge {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 4px 12px;
+    border-radius: 3px;
+}
+
+.network-mode-badge.local {
+    color: #00ff64;
+    background: rgba(0, 255, 100, 0.1);
+    border: 1px solid rgba(0, 255, 100, 0.3);
+    text-shadow: 0 0 5px rgba(0, 255, 100, 0.5);
+}
+
+.network-mode-badge.cloud {
+    color: var(--primary-color);
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.3);
+}
+
 .input-with-icon {
     display: flex;
     gap: 5px;

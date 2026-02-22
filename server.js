@@ -16,31 +16,45 @@ import { execSync } from 'child_process';
 import { ExpressPeerServer } from 'peer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 9000;
+const PORT = process.env.PORT || 443;
 
-// --- SSL Setup (openssl self-signed cert) ---
-const certDir = path.join(__dirname, '.certs');
-const keyPath = path.join(certDir, 'key.pem');
-const certPath = path.join(certDir, 'cert.pem');
+// --- SSL Setup ---
+// Use custom certs via env vars, or auto-generate self-signed
+const customKey = process.env.SSL_KEY;
+const customCert = process.env.SSL_CERT;
 
-if (!fs.existsSync(certDir)) {
-    fs.mkdirSync(certDir, { recursive: true });
+let sslOptions;
+
+if (customKey && customCert) {
+    console.log(`[Server] Using custom SSL cert: ${customCert}`);
+    sslOptions = {
+        key: fs.readFileSync(customKey),
+        cert: fs.readFileSync(customCert)
+    };
+} else {
+    // Auto-generate self-signed cert
+    const certDir = path.join(__dirname, '.certs');
+    const keyPath = path.join(certDir, 'key.pem');
+    const certPath = path.join(certDir, 'cert.pem');
+
+    if (!fs.existsSync(certDir)) {
+        fs.mkdirSync(certDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+        console.log('[Server] Generating self-signed SSL certificate via openssl...');
+        execSync(
+            `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/CN=localhost" -config NUL`,
+            { stdio: 'inherit' }
+        );
+        console.log('[Server] SSL certificate generated.');
+    }
+
+    sslOptions = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+    };
 }
-
-if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-    console.log('[Server] Generating self-signed SSL certificate via openssl...');
-    // -config NUL bypasses the missing openssl.cnf on Windows
-    execSync(
-        `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/CN=localhost" -config NUL`,
-        { stdio: 'inherit' }
-    );
-    console.log('[Server] SSL certificate generated.');
-}
-
-const sslOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
-};
 
 // --- Express App ---
 const app = express();
