@@ -282,8 +282,6 @@ export class UIManager {
         // Dedicated Host Flow
         if (this.dedicatedHostBtn) {
             this.dedicatedHostBtn.addEventListener('click', async () => {
-                gameState.playerName = 'Host';
-
                 // Auto-activate voice if enabled
                 if (gameState.voiceEnabled) {
                     this.ensureAudioContextResumed();
@@ -296,6 +294,8 @@ export class UIManager {
                 this.clearError();
                 this.saveToStorage();
 
+                // Force name AFTER saveToStorage (which overwrites from input field)
+                gameState.playerName = 'Host';
                 gameState.isHost = true;
                 gameState.isDedicatedHost = true;
                 gameState.roomConfig.isDedicatedHost = true;

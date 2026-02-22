@@ -123,6 +123,12 @@ export class HUDManager {
         if (this.notifications.length !== initialCount) {
             this.draw();
         }
+
+        // Periodically refresh participant list (catches auto-spawned entities)
+        if (!this._lastListRefresh || now - this._lastListRefresh > 2000) {
+            this._lastListRefresh = now;
+            this.updatePlayerList();
+        }
     }
 
     draw() {

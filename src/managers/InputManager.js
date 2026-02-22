@@ -7,7 +7,8 @@ import { VirtualJoystick } from '../utils/VirtualJoystick.js';
 export class InputManager {
     constructor() {
         this.keyboard = {
-            w: false, a: false, s: false, d: false
+            w: false, a: false, s: false, d: false,
+            q: false, e: false
         };
 
         this.joysticks = {

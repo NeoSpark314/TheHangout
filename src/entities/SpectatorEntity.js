@@ -151,6 +151,11 @@ export class SpectatorEntity extends NetworkEntity {
         const velocity = new THREE.Vector3();
         velocity.addScaledVector(forward, -moveVec.y * this.moveSpeed * delta);
         velocity.addScaledVector(right, moveVec.x * this.moveSpeed * delta);
+
+        // Q/E for vertical movement
+        if (input.keyboard.e) velocity.y += this.moveSpeed * delta;
+        if (input.keyboard.q) velocity.y -= this.moveSpeed * delta;
+
         render.cameraGroup.position.add(velocity);
 
         render.cameraGroup.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
