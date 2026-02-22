@@ -39,6 +39,7 @@ export class PhysicsEntity extends NetworkEntity {
         }
 
         this.lerpFactor = 0.2; // Smoothing Factor
+        this._vCheck = new THREE.Vector3(); // Reuse for distance checks
 
         // Initial authority sync
         this.syncAuthority();
@@ -185,16 +186,35 @@ export class PhysicsEntity extends NetworkEntity {
             }
         } else {
             // Non-authoritative: Interpolate visuals toward target state
-            this.mesh.position.lerp(this.targetPos, this.lerpFactor);
-            this.mesh.quaternion.slerp(this.targetRot, this.lerpFactor);
+            const distSq = this.mesh.position.distanceToSquared(this.targetPos);
+            const angleDiff = this.mesh.quaternion.angleTo(this.targetRot);
+
+            // Only lerp if we are above a "settle" threshold to prevent micro-jitter
+            if (distSq > 0.00001) {
+                this.mesh.position.lerp(this.targetPos, this.lerpFactor);
+            } else {
+                this.mesh.position.copy(this.targetPos);
+            }
+
+            if (angleDiff > 0.001) {
+                this.mesh.quaternion.slerp(this.targetRot, this.lerpFactor);
+            } else {
+                this.mesh.quaternion.copy(this.targetRot);
+            }
 
             // Keep physics body somewhat synced to visual for local collisions
-            // But don't let it fight the network updates
             if (this.rigidBody.bodyType() === RAPIER.RigidBodyType.Dynamic) {
-                // For dynamic props we don't own, we snap the physics body to the network position 
-                // so subsequent local physics steps start from a sane place.
-                this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, true);
-                this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, true);
+                const bodyPos = this.rigidBody.translation();
+                this._vCheck.set(bodyPos.x, bodyPos.y, bodyPos.z);
+                const dsq = this.mesh.position.distanceToSquared(this._vCheck);
+
+                // ONLY snap physics if the visual mesh has moved enough to matter.
+                // This allows Rapier to put the body to SLEEP if the network state is stationary.
+                // Threshold increased to be more permissive of sleep.
+                if (dsq > 0.0005) {
+                    this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, true);
+                    this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, true);
+                }
             }
         }
     }

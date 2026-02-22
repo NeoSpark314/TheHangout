@@ -29,7 +29,10 @@ export class PhysicsManager {
      */
     createGround(size = 50) {
         if (!this.world) return;
-        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, 0.1, size);
+        // Ground is a thin box. We set its top surface at y=0.
+        // half-height is 0.1, so we translate down by 0.1.
+        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, 0.1, size)
+            .setTranslation(0, -0.1, 0);
         this.world.createCollider(groundColliderDesc);
     }
 
@@ -79,9 +82,11 @@ export class PhysicsManager {
         const hh = height / 2;
 
         for (let i = 0; i < 6; i++) {
+            // Align with Three.js CylinderGeometry (radialSegments: 6)
+            // Three.js uses (x = sin, z = cos) which starts at (0, R)
             const angle = (i / 6) * Math.PI * 2;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
+            const x = Math.sin(angle) * radius;
+            const z = Math.cos(angle) * radius;
 
             // Top vertex
             vertices[i * 3] = x;
@@ -124,7 +129,9 @@ export class PhysicsManager {
 
         const hs = size / 2; // half-extent
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(position.x, position.y, position.z);
+            .setTranslation(position.x, position.y, position.z)
+            .setLinearDamping(0.5)
+            .setAngularDamping(0.5);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
