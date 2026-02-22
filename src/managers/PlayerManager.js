@@ -1,10 +1,18 @@
 // managers/PlayerManager.js
+
 import { LocalPlayer } from '../entities/LocalPlayer.js';
 import { RemotePlayer } from '../entities/RemotePlayer.js';
+import { StickFigureView } from '../views/StickFigureView.js';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 
+/**
+ * Manages player lifecycle: spawns/despawns local and remote player entities.
+ *
+ * Creates the appropriate view (visual) for each player and wires it up
+ * to the entity via constructor injection.
+ */
 export class PlayerManager {
     constructor() {
         this.initialized = false;
@@ -26,35 +34,50 @@ export class PlayerManager {
         // Get procedural spawn point
         let spawnIndex = 0; // Host is always 0
         if (!gameState.isHost) {
-            // Guests are indexed based on their order in connections
             spawnIndex = gameState.managers.network.connections.size;
         }
 
         const spawn = gameState.managers.room.getSpawnPoint(spawnIndex);
 
-        gameState.localPlayer = new LocalPlayer(id, spawn.position, spawn.yaw);
+        // Create view and entity
+        const view = new StickFigureView({
+            color: gameState.avatarConfig.color || 0x00ffff,
+            isLocal: true
+        });
 
-        // Register the local player with the EntityManager.
+        gameState.localPlayer = new LocalPlayer(id, spawn.position, spawn.yaw, view);
+
+        // Add view to scene, register entity
+        const { render } = gameState.managers;
+        if (render) {
+            view.addToScene(render.scene);
+        }
         gameState.managers.entity.addEntity(gameState.localPlayer);
 
         this.initialized = true;
     }
 
     onPeerConnected(peerId) {
-        // Don't spawn a RemotePlayer for the dedicated host — they have no avatar
+        // Don't spawn a RemotePlayer for the dedicated host
         if (gameState.roomConfig?.isDedicatedHost && peerId === gameState.roomId) {
             console.log(`[PlayerManager] Skipping avatar for dedicated host ${peerId}`);
             return;
         }
 
         console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
-        const rp = new RemotePlayer(peerId);
 
-        // Remote players will be positioned by their network state, 
-        // so we don't strictly need to set spawn point here, 
-        // but it helps if we wanted an instant visual placeholder.
+        // Create view and entity
+        const view = new StickFigureView({
+            color: 0xff00ff,
+            isLocal: false
+        });
 
-        // Use EntityManager instead of manual map
+        const rp = new RemotePlayer(peerId, view);
+
+        const { render } = gameState.managers;
+        if (render) {
+            view.addToScene(render.scene);
+        }
         gameState.managers.entity.addEntity(rp);
     }
 

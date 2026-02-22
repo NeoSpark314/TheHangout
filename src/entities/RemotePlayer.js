@@ -1,43 +1,70 @@
+// entities/RemotePlayer.js
+
 import * as THREE from 'three';
-import { Avatar } from './Avatar.js';
 import { PlayerEntity } from './PlayerEntity.js';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
 
+/**
+ * A remote player entity — driven by network state updates.
+ * Authority is always false (another client owns this).
+ *
+ * Rendering is delegated to this.view (typically StickFigureView).
+ */
 export class RemotePlayer extends PlayerEntity {
-    constructor(peerId) {
+    /**
+     * @param {string} peerId
+     * @param {import('../views/EntityView.js').EntityView} view - Pluggable visual
+     */
+    constructor(peerId, view) {
         super(peerId, 'REMOTE_PLAYER', false);
         this.peerId = peerId;
+
+        // --- Visual ---
+        this.view = view;
+        this.mesh = view.mesh;
 
         // Physical Interpolation targets
         this.targetPosition = new THREE.Vector3(0, 5, 0);
         this.targetYaw = 0;
 
-        // PlayerEntity provides this.headHeight, this.headState, and this.handStates
-        // We will use them as our network interpolation targets
-
         this.lastNetworkUpdateTime = performance.now();
 
-        this.initAvatar();
+        // Start somewhat high up
+        this.mesh.position.copy(this.targetPosition);
+
+        // --- Positional Audio ---
+        this.positionalAudio = null;
+        this.audioElement = null;
+
+        const { render } = gameState.managers;
+        if (render?.audioListener) {
+            this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
+            this.positionalAudio.setRefDistance(3);
+            this.positionalAudio.setRolloffFactor(1.0);
+            this.positionalAudio.setDistanceModel('exponential');
+            // Attach audio to the head so it comes from their mouth
+            this.view.headMesh.add(this.positionalAudio);
+        }
 
         this.onVoiceStream = this.onVoiceStream.bind(this);
         eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
+
+        console.log(`[RemotePlayer] Created avatar for ${this.peerId}`);
     }
 
     onVoiceStream(data) {
         if (data.peerId === this.peerId) {
             console.log(`[RemotePlayer] Attaching voice stream to avatar ${this.peerId}`);
             if (this.positionalAudio) {
-                // Remove old stream if it exists
                 if (this.positionalAudio.hasPlaybackControl) {
                     this.positionalAudio.stop();
                 }
                 try {
-                    // Chrome WebRTC Bug Workaround: WebAudio stream is silent unless attached to a playing HTML element
                     if (!this.audioElement) {
                         this.audioElement = new Audio();
-                        this.audioElement.muted = true; // VERY important: mute HTML audio so we only hear PositionalAudio 
+                        this.audioElement.muted = true;
                     }
                     this.audioElement.srcObject = data.stream;
                     this.audioElement.play().catch(e => console.warn('[RemotePlayer] Auto-play blocked for hidden audio:', e));
@@ -50,45 +77,14 @@ export class RemotePlayer extends PlayerEntity {
         }
     }
 
-    initAvatar() {
-        const { render } = gameState.managers;
-        if (!render) return;
-
-        this.avatar = new Avatar({ color: 0xff00ff, isLocal: false });
-        this.mesh = this.avatar.mesh;
-
-        // Start somewhat high up
-        this.mesh.position.copy(this.targetPosition);
-
-        // Setup Positional Audio
-        if (render.audioListener) {
-            this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
-            this.positionalAudio.setRefDistance(3); // Start dropping volume at 3 meters
-            this.positionalAudio.setRolloffFactor(1.0); // Slower dropoff curve
-            this.positionalAudio.setDistanceModel('exponential');
-            // Attach audio to the head so it comes from their mouth
-            this.avatar.headMesh.add(this.positionalAudio);
-        }
-
-        render.add(this.mesh);
-
-        console.log(`[RemotePlayer] Created advanced stick-figure avatar for ${this.peerId}`);
-    }
-
     setNetworkState(data) {
         if (data.name !== undefined && data.name !== this.name) {
             this.name = data.name;
-            if (this.avatar) {
-                this.avatar.setName(this.name);
-            }
             eventBus.emit(EVENTS.REMOTE_NAME_UPDATED, { peerId: this.peerId, name: this.name });
         }
 
         if (data.avatarConfig && data.avatarConfig.color !== this.avatarColor) {
             this.avatarColor = data.avatarConfig.color;
-            if (this.avatar) {
-                this.avatar.setColor(this.avatarColor);
-            }
         }
 
         if (data.position) this.targetPosition.set(data.position.x, data.position.y, data.position.z);
@@ -129,7 +125,7 @@ export class RemotePlayer extends PlayerEntity {
     update(delta) {
         if (!this.mesh) return;
 
-        // Timeout tracking: If no updates for 5 seconds, mark for destruction (Peer JS missed close event)
+        // Timeout tracking
         if (performance.now() - this.lastNetworkUpdateTime > 5000) {
             console.warn(`[RemotePlayer] Player ${this.peerId} timed out. Destroying.`);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, this.peerId);
@@ -138,40 +134,21 @@ export class RemotePlayer extends PlayerEntity {
 
         const lerpFactor = 10 * delta;
 
-        // 1. Interpolate Body Position/Yaw
-        this.mesh.position.lerp(this.targetPosition, lerpFactor);
-        const targetQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.targetYaw, 0, 'YXZ'));
-        this.mesh.quaternion.slerp(targetQuaternion, lerpFactor);
-
-        // 2. Interpolate Head & Height
-        this.currentHeadHeight = THREE.MathUtils.lerp(this.currentHeadHeight || 1.7, this.headHeight, lerpFactor);
-        this.avatar.updatePosture(this.currentHeadHeight);
-
-        // Apply relative slerped head quaternion
-        const currentHeadQuat = this.avatar.headMesh.quaternion.clone();
+        // Compute head quaternion for interpolation
+        const currentHeadQuat = this.view.headMesh.quaternion.clone();
         currentHeadQuat.slerp(this.headState.quaternion, lerpFactor);
-        this.avatar.updateHeadOrientation(currentHeadQuat);
 
-        // 3. Update Arms IK
-        const leftLocal = this.handStates.left.position.clone();
-        const rightLocal = this.handStates.right.position.clone();
-
-        if (!this.handStates.left.active) {
-            leftLocal.set(-0.35, 0.85, 0.1);
-        }
-        if (!this.handStates.right.active) {
-            rightLocal.set(0.35, 0.85, 0.1);
-        }
-
-        this.avatar.updateWristMarkers(this.handStates.left, this.handStates.right, lerpFactor);
-
-        // We still need the active local position for the arm IK, 
-        // the wrist markers themselves handle visual toggling.
-        // We override the default local pos if active to point to the wrist marker.
-        if (this.handStates.left.active) leftLocal.copy(this.avatar.getLeftWristMarkerPosition());
-        if (this.handStates.right.active) rightLocal.copy(this.avatar.getRightWristMarkerPosition());
-
-        this.avatar.updateArms(leftLocal, rightLocal);
+        // Push state to view — view handles all interpolation and rendering
+        this.view.update({
+            position: this.targetPosition,
+            yaw: this.targetYaw,
+            headHeight: this.headHeight,
+            headQuaternion: currentHeadQuat,
+            handStates: this.handStates,
+            name: this.name,
+            color: this.avatarColor,
+            lerpFactor: lerpFactor
+        }, delta);
     }
 
     destroy() {
@@ -191,13 +168,13 @@ export class RemotePlayer extends PlayerEntity {
             if (this.positionalAudio.source) {
                 this.positionalAudio.disconnect();
             }
-            this.avatar.headMesh.remove(this.positionalAudio);
+            this.view.headMesh.remove(this.positionalAudio);
         }
 
         const { render } = gameState.managers;
-        if (render && this.mesh) {
-            render.remove(this.mesh);
-            this.avatar.destroy();
+        if (render && this.view) {
+            this.view.removeFromScene(render.scene);
+            this.view.destroy();
         }
     }
 }

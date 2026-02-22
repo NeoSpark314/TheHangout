@@ -2,14 +2,26 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { NetworkEntity } from './NetworkEntity.js';
 import gameState from '../core/GameState.js';
-import { PACKET_TYPES, EVENTS } from '../utils/Constants.js';
-import eventBus from '../core/EventBus.js';
+import { PACKET_TYPES } from '../utils/Constants.js';
 
 export class PhysicsEntity extends NetworkEntity {
+    /**
+     * @param {string} id
+     * @param {boolean} isAuthority
+     * @param {THREE.Mesh} mesh
+     * @param {RAPIER.RigidBody} rigidBody
+     * @param {Object} [options]
+     * @param {boolean} [options.grabbable]
+     * @param {THREE.Vector3} [options.spawnPosition]
+     * @param {import('../views/EntityView.js').EntityView} [options.view] - Optional pluggable visual
+     */
     constructor(id, isAuthority, mesh, rigidBody, options = {}) {
         super(id, 'PHYSICS_PROP', isAuthority);
         this.mesh = mesh;
         this.rigidBody = rigidBody;
+
+        // Optional view for visual effects (highlights, etc.)
+        this.view = options.view || null;
 
         // Grabbable properties
         this.grabbable = options.grabbable || false;
@@ -17,13 +29,6 @@ export class PhysicsEntity extends NetworkEntity {
             ? new THREE.Vector3().copy(options.spawnPosition)
             : null;
         this.heldBy = null; // player ID of holder, or null
-
-        // Store original emissive for highlight restoration
-        if (this.mesh && this.mesh.material) {
-            this._originalEmissive = this.mesh.material.emissive
-                ? this.mesh.material.emissive.clone()
-                : new THREE.Color(0x000000);
-        }
 
         // --- Optimized Sync State ---
         this.ownerId = null; // null = host (default)
@@ -153,15 +158,11 @@ export class PhysicsEntity extends NetworkEntity {
 
     /**
      * Set a highlight on this entity (for grab proximity feedback).
+     * Delegates to the view if one is attached.
      */
     setHighlight(on) {
-        if (!this.mesh || !this.mesh.material || !this.mesh.material.emissive) return;
-        if (on) {
-            this.mesh.material.emissive.set(0xffffff);
-            this.mesh.material.emissiveIntensity = 0.5;
-        } else {
-            this.mesh.material.emissive.copy(this._originalEmissive);
-            this.mesh.material.emissiveIntensity = 1.0;
+        if (this.view?.setHighlight) {
+            this.view.setHighlight(on);
         }
     }
 

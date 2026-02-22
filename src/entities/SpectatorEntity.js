@@ -1,4 +1,5 @@
 // entities/SpectatorEntity.js
+
 import * as THREE from 'three';
 import { NetworkEntity } from './NetworkEntity.js';
 import gameState from '../core/GameState.js';
@@ -8,17 +9,21 @@ import gameState from '../core/GameState.js';
  *
  * Follows the Unified Entity Pattern (see NetworkEntity.js):
  *   Authority  (host)  → free-fly camera controls, broadcasts position
- *   Non-Auth   (guest) → receives position, lerps orb smoothly
+ *   Non-Auth   (guest) → receives position, view lerps orb smoothly
  *
- * Both modes share the same visual: a glowing orb with a spinning ring
- * and a "HOST" name tag.
+ * Rendering delegated to this.view (typically SpectatorView).
  */
 export class SpectatorEntity extends NetworkEntity {
-    constructor(id, isAuthority = false) {
+    /**
+     * @param {string} id
+     * @param {boolean} isAuthority
+     * @param {import('../views/EntityView.js').EntityView} view - Pluggable visual
+     */
+    constructor(id, isAuthority = false, view) {
         super(id, 'SPECTATOR', isAuthority);
 
-        this.mesh = null;
-        this.ring = null;
+        this.view = view;
+        this.mesh = view?.mesh ?? null;
 
         // Non-authority interpolation target
         this.targetPosition = new THREE.Vector3(0, 8, 10);
@@ -30,66 +35,12 @@ export class SpectatorEntity extends NetworkEntity {
             this.pitch = 0;
             this.yaw = 0;
             this.isPointerLocked = false;
-        }
-
-        this.initVisual();
-
-        if (this.isAuthority) {
             this.initControls();
         }
-    }
 
-    // ─── Visual (shared by both modes) ───────────────────────────────
-
-    initVisual() {
-        const { render } = gameState.managers;
-        if (!render) return;
-
-        // Glowing orb
-        const geometry = new THREE.SphereGeometry(0.15, 16, 16);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xff00ff,
-            transparent: true,
-            opacity: 0.7
-        });
-        this.mesh = new THREE.Mesh(geometry, material);
-
-        // Halo ring
-        const ringGeometry = new THREE.RingGeometry(0.2, 0.25, 32);
-        const ringMaterial = new THREE.MeshBasicMaterial({
-            color: 0xff00ff,
-            transparent: true,
-            opacity: 0.4,
-            side: THREE.DoubleSide
-        });
-        this.ring = new THREE.Mesh(ringGeometry, ringMaterial);
-        this.mesh.add(this.ring);
-
-        // "HOST" name tag
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 256;
-        canvas.height = 64;
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.roundRect(0, 0, canvas.width, canvas.height, 10);
-        ctx.fill();
-
-        ctx.font = 'bold 36px Inter, Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ff00ff';
-        ctx.fillText('HOST', canvas.width / 2, canvas.height / 2);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-        const nameSprite = new THREE.Sprite(spriteMaterial);
-        nameSprite.scale.set(0.5, 0.125, 1);
-        nameSprite.position.y = 0.35;
-        this.mesh.add(nameSprite);
-
-        this.mesh.position.copy(this.targetPosition);
-        render.add(this.mesh);
+        if (this.mesh) {
+            this.mesh.position.copy(this.targetPosition);
+        }
     }
 
     // ─── Authority-only: camera controls ─────────────────────────────
@@ -127,10 +78,13 @@ export class SpectatorEntity extends NetworkEntity {
             this.updateRemote(delta);
         }
 
-        // Shared: spin the ring
-        if (this.ring) {
-            this.ring.rotation.x += delta * 1.5;
-            this.ring.rotation.y += delta * 0.8;
+        // Let the view handle its own animations (ring spin, etc.)
+        if (this.view) {
+            const position = this.mesh ? this.mesh.position : this.targetPosition;
+            this.view.update({
+                position: position,
+                lerpFactor: 1.0
+            }, delta);
         }
     }
 
@@ -152,12 +106,10 @@ export class SpectatorEntity extends NetworkEntity {
         velocity.addScaledVector(forward, -moveVec.y * this.moveSpeed * delta);
         velocity.addScaledVector(right, moveVec.x * this.moveSpeed * delta);
 
-        // Q/E for vertical movement
         if (input.keyboard.e) velocity.y += this.moveSpeed * delta;
         if (input.keyboard.q) velocity.y -= this.moveSpeed * delta;
 
         render.cameraGroup.position.add(velocity);
-
         render.cameraGroup.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
 
         // Sync orb to camera world position
@@ -199,15 +151,9 @@ export class SpectatorEntity extends NetworkEntity {
         super.destroy();
 
         const { render } = gameState.managers;
-        if (render && this.mesh) {
-            render.remove(this.mesh);
-            this.mesh.traverse((child) => {
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (child.material.map) child.material.map.dispose();
-                    child.material.dispose();
-                }
-            });
+        if (render && this.view) {
+            this.view.removeFromScene(render.scene);
+            this.view.destroy();
         }
 
         if (this.isAuthority && document.pointerLockElement) {

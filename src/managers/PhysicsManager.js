@@ -121,8 +121,12 @@ export class PhysicsManager {
 
     /**
      * Create a grabbable dynamic rigid body and register it
+     * @param {number} size - Cube side length
+     * @param {Object} position - {x, y, z}
+     * @param {THREE.Mesh} mesh
+     * @param {import('../views/EntityView.js').EntityView} [view] - Optional visual
      */
-    createGrabbable(size, position, mesh) {
+    createGrabbable(size, position, mesh, view) {
         if (!this.world) return null;
 
         const hs = size / 2; // half-extent
@@ -143,7 +147,8 @@ export class PhysicsManager {
         const entityId = `grabbable-${this.nextPhysicsId++}`;
         const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody, {
             grabbable: true,
-            spawnPosition: position
+            spawnPosition: position,
+            view: view || null
         });
 
         if (gameState.managers.entity) {

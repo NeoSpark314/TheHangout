@@ -13,6 +13,7 @@ import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
 import { RoomManager } from './managers/RoomManager.js';
 import { SpectatorEntity } from './entities/SpectatorEntity.js';
+import { SpectatorView } from './views/SpectatorView.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
 
@@ -62,7 +63,9 @@ async function bootstrap() {
     // Stop cinematic menu rotation
     if (gameState.isDedicatedHost) {
       gameState.managers.render.switchToSpectatorView();
-      const spectator = new SpectatorEntity(id, true);
+      const view = new SpectatorView();
+      const spectator = new SpectatorEntity(id, true, view);
+      view.addToScene(gameState.managers.render.scene);
       gameState.managers.entity.addEntity(spectator);
     } else {
       gameState.managers.render.switchToPlayerView();

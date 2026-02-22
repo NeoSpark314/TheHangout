@@ -1,5 +1,6 @@
+// entities/LocalPlayer.js
+
 import * as THREE from 'three';
-import { Avatar } from './Avatar.js';
 import { PlayerEntity } from './PlayerEntity.js';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
@@ -7,20 +8,35 @@ import { EVENTS } from '../utils/Constants.js';
 import { MovementSkill } from '../skills/MovementSkill.js';
 import { GrabSkill } from '../skills/GrabSkill.js';
 
+/**
+ * The local player entity — driven by local input, camera, and XR tracking.
+ * Authority is always true (we own ourselves).
+ *
+ * Rendering is delegated to this.view (an EntityView subclass, typically StickFigureView).
+ * The view is injected via the constructor, keeping entity logic decoupled from visuals.
+ */
 export class LocalPlayer extends PlayerEntity {
-    constructor(id, spawnPos, spawnYaw) {
+    /**
+     * @param {string} id
+     * @param {THREE.Vector3} spawnPos
+     * @param {number} spawnYaw
+     * @param {import('../views/EntityView.js').EntityView} view - Pluggable visual
+     */
+    constructor(id, spawnPos, spawnYaw, view) {
         super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
+
+        // --- Visual ---
+        this.view = view;
+        this.mesh = view.mesh;
 
         // --- Skill System ---
         this.skills = [];
         this.activeSkill = null;
 
         // --- Clean Architecture Transforms ---
-        // xrOrigin is the physical center of the room (pinned to y=0)
         this.xrOrigin = new THREE.Object3D();
         if (spawnPos) this.xrOrigin.position.copy(spawnPos);
 
-        // These poses are relative to the xrOrigin
         this.headPose = new THREE.Object3D();
         this.leftHandPose = new THREE.Object3D();
         this.rightHandPose = new THREE.Object3D();
@@ -39,7 +55,13 @@ export class LocalPlayer extends PlayerEntity {
         // Internal: set by MovementSkill so update() can check if movement happened
         this._lastMoveVector = new THREE.Vector3();
 
-        this.initAvatar();
+        // Listen for live customization updates
+        eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config) => {
+            if (this.view) {
+                this.view.setColor(config.color);
+            }
+        });
+
         this.initSkills(spawnYaw);
     }
 
@@ -63,7 +85,6 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     setActiveSkill(id) {
-        // Deactivate current non-always-active skill
         if (this.activeSkill && !this.activeSkill.alwaysActive) {
             this.activeSkill.deactivate(this);
         }
@@ -77,24 +98,6 @@ export class LocalPlayer extends PlayerEntity {
 
     getSkill(id) {
         return this.skills.find(s => s.id === id);
-    }
-
-    // --- Avatar ---
-
-    initAvatar() {
-        const { render } = gameState.managers;
-        if (!render) return;
-
-        this.avatar = new Avatar({ color: gameState.avatarConfig.color || 0x00ffff, isLocal: true });
-        this.mesh = this.avatar.mesh;
-        render.add(this.mesh);
-
-        // Listen for live customization updates
-        eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config) => {
-            if (this.avatar) {
-                this.avatar.setColor(config.color);
-            }
-        });
     }
 
     // --- Main Update ---
@@ -113,38 +116,41 @@ export class LocalPlayer extends PlayerEntity {
         // 2. Map VR Hands
         this.updateVRHands();
 
-        // 3. Visual Avatar
+        // 3. Compute visual state and push to view
         const headWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(headWorldPos);
         const finalHeadQuat = new THREE.Quaternion();
         render.camera.getWorldQuaternion(finalHeadQuat);
         const finalHeadEuler = new THREE.Euler().setFromQuaternion(finalHeadQuat, 'YXZ');
 
-        // Avatar feet pinned to ground exactly below head
-        this.mesh.position.set(headWorldPos.x, 0, headWorldPos.z);
-        this.avatar.updatePosture(headWorldPos.y);
-
         // Body heading follows head world yaw
-        this.mesh.rotation.y = finalHeadEuler.y;
+        const bodyYaw = finalHeadEuler.y;
 
-        // Neck rotation (absolute head orientation relative to body yaw)
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, finalHeadEuler.y, 0, 'YXZ'));
+        // Neck rotation (head orientation relative to body yaw)
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const localHeadQuat = bodyQuat.invert().multiply(finalHeadQuat);
-        this.avatar.updateHeadOrientation(localHeadQuat);
 
-        // 4. Transform Hands to Local Avatar Space
+        // Transform VR hands to avatar-local space
         this.transformHandsToAvatarSpace();
 
-        // Update Avatar IK
-        this.avatar.updateWristMarkers(this.handStates.left, this.handStates.right, 1.0);
+        // Sync name
+        this.syncName();
 
-        const leftArmPos = this.handStates.left.active ? this.avatar.getLeftWristMarkerPosition() : new THREE.Vector3(-0.35, 0.85, 0.1);
-        const rightArmPos = this.handStates.right.active ? this.avatar.getRightWristMarkerPosition() : new THREE.Vector3(0.35, 0.85, 0.1);
-        this.avatar.updateArms(leftArmPos, rightArmPos);
+        // Push complete state to view
+        this.view.update({
+            position: new THREE.Vector3(headWorldPos.x, 0, headWorldPos.z),
+            yaw: bodyYaw,
+            headHeight: headWorldPos.y,
+            headQuaternion: localHeadQuat,
+            handStates: this.handStates,
+            name: this.name,
+            color: gameState.avatarConfig.color,
+            isLocal: true,
+            lerpFactor: 1.0
+        }, delta);
 
-        // 5. Network
+        // 4. Network
         if (this._lastMoveVector.lengthSq() > 0 || Math.abs(delta) > 0) {
-            this.syncName();
             eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
         }
     }
@@ -152,7 +158,6 @@ export class LocalPlayer extends PlayerEntity {
     syncName() {
         if (gameState.playerName && this.name !== gameState.playerName) {
             this.name = gameState.playerName;
-            this.avatar.setName(this.name);
         }
     }
 
@@ -331,7 +336,6 @@ export class LocalPlayer extends PlayerEntity {
     destroy() {
         super.destroy();
 
-        // Destroy all skills
         for (const skill of this.skills) {
             skill.destroy();
         }
@@ -339,9 +343,9 @@ export class LocalPlayer extends PlayerEntity {
         this.activeSkill = null;
 
         const { render } = gameState.managers;
-        if (render && this.mesh) {
-            render.remove(this.mesh);
-            this.avatar.destroy();
+        if (render && this.view) {
+            this.view.removeFromScene(render.scene);
+            this.view.destroy();
         }
     }
 }
