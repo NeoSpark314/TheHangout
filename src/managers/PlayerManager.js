@@ -49,9 +49,12 @@ export class PlayerManager {
     }
 
     onPeerConnected(peerId) {
-        // Don't spawn a RemotePlayer for the dedicated host
-        if (gameState.roomConfig?.isDedicatedHost && peerId === gameState.roomId) {
-            console.log(`[PlayerManager] Skipping avatar for dedicated host ${peerId}`);
+        // [SYNC FIX] REFINED JOIN SEQUENCE:
+        // If we are a guest, and this is the host connecting, STOP eager spawning.
+        // We wait for the Host to send its first state update packet to determine 
+        // if it's a PLAYER (RemotePlayer) or a SPECTATOR (Dedicated Host).
+        if (!gameState.isHost && peerId === gameState.roomId) {
+            console.log(`[PlayerManager] Deferring avatar spawn for host ${peerId} until state update.`);
             return;
         }
 

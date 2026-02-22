@@ -132,18 +132,17 @@ export class RemotePlayer extends PlayerEntity {
             return;
         }
 
-        const lerpFactor = 10 * delta;
-
-        // Compute head quaternion for interpolation
-        const currentHeadQuat = this.view.headMesh.quaternion.clone();
-        currentHeadQuat.slerp(this.headState.quaternion, lerpFactor);
+        const lerpFactor = 15 * delta; // Increased from 10 to 15 for better snappiness
 
         // Push state to view — view handles all interpolation and rendering
+        // SYNC FIX [PHASE 3]: We pass the raw network target (this.headState.quaternion) 
+        // directly to the view. If we slerp it here first, we get a "double slerp" 
+        // (entity slerps toward target, view slerps toward entity's current) which feels slow.
         this.view.update({
             position: this.targetPosition,
             yaw: this.targetYaw,
             headHeight: this.headHeight,
-            headQuaternion: currentHeadQuat,
+            headQuaternion: this.headState.quaternion,
             handStates: this.handStates,
             name: this.name,
             color: this.avatarColor,
