@@ -13,15 +13,16 @@ import { EVENTS } from '../utils/Constants.js';
 export class PlayerManager {
     constructor() {
         this.initialized = false;
-
-        // Listen to network events to spawn/despawn remote avatars
-        eventBus.on(EVENTS.PEER_CONNECTED, (peerId) => this.onPeerConnected(peerId));
+        // Spawning is now data-driven via NetworkManager calling handleRemoteEntityDiscovery
         eventBus.on(EVENTS.PEER_DISCONNECTED, (peerId) => this.onPeerDisconnected(peerId));
     }
 
     init(id) {
         if (gameState.isDedicatedHost) {
-            console.log('[PlayerManager] Dedicated Host mode — skipping local player init.');
+            console.log('[PlayerManager] Dedicated Host mode — creating local spectator entity.');
+            // Dedicated host needs an entity so guests can "see" it and finish joining
+            gameState.localPlayer = EntityFactory.createSpectator(id, true);
+            gameState.managers.entity.addEntity(gameState.localPlayer);
             this.initialized = true;
             return;
         }
@@ -48,31 +49,38 @@ export class PlayerManager {
         this.initialized = true;
     }
 
-    onPeerConnected(peerId) {
-        // [SYNC FIX] REFINED JOIN SEQUENCE:
-        // If we are a guest, and this is the host connecting, STOP eager spawning.
-        // We wait for the Host to send its first state update packet to determine 
-        // if it's a PLAYER (RemotePlayer) or a SPECTATOR (Dedicated Host).
-        if (!gameState.isHost && peerId === gameState.roomId) {
-            console.log(`[PlayerManager] Deferring avatar spawn for host ${peerId} until state update.`);
-            return;
+    /**
+     * Data-driven entry point for new entities discovered via network state.
+     */
+    handleRemoteEntityDiscovery(peerId, type) {
+        if (gameState.managers.entity.getEntity(peerId)) return;
+
+        console.log(`[PlayerManager] Discovering remote ${type} for ${peerId}`);
+
+        if (type === 'LOCAL_PLAYER' || type === 'REMOTE_PLAYER') {
+            const rp = EntityFactory.createPlayer(peerId, {
+                isLocal: false,
+                color: 0xff00ff
+            });
+            gameState.managers.entity.addEntity(rp);
+        } else if (type === 'SPECTATOR') {
+            const rs = EntityFactory.createSpectator(peerId, false);
+            gameState.managers.entity.addEntity(rs);
         }
 
-        console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
-
-        // Create entity via factory
-        const rp = EntityFactory.createPlayer(peerId, {
-            isLocal: false,
-            color: 0xff00ff
-        });
-
-        gameState.managers.entity.addEntity(rp);
+        // Notify UI that we've "connected" to something tangible
+        eventBus.emit(EVENTS.PEER_CONNECTED, peerId);
     }
 
     onPeerDisconnected(peerId) {
-        console.log(`[PlayerManager] Removing remote player for ${peerId}`);
         const entity = gameState.managers.entity.getEntity(peerId);
-        const name = entity ? (entity.name || 'Somebody') : 'Somebody';
+        if (!entity || entity.type === 'SPECTATOR') {
+            gameState.managers.entity.removeEntity(peerId);
+            return; // No notification for non-players or non-existent
+        }
+
+        console.log(`[PlayerManager] Removing remote player for ${peerId}`);
+        const name = entity.name || 'Somebody';
 
         gameState.managers.entity.removeEntity(peerId);
 

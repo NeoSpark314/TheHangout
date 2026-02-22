@@ -131,8 +131,8 @@ export class NetworkManager {
                 }
             }
 
-            // Emit connection event so PlayerManager can spawn their avatar
-            eventBus.emit(EVENTS.PEER_CONNECTED, conn.peer);
+            // Spawning is now data-driven: we wait for the first state update 
+            // to arrive in applyStateUpdate before triggering onPeerConnected.
         });
 
         conn.on('data', (data) => {
@@ -230,21 +230,14 @@ export class NetworkManager {
         for (const stateData of entityStates) {
             let entity = gameState.managers.entity.getEntity(stateData.id);
 
-            // Auto-spawn unknown players (learning about them via relayed state updates)
-            if (!entity && (stateData.type === 'LOCAL_PLAYER' || stateData.type === 'REMOTE_PLAYER')) {
-                // Don't auto-spawn ourselves; dedicated host has no localPlayer so always spawn
+            // Unified Data-Driven Discovery
+            if (!entity) {
+                // Don't auto-spawn ourselves
                 const isOwnEntity = gameState.localPlayer && stateData.id === gameState.localPlayer.id;
                 if (!isOwnEntity) {
-                    eventBus.emit(EVENTS.PEER_CONNECTED, stateData.id);
+                    gameState.managers.player.handleRemoteEntityDiscovery(stateData.id, stateData.type);
                     entity = gameState.managers.entity.getEntity(stateData.id);
                 }
-            }
-
-            // Auto-spawn remote spectator for dedicated host
-            if (!entity && stateData.type === 'SPECTATOR') {
-                const rs = EntityFactory.createSpectator(stateData.id, false);
-                gameState.managers.entity.addEntity(rs);
-                entity = rs;
             }
 
             if (entity && !entity.isAuthority) {
