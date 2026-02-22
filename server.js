@@ -14,14 +14,26 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { ExpressPeerServer } from 'peer';
+import { parseArgs } from 'node:util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 443;
+
+// --- CLI args (with env var fallback) ---
+const { values: args } = parseArgs({
+    options: {
+        port: { type: 'string', short: 'p', default: process.env.PORT || '443' },
+        key: { type: 'string', short: 'k', default: process.env.SSL_KEY || '' },
+        cert: { type: 'string', short: 'c', default: process.env.SSL_CERT || '' },
+    },
+    strict: false
+});
+
+const PORT = parseInt(args.port);
 
 // --- SSL Setup ---
-// Use custom certs via env vars, or auto-generate self-signed
-const customKey = process.env.SSL_KEY;
-const customCert = process.env.SSL_CERT;
+// Use custom certs via --key/--cert, or auto-generate self-signed
+const customKey = args.key || null;
+const customCert = args.cert || null;
 
 let sslOptions;
 
