@@ -121,9 +121,14 @@ export class NetworkManager {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
 
-            // If we are the host, send the current room config to the new guest immediately
+            // If we are the host, send the current room config and a world snapshot to the new guest immediately
             if (gameState.isHost) {
                 this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, gameState.roomConfig);
+
+                if (gameState.managers.entity) {
+                    const snapshot = gameState.managers.entity.getWorldSnapshot();
+                    this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
+                }
             }
 
             // Emit connection event so PlayerManager can spawn their avatar
@@ -300,8 +305,10 @@ export class NetworkManager {
         if (authoritativeStates.length === 0) return;
 
         if (gameState.isHost) {
-            // Host broadcasts its authoritative states (e.g. its own player + all physics props) to everyone
-            this.broadcast(PACKET_TYPES.STATE_UPDATE, authoritativeStates);
+            // Host sends state of BOTH authoritative objects (its own) 
+            // AND guest-owned physics objects to maintain eventual consistency for late joiners
+            const allStates = gameState.managers.entity.getWorldSnapshot();
+            this.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
         } else if (gameState.roomId) {
             // Guest sends its authoritative states (player + any owned physics) to the Host
             this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);

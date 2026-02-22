@@ -100,4 +100,26 @@ export class EntityManager {
         }
         return states;
     }
+
+    /**
+     * Gets state for all non-destroyed entities in the scene.
+     * Used by the Host to send initial snapshots to late joiners.
+     * @returns {Array<Object>}
+     */
+    getWorldSnapshot() {
+        const states = [];
+        for (const entity of this.entities.values()) {
+            if (!entity.destroyed) {
+                const state = entity.getNetworkState();
+                if (state) {
+                    states.push({
+                        id: entity.id,
+                        type: entity.type,
+                        state: state
+                    });
+                }
+            }
+        }
+        return states;
+    }
 }

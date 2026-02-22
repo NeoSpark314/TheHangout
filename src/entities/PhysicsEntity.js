@@ -198,7 +198,6 @@ export class PhysicsEntity extends NetworkEntity {
             }
         }
     }
-
     getNetworkState() {
         if (!this.rigidBody) return null;
 
@@ -210,7 +209,8 @@ export class PhysicsEntity extends NetworkEntity {
             p: [pos.x, pos.y, pos.z],
             r: [rot.x, rot.y, rot.z, rot.w],
             v: [vel.x, vel.y, vel.z],
-            h: this.heldBy
+            h: this.heldBy,
+            o: this.ownerId
         };
     }
 
@@ -223,6 +223,12 @@ export class PhysicsEntity extends NetworkEntity {
 
         const wasHeld = this.heldBy;
         this.heldBy = state.h || null;
+
+        // Sync ownership tracking
+        if (state.o !== undefined) {
+            this.ownerId = state.o;
+            this.syncAuthority(); // Apply authority change immediately
+        }
 
         // Sync target for interpolation
         this.targetPos.set(state.p[0], state.p[1], state.p[2]);
