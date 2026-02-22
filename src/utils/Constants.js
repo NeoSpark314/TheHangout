@@ -23,14 +23,18 @@ export const EVENTS = {
     // Render & Logic
     SCENE_READY: 'SCENE_READY',
     PHYSICS_READY: 'PHYSICS_READY',
-    LOCAL_PLAYER_MOVED: 'LOCAL_PLAYER_MOVED'
+    LOCAL_PLAYER_MOVED: 'LOCAL_PLAYER_MOVED',
+    OWNERSHIP_TRANSFERRED: 'OWNERSHIP_TRANSFERRED'
 };
 
 export const PACKET_TYPES = {
     STATE_UPDATE: 0, // Host -> Guests: World state (Transform of all dynamic objects + players)
     PLAYER_INPUT: 1, // Guest -> Host: Controller & Headset positions
     PEER_DISCONNECT: 2, // Host -> Guests: Notification that a peer left
-    ROOM_CONFIG_UPDATE: 3
+    ROOM_CONFIG_UPDATE: 3,
+    OWNERSHIP_REQUEST: 4,  // Guest -> Host: request to own an object
+    OWNERSHIP_RELEASE: 5,  // Guest -> Host: release ownership + final velocity
+    OWNERSHIP_TRANSFER: 6  // Host -> Guests: notify everyone of new owner
 };
 
 export const INPUT_CONFIG = {

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { NetworkEntity } from './NetworkEntity.js';
+import gameState from '../core/GameState.js';
+import { PACKET_TYPES, EVENTS } from '../utils/Constants.js';
+import eventBus from '../core/EventBus.js';
 
 export class PhysicsEntity extends NetworkEntity {
     constructor(id, isAuthority, mesh, rigidBody, options = {}) {
@@ -20,6 +23,97 @@ export class PhysicsEntity extends NetworkEntity {
             this._originalEmissive = this.mesh.material.emissive
                 ? this.mesh.material.emissive.clone()
                 : new THREE.Color(0x000000);
+        }
+
+        // --- Optimized Sync State ---
+        this.ownerId = null; // null = host (default)
+        this.targetPos = new THREE.Vector3();
+        this.targetRot = new THREE.Quaternion();
+
+        // Initialize targets from rigid body if it exists to prevent snapping to (0,0,0)
+        if (this.rigidBody) {
+            const pos = this.rigidBody.translation();
+            const rot = this.rigidBody.rotation();
+            this.targetPos.set(pos.x, pos.y, pos.z);
+            this.targetRot.set(rot.x, rot.y, rot.z, rot.w);
+        }
+
+        this.lerpFactor = 0.2; // Smoothing Factor
+
+        // Initial authority sync
+        this.syncAuthority();
+    }
+
+    /**
+     * Determines if this client should be the authority based on host status and ownership.
+     */
+    syncAuthority() {
+        const localId = gameState.localPlayer?.id || 'local';
+
+        // We are authority if:
+        // 1. We specifically own it (optimistically or confirmed)
+        // 2. NOBODY owns it and we are the host
+        const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && gameState.isHost);
+
+        if (this.isAuthority !== shouldBeAuthority) {
+            console.log(`[PhysicsEntity] ${this.id} authority changing: ${this.isAuthority} -> ${shouldBeAuthority} (owner: ${this.ownerId})`);
+            this.isAuthority = shouldBeAuthority;
+
+            // If we just became non-authoritative, ensure our interpolation targets are sane
+            if (!this.isAuthority && this.rigidBody) {
+                const pos = this.rigidBody.translation();
+                const rot = this.rigidBody.rotation();
+                this.targetPos.set(pos.x, pos.y, pos.z);
+                this.targetRot.set(rot.x, rot.y, rot.z, rot.w);
+            }
+        }
+    }
+
+    /**
+     * Optimistically take ownership and notify host
+     */
+    requestOwnership() {
+        if (this.isAuthority && this.ownerId) return; // Already own it
+
+        console.log(`[PhysicsEntity] Requesting ownership of ${this.id}`);
+        this.ownerId = gameState.localPlayer?.id || 'local';
+        this.syncAuthority(); // Apply immediately
+
+        // Switch to kinematic for local control
+        if (this.rigidBody) {
+            this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        }
+
+        // Notify host via NetworkManager
+        if (gameState.managers.network && !gameState.isHost) {
+            gameState.managers.network.sendData(gameState.roomId, PACKET_TYPES.OWNERSHIP_REQUEST, { id: this.id });
+        }
+    }
+
+    /**
+     * Release ownership and return to host control
+     */
+    releaseOwnership(velocity) {
+        if (!this.isAuthority) return;
+
+        console.log(`[PhysicsEntity] Releasing ownership of ${this.id}`);
+        this.isAuthority = false;
+        this.ownerId = null;
+
+        if (this.rigidBody) {
+            this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+            this.rigidBody.wakeUp();
+            if (velocity) {
+                this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
+            }
+        }
+
+        // Notify host
+        if (gameState.managers.network) {
+            gameState.managers.network.sendData(gameState.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, {
+                id: this.id,
+                v: velocity ? [velocity.x, velocity.y, velocity.z] : [0, 0, 0]
+            });
         }
     }
 
@@ -66,7 +160,13 @@ export class PhysicsEntity extends NetworkEntity {
     }
 
     update(delta) {
-        if (this.rigidBody && this.mesh) {
+        if (!this.rigidBody || !this.mesh) return;
+
+        // Ensure authority is synced (handles initial host detection and ownership changes)
+        this.syncAuthority();
+
+        if (this.isAuthority) {
+            // Authoritative: Drive mesh from physics
             const position = this.rigidBody.translation();
             const rotation = this.rigidBody.rotation();
 
@@ -82,6 +182,19 @@ export class PhysicsEntity extends NetworkEntity {
                 this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
                 this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
                 this.rigidBody.wakeUp();
+            }
+        } else {
+            // Non-authoritative: Interpolate visuals toward target state
+            this.mesh.position.lerp(this.targetPos, this.lerpFactor);
+            this.mesh.quaternion.slerp(this.targetRot, this.lerpFactor);
+
+            // Keep physics body somewhat synced to visual for local collisions
+            // But don't let it fight the network updates
+            if (this.rigidBody.bodyType() === RAPIER.RigidBodyType.Dynamic) {
+                // For dynamic props we don't own, we snap the physics body to the network position 
+                // so subsequent local physics steps start from a sane place.
+                this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, true);
+                this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, true);
             }
         }
     }
@@ -104,11 +217,18 @@ export class PhysicsEntity extends NetworkEntity {
     setNetworkState(state) {
         if (!this.rigidBody || !this.mesh) return;
 
+        // If we are currently the authority, ignore incoming state updates for this entity
+        // (This happens while our ownership request is in flight or relaying)
+        if (this.isAuthority) return;
+
         const wasHeld = this.heldBy;
         this.heldBy = state.h || null;
 
-        // Toggle body type: kinematic while held (no local physics fighting),
-        // dynamic when free (local physics takes over between updates)
+        // Sync target for interpolation
+        this.targetPos.set(state.p[0], state.p[1], state.p[2]);
+        this.targetRot.set(state.r[0], state.r[1], state.r[2], state.r[3]);
+
+        // Toggle body type based on held status
         if (this.heldBy && !wasHeld) {
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
         } else if (!this.heldBy && wasHeld) {
@@ -116,22 +236,15 @@ export class PhysicsEntity extends NetworkEntity {
             this.rigidBody.wakeUp();
         }
 
-        // Snap the visual mesh
-        this.mesh.position.set(state.p[0], state.p[1], state.p[2]);
-        this.mesh.quaternion.set(state.r[0], state.r[1], state.r[2], state.r[3]);
-
-        // Snap the local rigid body
-        if (this.heldBy) {
-            this.rigidBody.setNextKinematicTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] });
-            this.rigidBody.setNextKinematicRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] });
-        } else {
-            this.rigidBody.setTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] }, true);
-            this.rigidBody.setRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] }, true);
-        }
-
         // Apply velocity on release so thrown objects continue moving on remote
         if (!this.heldBy && wasHeld && state.v) {
             this.rigidBody.setLinvel({ x: state.v[0], y: state.v[1], z: state.v[2] }, true);
+        }
+
+        // If it's a kinematic object (held), snap physics body to follow the host's target
+        if (this.heldBy) {
+            this.rigidBody.setNextKinematicTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] });
+            this.rigidBody.setNextKinematicRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] });
         }
     }
 }

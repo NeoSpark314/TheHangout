@@ -108,6 +108,8 @@ export class GrabSkill extends Skill {
                     this.held[hand] = null;
                 } else {
                     // Update held object position to follow hand
+                    // Since the guest now HAS authority locally during grab, 
+                    // this will be picked up by NetworkManager.syncState() and sent to the host.
                     this.held[hand].rigidBody.setNextKinematicTranslation(
                         { x: handWorldPos.x, y: handWorldPos.y, z: handWorldPos.z }
                     );
@@ -121,6 +123,7 @@ export class GrabSkill extends Skill {
                     // Squeeze just started — try to grab nearest
                     const nearest = this._findNearest(grabbables, handWorldPos);
                     if (nearest) {
+                        nearest.requestOwnership(); // Optimistically take control
                         nearest.grab(player.id);
                         this.held[hand] = nearest;
                     }
@@ -212,7 +215,9 @@ export class GrabSkill extends Skill {
 
     _releaseHand(hand) {
         if (this.held[hand]) {
-            this.held[hand].release(new THREE.Vector3(0, 0, 0));
+            const velocity = this._computeThrowVelocity(hand);
+            this.held[hand].release(velocity);
+            this.held[hand].releaseOwnership(velocity);
             this.held[hand] = null;
         }
     }

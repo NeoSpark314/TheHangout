@@ -139,6 +139,11 @@ export class NetworkManager {
             this.connections.delete(conn.peer);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, conn.peer);
 
+            // If we are the host, reclaim any physics objects owned by this peer
+            if (gameState.isHost) {
+                this.reclaimOwnership(conn.peer);
+            }
+
             // If we are a guest and our connection to the host closed, the session is over
             if (!gameState.isHost && conn.peer === gameState.roomId) {
                 console.log('[NetworkManager] Host disconnected. Ending session.');
@@ -198,6 +203,21 @@ export class NetworkManager {
                                 gameState.managers.entity.removeEntity(gameState.roomId);
                             }
                         }
+                    }
+                    break;
+                case PACKET_TYPES.OWNERSHIP_REQUEST:
+                    if (gameState.isHost) {
+                        this.handleOwnershipRequest(senderId, parsed.payload);
+                    }
+                    break;
+                case PACKET_TYPES.OWNERSHIP_RELEASE:
+                    if (gameState.isHost) {
+                        this.handleOwnershipRelease(senderId, parsed.payload);
+                    }
+                    break;
+                case PACKET_TYPES.OWNERSHIP_TRANSFER:
+                    if (!gameState.isHost) {
+                        this.applyOwnershipTransfer(parsed.payload);
                     }
                     break;
                 default:
@@ -283,9 +303,88 @@ export class NetworkManager {
             // Host broadcasts its authoritative states (e.g. its own player + all physics props) to everyone
             this.broadcast(PACKET_TYPES.STATE_UPDATE, authoritativeStates);
         } else if (gameState.roomId) {
-            // Guest sends its authoritative states (just its own player) to the Host
+            // Guest sends its authoritative states (player + any owned physics) to the Host
             this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
         }
+    }
+
+    // --- Ownership Negotiation (Host Only) ---
+
+    handleOwnershipRequest(senderId, payload) {
+        const entity = gameState.managers.entity?.getEntity(payload.id);
+        if (!entity) return;
+
+        // Arbitration Logic: Host decides if request is valid
+        // For now, first-come first-served if not already owned by someone else
+        if (!entity.ownerId || entity.ownerId === senderId) {
+            console.log(`[NetworkManager] Granting ownership of ${entity.id} to ${senderId}`);
+            entity.ownerId = senderId;
+            entity.isAuthority = (senderId === (gameState.localPlayer?.id || 'local')); // Host might be the owner
+
+            // Broadcast transfer to everyone
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, {
+                id: entity.id,
+                ownerId: senderId
+            });
+        } else {
+            console.warn(`[NetworkManager] Denied ownership request for ${entity.id} from ${senderId}. Currently owned by ${entity.ownerId}`);
+            // Explicit rejection not strictly needed; guest will be corrected by next state update
+        }
+    }
+
+    handleOwnershipRelease(senderId, payload) {
+        const entity = gameState.managers.entity?.getEntity(payload.id);
+        if (!entity || entity.ownerId !== senderId) return;
+
+        console.log(`[NetworkManager] Reclaiming ownership of ${entity.id} from ${senderId}`);
+        entity.ownerId = null;
+        entity.isAuthority = true; // Host regains authority
+
+        // Apply final velocity if provided
+        if (payload.v && entity.rigidBody) {
+            entity.rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
+        }
+
+        // Broadcast release to everyone
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, {
+            id: entity.id,
+            ownerId: null
+        });
+    }
+
+    reclaimOwnership(peerId) {
+        if (!gameState.managers.entity) return;
+        for (const entity of gameState.managers.entity.entities.values()) {
+            if (entity.ownerId === peerId) {
+                console.log(`[NetworkManager] Reclaiming ${entity.id} from disconnected peer ${peerId}`);
+                entity.ownerId = null;
+                entity.isAuthority = true;
+
+                // Broadcast to update other guests
+                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, {
+                    id: entity.id,
+                    ownerId: null
+                });
+            }
+        }
+    }
+
+    // --- Ownership Application (Guest Only) ---
+
+    applyOwnershipTransfer(payload) {
+        const entity = gameState.managers.entity?.getEntity(payload.id);
+        if (!entity) return;
+
+        const isLocalOwner = payload.ownerId === (gameState.localPlayer?.id || 'local');
+
+        // If we are getting corrected by the host (e.g. we thought we owned it but host says otherwise),
+        // or if someone else just took ownership, update our local flag.
+        entity.ownerId = payload.ownerId;
+        entity.isAuthority = isLocalOwner;
+
+        console.log(`[NetworkManager] ${entity.id} ownership transferred to ${payload.ownerId || 'Host'}. Local authority: ${entity.isAuthority}`);
+
+        eventBus.emit(EVENTS.OWNERSHIP_TRANSFERRED, payload);
     }
 
     disconnect() {
