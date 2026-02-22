@@ -460,7 +460,7 @@ export class StickFigureView extends EntityView {
             const armDir = armVec.clone().normalize();
             const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
 
-            const segmentLen = 0.4;
+            const segmentLen = 0.32;
             const bendDist = Math.sqrt(Math.max(0, segmentLen * segmentLen - (armLen / 2) * (armLen / 2)));
 
             const side = shoulder.x > 0 ? 1 : -1;
