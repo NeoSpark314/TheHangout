@@ -104,5 +104,10 @@ export class GameEngine {
             gameState.managers.render.update(delta);
             gameState.managers.render.render();
         }
+
+        // 8. Late Update / Cleanup
+        if (gameState.managers.input) {
+            gameState.managers.input.clearJustPressed();
+        }
     }
 }

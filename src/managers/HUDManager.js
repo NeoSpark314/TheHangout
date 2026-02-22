@@ -24,6 +24,9 @@ export class HUDManager {
         this.noteTexture = null;
         this.noteMesh = null;
 
+        // --- Crosshair (Center) ---
+        this.crosshair = null;
+
         this.opacity = 0.8;
         this.notifications = []; // { text, startTime, duration }
         this.maxNotifications = 1; // Only show most recent in the new centered spot? Or stack?
@@ -75,6 +78,19 @@ export class HUDManager {
         this.noteMesh.position.set(0, -0.35, -1.0); // Bottom-Center
         this.group.add(this.noteMesh);
 
+        // --- Crosshair Mesh ---
+        const crosshairGeo = new THREE.RingGeometry(0.002, 0.004, 32);
+        const crosshairMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.5,
+            depthTest: false,
+            depthWrite: false
+        });
+        this.crosshair = new THREE.Mesh(crosshairGeo, crosshairMat);
+        this.crosshair.position.set(0, 0, -1.0); // Dead center
+        this.group.add(this.crosshair);
+
         this.draw();
     }
 
@@ -117,6 +133,13 @@ export class HUDManager {
 
     update() {
         const now = performance.now();
+
+        // Toggle crosshair visibility (hidden in XR)
+        if (this.crosshair) {
+            const isXR = gameState.managers.render?.isXRPresenting();
+            this.crosshair.visible = !isXR;
+        }
+
         const initialCount = this.notifications.length;
         this.notifications = this.notifications.filter(n => (now - n.startTime) < n.duration);
 

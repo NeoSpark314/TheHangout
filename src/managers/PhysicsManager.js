@@ -182,29 +182,10 @@ export class PhysicsManager {
         const maxStepsPerFrame = 5; // Prevent "Spiral of Death" if lag is extreme
 
         while (this.accumulator >= this.fixedTimeStep && stepsRun < maxStepsPerFrame) {
-            this.world.step(this.eventQueue);
+            this.world.step();
             this.accumulator -= this.fixedTimeStep;
             stepsRun++;
         }
-
-        // Drain collision events
-        this.eventQueue.drainContactForceEvents((handle1, handle2, force, maxForce) => {
-            const now = Date.now();
-            const lastTime1 = this.lastCollisionTime.get(handle1) || 0;
-            const lastTime2 = this.lastCollisionTime.get(handle2) || 0;
-
-            if (now - lastTime1 > this.collisionCooldown && now - lastTime2 > this.collisionCooldown) {
-                // Map force to intensity (0 to 1)
-                // Cubes have small mass, so force is low. Normalize around 5.
-                const intensity = Math.min(maxForce / 5, 1.0);
-                
-                if (intensity > 0.02) {
-                    eventBus.emit(EVENTS.ENTITY_COLLIDED, { intensity });
-                    this.lastCollisionTime.set(handle1, now);
-                    this.lastCollisionTime.set(handle2, now);
-                }
-            }
-        });
 
         // Catch up or clear if we're falling too far behind
         if (this.accumulator > this.fixedTimeStep) {

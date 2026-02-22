@@ -10,6 +10,7 @@ export class InputManager {
             w: false, a: false, s: false, d: false,
             q: false, e: false
         };
+        this.justPressed = new Set();
 
         this.joysticks = {
             move: null,
@@ -37,6 +38,9 @@ export class InputManager {
 
     onKey(key, isDown) {
         if (this.keyboard.hasOwnProperty(key)) {
+            if (isDown && !this.keyboard[key]) {
+                this.justPressed.add(key);
+            }
             this.keyboard[key] = isDown;
         }
     }
@@ -56,6 +60,21 @@ export class InputManager {
 
     update(delta) {
         this.pollGamepad(delta);
+    }
+
+    /**
+     * Clear the just-pressed buffer.
+     * Should be called at the end of the game loop.
+     */
+    clearJustPressed() {
+        this.justPressed.clear();
+    }
+
+    /**
+     * Check if a key was JUST pressed this frame.
+     */
+    isKeyPressed(key) {
+        return this.justPressed.has(key);
     }
 
     pollGamepad(delta) {
