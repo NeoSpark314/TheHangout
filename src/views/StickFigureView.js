@@ -52,7 +52,8 @@ export class StickFigureView extends EntityView {
 
         // 1. Head (Box)
         const headSize = 0.3;
-        const headGeometry = new THREE.BoxGeometry(headSize, headSize, headSize);
+        const headDepth = 0.12; // Flattened front-to-back for a funnier look
+        const headGeometry = new THREE.BoxGeometry(headSize, headSize, headDepth);
         headGeometry.translate(0, headSize / 2, 0);
 
         const hairMaterial = new THREE.MeshBasicMaterial({ color: 0x050510 });
