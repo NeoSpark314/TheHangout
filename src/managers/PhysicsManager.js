@@ -12,6 +12,10 @@ export class PhysicsManager {
 
         // Counter for generating sequential IDs for physics entities
         this.nextPhysicsId = 0;
+
+        // Timestep Accumulator
+        this.accumulator = 0;
+        this.fixedTimeStep = 1 / 60;
     }
 
     async init() {
@@ -72,49 +76,37 @@ export class PhysicsManager {
     }
 
     /**
-     * Create a rigid body hexagon (cylinder-like) and register it for sync.
-     * Accurate prismatic hull matching Three.js CylinderGeometry.
+     * Create a hexagonal collision shape using a Cylinder primitive.
+     * Cylinders are much more stable for resting objects than convex hulls.
      */
     createHexagon(radius, height, position, mesh, isStatic = false) {
         if (!this.world) return;
 
         const rigidBodyDesc = isStatic
-            ? RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
-            : RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z);
+            ? RAPIER.RigidBodyDesc.fixed()
+            : RAPIER.RigidBodyDesc.dynamic();
+        rigidBodyDesc.setTranslation(position.x, position.y, position.z);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
-        // Generate 12 vertices (6 top, 6 bottom)
+        // We use a Cylinder primitive. 
+        // Note: Rapier's cylinder is Y-aligned by default.
         const hh = height / 2;
-        const vertices = new Float32Array(12 * 3);
-        for (let i = 0; i < 6; i++) {
-            // Three.js CylinderGeometry orientation: x=sin, z=cos (Z-up-ish internally)
-            const theta = (i / 6) * Math.PI * 2;
-            const x = Math.sin(theta) * radius;
-            const z = Math.cos(theta) * radius;
-
-            // Top
-            vertices[i * 3] = x;
-            vertices[i * 3 + 1] = hh;
-            vertices[i * 3 + 2] = z;
-
-            // Bottom
-            vertices[(i + 6) * 3] = x;
-            vertices[(i + 6) * 3 + 1] = -hh;
-            vertices[(i + 6) * 3 + 2] = z;
-        }
-
-        const colliderDesc = RAPIER.ColliderDesc.convexHull(vertices)
+        const colliderDesc = RAPIER.ColliderDesc.cylinder(hh, radius)
             .setFriction(1.0)
             .setRestitution(0.0);
         this.world.createCollider(colliderDesc, rigidBody);
 
         if (!isStatic) {
             const entityId = `physics-hexagon-${this.nextPhysicsId++}`;
-            const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody);
+            const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody, {
+                spawnPosition: position
+            });
+
             if (gameState.managers.entity) {
                 gameState.managers.entity.addEntity(physicsEntity);
             }
+            return physicsEntity;
         }
 
         return rigidBody;
@@ -164,13 +156,25 @@ export class PhysicsManager {
     step(delta) {
         if (!this.world) return;
 
-        // Use a fixed timestep for physics simulation to prevent tunneling.
-        // Even if the frame rate drops (or menus lag), we step at a consistent 60Hz.
-        const fixedTimeStep = 1 / 60;
-        this.world.timestep = fixedTimeStep;
+        // Add elapsed time to accumulator
+        this.accumulator += delta;
 
-        // In a real game, you might want to loop here to catch up on 'accumulatedTime'
-        // But for this simulation, a single 1/60th step per frame is usually enough and stable.
-        this.world.step();
+        // Step the world in fixed increments
+        // This ensures gravity and settling are consistent regardless of frame rate
+        this.world.timestep = this.fixedTimeStep;
+
+        let stepsRun = 0;
+        const maxStepsPerFrame = 5; // Prevent "Spiral of Death" if lag is extreme
+
+        while (this.accumulator >= this.fixedTimeStep && stepsRun < maxStepsPerFrame) {
+            this.world.step();
+            this.accumulator -= this.fixedTimeStep;
+            stepsRun++;
+        }
+
+        // Catch up or clear if we're falling too far behind
+        if (this.accumulator > this.fixedTimeStep) {
+            this.accumulator = 0;
+        }
     }
 }

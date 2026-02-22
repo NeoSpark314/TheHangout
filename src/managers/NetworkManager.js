@@ -347,9 +347,19 @@ export class NetworkManager {
         entity.ownerId = null;
         entity.isAuthority = true; // Host regains authority
 
-        // Apply final velocity if provided
-        if (payload.v && entity.rigidBody) {
-            entity.rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
+        // Apply final state if provided (Handoff to Sleep)
+        // We set wakeUp to false (the second argument) to prevent the Host 
+        // from shouting the object awake if it was already settled on the Guest.
+        if (entity.rigidBody) {
+            if (payload.p) {
+                entity.rigidBody.setTranslation({ x: payload.p[0], y: payload.p[1], z: payload.p[2] }, false);
+            }
+            if (payload.r) {
+                entity.rigidBody.setRotation({ x: payload.r[0], y: payload.r[1], z: payload.r[2], w: payload.r[3] }, false);
+            }
+            if (payload.v) {
+                entity.rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
+            }
         }
 
         // Broadcast release to everyone

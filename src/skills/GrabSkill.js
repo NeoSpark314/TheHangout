@@ -105,6 +105,9 @@ export class GrabSkill extends Skill {
                     // Released! Throw it
                     const velocity = this._computeThrowVelocity(hand);
                     this.held[hand].release(velocity);
+                    // AUTH ARCHITECTURE CHANGE: 
+                    // We DO NOT releaseOwnership here anymore. 
+                    // The guest keeps control while the object is in flight.
                     this.held[hand] = null;
                 } else {
                     // Update held object position to follow hand
@@ -217,7 +220,6 @@ export class GrabSkill extends Skill {
         if (this.held[hand]) {
             const velocity = this._computeThrowVelocity(hand);
             this.held[hand].release(velocity);
-            this.held[hand].releaseOwnership(velocity);
             this.held[hand] = null;
         }
     }

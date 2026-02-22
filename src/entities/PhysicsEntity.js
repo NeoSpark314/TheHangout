@@ -103,17 +103,22 @@ export class PhysicsEntity extends NetworkEntity {
 
         if (this.rigidBody) {
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-            this.rigidBody.wakeUp();
-            if (velocity) {
+            // Only wake it if we actually have velocity (a throw)
+            // Otherwise if it's already sleeping (Handoff to Sleep), let it stay asleep.
+            if (velocity && (Math.abs(velocity.x) > 0.1 || Math.abs(velocity.y) > 0.1 || Math.abs(velocity.z) > 0.1)) {
+                this.rigidBody.wakeUp();
                 this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
             }
         }
 
         // Notify host
         if (gameState.managers.network) {
+            const state = this.getNetworkState();
             gameState.managers.network.sendData(gameState.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, {
                 id: this.id,
-                v: velocity ? [velocity.x, velocity.y, velocity.z] : [0, 0, 0]
+                v: velocity ? [velocity.x, velocity.y, velocity.z] : [0, 0, 0],
+                p: state.p,
+                r: state.r
             });
         }
     }
@@ -188,6 +193,13 @@ export class PhysicsEntity extends NetworkEntity {
                 }
             }
 
+            // Handoff to Sleep Architecture:
+            // If we are a GUEST and we own this object (from a throw), 
+            // and it has now settled/slept, return authority to the host.
+            if (!this.heldBy && this.ownerId !== null && !gameState.isHost && this.rigidBody.isSleeping()) {
+                this.releaseOwnership();
+            }
+
             // Respawn check — only if not held and below the kill plane
             if (this.grabbable && !this.heldBy && this.spawnPosition && position.y < -10) {
                 this.rigidBody.setTranslation(
@@ -224,10 +236,10 @@ export class PhysicsEntity extends NetworkEntity {
 
                 // ONLY snap physics if the visual mesh has moved enough to matter.
                 // This allows Rapier to put the body to SLEEP if the network state is stationary.
-                // Threshold increased to 0.002 (2mm) to be more permissive of sleep.
-                if (dsq > 0.000004) { // (0.002^2)
-                    this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, true);
-                    this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, true);
+                // Threshold increased to 0.01 (1cm) to provide more slack for sleep.
+                if (dsq > 0.0001) { // (0.01^2)
+                    this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, false);
+                    this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, false);
                 } else if (!this.rigidBody.isSleeping()) {
                     // If we are very close to target and moving slowly, force it to stop and sleep
                     const linvel = this.rigidBody.linvel();
