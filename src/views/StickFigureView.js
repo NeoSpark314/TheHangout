@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { EntityView } from './EntityView.js';
+import gameState from '../core/GameState.js';
 
 /**
  * Cyberpunk stick-figure avatar.
@@ -261,6 +262,8 @@ export class StickFigureView extends EntityView {
             }
         }
 
+        // Upright Name Tag Billboarding
+        this._billboardNameTag();
         // Name
         if (state.name !== undefined && state.name !== this._lastName) {
             this._lastName = state.name;
@@ -270,6 +273,28 @@ export class StickFigureView extends EntityView {
         // Color
         if (state.color !== undefined && state.color !== this.color) {
             this.setColor(state.color);
+        }
+    }
+
+    _billboardNameTag() {
+        if (!this.nameTag) return;
+        const render = gameState.managers.render;
+        if (!render || !render.camera) return;
+
+        // Get world position of camera and tag
+        const cameraPos = new THREE.Vector3();
+        render.camera.getWorldPosition(cameraPos);
+
+        const tagWorldPos = new THREE.Vector3();
+        this.nameTag.getWorldPosition(tagWorldPos);
+
+        // Vector from tag to camera, but flattened on the Y plane
+        const lookDir = new THREE.Vector3().subVectors(cameraPos, tagWorldPos);
+        lookDir.y = 0; // This keeps it strictly upright
+
+        if (lookDir.lengthSq() > 0.0001) {
+            const target = tagWorldPos.clone().add(lookDir);
+            this.nameTag.lookAt(target);
         }
     }
 
@@ -347,9 +372,10 @@ export class StickFigureView extends EntityView {
             if (oldMap) oldMap.dispose();
             this.nameTag.material.needsUpdate = true;
         } else {
-            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-            this.nameTag = new THREE.Sprite(spriteMaterial);
-            this.nameTag.scale.set(1.0, 0.25, 1.0);
+            // Plane Mesh instead of Sprite for controlled billboarding (upright axis)
+            const geometry = new THREE.PlaneGeometry(1.0, 0.25);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+            this.nameTag = new THREE.Mesh(geometry, material);
             this.mesh.add(this.nameTag);
         }
 
