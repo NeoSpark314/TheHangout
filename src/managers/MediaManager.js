@@ -46,9 +46,14 @@ export class MediaManager {
             console.log('[MediaManager] Microphone access granted.');
 
             // Setup local analyser
-            if (!this.audioContext) {
+            // Use shared context from RenderManager if available
+            const render = gameState.managers.render;
+            if (render && render.audioListener) {
+                this.audioContext = render.audioListener.context;
+            } else if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             }
+
             this.localSource = this.audioContext.createMediaStreamSource(this.localStream);
             this.localAnalyser = this.audioContext.createAnalyser();
             this.localAnalyser.fftSize = 32; // Smallest for performance

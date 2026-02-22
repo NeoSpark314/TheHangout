@@ -23,7 +23,12 @@ export class PhysicsManager {
 
         const gravity = { x: 0.0, y: -9.81, z: 0.0 };
         this.world = new RAPIER.World(gravity);
+        this.eventQueue = new RAPIER.EventQueue(true);
         this.rapierLoaded = true;
+
+        // Track last sound time per collider to prevent spam
+        this.lastCollisionTime = new Map();
+        this.collisionCooldown = 150; // ms
 
         console.log('[PhysicsManager] Rapier3D initialized');
         eventBus.emit(EVENTS.PHYSICS_READY);
@@ -60,7 +65,8 @@ export class PhysicsManager {
         // Rapier cuboid takes half-extents
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
             .setFriction(1.0)      // Stick to surfaces
-            .setRestitution(0.0);  // Don't bounce/vibrate indefinitely
+            .setRestitution(0.0)  // Don't bounce/vibrate indefinitely
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(colliderDesc, rigidBody);
 
         if (!isStatic) {
@@ -94,7 +100,8 @@ export class PhysicsManager {
         const hh = height / 2;
         const colliderDesc = RAPIER.ColliderDesc.cylinder(hh, radius)
             .setFriction(1.0)
-            .setRestitution(0.0);
+            .setRestitution(0.0)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(colliderDesc, rigidBody);
 
         if (!isStatic) {
@@ -142,7 +149,8 @@ export class PhysicsManager {
 
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hs, hs, hs)
             .setRestitution(0.2)  // Restored slight bounce
-            .setFriction(0.7);    // Restored natural friction
+            .setFriction(0.7)    // Restored natural friction
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(colliderDesc, rigidBody);
 
         const entityId = id || `grabbable-${this.nextPhysicsId++}`;
@@ -173,10 +181,29 @@ export class PhysicsManager {
         const maxStepsPerFrame = 5; // Prevent "Spiral of Death" if lag is extreme
 
         while (this.accumulator >= this.fixedTimeStep && stepsRun < maxStepsPerFrame) {
-            this.world.step();
+            this.world.step(this.eventQueue);
             this.accumulator -= this.fixedTimeStep;
             stepsRun++;
         }
+
+        // Drain collision events
+        this.eventQueue.drainContactForceEvents((handle1, handle2, force, maxForce) => {
+            const now = Date.now();
+            const lastTime1 = this.lastCollisionTime.get(handle1) || 0;
+            const lastTime2 = this.lastCollisionTime.get(handle2) || 0;
+
+            if (now - lastTime1 > this.collisionCooldown && now - lastTime2 > this.collisionCooldown) {
+                // Map force to intensity (0 to 1)
+                // Rapier force can be high; let's normalize around a reasonable value
+                const intensity = Math.min(maxForce / 20, 1.0);
+                
+                if (intensity > 0.1) {
+                    eventBus.emit(EVENTS.ENTITY_COLLIDED, { intensity });
+                    this.lastCollisionTime.set(handle1, now);
+                    this.lastCollisionTime.set(handle2, now);
+                }
+            }
+        });
 
         // Catch up or clear if we're falling too far behind
         if (this.accumulator > this.fixedTimeStep) {

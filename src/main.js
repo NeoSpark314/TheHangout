@@ -12,6 +12,7 @@ import { MediaManager } from './managers/MediaManager.js';
 import { HUDManager } from './managers/HUDManager.js';
 import { InputManager } from './managers/InputManager.js';
 import { RoomManager } from './managers/RoomManager.js';
+import { AudioManager } from './managers/AudioManager.js';
 import { EntityFactory } from './factories/EntityFactory.js';
 import eventBus from './core/EventBus.js';
 import { EVENTS } from './utils/Constants.js';
@@ -44,6 +45,16 @@ async function bootstrap() {
   gameState.managers.input = new InputManager();
   gameState.managers.hud = new HUDManager();
   gameState.managers.room = new RoomManager();
+  gameState.managers.audio = new AudioManager();
+
+  // Resume AudioContext on first interaction
+  const resumeAudio = () => {
+    gameState.managers.audio.resume();
+    window.removeEventListener('pointerdown', resumeAudio);
+    window.removeEventListener('keydown', resumeAudio);
+  };
+  window.addEventListener('pointerdown', resumeAudio);
+  window.addEventListener('keydown', resumeAudio);
 
   // Attach HUD to camera
   if (gameState.managers.render) {
