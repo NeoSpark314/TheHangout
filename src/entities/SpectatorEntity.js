@@ -174,13 +174,17 @@ export class SpectatorEntity extends NetworkEntity {
     getNetworkState() {
         if (!this.mesh) return null;
         return {
-            p: [this.mesh.position.x, this.mesh.position.y, this.mesh.position.z]
+            p: [this.mesh.position.x, this.mesh.position.y, this.mesh.position.z],
+            name: 'Host'
         };
     }
 
     setNetworkState(state) {
         if (state.p) {
             this.targetPosition.set(state.p[0], state.p[1], state.p[2]);
+        }
+        if (state.name) {
+            this.name = state.name;
         }
     }
 

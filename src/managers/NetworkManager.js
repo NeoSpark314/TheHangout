@@ -4,6 +4,7 @@ import eventBus from '../core/EventBus.js';
 import gameState from '../core/GameState.js';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants.js';
 import { SpectatorEntity } from '../entities/SpectatorEntity.js';
+import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive.js';
 
 export class NetworkManager {
     constructor() {
@@ -17,6 +18,19 @@ export class NetworkManager {
         // Bind events
         eventBus.on(EVENTS.CREATE_ROOM, (customId) => this.initHost(customId));
         eventBus.on(EVENTS.JOIN_ROOM, (roomId) => this.initGuest(roomId));
+
+        // Tab visibility warning for dedicated host
+        document.addEventListener('visibilitychange', () => {
+            if (!gameState.isDedicatedHost) return;
+            if (document.hidden) {
+                console.warn('[NetworkManager] Tab hidden — keepalive worker active.');
+                if (gameState.managers.hud) {
+                    gameState.managers.hud.showNotification('⚠ Tab hidden — sync running via worker', 8000);
+                }
+            } else {
+                console.log('[NetworkManager] Tab visible again.');
+            }
+        });
     }
 
     initHost(customId) {
@@ -30,6 +44,17 @@ export class NetworkManager {
             if (gameState.managers.media) {
                 gameState.managers.media.bindPeer(this.peer);
             }
+
+            // Start keepalive worker for dedicated host
+            if (gameState.isDedicatedHost) {
+                startKeepalive((delta) => {
+                    // Only sync if the normal game loop isn't running (tab hidden)
+                    if (document.hidden) {
+                        this.syncState();
+                    }
+                });
+            }
+
             eventBus.emit(EVENTS.HOST_READY, id);
         });
 
@@ -249,6 +274,8 @@ export class NetworkManager {
     }
 
     disconnect() {
+        stopKeepalive();
+
         if (this.peer) {
             this.peer.destroy();
             this.peer = null;

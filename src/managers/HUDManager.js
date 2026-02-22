@@ -93,6 +93,9 @@ export class HUDManager {
             if (entity.type === 'REMOTE_PLAYER' && entity.name) {
                 this.playerNames.push(entity.name);
             }
+            if (entity.type === 'SPECTATOR' && entity.name) {
+                this.playerNames.push(`👁 ${entity.name}`);
+            }
         }
 
         this.draw();
