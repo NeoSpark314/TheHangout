@@ -51,6 +51,36 @@ export class PhysicsEntity extends NetworkEntity {
     }
 
     /**
+     * Reconcile authority and transition states.
+     * Snaps mesh/targets to prevent lerp sweeps during handoff.
+     */
+    handleAuthorityChange(newOwnerId) {
+        const wasAuthority = this.isAuthority;
+        this.ownerId = newOwnerId;
+        this.syncAuthority(); // Updates this.isAuthority
+
+        const isAuthorityNow = this.isAuthority;
+
+        // --- Discontinuity Snapping ---
+        // Whenever authority flips, snap targets/mesh to prevent the lerp 
+        // from sweeping through the "stale past" while waiting for network truth.
+        if (wasAuthority !== isAuthorityNow && this.rigidBody) {
+            const pos = this.rigidBody.translation();
+            const rot = this.rigidBody.rotation();
+
+            // Losing: Snap current physics state to network targets
+            if (!isAuthorityNow) {
+                this.targetPos.set(pos.x, pos.y, pos.z);
+                this.targetRot.set(rot.x, rot.y, rot.z, rot.w);
+            }
+
+            // Ensure visual mesh snaps to ground truth immediately
+            this.mesh.position.set(pos.x, pos.y, pos.z);
+            this.mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
+        }
+    }
+
+    /**
      * Determines if this client should be the authority based on host status and ownership.
      */
     syncAuthority() {
@@ -64,14 +94,6 @@ export class PhysicsEntity extends NetworkEntity {
         if (this.isAuthority !== shouldBeAuthority) {
             console.log(`[PhysicsEntity] ${this.id} authority changing: ${this.isAuthority} -> ${shouldBeAuthority} (owner: ${this.ownerId})`);
             this.isAuthority = shouldBeAuthority;
-
-            // If we just became non-authoritative, ensure our interpolation targets are sane
-            if (!this.isAuthority && this.rigidBody) {
-                const pos = this.rigidBody.translation();
-                const rot = this.rigidBody.rotation();
-                this.targetPos.set(pos.x, pos.y, pos.z);
-                this.targetRot.set(rot.x, rot.y, rot.z, rot.w);
-            }
         }
     }
 
@@ -82,8 +104,7 @@ export class PhysicsEntity extends NetworkEntity {
         if (this.isAuthority && this.ownerId) return; // Already own it
 
         console.log(`[PhysicsEntity] Requesting ownership of ${this.id}`);
-        this.ownerId = gameState.localPlayer?.id || 'local';
-        this.syncAuthority(); // Apply immediately
+        this.handleAuthorityChange(gameState.localPlayer?.id || 'local');
 
         // Switch to kinematic for local control
         if (this.rigidBody) {
@@ -103,8 +124,7 @@ export class PhysicsEntity extends NetworkEntity {
         if (!this.isAuthority) return;
 
         console.log(`[PhysicsEntity] Releasing ownership of ${this.id}`);
-        this.isAuthority = false;
-        this.ownerId = null;
+        this.handleAuthorityChange(null);
 
         if (this.rigidBody) {
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
@@ -229,18 +249,16 @@ export class PhysicsEntity extends NetworkEntity {
                 this.mesh.quaternion.copy(this.targetRot);
             }
 
-            // Keep physics body somewhat synced to visual for local collisions
+            // Keep physics body synced to GROUND TRUTH (targetPos), not the visual trail (mesh)
             if (this.rigidBody.bodyType() === RAPIER.RigidBodyType.Dynamic) {
                 const bodyPos = this.rigidBody.translation();
                 this._vCheck.set(bodyPos.x, bodyPos.y, bodyPos.z);
-                const dsq = this.mesh.position.distanceToSquared(this._vCheck);
+                const dsq = this.targetPos.distanceToSquared(this._vCheck);
 
-                // ONLY snap physics if the visual mesh has moved enough to matter.
-                // This allows Rapier to put the body to SLEEP if the network state is stationary.
-                // Threshold increased to 0.01 (1cm) to provide more slack for sleep.
+                // ONLY snap physics if the body has drifted significantly from ground truth
                 if (dsq > 0.0001) { // (0.01^2)
-                    this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, false);
-                    this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, false);
+                    this.rigidBody.setTranslation({ x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z }, false);
+                    this.rigidBody.setRotation({ x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w }, false);
                 } else if (!this.rigidBody.isSleeping()) {
                     // If we are very close to target and moving slowly, force it to stop and sleep
                     const linvel = this.rigidBody.linvel();
@@ -277,17 +295,30 @@ export class PhysicsEntity extends NetworkEntity {
         if (this.isAuthority) return;
 
         const wasHeld = this.heldBy;
+        const oldOwner = this.ownerId;
         this.heldBy = state.h || null;
 
         // Sync ownership tracking
-        if (state.o !== undefined) {
-            this.ownerId = state.o;
-            this.syncAuthority(); // Apply authority change immediately
+        if (state.o !== undefined && state.o !== oldOwner) {
+            this.handleAuthorityChange(state.o);
         }
 
         // Sync target for interpolation
+        const oldTargetPos = this.targetPos.clone();
         this.targetPos.set(state.p[0], state.p[1], state.p[2]);
         this.targetRot.set(state.r[0], state.r[1], state.r[2], state.r[3]);
+
+        // --- DISCONTINUITY SNAPPING ---
+        // If the holder changed, or ownership shifted, or the object jumped a huge distance,
+        // snap the visual mesh immediately. This prevents the lerp (smoothing) from 
+        // creating a "pullback" or "sweep" effect during handoff.
+        const stateTransition = (this.heldBy !== wasHeld) || (this.ownerId !== oldOwner);
+        const hugeJump = this.targetPos.distanceToSquared(oldTargetPos) > 1.0; // >1m
+
+        if (stateTransition || hugeJump) {
+            this.mesh.position.copy(this.targetPos);
+            this.mesh.quaternion.copy(this.targetRot);
+        }
 
         // Toggle body type based on held status
         if (this.heldBy && !wasHeld) {
