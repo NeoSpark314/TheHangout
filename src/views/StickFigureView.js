@@ -48,8 +48,11 @@ export class StickFigureView extends EntityView {
     // ─── Geometry Construction ───────────────────────────────────────
 
     _buildGeometry() {
-        const outlineMaterial = new THREE.LineBasicMaterial({ color: this.color });
-        const solidDark = new THREE.MeshBasicMaterial({ color: 0x050510, side: THREE.DoubleSide });
+        // Materials
+        this.accentMaterial = new THREE.MeshBasicMaterial({ color: this.color });
+        this.cyberMaterial = new THREE.MeshBasicMaterial({ color: 0x1a1a1a }); // Uniform "cyber" dark grey
+        this.darkMaterial = new THREE.MeshBasicMaterial({ color: 0x050510 });
+        this.featureMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
         // 1. Head (Box)
         const headSize = 0.3;
@@ -57,32 +60,32 @@ export class StickFigureView extends EntityView {
         const headGeometry = new THREE.BoxGeometry(headSize, headSize, headDepth);
         headGeometry.translate(0, headSize / 2, 0);
 
-        const hairMaterial = new THREE.MeshBasicMaterial({ color: 0x050510 });
-        const faceMaterial = new THREE.MeshBasicMaterial({ color: this.color });
-        const materials = [hairMaterial, hairMaterial, hairMaterial, hairMaterial, hairMaterial, faceMaterial];
+        const faceMaterial = this.accentMaterial;
+        const materials = [this.darkMaterial, this.darkMaterial, this.darkMaterial, this.darkMaterial, this.darkMaterial, faceMaterial];
 
         this.headMesh = new THREE.Mesh(headGeometry, materials);
+        // We'll keep a thin wireframe for that "hologram" feel
         const headEdges = new THREE.EdgesGeometry(headGeometry);
-        const headOutline = new THREE.LineSegments(headEdges, outlineMaterial);
-        this.headMesh.add(headOutline);
+        this.headOutline = new THREE.LineSegments(headEdges, new THREE.LineBasicMaterial({ color: this.color }));
+        this.headMesh.add(this.headOutline);
 
         this.headMesh.position.y = 1.5;
         if (this.isLocal) this.headMesh.visible = false;
         this.mesh.add(this.headMesh);
 
         // 1a. Facial Features (Eyes & Mouth)
-        const featureMat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black features
+        // (featureMaterial defined above)
 
         // Eyes
         const eyeGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8);
         eyeGeom.rotateX(Math.PI / 2); // Point forward
 
-        this.leftEye = new THREE.Mesh(eyeGeom, featureMat);
-        this.leftEye.position.set(-0.07, headSize * 0.7, -(headDepth / 2 + 0.01)); // Moved to negative Z
+        this.leftEye = new THREE.Mesh(eyeGeom, this.featureMaterial);
+        this.leftEye.position.set(-0.07, headSize * 0.7, -(headDepth / 2 + 0.01));
         this.headMesh.add(this.leftEye);
 
-        this.rightEye = new THREE.Mesh(eyeGeom, featureMat);
-        this.rightEye.position.set(0.07, headSize * 0.7, -(headDepth / 2 + 0.01)); // Moved to negative Z
+        this.rightEye = new THREE.Mesh(eyeGeom, this.featureMaterial);
+        this.rightEye.position.set(0.07, headSize * 0.7, -(headDepth / 2 + 0.01));
         this.headMesh.add(this.rightEye);
 
         // Mouth
@@ -90,69 +93,73 @@ export class StickFigureView extends EntityView {
         mouthGeom.rotateZ(Math.PI / 2); // Horizontal
         mouthGeom.rotateX(Math.PI / 2); // Face forward
 
-        this.mouth = new THREE.Mesh(mouthGeom, featureMat);
+        this.mouth = new THREE.Mesh(mouthGeom, this.featureMaterial);
         this.mouth.position.set(0, headSize * 0.3, -(headDepth / 2 + 0.01));
         this.headMesh.add(this.mouth);
 
-        // 2. Torso
-        const torsoGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 1.5, 0),
-            new THREE.Vector3(0, 0.85, 0)
-        ]);
-        this.torso = new THREE.Line(torsoGeom, outlineMaterial);
+        // 2. Torso (Cylinder)
+        const limbRadius = 0.025;
+        const cylinderGeom = new THREE.CylinderGeometry(limbRadius, limbRadius, 1, 6);
+        const jointGeom = new THREE.SphereGeometry(0.04, 8, 4);
+
+        this.torso = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         this.mesh.add(this.torso);
 
-        // 3. Legs
-        const legGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(-0.2, 0, 0),
-            new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(0.2, 0, 0)
-        ]);
-        this.legs = new THREE.LineSegments(legGeom, outlineMaterial);
-        this.mesh.add(this.legs);
+        // 3. Joints (Accent Color)
+        this.neckJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.mesh.add(this.neckJoint);
 
-        // 4. Shoulders
-        const shoulderGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-0.25, 0, 0), new THREE.Vector3(0.25, 0, 0)
-        ]);
-        this.shoulders = new THREE.Line(shoulderGeom, outlineMaterial);
-        this.shoulders.position.y = 1.4;
+        this.waistJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.mesh.add(this.waistJoint);
+
+        this.leftKnee = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.rightKnee = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.mesh.add(this.leftKnee);
+        this.mesh.add(this.rightKnee);
+
+        this.leftShoulderJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.rightShoulderJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.leftElbowJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.rightElbowJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        this.mesh.add(this.leftShoulderJoint);
+        this.mesh.add(this.rightShoulderJoint);
+        this.mesh.add(this.leftElbowJoint);
+        this.mesh.add(this.rightElbowJoint);
+
+        // 4. Legs (Cyber Color)
+        this.leftLeg = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        this.rightLeg = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        this.mesh.add(this.leftLeg);
+        this.mesh.add(this.rightLeg);
+
+        // 5. Shoulders (Cyber Color)
+        this.shoulders = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         this.mesh.add(this.shoulders);
 
-        // 5. Arms (updated per-frame via IK)
-        this.arms = new THREE.LineSegments(
-            new THREE.BufferGeometry(),
-            outlineMaterial
-        );
-        this.mesh.add(this.arms);
+        // 6. Arms (Cyber Color)
+        this.leftUpperArm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        this.leftForearm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        this.rightUpperArm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        this.rightForearm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
 
-        // 6. XR Hand Tracking Visuals
+        this.mesh.add(this.leftUpperArm);
+        this.mesh.add(this.leftForearm);
+        this.mesh.add(this.rightUpperArm);
+        this.mesh.add(this.rightForearm);
+
+        // 7. XR Hand Tracking Visuals (Accent Color)
+        const handJointGeom = new THREE.SphereGeometry(0.006, 6, 4);
+        const handLimbRadius = 0.003;
+        const handCylinderGeom = new THREE.CylinderGeometry(handLimbRadius, handLimbRadius, 1, 4);
+
         this.handMeshes = { left: [], right: [] };
-        const jointGeom = new THREE.BoxGeometry(0.005, 0.005, 0.005);
-        const jointMatLeft = new THREE.MeshBasicMaterial({ color: this.color });
-        const jointMatRight = new THREE.MeshBasicMaterial({ color: this.color });
-
-        const handLineMat = new THREE.LineBasicMaterial({ color: this.color });
-
-        const leftGeom = new THREE.BufferGeometry();
-        leftGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(StickFigureView.HAND_INDICES.length * 3), 3));
-        const rightGeom = new THREE.BufferGeometry();
-        rightGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(StickFigureView.HAND_INDICES.length * 3), 3));
-
-        this.handLines = {
-            left: new THREE.LineSegments(leftGeom, handLineMat),
-            right: new THREE.LineSegments(rightGeom, handLineMat)
-        };
-        this.handLines.left.frustumCulled = false;
-        this.handLines.right.frustumCulled = false;
-
-        this.mesh.add(this.handLines.left);
-        this.mesh.add(this.handLines.right);
+        this.handCylinders = { left: [], right: [] };
 
         // Wrist markers for fallback
-        const wristGeom = new THREE.BoxGeometry(0.02, 0.02, 0.02);
+        const wristGeom = new THREE.BoxGeometry(0.03, 0.03, 0.03);
         this.wristMeshes = {
-            left: new THREE.Mesh(wristGeom, jointMatLeft),
-            right: new THREE.Mesh(wristGeom, jointMatRight)
+            left: new THREE.Mesh(wristGeom, this.accentMaterial),
+            right: new THREE.Mesh(wristGeom, this.accentMaterial)
         };
         this.mesh.add(this.wristMeshes.left);
         this.mesh.add(this.wristMeshes.right);
@@ -160,15 +167,28 @@ export class StickFigureView extends EntityView {
         this.wristMeshes.right.visible = false;
 
         for (let i = 0; i < 25; i++) {
-            const leftJoint = new THREE.Mesh(jointGeom, jointMatLeft);
+            const leftJoint = new THREE.Mesh(handJointGeom, this.accentMaterial);
             leftJoint.visible = false;
             this.mesh.add(leftJoint);
             this.handMeshes.left.push(leftJoint);
 
-            const rightJoint = new THREE.Mesh(jointGeom, jointMatRight);
+            const rightJoint = new THREE.Mesh(handJointGeom, this.accentMaterial);
             rightJoint.visible = false;
             this.mesh.add(rightJoint);
             this.handMeshes.right.push(rightJoint);
+        }
+
+        // Hand Skeletons (Cylinders)
+        for (let i = 0; i < StickFigureView.HAND_INDICES.length / 2; i++) {
+            const leftCyl = new THREE.Mesh(handCylinderGeom, this.accentMaterial);
+            leftCyl.visible = false;
+            this.mesh.add(leftCyl);
+            this.handCylinders.left.push(leftCyl);
+
+            const rightCyl = new THREE.Mesh(handCylinderGeom, this.accentMaterial);
+            rightCyl.visible = false;
+            this.mesh.add(rightCyl);
+            this.handCylinders.right.push(rightCyl);
         }
 
         // 7. Name Tag
@@ -298,29 +318,32 @@ export class StickFigureView extends EntityView {
         }
     }
 
+    /**
+     * Helper to stretch a cylinder between two points.
+     */
+    _alignCylinder(mesh, start, end, radius = 0.02) {
+        const dir = new THREE.Vector3().subVectors(end, start);
+        const len = dir.length();
+        if (len < 0.001) {
+            mesh.scale.set(0, 0, 0); // Hide if too small
+            return;
+        }
+
+        mesh.scale.set(1, len, 1);
+        mesh.position.copy(start).addScaledVector(dir, 0.5);
+
+        // Align cylinder (Three.js cylinders are Y-up)
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    }
+
     // ─── Color ───────────────────────────────────────────────────────
 
     setColor(color) {
         this.color = color;
         const colorObj = new THREE.Color(color);
+        this.accentMaterial.color.copy(colorObj);
 
-        this.mesh.traverse((child) => {
-            if (child.isLine || child.isLineSegments) {
-                child.material.color.copy(colorObj);
-            }
-            if (child.isMesh && child.geometry.type === 'BoxGeometry' && !child.name.includes('Hand')) {
-                if (child === this.headMesh) {
-                    child.material[5].color.copy(colorObj);
-                } else if (child.name === 'wrist') {
-                    child.material.color.copy(colorObj);
-                } else if (child === this.mouth || child === this.leftEye || child === this.rightEye) {
-                    // Do not tint facial features, keep them black
-                }
-            }
-            if (child.isMesh && (child.material.name === 'jointMat' || child.geometry.type === 'BoxGeometry')) {
-                if (child.material && child.material.color) child.material.color.copy(colorObj);
-            }
-        });
+        if (this.headOutline) this.headOutline.material.color.copy(colorObj);
 
         if (this.nameTag && this._lastName) {
             this.setName(this._lastName);
@@ -395,19 +418,30 @@ export class StickFigureView extends EntityView {
 
         const neckHeight = Math.max(0.4, headHeight - 0.2);
         this.headMesh.position.y = neckHeight;
-        this.shoulders.position.y = neckHeight - 0.1;
+        this.neckJoint.position.set(0, neckHeight, 0);
+
+        const shoulderY = neckHeight - 0.1;
+        const shoulderStart = new THREE.Vector3(-0.25, shoulderY, 0);
+        const shoulderEnd = new THREE.Vector3(0.25, shoulderY, 0);
+        this._alignCylinder(this.shoulders, shoulderStart, shoulderEnd, 0.025);
 
         const waistHeight = neckHeight * 0.55;
+        this.waistJoint.position.set(0, waistHeight, 0);
 
-        this.torso.geometry.setFromPoints([
-            new THREE.Vector3(0, neckHeight, 0),
-            new THREE.Vector3(0, waistHeight, 0)
-        ]);
+        // Align Torso (Neck to Waist)
+        this._alignCylinder(this.torso, new THREE.Vector3(0, neckHeight, 0), new THREE.Vector3(0, waistHeight, 0), 0.025);
 
-        this.legs.geometry.setFromPoints([
-            new THREE.Vector3(0, waistHeight, 0), new THREE.Vector3(-0.2, 0, 0),
-            new THREE.Vector3(0, waistHeight, 0), new THREE.Vector3(0.2, 0, 0)
-        ]);
+        // Align Legs
+        const leftFoot = new THREE.Vector3(-0.2, 0, 0);
+        const rightFoot = new THREE.Vector3(0.2, 0, 0);
+        const waistPos = new THREE.Vector3(0, waistHeight, 0);
+
+        this._alignCylinder(this.leftLeg, waistPos, leftFoot, 0.025);
+        this._alignCylinder(this.rightLeg, waistPos, rightFoot, 0.025);
+
+        // Knee indicators
+        this.leftKnee.position.lerpVectors(waistPos, leftFoot, 0.5);
+        this.rightKnee.position.lerpVectors(waistPos, rightFoot, 0.5);
 
         this._updateNameTagPosition();
     }
@@ -421,24 +455,16 @@ export class StickFigureView extends EntityView {
         const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
 
         const calculateElbow = (shoulder, hand) => {
-            const dist = shoulder.distanceTo(hand);
-            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
-
-            // Vector from shoulder to hand
             const armVec = new THREE.Vector3().subVectors(hand, shoulder);
             const armLen = armVec.length();
             const armDir = armVec.clone().normalize();
+            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
 
-            // Desired bend amount (elbow point distance from the center line)
-            // Using a fixed segment length heuristic (e.g. 0.45m upper arm and forearm)
             const segmentLen = 0.4;
             const bendDist = Math.sqrt(Math.max(0, segmentLen * segmentLen - (armLen / 2) * (armLen / 2)));
 
-            // "Hint" vector to determine elbow direction (out and slightly down/back)
             const side = shoulder.x > 0 ? 1 : -1;
             const hint = new THREE.Vector3(side * 0.5, -0.2, 0.2).normalize();
-
-            // Project hint onto the plane perpendicular to the arm direction
             const projection = hint.clone().projectOnPlane(armDir).normalize();
 
             return mid.addScaledVector(projection, bendDist);
@@ -447,19 +473,17 @@ export class StickFigureView extends EntityView {
         const leftElbow = calculateElbow(leftShoulder, leftHandPos);
         const rightElbow = calculateElbow(rightShoulder, rightHandPos);
 
-        const positions = new Float32Array([
-            leftShoulder.x, leftShoulder.y, leftShoulder.z,
-            leftElbow.x, leftElbow.y, leftElbow.z,
-            leftElbow.x, leftElbow.y, leftElbow.z,
-            leftHandPos.x, leftHandPos.y, leftHandPos.z,
-            rightShoulder.x, rightShoulder.y, rightShoulder.z,
-            rightElbow.x, rightElbow.y, rightElbow.z,
-            rightElbow.x, rightElbow.y, rightElbow.z,
-            rightHandPos.x, rightHandPos.y, rightHandPos.z
-        ]);
+        // Position Joint Spheres
+        this.leftShoulderJoint.position.copy(leftShoulder);
+        this.rightShoulderJoint.position.copy(rightShoulder);
+        this.leftElbowJoint.position.copy(leftElbow);
+        this.rightElbowJoint.position.copy(rightElbow);
 
-        this.arms.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        this.arms.geometry.computeBoundingSphere();
+        // Align Volumetric Arms
+        this._alignCylinder(this.leftUpperArm, leftShoulder, leftElbow, 0.02);
+        this._alignCylinder(this.leftForearm, leftElbow, leftHandPos, 0.02);
+        this._alignCylinder(this.rightUpperArm, rightShoulder, rightElbow, 0.02);
+        this._alignCylinder(this.rightForearm, rightElbow, rightHandPos, 0.02);
     }
 
     // ─── Hand Tracking Visuals ───────────────────────────────────────
@@ -509,27 +533,29 @@ export class StickFigureView extends EntityView {
             }
         }
 
-        // Skeleton lines
-        this._updateSkeletonLines('left', leftHasJoints);
-        this._updateSkeletonLines('right', rightHasJoints);
+        // Update Hand Skeletons (Cylinders)
+        this._updateHandSkeleton('left', leftHasJoints);
+        this._updateHandSkeleton('right', rightHasJoints);
     }
 
-    _updateSkeletonLines(hand, hasJoints) {
-        if (hasJoints) {
-            const positions = this.handLines[hand].geometry.attributes.position.array;
-            let ptr = 0;
-            for (let i = 0; i < StickFigureView.HAND_INDICES.length; i++) {
-                const jointObj = this.handMeshes[hand][StickFigureView.HAND_INDICES[i]];
-                positions[ptr++] = jointObj.position.x;
-                positions[ptr++] = jointObj.position.y;
-                positions[ptr++] = jointObj.position.z;
-            }
-            this.handLines[hand].geometry.attributes.position.needsUpdate = true;
-            this.handLines[hand].visible = true;
-        } else {
-            this.handLines[hand].visible = false;
+    _updateHandSkeleton(hand, hasJoints) {
+        const cylinders = this.handCylinders[hand];
+        if (!hasJoints) {
+            cylinders.forEach(c => c.visible = false);
+            return;
+        }
+
+        for (let i = 0; i < cylinders.length; i++) {
+            const startIdx = StickFigureView.HAND_INDICES[i * 2];
+            const endIdx = StickFigureView.HAND_INDICES[i * 2 + 1];
+            const startJoint = this.handMeshes[hand][startIdx];
+            const endJoint = this.handMeshes[hand][endIdx];
+
+            cylinders[i].visible = true;
+            this._alignCylinder(cylinders[i], startJoint.position, endJoint.position, 0.003);
         }
     }
+
 
     // ─── Accessors ───────────────────────────────────────────────────
 
