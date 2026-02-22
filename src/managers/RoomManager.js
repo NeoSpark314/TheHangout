@@ -291,10 +291,12 @@ export class RoomManager {
         this.scene.add(tableGroup);
 
         if (gameState.managers.physics) {
-            // Table top: hexagonal cylinder (2m radius, 0.1m height) at y=1.0
-            gameState.managers.physics.createHexagon(2.0, 0.1, { x: 0, y: 1.0, z: 0 }, tableGroup, true);
-            // Pedestal: narrow column (0.4m radius, 0.5m half-height) at y=0.5
-            gameState.managers.physics.createCuboid(0.4, 0.5, 0.4, { x: 0, y: 0.5, z: 0 }, null, true);
+            // Table top: hexagonal cylinder (2m radius, 0.5m thickness)
+            // Surface is at y=1.05. Center = 1.05 - 0.25 = 0.8
+            gameState.managers.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
+
+            // Pedestal: stays at y=0.45, now overlaps nicely with the thick table top
+            gameState.managers.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
         }
     }
 
@@ -482,7 +484,8 @@ export class RoomManager {
         const cubeSize = 0.12;
         const cubeCount = 6;
         const tableRadius = 1.0; // Arrange cubes in a circle on the table
-        const tableY = 1.85;     // Higher up so they drop to the table
+        const tableY = 1.15;     // Just above the table surface (1.05)
+        console.log(`[RoomManager] Spawning cubes at y=${tableY}`);
 
         const colors = [
             0xff0055, // Hot pink

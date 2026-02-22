@@ -31,12 +31,14 @@ export class PhysicsManager {
     createGround(size = 50) {
         if (!this.world) return;
         // Visual floor is at y = -0.05.
-        // We create a 1m thick ground collider.
-        // Top surface should be at -0.05, so center is at -0.05 - 0.5 = -0.55.
+        // We create a fixed body for the ground to ensure best stability.
         const halfHeight = 0.5;
-        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, halfHeight, size)
+        const groundBodyDesc = RAPIER.RigidBodyDesc.fixed()
             .setTranslation(0, -0.05 - halfHeight, 0);
-        this.world.createCollider(groundColliderDesc);
+        const groundBody = this.world.createRigidBody(groundBodyDesc);
+
+        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, halfHeight, size);
+        this.world.createCollider(groundColliderDesc, groundBody);
     }
 
     /**
@@ -52,7 +54,9 @@ export class PhysicsManager {
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
         // Rapier cuboid takes half-extents
-        const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz);
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+            .setFriction(1.0)      // Stick to surfaces
+            .setRestitution(0.0);  // Don't bounce/vibrate indefinitely
         this.world.createCollider(colliderDesc, rigidBody);
 
         if (!isStatic) {
@@ -68,8 +72,8 @@ export class PhysicsManager {
     }
 
     /**
-     * Create a hexagonal collision shape by overlapping three cuboids.
-     * This is generally more stable than a convex hull for flat surfaces.
+     * Create a rigid body hexagon (cylinder-like) and register it for sync.
+     * Accurate prismatic hull matching Three.js CylinderGeometry.
      */
     createHexagon(radius, height, position, mesh, isStatic = false) {
         if (!this.world) return;
@@ -80,31 +84,30 @@ export class PhysicsManager {
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
-        // A hexagon can be approximated by 3 overlapping cuboids rotated by 60 degrees.
-        // For a radius R (center to vertex), the width of the cuboid (face to face) is R * sqrt(3).
-        // Wait, CylinderGeometry radius is center-to-vertex.
-        // So width of one rectangle is Radius * 2, and the other dimension is Radius * sqrt(3).
+        // Generate 12 vertices (6 top, 6 bottom)
         const hh = height / 2;
-        const hx = radius;               // length (vertex to vertex)
-        const hz = radius * 0.866;       // width (face to face / 2) -> R * sin(60)
+        const vertices = new Float32Array(12 * 3);
+        for (let i = 0; i < 6; i++) {
+            // Three.js CylinderGeometry orientation: x=sin, z=cos (Z-up-ish internally)
+            const theta = (i / 6) * Math.PI * 2;
+            const x = Math.sin(theta) * radius;
+            const z = Math.cos(theta) * radius;
 
-        // Create 3 colliders at the same position but rotated
-        const baseDesc = RAPIER.ColliderDesc.cuboid(hx, hh, hz);
+            // Top
+            vertices[i * 3] = x;
+            vertices[i * 3 + 1] = hh;
+            vertices[i * 3 + 2] = z;
 
-        // 0 degrees
-        this.world.createCollider(baseDesc, rigidBody);
+            // Bottom
+            vertices[(i + 6) * 3] = x;
+            vertices[(i + 6) * 3 + 1] = -hh;
+            vertices[(i + 6) * 3 + 2] = z;
+        }
 
-        // 60 degrees (rotate around Y)
-        const q60 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 3);
-        const desc60 = RAPIER.ColliderDesc.cuboid(hx, hh, hz)
-            .setRotation({ x: q60.x, y: q60.y, z: q60.z, w: q60.w });
-        this.world.createCollider(desc60, rigidBody);
-
-        // 120 degrees
-        const q120 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 2 * Math.PI / 3);
-        const desc120 = RAPIER.ColliderDesc.cuboid(hx, hh, hz)
-            .setRotation({ x: q120.x, y: q120.y, z: q120.z, w: q120.w });
-        this.world.createCollider(desc120, rigidBody);
+        const colliderDesc = RAPIER.ColliderDesc.convexHull(vertices)
+            .setFriction(1.0)
+            .setRestitution(0.0);
+        this.world.createCollider(colliderDesc, rigidBody);
 
         if (!isStatic) {
             const entityId = `physics-hexagon-${this.nextPhysicsId++}`;
@@ -134,13 +137,15 @@ export class PhysicsManager {
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
             .setLinearDamping(0.5)
-            .setAngularDamping(0.5);
+            .setAngularDamping(0.5)
+            .setCanSleep(true)
+            .setSleeping(true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hs, hs, hs)
-            .setRestitution(0.4)  // Slight bounce
-            .setFriction(0.8);
+            .setRestitution(0.2)  // Restored slight bounce
+            .setFriction(0.7);    // Restored natural friction
         this.world.createCollider(colliderDesc, rigidBody);
 
         const entityId = `grabbable-${this.nextPhysicsId++}`;
@@ -157,11 +162,15 @@ export class PhysicsManager {
     }
 
     step(delta) {
-        if (!this.rapierLoaded || !this.world) return;
+        if (!this.world) return;
 
-        // Step the actual physics simulation.
-        // Syncing mesh transforms from rigid bodies is now handled individually 
-        // by each PhysicsEntity during the EntityManager.update() pass.
+        // Use a fixed timestep for physics simulation to prevent tunneling.
+        // Even if the frame rate drops (or menus lag), we step at a consistent 60Hz.
+        const fixedTimeStep = 1 / 60;
+        this.world.timestep = fixedTimeStep;
+
+        // In a real game, you might want to loop here to catch up on 'accumulatedTime'
+        // But for this simulation, a single 1/60th step per frame is usually enough and stable.
         this.world.step();
     }
 }

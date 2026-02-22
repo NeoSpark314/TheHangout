@@ -174,6 +174,20 @@ export class PhysicsEntity extends NetworkEntity {
             this.mesh.position.set(position.x, position.y, position.z);
             this.mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
 
+            // Authoritative SLEEP helper: 
+            // If the object is moving extremely slowly, force it to sleep to stop micro-jitter.
+            if (!this.heldBy && !this.rigidBody.isSleeping()) {
+                const vel = this.rigidBody.linvel();
+                const angvel = this.rigidBody.angvel();
+                // If velocity is very low, force it to sleep
+                if (Math.abs(vel.x) < 0.02 && Math.abs(vel.y) < 0.02 && Math.abs(vel.z) < 0.02 &&
+                    Math.abs(angvel.x) < 0.02 && Math.abs(angvel.y) < 0.02 && Math.abs(angvel.z) < 0.02) {
+                    this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                    this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+                    this.rigidBody.sleep();
+                }
+            }
+
             // Respawn check — only if not held and below the kill plane
             if (this.grabbable && !this.heldBy && this.spawnPosition && position.y < -10) {
                 this.rigidBody.setTranslation(
@@ -210,14 +224,16 @@ export class PhysicsEntity extends NetworkEntity {
 
                 // ONLY snap physics if the visual mesh has moved enough to matter.
                 // This allows Rapier to put the body to SLEEP if the network state is stationary.
-                // Threshold increased to 0.001 (1mm) to be more permissive of sleep.
-                if (dsq > 0.001) {
+                // Threshold increased to 0.002 (2mm) to be more permissive of sleep.
+                if (dsq > 0.000004) { // (0.002^2)
                     this.rigidBody.setTranslation({ x: this.mesh.position.x, y: this.mesh.position.y, z: this.mesh.position.z }, true);
                     this.rigidBody.setRotation({ x: this.mesh.quaternion.x, y: this.mesh.quaternion.y, z: this.mesh.quaternion.z, w: this.mesh.quaternion.w }, true);
                 } else if (!this.rigidBody.isSleeping()) {
-                    // If we are very close to target and not moving, help it sleep
+                    // If we are very close to target and moving slowly, force it to stop and sleep
                     const linvel = this.rigidBody.linvel();
-                    if (Math.abs(linvel.x) < 0.01 && Math.abs(linvel.y) < 0.01 && Math.abs(linvel.z) < 0.01) {
+                    if (Math.abs(linvel.x) < 0.02 && Math.abs(linvel.y) < 0.02 && Math.abs(linvel.z) < 0.02) {
+                        this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                        this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
                         this.rigidBody.sleep();
                     }
                 }
