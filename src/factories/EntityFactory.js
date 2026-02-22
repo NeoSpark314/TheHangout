@@ -67,18 +67,18 @@ export class EntityFactory {
      */
     static createGrabbable(id, size, position, mesh) {
         const view = new PhysicsPropView(mesh);
-        const physics = gameState.managers.physics;
+        const { render, physics } = gameState.managers;
 
         if (!physics) {
             console.error('[EntityFactory] Physics manager not found');
             return null;
         }
 
-        const entity = physics.createGrabbable(id, size, position, mesh, view);
+        if (render) {
+            view.addToScene(render.scene);
+        }
 
-        // Note: createGrabbable already adds to scene via view.addToScene in our previous refactor,
-        // but let's be explicit if we want the factory to own that mapping.
-        // Actually, PhysicsManager.createGrabbable was updated to take the view.
+        const entity = physics.createGrabbable(id, size, position, mesh, view);
 
         return entity;
     }

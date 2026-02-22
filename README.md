@@ -34,14 +34,13 @@ npm run serve -- --key ./my.key --cert ./my.cert  # Custom SSL cert
 | VR | WebXR | Hand tracking, head pose |
 | Server | Express + PeerJS Server | Optional local signaling |
 
-### Entity System
+### Entity & View System
 
-All synced game objects follow the **Unified Entity Pattern** (see `NetworkEntity.js`):
+All synced game objects follow the **Unified Entity Pattern** (see `NetworkEntity.js`) decoupled from their visuals:
 
-- One class per entity type, handling both **authority** (local simulation) and **non-authority** (remote replication) via `isAuthority`
-- `getNetworkState()` / `setNetworkState()` for serialization
-- Authority can transfer at runtime (e.g., grab/release)
-- Register with `EntityManager` — sync is automatic
+- **Entities** (`src/entities/`): Logic-only classes handling physics, networking, and state.
+- **Views** (`src/views/`): Three.js visual implementations (StickFigure, Spectator, Props).
+- **Factory** (`src/factories/`): Centralized `EntityFactory` for creating and wiring entities to their views.
 
 ### Hosting Modes
 
@@ -59,10 +58,12 @@ All synced game objects follow the **Unified Entity Pattern** (see `NetworkEntit
 ├── server.js           # Local Node.js server
 ├── src/
 │   ├── core/           # GameState, EventBus, GameEngine
-│   ├── entities/       # NetworkEntity, LocalPlayer, RemotePlayer, SpectatorEntity, PhysicsEntity
-│   ├── managers/       # UI, Network, Render, Physics, Input, HUD, Player, Entity, Media, Room
+│   ├── entities/       # Logic: LocalPlayer, RemotePlayer, Spectator, PhysicsEntity
+│   ├── factories/      # Creation: EntityFactory
+│   ├── views/          # Visuals: StickFigureView, SpectatorView, PhysicsPropView
+│   ├── managers/       # UI, Network, Render, Physics, Environment, Prop, Room
 │   ├── skills/         # Movement, Grab (player abilities)
-│   └── utils/          # Constants, VirtualJoystick, HostKeepalive
+│   └── utils/          # Constants, DeviceUtils, HostKeepalive
 └── vite.config.js
 ```
 
