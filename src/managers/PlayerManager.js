@@ -1,8 +1,6 @@
 // managers/PlayerManager.js
 
-import { LocalPlayer } from '../entities/LocalPlayer.js';
-import { RemotePlayer } from '../entities/RemotePlayer.js';
-import { StickFigureView } from '../views/StickFigureView.js';
+import { EntityFactory } from '../factories/EntityFactory.js';
 import gameState from '../core/GameState.js';
 import eventBus from '../core/EventBus.js';
 import { EVENTS } from '../utils/Constants.js';
@@ -10,8 +8,7 @@ import { EVENTS } from '../utils/Constants.js';
 /**
  * Manages player lifecycle: spawns/despawns local and remote player entities.
  *
- * Creates the appropriate view (visual) for each player and wires it up
- * to the entity via constructor injection.
+ * Uses EntityFactory to create entities with their associated views.
  */
 export class PlayerManager {
     constructor() {
@@ -39,21 +36,15 @@ export class PlayerManager {
 
         const spawn = gameState.managers.room.getSpawnPoint(spawnIndex);
 
-        // Create view and entity
-        const view = new StickFigureView({
-            color: gameState.avatarConfig.color || 0x00ffff,
-            isLocal: true
+        // Create entity via factory
+        gameState.localPlayer = EntityFactory.createPlayer(id, {
+            isLocal: true,
+            spawnPos: spawn.position,
+            spawnYaw: spawn.yaw,
+            color: gameState.avatarConfig.color || 0x00ffff
         });
 
-        gameState.localPlayer = new LocalPlayer(id, spawn.position, spawn.yaw, view);
-
-        // Add view to scene, register entity
-        const { render } = gameState.managers;
-        if (render) {
-            view.addToScene(render.scene);
-        }
         gameState.managers.entity.addEntity(gameState.localPlayer);
-
         this.initialized = true;
     }
 
@@ -66,18 +57,12 @@ export class PlayerManager {
 
         console.log(`[PlayerManager] Spawning remote player for ${peerId}`);
 
-        // Create view and entity
-        const view = new StickFigureView({
-            color: 0xff00ff,
-            isLocal: false
+        // Create entity via factory
+        const rp = EntityFactory.createPlayer(peerId, {
+            isLocal: false,
+            color: 0xff00ff
         });
 
-        const rp = new RemotePlayer(peerId, view);
-
-        const { render } = gameState.managers;
-        if (render) {
-            view.addToScene(render.scene);
-        }
         gameState.managers.entity.addEntity(rp);
     }
 
@@ -92,5 +77,4 @@ export class PlayerManager {
             gameState.managers.hud.showNotification(`${name} left the hangout.`);
         }
     }
-
 }

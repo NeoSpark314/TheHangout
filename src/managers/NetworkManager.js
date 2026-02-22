@@ -3,8 +3,7 @@ import Peer from 'peerjs';
 import eventBus from '../core/EventBus.js';
 import gameState from '../core/GameState.js';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants.js';
-import { SpectatorEntity } from '../entities/SpectatorEntity.js';
-import { SpectatorView } from '../views/SpectatorView.js';
+import { EntityFactory } from '../factories/EntityFactory.js';
 import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive.js';
 
 export class NetworkManager {
@@ -252,10 +251,7 @@ export class NetworkManager {
 
             // Auto-spawn remote spectator for dedicated host
             if (!entity && stateData.type === 'SPECTATOR') {
-                const view = new SpectatorView();
-                const rs = new SpectatorEntity(stateData.id, false, view);
-                const { render } = gameState.managers;
-                if (render) view.addToScene(render.scene);
+                const rs = EntityFactory.createSpectator(stateData.id, false);
                 gameState.managers.entity.addEntity(rs);
                 entity = rs;
             }

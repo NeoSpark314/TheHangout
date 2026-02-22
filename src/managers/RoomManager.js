@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import eventBus from '../core/EventBus.js';
 import gameState from '../core/GameState.js';
 import { PACKET_TYPES } from '../utils/Constants.js';
+import { EntityFactory } from '../factories/EntityFactory.js';
 
 export class RoomManager {
     constructor() {
@@ -517,9 +518,9 @@ export class RoomManager {
             const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
             mesh.add(new THREE.LineSegments(edges, lineMat));
 
-            this.scene.add(mesh);
-
-            physics.createGrabbable(cubeSize, position, mesh);
+            // Create entity via factory
+            const entityId = `grabbable-${i}`; // Using loop index for stability
+            EntityFactory.createGrabbable(entityId, cubeSize, position, mesh);
         }
     }
 

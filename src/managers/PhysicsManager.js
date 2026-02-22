@@ -121,12 +121,13 @@ export class PhysicsManager {
 
     /**
      * Create a grabbable dynamic rigid body and register it
+     * @param {string} id - Explicit ID, or null to auto-generate
      * @param {number} size - Cube side length
      * @param {Object} position - {x, y, z}
      * @param {THREE.Mesh} mesh
      * @param {import('../views/EntityView.js').EntityView} [view] - Optional visual
      */
-    createGrabbable(size, position, mesh, view) {
+    createGrabbable(id, size, position, mesh, view) {
         if (!this.world) return null;
 
         const hs = size / 2; // half-extent
@@ -144,7 +145,7 @@ export class PhysicsManager {
             .setFriction(0.7);    // Restored natural friction
         this.world.createCollider(colliderDesc, rigidBody);
 
-        const entityId = `grabbable-${this.nextPhysicsId++}`;
+        const entityId = id || `grabbable-${this.nextPhysicsId++}`;
         const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, mesh, rigidBody, {
             grabbable: true,
             spawnPosition: position,
