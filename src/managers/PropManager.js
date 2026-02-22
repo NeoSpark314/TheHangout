@@ -1,6 +1,7 @@
 // managers/PropManager.js
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EntityFactory } from '../factories/EntityFactory.js';
 import gameState from '../core/GameState.js';
 
@@ -95,6 +96,30 @@ export class PropManager {
         this.hologram = new THREE.Mesh(holoGeo, holoMat);
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
+
+        // Add the duck! 🦆
+        const loader = new GLTFLoader();
+        const duckUrl = '/models/duck.glb';
+
+        loader.load(duckUrl, (gltf) => {
+            const duck = gltf.scene;
+
+            // Normalize size and center
+            const box = new THREE.Box3().setFromObject(duck);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetScale = 0.25 / maxDim;
+            duck.scale.setScalar(targetScale);
+
+            // Re-center after scaling
+            const center = box.getCenter(new THREE.Vector3()).multiplyScalar(-targetScale);
+            duck.position.copy(center);
+
+            // Add to hologram so it rotates/floats with it
+            this.hologram.add(duck);
+        }, undefined, (error) => {
+            console.error('[PropManager] Failed to load duck joke:', error);
+        });
     }
 
     createPodest() {
