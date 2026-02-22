@@ -33,10 +33,25 @@ export class NetworkManager {
         });
     }
 
+    /**
+     * Build PeerJS config — local signaling server or PeerJS cloud.
+     */
+    getPeerConfig() {
+        if (gameState.isLocalServer) {
+            return {
+                host: window.location.hostname,
+                port: parseInt(window.location.port) || 443,
+                path: '/peerjs',
+                secure: window.location.protocol === 'https:',
+                debug: 2
+            };
+        }
+        return { debug: 2 }; // PeerJS cloud fallback
+    }
+
     initHost(customId) {
-        // If customId is provided, PeerJS will attempt to use it.
-        // If not, it generates a random one.
-        this.peer = customId ? new Peer(customId, { debug: 2 }) : new Peer({ debug: 2 });
+        const config = this.getPeerConfig();
+        this.peer = customId ? new Peer(customId, config) : new Peer(config);
 
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
@@ -76,7 +91,7 @@ export class NetworkManager {
     }
 
     initGuest(hostId) {
-        this.peer = new Peer({ debug: 2 });
+        this.peer = new Peer(this.getPeerConfig());
 
         this.peer.on('open', (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);

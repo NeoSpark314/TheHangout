@@ -19,6 +19,20 @@ import { EVENTS } from './utils/Constants.js';
 async function bootstrap() {
   console.log('Bootstrapping TheHangout...');
 
+  // Detect if running on local Node.js server
+  try {
+    const resp = await fetch('/api/server-info');
+    if (resp.ok) {
+      const info = await resp.json();
+      if (info.local) {
+        gameState.isLocalServer = true;
+        console.log('[Bootstrap] Local server detected — using local PeerJS signaling.');
+      }
+    }
+  } catch (e) {
+    // Not on local server — use PeerJS cloud (default)
+  }
+
   // Initialize Managers
   gameState.managers.entity = new EntityManager();
   gameState.managers.ui = new UIManager();

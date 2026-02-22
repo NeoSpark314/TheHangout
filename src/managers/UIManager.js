@@ -51,6 +51,19 @@ export class UIManager {
             this.setupDefaultMode();
         }
 
+        // Show local server indicator
+        if (gameState.isLocalServer) {
+            const badge = document.createElement('div');
+            badge.textContent = '🖥 Local Server';
+            badge.style.cssText = `
+                position: fixed; top: 12px; right: 12px; z-index: 10000;
+                background: rgba(0, 255, 100, 0.15); border: 1px solid rgba(0, 255, 100, 0.4);
+                color: #00ff64; padding: 6px 14px; border-radius: 20px;
+                font: bold 13px Inter, Arial, sans-serif; backdrop-filter: blur(8px);
+            `;
+            document.body.appendChild(badge);
+        }
+
         this.voiceBtn = document.getElementById('voice-btn');
 
         if (this.copyRoomBtn) {
