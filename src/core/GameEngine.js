@@ -78,19 +78,20 @@ export class GameEngine {
             gameState.managers.input.update(delta);
         }
 
-        // 3. Physics
+        // 3. Update All Entities Locally (Locomotion & Grabbing)
+        // This must happen BEFORE Physics so kinematic targets are set for the current frame
+        if (gameState.managers.entity) {
+            gameState.managers.entity.update(delta);
+        }
+
+        // 4. Physics
         if (gameState.managers.physics) {
             gameState.managers.physics.step(delta);
         }
 
-        // 4. World & Entity State Sync
+        // 5. World State Sync
         if (gameState.managers.room) {
             gameState.managers.room.update(delta);
-        }
-
-        // 5. Update All Entities Locally
-        if (gameState.managers.entity) {
-            gameState.managers.entity.update(delta);
         }
 
         // 6. HUD

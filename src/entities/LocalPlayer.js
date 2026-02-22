@@ -130,6 +130,13 @@ export class LocalPlayer extends PlayerEntity {
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const localHeadQuat = bodyQuat.invert().multiply(finalHeadQuat);
 
+        // SYNC FIX [PHASE 2]: 
+        // We must update the mesh position and rotation BEFORE transforming hands to avatar space.
+        // Otherwise, the hands use the "previous" frame's body position for the transformation.
+        this.mesh.position.set(headWorldPos.x, 0, headWorldPos.z);
+        this.mesh.rotation.y = bodyYaw;
+        this.mesh.updateMatrixWorld(true);
+
         // Transform VR hands to avatar-local space
         this.transformHandsToAvatarSpace();
 
@@ -138,7 +145,7 @@ export class LocalPlayer extends PlayerEntity {
 
         // Push complete state to view
         this.view.update({
-            position: new THREE.Vector3(headWorldPos.x, 0, headWorldPos.z),
+            position: this.mesh.position,
             yaw: bodyYaw,
             headHeight: headWorldPos.y,
             headQuaternion: localHeadQuat,
