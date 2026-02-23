@@ -57,7 +57,10 @@ export class NetworkManager {
     }
 
     async initRelay(peerId, roomId) {
-        if (!gameState.isLocalServer) return null;
+        if (!gameState.isLocalServer) {
+            console.warn('[NetworkManager] initRelay called but isLocalServer is false.');
+            return null;
+        }
 
         return new Promise((resolve, reject) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -117,18 +120,25 @@ export class NetworkManager {
 
         if (gameState.isLocalServer) {
             this.peer.on('error', (err) => {
-                if (err.type === 'network' || err.type === 'server-error') {
-                    console.warn('[NetworkManager] PeerJS signaling failed, but we are on local server. Relay might still work.');
+                if (err.type === 'network' || err.type === 'server-error' || err.type === 'peer-unavailable') {
+                    console.warn('[NetworkManager] PeerJS signaling issue detected. Relay should handle connectivity.');
                 }
             });
+
+            // Start Relay immediately if we have a customId, or wait for PeerJS ID
+            // If it's a dedicated host or we have a customId, we know the ID we want.
+            const initialId = customId || (this.peer.id ? this.peer.id : null);
+            if (initialId) {
+                this.initRelay(initialId, initialId).catch(e => console.error('[NetworkManager] Relay init failed:', e));
+            }
         }
 
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             gameState.roomId = id;
 
-            // Start Relay if on local server
-            if (gameState.isLocalServer) {
+            // If relay didn't start yet (no customId), start it now
+            if (gameState.isLocalServer && !this.relaySocket) {
                 try {
                     await this.initRelay(id, id);
                 } catch (e) {
@@ -172,6 +182,19 @@ export class NetworkManager {
     async initGuest(hostId) {
         this.peer = new Peer(this.getPeerConfig());
 
+        // Start Relay immediately on guest (we know hostId, and we can use a temp ID for ourselves)
+        if (gameState.isLocalServer) {
+            const tempId = 'guest-' + Math.random().toString(36).substr(2, 9);
+            console.log(`[NetworkManager] Initializing Relay as Guest with temp ID: ${tempId}`);
+            this.initRelay(tempId, hostId).then(() => {
+                if (!this.connections.has(hostId)) {
+                    console.log(`[NetworkManager] Relay connection established for Guest to Host: ${hostId}`);
+                    const conn = new RelayConnection(this.relaySocket, tempId, hostId, false);
+                    this.setupConnection(conn);
+                }
+            }).catch(e => console.warn('[NetworkManager] Local Relay init failed:', e));
+        }
+
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
             gameState.roomId = hostId;
@@ -181,12 +204,20 @@ export class NetworkManager {
             }
 
             if (gameState.isLocalServer) {
+                // If the relay connection already exists (from tempId), we don't need to do anything here
+                // except maybe update the ID if we really wanted to, but keeping the tempId is fine
+                // as long as the host recognizes us.
+                if (this.connections.has(hostId)) {
+                    console.log('[NetworkManager] Relay already connected via temp ID. Skipping PeerJS connect.');
+                    return;
+                }
+
                 try {
+                    console.log('[NetworkManager] Relay not connected yet, attempting with PeerJS ID:', id);
                     await this.initRelay(id, hostId);
-                    // Use Relay instead of PeerJS connect
                     const conn = new RelayConnection(this.relaySocket, id, hostId, false);
                     this.setupConnection(conn);
-                    return; // Bypass PeerJS.connect
+                    return;
                 } catch (e) {
                     console.warn('[NetworkManager] Local Server Relay failed, falling back to PeerJS cloud/P2P.');
                 }
