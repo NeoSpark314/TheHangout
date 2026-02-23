@@ -66,6 +66,13 @@ export class RoomManager {
 
     updateConfig(newConfig) {
         const oldSeed = gameState.roomConfig.seed;
+
+        // Capture transient fields like assignedSpawnIndex if present
+        if (newConfig.assignedSpawnIndex !== undefined) {
+            this.assignedSpawnIndex = newConfig.assignedSpawnIndex;
+            delete newConfig.assignedSpawnIndex; // Don't pollute the persistent config
+        }
+
         gameState.roomConfig = { ...gameState.roomConfig, ...newConfig };
 
         // If the seed changed, tear down procedural elements so they get rebuilt

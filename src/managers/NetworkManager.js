@@ -248,7 +248,11 @@ export class NetworkManager {
 
             // If we are the host, send the current room config and a world snapshot to the new guest immediately
             if (gameState.isHost) {
-                this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, gameState.roomConfig);
+                const welcomeConfig = {
+                    ...gameState.roomConfig,
+                    assignedSpawnIndex: this.connections.size // Host 0, first guest 1, etc.
+                };
+                this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, welcomeConfig);
 
                 if (gameState.managers.entity) {
                     const snapshot = gameState.managers.entity.getWorldSnapshot();

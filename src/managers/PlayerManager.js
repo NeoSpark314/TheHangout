@@ -32,7 +32,13 @@ export class PlayerManager {
         // Get procedural spawn point
         let spawnIndex = 0; // Host is always 0
         if (!gameState.isHost) {
-            spawnIndex = gameState.managers.network.connections.size;
+            // Check if RoomManager caught an assigned index from the host
+            if (gameState.managers.room && gameState.managers.room.assignedSpawnIndex !== undefined) {
+                spawnIndex = gameState.managers.room.assignedSpawnIndex;
+            } else {
+                // Fallback for unexpected sync order
+                spawnIndex = gameState.managers.network.connections.size;
+            }
         }
 
         const spawn = gameState.managers.room.getSpawnPoint(spawnIndex);
