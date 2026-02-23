@@ -33,6 +33,22 @@ npm run serve -- --key ./my.key --cert ./my.cert  # Custom SSL cert
 | Networking | PeerJS (WebRTC) | P2P data + voice |
 | VR | WebXR | Hand tracking, head pose |
 | Server | Express + PeerJS Server | Optional local signaling |
+| Audio | Web Audio API | Procedural 8-bit / 80s SFX |
+
+## Controls
+
+### VR Mode
+- **Movement**: Left Thumbstick
+- **Rotation**: Right Thumbstick (Snap/Smooth)
+- **Grab**: Squeeze/Grip button (hold to carry)
+- **Voice**: Microphone active by default (toggle via UI)
+
+### Desktop Mode
+- **Movement**: WASD
+- **Look**: Mouse (Pointer Lock)
+- **Grab**: **E key** (hold to carry, release to throw)
+- **Aim**: Integrated crosshair HUD
+- **Voice**: Microphone toggle via UI button
 
 ### Entity & View System
 

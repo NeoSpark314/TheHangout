@@ -21,6 +21,19 @@ export default defineConfig({
     },
     server: {
         https: true,
-        host: true // Exposes the server to your local network
+        host: true, // Exposes the server to your local network
+        proxy: {
+            '/api': {
+                target: 'https://localhost',
+                secure: false, // Accept self-signed certs
+                changeOrigin: true
+            },
+            '/peerjs': {
+                target: 'https://localhost',
+                secure: false,
+                changeOrigin: true,
+                ws: true // Important for PeerJS websockets
+            }
+        }
     }
 })

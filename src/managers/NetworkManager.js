@@ -43,7 +43,12 @@ export class NetworkManager {
                 port: parseInt(window.location.port) || 443,
                 path: '/peerjs',
                 secure: window.location.protocol === 'https:',
-                debug: 2
+                debug: 2,
+                config: {
+                    // Force local-only (no STUN/TURN) when on local server
+                    // to avoid timeouts in restricted environments
+                    iceServers: []
+                }
             };
         }
         return { debug: 2 }; // PeerJS cloud fallback

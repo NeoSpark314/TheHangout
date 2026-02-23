@@ -90,11 +90,11 @@ app.use(express.static(distPath));
 // --- HTTPS Server (must exist before PeerJS) ---
 const server = https.createServer(sslOptions, app);
 
-// --- PeerJS signaling (MUST be before SPA fallback) ---
 const peerServer = ExpressPeerServer(server, {
     debug: true,
     path: '/',
-    allow_discovery: true
+    allow_discovery: true,
+    proxied: true // Better handling of corporate proxies/SSL offloading
 });
 
 app.use('/peerjs', peerServer);
@@ -110,6 +110,10 @@ peerServer.on('connection', (client) => {
 
 peerServer.on('disconnect', (client) => {
     console.log(`[PeerJS] Peer disconnected: ${client.getId()}`);
+});
+
+peerServer.on('error', (err) => {
+    console.error('[PeerJS] Server Error:', err);
 });
 
 // --- Start ---
