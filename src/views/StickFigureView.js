@@ -180,12 +180,12 @@ export class StickFigureView extends EntityView {
 
         // Hand Skeletons (Cylinders)
         for (let i = 0; i < StickFigureView.HAND_INDICES.length / 2; i++) {
-            const leftCyl = new THREE.Mesh(handCylinderGeom, this.accentMaterial);
+            const leftCyl = new THREE.Mesh(handCylinderGeom, this.cyberMaterial);
             leftCyl.visible = false;
             this.mesh.add(leftCyl);
             this.handCylinders.left.push(leftCyl);
 
-            const rightCyl = new THREE.Mesh(handCylinderGeom, this.accentMaterial);
+            const rightCyl = new THREE.Mesh(handCylinderGeom, this.cyberMaterial);
             rightCyl.visible = false;
             this.mesh.add(rightCyl);
             this.handCylinders.right.push(rightCyl);
