@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
+import { WebSocketServer } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -114,6 +115,90 @@ peerServer.on('disconnect', (client) => {
 
 peerServer.on('error', (err) => {
     console.error('[PeerJS] Server Error:', err);
+});
+
+// --- WebSocket Relay (Fallback for restricted networks) ---
+const wss = new WebSocketServer({ server, path: '/relay' });
+const rooms = new Map(); // roomId -> Set of sockets
+
+wss.on('connection', (ws) => {
+    let currentRoomId = null;
+    let currentPeerId = null;
+
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+
+            if (data.type === 'join') {
+                currentRoomId = data.roomId;
+                currentPeerId = data.peerId;
+
+                if (!rooms.has(currentRoomId)) {
+                    rooms.set(currentRoomId, new Map());
+                }
+                rooms.get(currentRoomId).set(currentPeerId, ws);
+
+                console.log(`[Relay] Peer ${currentPeerId} joined room ${currentRoomId}`);
+
+                // Notify others in the room
+                const room = rooms.get(currentRoomId);
+                for (const [peerId, socket] of room.entries()) {
+                    if (peerId !== currentPeerId && socket.readyState === 1) {
+                        socket.send(JSON.stringify({ type: 'peer-joined', peerId: currentPeerId }));
+                    }
+                }
+            } else if (data.type === 'relay') {
+                const room = rooms.get(currentRoomId);
+                if (room) {
+                    if (data.target) {
+                        // Unicast
+                        const targetSocket = room.get(data.target);
+                        if (targetSocket && targetSocket.readyState === 1) {
+                            targetSocket.send(JSON.stringify({
+                                type: 'relay',
+                                from: currentPeerId,
+                                payload: data.payload
+                            }));
+                        }
+                    } else {
+                        // Broadcast
+                        for (const [peerId, socket] of room.entries()) {
+                            if (peerId !== currentPeerId && socket.readyState === 1) {
+                                socket.send(JSON.stringify({
+                                    type: 'relay',
+                                    from: currentPeerId,
+                                    payload: data.payload
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[Relay] Error processing message:', e);
+        }
+    });
+
+    ws.on('close', () => {
+        if (currentRoomId && currentPeerId) {
+            const room = rooms.get(currentRoomId);
+            if (room) {
+                room.delete(currentPeerId);
+                console.log(`[Relay] Peer ${currentPeerId} left room ${currentRoomId}`);
+
+                // Notify others
+                for (const [peerId, socket] of room.entries()) {
+                    if (socket.readyState === 1) {
+                        socket.send(JSON.stringify({ type: 'peer-left', peerId: currentPeerId }));
+                    }
+                }
+
+                if (room.size === 0) {
+                    rooms.delete(currentRoomId);
+                }
+            }
+        }
+    });
 });
 
 // --- Start ---

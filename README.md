@@ -9,14 +9,16 @@ npm install
 npm run dev          # Development (Vite + PeerJS cloud)
 ```
 
-### Local Server (LAN hosting)
+### Local Server (LAN & Corporate hosting)
 
 ```bash
 npm run build        # Build the client
-npm run serve        # Start Express + local PeerJS signaling (port 443)
+npm run serve        # Start Express + local PeerJS signaling + WS Relay (port 443)
 ```
 
 Opens at `https://localhost/`. Self-signed SSL cert is auto-generated on first run.
+
+**Reliability Note**: This mode includes an automatic **WebSocket Relay Fallback**. If your network blocks P2P (WebRTC), the app will automatically route traffic through the server. This is guaranteed to work in restricted corporate networks where HTTPS (port 443) is allowed.
 
 **Options** (CLI flags or env vars):
 ```bash

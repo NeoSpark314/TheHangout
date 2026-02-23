@@ -33,6 +33,12 @@ export default defineConfig({
                 secure: false,
                 changeOrigin: true,
                 ws: true // Important for PeerJS websockets
+            },
+            '/relay': {
+                target: 'https://localhost',
+                secure: false,
+                changeOrigin: true,
+                ws: true // Important for Relay websockets
             }
         }
     }

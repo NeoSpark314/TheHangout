@@ -5,11 +5,13 @@ import gameState from '../core/GameState.js';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants.js';
 import { EntityFactory } from '../factories/EntityFactory.js';
 import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive.js';
+import { RelayConnection } from '../utils/RelayConnection.js';
 
 export class NetworkManager {
     constructor() {
         this.peer = null;
-        this.connections = new Map(); // peerId -> DataConnection
+        this.relaySocket = null;
+        this.connections = new Map(); // peerId -> DataConnection / RelayConnection
 
         // Sync Timing (e.g. 20 Hz)
         this.syncRate = 1 / 20;
@@ -54,13 +56,85 @@ export class NetworkManager {
         return { debug: 2 }; // PeerJS cloud fallback
     }
 
-    initHost(customId) {
+    async initRelay(peerId, roomId) {
+        if (!gameState.isLocalServer) return null;
+
+        return new Promise((resolve, reject) => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+            const url = `${protocol}//${host}:${port}/relay`;
+
+            console.log(`[NetworkManager] Connecting to Relay: ${url}`);
+            this.relaySocket = new WebSocket(url);
+
+            this.relaySocket.onopen = () => {
+                console.log('[NetworkManager] Relay Socket Open');
+                this.relaySocket.send(JSON.stringify({
+                    type: 'join',
+                    roomId: roomId || peerId,
+                    peerId: peerId
+                }));
+                resolve(this.relaySocket);
+            };
+
+            this.relaySocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'peer-joined') {
+                    console.log(`[NetworkManager] Relay: Peer joined: ${data.peerId}`);
+                    // If we are host, we "accept" this connection
+                    if (gameState.isHost) {
+                        const conn = new RelayConnection(this.relaySocket, peerId, data.peerId, true);
+                        this.setupConnection(conn);
+                    }
+                } else if (data.type === 'relay') {
+                    const conn = this.connections.get(data.from);
+                    if (conn && conn instanceof RelayConnection) {
+                        conn.handleData(data.payload);
+                    } else if (!gameState.isHost && data.from === gameState.roomId) {
+                        // We are guest, and this is the host talking to us via relay for the first time
+                        // If we don't have a connection yet, create one
+                        const conn = new RelayConnection(this.relaySocket, peerId, data.from, false);
+                        this.setupConnection(conn);
+                        conn.handleData(data.payload);
+                    }
+                } else if (data.type === 'peer-left') {
+                    const conn = this.connections.get(data.peerId);
+                    if (conn) conn.close();
+                }
+            };
+
+            this.relaySocket.onerror = (err) => {
+                console.error('[NetworkManager] Relay Socket Error:', err);
+                reject(err);
+            };
+        });
+    }
+
+    async initHost(customId) {
         const config = this.getPeerConfig();
         this.peer = customId ? new Peer(customId, config) : new Peer(config);
 
-        this.peer.on('open', (id) => {
+        if (gameState.isLocalServer) {
+            this.peer.on('error', (err) => {
+                if (err.type === 'network' || err.type === 'server-error') {
+                    console.warn('[NetworkManager] PeerJS signaling failed, but we are on local server. Relay might still work.');
+                }
+            });
+        }
+
+        this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             gameState.roomId = id;
+
+            // Start Relay if on local server
+            if (gameState.isLocalServer) {
+                try {
+                    await this.initRelay(id, id);
+                } catch (e) {
+                    console.error('[NetworkManager] Failed to init Relay fallback:', e);
+                }
+            }
             if (gameState.managers.media) {
                 gameState.managers.media.bindPeer(this.peer);
             }
@@ -95,15 +169,27 @@ export class NetworkManager {
         });
     }
 
-    initGuest(hostId) {
+    async initGuest(hostId) {
         this.peer = new Peer(this.getPeerConfig());
 
-        this.peer.on('open', (id) => {
+        this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
             gameState.roomId = hostId;
 
             if (gameState.managers.media) {
                 gameState.managers.media.bindPeer(this.peer);
+            }
+
+            if (gameState.isLocalServer) {
+                try {
+                    await this.initRelay(id, hostId);
+                    // Use Relay instead of PeerJS connect
+                    const conn = new RelayConnection(this.relaySocket, id, hostId, false);
+                    this.setupConnection(conn);
+                    return; // Bypass PeerJS.connect
+                } catch (e) {
+                    console.warn('[NetworkManager] Local Server Relay failed, falling back to PeerJS cloud/P2P.');
+                }
             }
 
             const conn = this.peer.connect(hostId, { reliable: true });
@@ -395,6 +481,11 @@ export class NetworkManager {
 
     disconnect() {
         stopKeepalive();
+
+        if (this.relaySocket) {
+            this.relaySocket.close();
+            this.relaySocket = null;
+        }
 
         if (this.peer) {
             this.peer.destroy();
