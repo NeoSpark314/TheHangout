@@ -18,7 +18,10 @@ npm run serve        # Start Express + local PeerJS signaling + WS Relay (port 4
 
 Opens at `https://localhost/`. Self-signed SSL cert is auto-generated on first run.
 
-**Reliability Note**: This mode includes an automatic **WebSocket Relay Fallback**. If your network blocks P2P (WebRTC), the app will automatically route traffic through the server. This is guaranteed to work in restricted corporate networks where HTTPS (port 443) is allowed.
+**Reliability Note**: This mode includes an automatic **WebSocket Relay Fallback**. If your network blocks P2P (WebRTC), the app will automatically route traffic through the server on port 443. This bypasses typical corporate firewalls and deep packet inspection by disabling WebSocket compression and using a unified upgrade dispatcher.
+
+> [!NOTE]
+> Binding to port 443 on Linux/macOS typically requires `sudo`. On Windows, ensure the port is not being used by other services (like IIS or Skype).
 
 **Options** (CLI flags or env vars):
 ```bash
