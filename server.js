@@ -95,7 +95,8 @@ const peerServer = ExpressPeerServer(server, {
     debug: true,
     path: '/',
     allow_discovery: true,
-    proxied: true // Better handling of corporate proxies/SSL offloading
+    // Removing 'proxied: true' for now to debug 'Invalid frame header'
+    // as some proxies/environments don't like transformations.
 });
 
 app.use('/peerjs', peerServer);
@@ -118,10 +119,44 @@ peerServer.on('error', (err) => {
 });
 
 // --- WebSocket Relay (Fallback for restricted networks) ---
-const wss = new WebSocketServer({ server, path: '/relay' });
+const wss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: false // Disable compression to avoid 'Invalid frame header' in some environments
+});
 const rooms = new Map(); // roomId -> Set of sockets
 
+// Take over 'upgrade' handling to ensure strict routing between PeerJS and Relay
+const originalUpgradeListeners = server.listeners('upgrade').slice();
+server.removeAllListeners('upgrade');
+
+server.on('upgrade', (request, socket, head) => {
+    try {
+        const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`);
+        const pathname = url.pathname;
+        console.log(`[Server] Upgrade Request: ${pathname}`);
+
+        if (pathname === '/relay') {
+            console.log('[Server] Routing to Relay...');
+            wss.handleUpgrade(request, socket, head, (ws) => {
+                console.log('[Server] Relay Handshake Complete');
+                wss.emit('connection', ws, request);
+            });
+        } else {
+            // Pass to PeerJS or other listeners
+            if (originalUpgradeListeners.length > 0) {
+                originalUpgradeListeners.forEach(l => l(request, socket, head));
+            } else {
+                console.log(`[Server] No handler for upgrade path: ${pathname}`);
+                socket.destroy();
+            }
+        }
+    } catch (e) {
+        console.error('[Server] Upgrade processing error:', e);
+        socket.destroy();
+    }
+});
 wss.on('connection', (ws) => {
+    console.log('[Relay] New Connection established');
     let currentRoomId = null;
     let currentPeerId = null;
 

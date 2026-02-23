@@ -65,14 +65,16 @@ export class NetworkManager {
         return new Promise((resolve, reject) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.hostname;
-            const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-            const url = `${protocol}//${host}:${port}/relay`;
+            const port = window.location.port;
+            // Clean URL: don't include port if it's default
+            const portPart = (port === '443' || port === '80' || port === '') ? '' : `:${port}`;
+            const url = `${protocol}//${host}${portPart}/relay`;
 
-            console.log(`[NetworkManager] Connecting to Relay: ${url}`);
+            console.log(`[NetworkManager] Attempting Relay connection to: ${url}`);
             this.relaySocket = new WebSocket(url);
 
             this.relaySocket.onopen = () => {
-                console.log('[NetworkManager] Relay Socket Open');
+                console.log('[NetworkManager] Relay WebSocket Handshake Success!');
                 this.relaySocket.send(JSON.stringify({
                     type: 'join',
                     roomId: roomId || peerId,
@@ -108,7 +110,8 @@ export class NetworkManager {
             };
 
             this.relaySocket.onerror = (err) => {
-                console.error('[NetworkManager] Relay Socket Error:', err);
+                console.error('[NetworkManager] Relay Socket Error. State:', this.relaySocket.readyState);
+                console.error('[NetworkManager] Relay Error Details:', err);
                 reject(err);
             };
         });
