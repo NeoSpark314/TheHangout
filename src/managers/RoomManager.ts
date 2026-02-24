@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import gameState, { RoomConfig } from '../core/GameState';
 import { EnvironmentManager } from './EnvironmentManager';
 import { PropManager } from './PropManager';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 
 export class RoomManager {
     public scene: THREE.Scene | null = null;
@@ -26,6 +28,13 @@ export class RoomManager {
         const randomBound = this.random.bind(this);
         this.environment = new EnvironmentManager(scene, randomBound);
         this.props = new PropManager(scene, randomBound);
+        
+        // Ground is created strictly during applyConfig or init via master orchestrator
+        if (gameState.managers.physics) {
+            gameState.managers.physics.createGround(25);
+            this.groundPhysics = true;
+        }
+
         this.applyConfig(gameState.roomConfig);
     }
 
@@ -39,11 +48,6 @@ export class RoomManager {
 
         this.environment.applyConfig(config);
         this.props.applyConfig(config);
-
-        if (gameState.managers.physics && !this.groundPhysics) {
-            gameState.managers.physics.createGround(25);
-            this.groundPhysics = true;
-        }
     }
 
     public update(delta: number): void {

@@ -36,7 +36,13 @@ export class App {
             this.initializeManagers();
             this.setupGlobalEventListeners();
             
+            // 1. Infrastructure (Physics must be first)
+            await gameState.managers.physics.init();
+            
+            // 2. World (Requires Physics)
             await this.initSystems();
+            
+            // 3. Engine (Starts simulation)
             await this.engine.initialize();
 
             console.log('[App] Bootstrap complete. Scene ready.');
@@ -109,10 +115,6 @@ export class App {
 
     private async initSystems(): Promise<void> {
         const managers = gameState.managers;
-
-        if (managers.physics) {
-            await managers.physics.init();
-        }
 
         if (managers.render && managers.room) {
             managers.room.init(managers.render.scene);
