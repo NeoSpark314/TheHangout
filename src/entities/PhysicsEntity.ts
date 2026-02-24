@@ -114,6 +114,20 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
     }
 
+    public onNetworkEvent(type: string, payload: any): void {
+        if (type === 'OWNERSHIP_RELEASE' && this.rigidBody) {
+            // Restore Dynamic physics locally
+            this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+            
+            if (payload.position) this.rigidBody.setTranslation({ x: payload.position[0], y: payload.position[1], z: payload.position[2] }, false);
+            if (payload.quaternion) this.rigidBody.setRotation({ x: payload.quaternion[0], y: payload.quaternion[1], z: payload.quaternion[2], w: payload.quaternion[3] }, false);
+            if (payload.velocity) {
+                this.rigidBody.wakeUp();
+                this.rigidBody.setLinvel({ x: payload.velocity[0], y: payload.velocity[1], z: payload.velocity[2] }, true);
+            }
+        }
+    }
+
     public update(delta: number, _frame?: XRFrame): void {
         if (!this.rigidBody) return;
 

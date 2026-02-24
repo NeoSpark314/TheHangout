@@ -290,17 +290,11 @@ export class NetworkManager implements NetworkTransport {
         logicEntity.ownerId = null;
         entity.isAuthority = true;
         
-        if (logicEntity.rigidBody) {
-            // Restore Dynamic physics on host
-            logicEntity.rigidBody.setBodyType(0, true); // 0 = Dynamic
-            
-            if (payload.position) logicEntity.rigidBody.setTranslation({ x: payload.position[0], y: payload.position[1], z: payload.position[2] }, false);
-            if (payload.quaternion) logicEntity.rigidBody.setRotation({ x: payload.quaternion[0], y: payload.quaternion[1], z: payload.quaternion[2], w: payload.quaternion[3] }, false);
-            if (payload.velocity) {
-                logicEntity.rigidBody.wakeUp();
-                logicEntity.rigidBody.setLinvel({ x: payload.velocity[0], y: payload.velocity[1], z: payload.velocity[2] }, true);
-            }
+        // Let the entity handle its own state restoration (Encapsulation)
+        if (logicEntity.onNetworkEvent) {
+            logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
         }
+
         this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
     }
 

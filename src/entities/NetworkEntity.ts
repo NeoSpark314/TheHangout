@@ -62,6 +62,14 @@ export abstract class NetworkEntity implements IEntity, INetworkable<any> {
     abstract getNetworkState(): any;
     abstract applyNetworkState(state: any): void;
 
+    /**
+     * Called when a specialized network event occurs for this entity.
+     * Overridden by subclasses to handle things like ownership release data.
+     */
+    public onNetworkEvent(type: string, payload: any): void {
+        // Optional override
+    }
+
     onAuthorityChanged(isAuthority: boolean): void {
         this.isAuthority = isAuthority;
     }
