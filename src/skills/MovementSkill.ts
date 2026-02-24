@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { Vector3 } from '../interfaces/IMath';
-import gameState from '../core/GameState';
+import type { Managers } from '../core/GameState';
 
 export class MovementSkill extends Skill {
     public speed: number = 5.0;
@@ -22,25 +22,21 @@ export class MovementSkill extends Skill {
 
     public activate(player: LocalPlayer): void {
         super.activate(player);
-        if (!this._inputListenersAttached) {
-            this._attachInputListeners(player);
-            this._inputListenersAttached = true;
-        }
     }
 
-    private _attachInputListeners(player: LocalPlayer): void {
+    private _attachInputListeners(player: LocalPlayer, managers: Managers): void {
         const canvas = document.getElementById('app');
         if (!canvas) return;
 
         canvas.addEventListener('click', () => {
-            const render = gameState.managers.render;
+            const render = managers.render;
             if (render && !render.isXRPresenting()) {
                 canvas.requestPointerLock();
             }
         });
 
         document.addEventListener('mousemove', (e) => {
-            const render = gameState.managers.render;
+            const render = managers.render;
             if (document.pointerLockElement === canvas && render && !render.isXRPresenting()) {
                 this.yaw -= e.movementX * this.turnSpeed;
                 this.pitch -= e.movementY * this.turnSpeed;
@@ -49,10 +45,14 @@ export class MovementSkill extends Skill {
         });
     }
 
-    public update(delta: number, player: LocalPlayer): void {
-        const managers = gameState.managers;
+    public update(delta: number, player: LocalPlayer, managers: Managers): void {
         const render = managers.render;
         const input = managers.input;
+
+        if (!this._inputListenersAttached) {
+            this._attachInputListeners(player, managers);
+            this._inputListenersAttached = true;
+        }
 
         const isVR = render.isXRPresenting();
 
@@ -85,7 +85,7 @@ export class MovementSkill extends Skill {
                 if (!this._wasSnapTurnPressed) {
                     const sign = Math.sign(input.xrTurn);
                     const turnAngle = sign * (-Math.PI / 4);
-                    this.applyVRTurn(player, turnAngle);
+                    this.applyVRTurn(player, turnAngle, managers);
                     this._wasSnapTurnPressed = true;
                 }
             } else {
@@ -116,9 +116,8 @@ export class MovementSkill extends Skill {
         player._lastMoveVector = { x: moveVector.x, y: moveVector.y, z: moveVector.z };
     }
 
-    private applyVRTurn(player: LocalPlayer, deltaYaw: number): void {
-        const render = gameState.managers.render;
-        if (!render) return;
+    private applyVRTurn(player: LocalPlayer, deltaYaw: number, managers: Managers): void {
+        const render = managers.render;
 
         // Pivot around camera world position
         const pivot = new THREE.Vector3();

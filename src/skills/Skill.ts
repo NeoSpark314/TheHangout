@@ -1,4 +1,5 @@
 import { LocalPlayer } from '../entities/LocalPlayer';
+import type { Managers } from '../core/GameState';
 
 export abstract class Skill {
     public id: string;
@@ -20,7 +21,7 @@ export abstract class Skill {
         this.isActive = false;
     }
 
-    public abstract update(delta: number, player: LocalPlayer): void;
+    public abstract update(delta: number, player: LocalPlayer, managers: Managers): void;
 
     public getNetworkState(): any {
         return null;

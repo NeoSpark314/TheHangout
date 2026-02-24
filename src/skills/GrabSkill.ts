@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { IInteractable } from '../interfaces/IInteractable';
-import gameState from '../core/GameState';
+import type { Managers } from '../core/GameState';
 
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.3;
@@ -19,23 +19,22 @@ export class GrabSkill extends Skill {
         super('grab', 'Grab', { alwaysActive: false });
     }
 
-    public update(delta: number, player: LocalPlayer): void {
-        const managers = gameState.managers;
+    public update(delta: number, player: LocalPlayer, managers: Managers): void {
         const input = managers.input;
         const render = managers.render;
         const interactionSystem = managers.interaction;
 
         if (render.isXRPresenting()) {
-            this._updateXR(delta, player, interactionSystem);
+            this._updateXR(delta, player, managers);
         } else {
-            this._updateDesktop(delta, player, interactionSystem);
+            this._updateDesktop(delta, player, managers);
         }
     }
 
-    private _updateDesktop(_delta: number, player: LocalPlayer, interactionSystem: any): void {
-        const managers = gameState.managers;
+    private _updateDesktop(_delta: number, player: LocalPlayer, managers: Managers): void {
         const input = managers.input;
         const render = managers.render;
+        const interactionSystem = managers.interaction;
 
         const camWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(camWorldPos);
@@ -79,10 +78,10 @@ export class GrabSkill extends Skill {
         }
     }
 
-    private _updateXR(_delta: number, player: any, interactionSystem: any): void {
-        const managers = gameState.managers;
+    private _updateXR(_delta: number, player: any, managers: Managers): void {
         const render = managers.render;
         const xr = managers.xr;
+        const interactionSystem = managers.interaction;
 
         if (!render.isXRPresenting()) return;
 

@@ -103,7 +103,7 @@ export class LocalPlayer extends PlayerEntity {
 
         for (const skill of this.skills) {
             if (skill.alwaysActive || skill === this.activeSkill) {
-                skill.update(delta, this);
+                skill.update(delta, this, managers);
             }
         }
 
