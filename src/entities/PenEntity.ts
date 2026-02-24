@@ -27,6 +27,8 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     private quaternion: Quaternion = { x: 0, y: 0, z: 0, w: 1 };
     private isDrawing = false;
     private color: string | number = 0xffffff;
+    
+    private lastDrawPosition: Vector3 | null = null;
 
     constructor(id: string, isAuthority: boolean, view: IView<any> | null) {
         super(id, 'PEN', isAuthority);
@@ -36,12 +38,18 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         this.heldBy = playerId;
-        this.isAuthority = true; // Authority follows the holder
+        this.isAuthority = true;
+        
+        // Use the player's avatar color for drawing
+        if (gameState.localPlayer && playerId === gameState.localPlayer.id) {
+            this.color = gameState.avatarConfig.color;
+        }
     }
 
     public onRelease(velocity?: Vector3): void {
         this.heldBy = null;
         this.isDrawing = false;
+        this.lastDrawPosition = null;
     }
 
     public updateGrabbedPose(position: Vector3, quaternion: Quaternion): void {
@@ -62,9 +70,10 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         if (event.type === 'trigger') {
             if (event.phase === 'start' && !this.isDrawing) {
                 this.isDrawing = true;
-                // In a real app, we'd emit a START_DRAWING event here
+                this.lastDrawPosition = null; // Start fresh
             } else if (event.phase === 'end') {
                 this.isDrawing = false;
+                this.lastDrawPosition = null;
             }
         }
     }
@@ -79,10 +88,28 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
             }, delta);
         }
 
-        // If we are drawing, we might want to emit points to a "DrawingManager"
+        // Logic for emitting draw segments
         if (this.isDrawing && this.isAuthority) {
-            // Placeholder for drawing logic:
-            // eventBus.emit(EVENTS.PEN_DRAW_POINT, { pos: this.position, color: this.color });
+            // Get current pen tip position (approximate)
+            const tipOffset = new THREE.Vector3(0, 0, -0.12);
+            const quat = new THREE.Quaternion(this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w);
+            const tipPos = new THREE.Vector3(this.position.x, this.position.y, this.position.z).add(tipOffset.applyQuaternion(quat));
+
+            if (this.lastDrawPosition) {
+                const distSq = tipPos.distanceToSquared(new THREE.Vector3(this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z));
+                
+                // Only draw if we've moved enough (1cm) to save bandwidth/performance
+                if (distSq > 0.0001) {
+                    eventBus.emit(EVENTS.PEN_DRAW_SEGMENT, {
+                        start: [this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z],
+                        end: [tipPos.x, tipPos.y, tipPos.z],
+                        color: this.color
+                    });
+                    this.lastDrawPosition = { x: tipPos.x, y: tipPos.y, z: tipPos.z };
+                }
+            } else {
+                this.lastDrawPosition = { x: tipPos.x, y: tipPos.y, z: tipPos.z };
+            }
         }
     }
 

@@ -12,6 +12,7 @@ import type { AudioManager } from '../managers/AudioManager';
 import type { InteractionSystem } from '../systems/InteractionSystem';
 import type { XRSystem } from '../systems/XRSystem';
 import type { AssetManager } from '../managers/AssetManager';
+import type { DrawingManager } from '../managers/DrawingManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
 import type { SpectatorEntity } from '../entities/SpectatorEntity';
 
@@ -42,6 +43,7 @@ export interface Managers {
     interaction: InteractionSystem;
     xr: XRSystem;
     assets: AssetManager;
+    drawing: DrawingManager;
 }
 
 export class GameState {

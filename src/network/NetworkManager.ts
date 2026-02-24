@@ -62,6 +62,7 @@ export class NetworkManager implements NetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, new OwnershipRequestHandler(this));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, new OwnershipReleaseHandler(this));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler());
+        this.dispatcher.registerHandler(PACKET_TYPES.DRAW_LINE_SEGMENT, new DrawLineHandler());
     }
 
     private getPeerConfig(): any {
@@ -373,5 +374,13 @@ class OwnershipReleaseHandler implements PacketHandler {
 class OwnershipTransferHandler implements PacketHandler {
     handle(senderId: string, payload: any): void {
         if (!gameState.isHost) gameState.managers.network.applyOwnershipTransfer(payload);
+    }
+}
+
+class DrawLineHandler implements PacketHandler {
+    handle(senderId: string, payload: any): void {
+        if (gameState.managers.drawing) {
+            gameState.managers.drawing.drawLine(payload);
+        }
     }
 }
