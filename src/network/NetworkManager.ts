@@ -144,7 +144,7 @@ export class NetworkManager implements NetworkTransport {
 
             if (gameState.isDedicatedHost) {
                 startKeepalive(() => {
-                    if (document.hidden) this.syncState();
+                    if (document.hidden) this.syncStateManually();
                 });
             }
             eventBus.emit(EVENTS.HOST_READY, id);
@@ -286,12 +286,20 @@ export class NetworkManager implements NetworkTransport {
         if (!entity) return;
         const logicEntity = entity as any;
         if (logicEntity.ownerId !== senderId) return;
+
         logicEntity.ownerId = null;
         entity.isAuthority = true;
+        
         if (logicEntity.rigidBody) {
-            if (payload.p) logicEntity.rigidBody.setTranslation({ x: payload.p[0], y: payload.p[1], z: payload.p[2] }, false);
-            if (payload.r) logicEntity.rigidBody.setRotation({ x: payload.r[0], y: payload.r[1], z: payload.r[2], w: payload.r[3] }, false);
-            if (payload.v) logicEntity.rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
+            // Restore Dynamic physics on host
+            logicEntity.rigidBody.setBodyType(0, true); // 0 = Dynamic
+            
+            if (payload.position) logicEntity.rigidBody.setTranslation({ x: payload.position[0], y: payload.position[1], z: payload.position[2] }, false);
+            if (payload.quaternion) logicEntity.rigidBody.setRotation({ x: payload.quaternion[0], y: payload.quaternion[1], z: payload.quaternion[2], w: payload.quaternion[3] }, false);
+            if (payload.velocity) {
+                logicEntity.rigidBody.wakeUp();
+                logicEntity.rigidBody.setLinvel({ x: payload.velocity[0], y: payload.velocity[1], z: payload.velocity[2] }, true);
+            }
         }
         this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
     }

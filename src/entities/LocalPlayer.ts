@@ -263,6 +263,11 @@ export class LocalPlayer extends PlayerEntity {
         };
     }
 
+    public applyNetworkState(state: any): void {
+        // LocalPlayer state is driven by input, not network updates.
+        this.syncNetworkState(state);
+    }
+
     public destroy(): void {
         super.destroy();
         for (const skill of this.skills) {

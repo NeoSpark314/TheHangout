@@ -56,7 +56,7 @@ export class XRSystem {
             if (handedness !== 'left' && handedness !== 'right') continue;
             
             const state = handStates[handedness];
-            if (source.hand && state.active) {
+            if (source.hand && state.active && xrFrame.getJointPose) {
                 hasHand[handedness] = true;
                 let i = 0;
                 for (const joint of source.hand.values()) {
