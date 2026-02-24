@@ -258,7 +258,8 @@ export class LocalPlayer extends PlayerEntity {
                 quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
             hands: JSON.parse(JSON.stringify(this.handStates)),
-            avatarConfig: gameState.avatarConfig
+            avatarConfig: gameState.avatarConfig,
+            ownerId: this.ownerId
         };
     }
 

@@ -19,7 +19,11 @@ export class EntityFactory {
         this.register('LOCAL_PLAYER', (id, config) => this.createPlayer(id, { ...config, isLocal: true }));
         this.register('REMOTE_PLAYER', (id, config) => this.createPlayer(id, { ...config, isLocal: false }));
         this.register('SPECTATOR', (id, config) => this.createSpectator(id, config.isAuthority));
-        this.register('PHYSICS_PROP', (id, config) => this.createGrabbable(id, config.size, config.position, config.mesh));
+        this.register('PHYSICS_PROP', (id, config) => {
+            // For remote discovery, we might not have the mesh yet
+            // If config.mesh is missing, createGrabbable handles it or we use a default
+            return this.createGrabbable(id, config.size || 0.12, config.position || {x:0, y:0, z:0}, config.mesh);
+        });
         this.register('PEN', (id, config) => this.createPen(id, config));
     }
 

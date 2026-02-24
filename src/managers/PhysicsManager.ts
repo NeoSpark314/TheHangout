@@ -1,7 +1,9 @@
+import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { Vector3 } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
+import { PhysicsPropView } from '../views/PhysicsPropView';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -61,8 +63,24 @@ export class PhysicsManager {
         return rigidBody;
     }
 
-    public createGrabbable(id: string, size: number, position: Vector3, mesh: any, view: IView<any>): PhysicsEntity | null {
+    public createGrabbable(id: string, size: number, position: Vector3, mesh: any, view?: IView<any>): PhysicsEntity | null {
         if (!this.world) return null;
+
+        const entityId = id || `grabbable-${this.nextPhysicsId++}`;
+
+        // If no mesh or view was provided (remote discovery), create a default one
+        let finalView = view;
+        if (!finalView) {
+            const geo = new THREE.BoxGeometry(size, size, size);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+            const defaultMesh = new THREE.Mesh(geo, mat);
+            defaultMesh.position.set(position.x, position.y, position.z);
+            finalView = new PhysicsPropView(defaultMesh, entityId);
+            
+            if (gameState.managers.render) {
+                finalView.addToScene(gameState.managers.render.scene);
+            }
+        }
 
         const hs = size / 2;
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
@@ -79,11 +97,10 @@ export class PhysicsManager {
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(colliderDesc, rigidBody);
 
-        const entityId = id || `grabbable-${this.nextPhysicsId++}`;
         const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
-            view: view
+            view: finalView
         });
 
         const entityManager = gameState.managers.entity;

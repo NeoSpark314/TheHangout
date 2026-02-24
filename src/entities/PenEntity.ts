@@ -4,18 +4,11 @@ import { IInteractable } from '../interfaces/IInteractable';
 import { InteractionEvent } from '../interfaces/IInteractionEvent';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
+import { PenEntityState } from '../interfaces/IEntityState';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import * as THREE from 'three';
-
-export interface PenState {
-    p: [number, number, number];
-    r: [number, number, number, number];
-    heldBy: string | null;
-    isDrawing: boolean;
-    color: string | number;
-}
 
 /**
  * A non-physics grabbable object that can draw lines in the world.
@@ -23,7 +16,6 @@ export interface PenState {
 export class PenEntity extends NetworkEntity implements IGrabbable, IInteractable {
     public isGrabbable = true;
     public heldBy: string | null = null;
-    public ownerId: string | null = null;
     public view: IView<any> | null = null;
     
     private position: Vector3 = { x: 0, y: 0, z: 0 };
@@ -41,29 +33,16 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         this.heldBy = playerId;
-        this.ownerId = playerId;
-        this.isAuthority = true;
+        this.requestOwnership();
         
         // Use the player's avatar color for drawing
         if (gameState.localPlayer && playerId === gameState.localPlayer.id) {
             this.color = gameState.avatarConfig.color;
-            this.requestOwnership();
-        }
-    }
-
-    public requestOwnership(): void {
-        const localId = gameState.localPlayer?.id || 'local';
-        this.ownerId = localId;
-        this.isAuthority = true;
-
-        if (!gameState.isHost) {
-            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { id: this.id });
         }
     }
 
     public onRelease(velocity?: Vector3): void {
         this.heldBy = null;
-        this.ownerId = null;
         this.isDrawing = false;
         this.lastDrawPosition = null;
     }
@@ -129,32 +108,25 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         }
     }
 
-    public getNetworkState(): PenState {
+    public getNetworkState(): PenEntityState {
         return {
-            p: [this.position.x, this.position.y, this.position.z],
-            r: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
+            position: [this.position.x, this.position.y, this.position.z],
+            quaternion: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
             heldBy: this.heldBy,
             ownerId: this.ownerId,
             isDrawing: this.isDrawing,
             color: this.color
-        } as any;
+        };
     }
 
-    public applyNetworkState(state: any): void {
-        const localId = gameState.localPlayer?.id || 'local';
-        
-        // Handle authority change if ownerId changed
-        if (state.ownerId !== undefined && state.ownerId !== this.ownerId) {
-            this.ownerId = state.ownerId;
-            this.isAuthority = (this.ownerId === localId);
-        }
-
+    public applyNetworkState(state: PenEntityState): void {
+        this.syncNetworkState(state);
         if (this.isAuthority) return;
 
-        this.position = { x: state.p[0], y: state.p[1], z: state.p[2] };
-        this.quaternion = { x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] };
-        this.heldBy = state.heldBy;
-        this.isDrawing = state.isDrawing;
-        this.color = state.color;
+        if (state.position) this.position = { x: state.position[0], y: state.position[1], z: state.position[2] };
+        if (state.quaternion) this.quaternion = { x: state.quaternion[0], y: state.quaternion[1], z: state.quaternion[2], w: state.quaternion[3] };
+        this.heldBy = state.heldBy || null;
+        this.isDrawing = !!state.isDrawing;
+        this.color = state.color || 0xffffff;
     }
 }
