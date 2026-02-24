@@ -10,6 +10,29 @@ import gameState from '../core/GameState';
 import { Vector3 } from '../interfaces/IMath';
 
 export class EntityFactory {
+    private static registry: Map<string, (id: string, config: any) => any> = new Map();
+
+    static {
+        // Register default types
+        this.register('LOCAL_PLAYER', (id, config) => this.createPlayer(id, { ...config, isLocal: true }));
+        this.register('REMOTE_PLAYER', (id, config) => this.createPlayer(id, { ...config, isLocal: false }));
+        this.register('SPECTATOR', (id, config) => this.createSpectator(id, config.isAuthority));
+        this.register('PHYSICS_PROP', (id, config) => this.createGrabbable(id, config.size, config.position, config.mesh));
+    }
+
+    public static register(type: string, creator: (id: string, config: any) => any): void {
+        this.registry.set(type, creator);
+    }
+
+    public static spawn(type: string, id: string, config: any): any {
+        const creator = this.registry.get(type);
+        if (!creator) {
+            console.warn(`[EntityFactory] No creator registered for type: ${type}`);
+            return null;
+        }
+        return creator(id, config);
+    }
+
     public static createPlayer(id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: Vector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
         const view = new StickFigureView({
             color: color || (isLocal ? gameState.avatarConfig.color : 0xff00ff),
