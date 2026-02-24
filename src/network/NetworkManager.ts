@@ -3,25 +3,35 @@ import eventBus from '../core/EventBus';
 import gameState from '../core/GameState';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
-import { IEntity } from '../interfaces/IEntity';
 import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive';
 import { RelayConnection } from '../utils/RelayConnection';
+import { NetworkDispatcher } from './NetworkDispatcher';
+import { NetworkSynchronizer, NetworkTransport } from './NetworkSynchronizer';
+import { PacketHandler } from './PacketHandler';
 
-export class NetworkManager {
+export class NetworkManager implements NetworkTransport {
     public peer: Peer | null = null;
     private relaySocket: WebSocket | null = null;
     public connections: Map<string, DataConnection | RelayConnection> = new Map();
-    private syncRate: number = 1 / 20;
-    private timeSinceLastSync: number = 0;
+    
+    private dispatcher: NetworkDispatcher;
+    private synchronizer: NetworkSynchronizer;
 
     constructor() {
+        this.dispatcher = new NetworkDispatcher();
+        this.synchronizer = new NetworkSynchronizer(this);
+
+        this.registerHandlers();
+
         eventBus.on(EVENTS.CREATE_ROOM, (customId: string) => this.initHost(customId));
         eventBus.on(EVENTS.JOIN_ROOM, (roomId: string) => this.initGuest(roomId));
+        
         eventBus.on(EVENTS.REQUEST_OWNERSHIP, (payload: any) => {
             if (!gameState.isHost && gameState.roomId) {
                 this.sendData(gameState.roomId, PACKET_TYPES.OWNERSHIP_REQUEST, payload);
             }
         });
+        
         eventBus.on(EVENTS.RELEASE_OWNERSHIP, (payload: any) => {
             if (!gameState.isHost && gameState.roomId) {
                 this.sendData(gameState.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, payload);
@@ -37,6 +47,16 @@ export class NetworkManager {
                 }
             }
         });
+    }
+
+    private registerHandlers(): void {
+        this.dispatcher.registerHandler(PACKET_TYPES.STATE_UPDATE, new StateUpdateHandler());
+        this.dispatcher.registerHandler(PACKET_TYPES.PLAYER_INPUT, new PlayerInputHandler(this));
+        this.dispatcher.registerHandler(PACKET_TYPES.PEER_DISCONNECT, new PeerDisconnectHandler());
+        this.dispatcher.registerHandler(PACKET_TYPES.ROOM_CONFIG_UPDATE, new RoomConfigHandler());
+        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, new OwnershipRequestHandler(this));
+        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, new OwnershipReleaseHandler(this));
+        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler());
     }
 
     private getPeerConfig(): any {
@@ -168,7 +188,7 @@ export class NetworkManager {
         });
 
         conn.on('data', (data: any) => {
-            this.handleData(conn.peer, data);
+            this.dispatcher.dispatch(conn.peer, data);
         });
 
         conn.on('close', () => {
@@ -184,119 +204,41 @@ export class NetworkManager {
         });
     }
 
-    private handleData(senderId: string, data: any): void {
-        try {
-            const parsed = JSON.parse(data);
-            switch (parsed.type) {
-                case PACKET_TYPES.STATE_UPDATE:
-                    if (!gameState.isHost) this.applyStateUpdate(parsed.payload);
-                    break;
-                case PACKET_TYPES.PLAYER_INPUT:
-                    this.applyStateUpdate(parsed.payload);
-                    if (gameState.isHost) this.relayToOthers(senderId, parsed.type, parsed.payload);
-                    break;
-                case PACKET_TYPES.PEER_DISCONNECT:
-                    if (!gameState.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, parsed.payload);
-                    break;
-                case PACKET_TYPES.ROOM_CONFIG_UPDATE:
-                    if (!gameState.isHost) gameState.managers.room.updateConfig(parsed.payload);
-                    break;
-                case PACKET_TYPES.OWNERSHIP_REQUEST:
-                    if (gameState.isHost) this.handleOwnershipRequest(senderId, parsed.payload);
-                    break;
-                case PACKET_TYPES.OWNERSHIP_RELEASE:
-                    if (gameState.isHost) this.handleOwnershipRelease(senderId, parsed.payload);
-                    break;
-                case PACKET_TYPES.OWNERSHIP_TRANSFER:
-                    if (!gameState.isHost) this.applyOwnershipTransfer(parsed.payload);
-                    break;
-            }
-        } catch (e) {}
+    public update(delta: number): void {
+        this.synchronizer.update(delta);
     }
 
-    private applyStateUpdate(entityStates: any[]): void {
-        const entityManager = gameState.managers.entity;
+    public syncStateManually(): void {
+        // Exposed for dedicated host keepalive
+        (this.synchronizer as any).syncState();
+    }
 
+    public applyStateUpdate(entityStates: any[]): void {
+        const managers = gameState.managers;
         for (const stateData of entityStates) {
-            let entity = entityManager.getEntity(stateData.id);
+            let entity = managers.entity.getEntity(stateData.id);
             if (!entity) {
                 const isOwnEntity = gameState.localPlayer && stateData.id === gameState.localPlayer.id;
                 if (!isOwnEntity) {
-                    gameState.managers.player.handleRemoteEntityDiscovery(stateData.id, stateData.type);
-                    entity = entityManager.getEntity(stateData.id);
+                    managers.player.handleRemoteEntityDiscovery(stateData.id, stateData.type);
+                    entity = managers.entity.getEntity(stateData.id);
                 }
             }
-            
             if (entity && !entity.isAuthority) {
                 const networkable = entity as unknown as INetworkable<any>;
-                if (networkable.applyNetworkState) {
-                    networkable.applyNetworkState(stateData.state);
-                }
+                if (networkable.applyNetworkState) networkable.applyNetworkState(stateData.state);
             }
         }
     }
 
-    private relayToOthers(senderId: string, type: number, payload: any): void {
+    public relayToOthers(senderId: string, type: number, payload: any): void {
         const data = JSON.stringify({ type, payload });
         for (const [peerId, conn] of this.connections.entries()) {
             if (conn.open && peerId !== senderId) conn.send(data);
         }
     }
 
-    public update(delta: number): void {
-        this.timeSinceLastSync += delta;
-        if (this.timeSinceLastSync >= this.syncRate) {
-            this.timeSinceLastSync = 0;
-            this.syncState();
-        }
-    }
-
-    private syncState(): void {
-        const entityManager = gameState.managers.entity;
-
-        const authoritativeStates = entityManager.getAuthoritativeStates();
-        if (authoritativeStates.length === 0) return;
-
-        if (gameState.isHost) {
-            const allStates = entityManager.getWorldSnapshot();
-            this.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
-        } else if (gameState.roomId) {
-            this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
-        }
-    }
-
-    private handleOwnershipRequest(senderId: string, payload: any): void {
-        const entity = gameState.managers.entity.getEntity(payload.id);
-        if (!entity) return;
-        
-        // Use Type Assertion for logic properties not in IEntity
-        const logicEntity = entity as any;
-        if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
-            logicEntity.ownerId = senderId;
-            entity.isAuthority = (senderId === (gameState.localPlayer?.id || 'local'));
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: senderId });
-        }
-    }
-
-    private handleOwnershipRelease(senderId: string, payload: any): void {
-        const entity = gameState.managers.entity.getEntity(payload.id);
-        if (!entity) return;
-        
-        const logicEntity = entity as any;
-        if (logicEntity.ownerId !== senderId) return;
-
-        logicEntity.ownerId = null;
-        entity.isAuthority = true;
-        
-        if (logicEntity.rigidBody) {
-            if (payload.p) logicEntity.rigidBody.setTranslation({ x: payload.p[0], y: payload.p[1], z: payload.p[2] }, false);
-            if (payload.r) logicEntity.rigidBody.setRotation({ x: payload.r[0], y: payload.r[1], z: payload.r[2], w: payload.r[3] }, false);
-            if (payload.v) logicEntity.rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
-        }
-        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
-    }
-
-    private reclaimOwnership(peerId: string): void {
+    public reclaimOwnership(peerId: string): void {
         for (const entity of gameState.managers.entity.entities.values()) {
             const logicEntity = entity as any;
             if (logicEntity.ownerId === peerId) {
@@ -307,13 +249,38 @@ export class NetworkManager {
         }
     }
 
-    private applyOwnershipTransfer(payload: any): void {
+    public applyOwnershipTransfer(payload: any): void {
         const entity = gameState.managers.entity.getEntity(payload.id);
         if (!entity) return;
-        
         const isLocalOwner = payload.ownerId === (gameState.localPlayer?.id || 'local');
         (entity as any).ownerId = payload.ownerId;
         entity.isAuthority = isLocalOwner;
+    }
+
+    public handleOwnershipRequest(senderId: string, payload: any): void {
+        const entity = gameState.managers.entity.getEntity(payload.id);
+        if (!entity) return;
+        const logicEntity = entity as any;
+        if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
+            logicEntity.ownerId = senderId;
+            entity.isAuthority = (senderId === (gameState.localPlayer?.id || 'local'));
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: senderId });
+        }
+    }
+
+    public handleOwnershipRelease(senderId: string, payload: any): void {
+        const entity = gameState.managers.entity.getEntity(payload.id);
+        if (!entity) return;
+        const logicEntity = entity as any;
+        if (logicEntity.ownerId !== senderId) return;
+        logicEntity.ownerId = null;
+        entity.isAuthority = true;
+        if (logicEntity.rigidBody) {
+            if (payload.p) logicEntity.rigidBody.setTranslation({ x: payload.p[0], y: payload.p[1], z: payload.p[2] }, false);
+            if (payload.r) logicEntity.rigidBody.setRotation({ x: payload.r[0], y: payload.r[1], z: payload.r[2], w: payload.r[3] }, false);
+            if (payload.v) logicEntity.rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
+        }
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
     }
 
     public sendData(targetId: string, type: number, payload: any): void {
@@ -340,5 +307,59 @@ export class NetworkManager {
         }
         this.connections.clear();
         gameState.roomId = null;
+    }
+}
+
+/**
+ * HANDLERS
+ */
+
+class StateUpdateHandler implements PacketHandler {
+    handle(senderId: string, payload: any): void {
+        if (!gameState.isHost) {
+            gameState.managers.network.applyStateUpdate(payload);
+        }
+    }
+}
+
+class PlayerInputHandler implements PacketHandler {
+    constructor(private network: NetworkManager) {}
+    handle(senderId: string, payload: any): void {
+        this.network.applyStateUpdate(payload);
+        if (gameState.isHost) {
+            this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, payload);
+        }
+    }
+}
+
+class PeerDisconnectHandler implements PacketHandler {
+    handle(senderId: string, payload: any): void {
+        if (!gameState.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, payload);
+    }
+}
+
+class RoomConfigHandler implements PacketHandler {
+    handle(senderId: string, payload: any): void {
+        if (!gameState.isHost) gameState.managers.room.updateConfig(payload);
+    }
+}
+
+class OwnershipRequestHandler implements PacketHandler {
+    constructor(private network: NetworkManager) {}
+    handle(senderId: string, payload: any): void {
+        if (gameState.isHost) this.network.handleOwnershipRequest(senderId, payload);
+    }
+}
+
+class OwnershipReleaseHandler implements PacketHandler {
+    constructor(private network: NetworkManager) {}
+    handle(senderId: string, payload: any): void {
+        if (gameState.isHost) this.network.handleOwnershipRelease(senderId, payload);
+    }
+}
+
+class OwnershipTransferHandler implements PacketHandler {
+    handle(senderId: string, payload: any): void {
+        if (!gameState.isHost) gameState.managers.network.applyOwnershipTransfer(payload);
     }
 }
