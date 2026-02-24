@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { HandState } from '../entities/PlayerEntity';
+import { RenderManager } from '../managers/RenderManager';
 
 /**
  * Handles Three.js specific XR coordinate transformations.
@@ -11,55 +12,55 @@ export class XRSystem {
     private tempMatrix = new THREE.Matrix4();
     private avatarTransform = new THREE.Object3D();
 
-    public updateHandPoses(
+    public updateHandPosesFromControllers(
+        render: RenderManager,
+        leftHandPose: { position: Vector3, quaternion: Quaternion },
+        rightHandPose: { position: Vector3, quaternion: Quaternion },
+        handStates: { left: HandState, right: HandState },
+        leftControllerIndex: number,
+        rightControllerIndex: number
+    ): void {
+        const process = (pose: { position: Vector3, quaternion: Quaternion }, state: HandState, index: number) => {
+            if (!state.active) return;
+            const controller = render.getXRController(index);
+            controller.getWorldPosition(this.tempVec);
+            controller.getWorldQuaternion(this.tempQuat);
+            
+            pose.position = { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z };
+            pose.quaternion = { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w };
+
+            // CRITICAL: We MUST set the state position to world space so transformHandsToAvatarSpace
+            // can transform it to local space. Otherwise, it will use the previous frame's local
+            // position as a world position, leading to "infinity" feedback loops.
+            state.position = { ...pose.position };
+            state.quaternion = { ...pose.quaternion };
+        };
+
+        process(leftHandPose, handStates.left, leftControllerIndex);
+        process(rightHandPose, handStates.right, rightControllerIndex);
+    }
+
+    public updateJointsFromXRFrame(
         xrFrame: XRFrame,
         referenceSpace: XRReferenceSpace,
         session: XRSession,
-        outputHandPoses: { 
-            left: { position: Vector3, quaternion: Quaternion, active: boolean }, 
-            right: { position: Vector3, quaternion: Quaternion, active: boolean } 
-        },
-        outputJointStates: { left: HandState, right: HandState }
+        handStates: { left: HandState, right: HandState }
     ): void {
-        outputHandPoses.left.active = false;
-        outputHandPoses.right.active = false;
-        outputJointStates.left.active = false;
-        outputJointStates.right.active = false;
-
         for (const source of session.inputSources) {
             const handedness = source.handedness as 'left' | 'right';
             if (handedness !== 'left' && handedness !== 'right') continue;
-
-            // Fallback: Grip space is for physical controllers, targetRaySpace for gaze/fallback
-            const space = source.gripSpace || source.targetRaySpace;
-            if (!space) continue;
-
-            const pose = xrFrame.getPose(space, referenceSpace);
-            if (pose) {
-                const outPose = outputHandPoses[handedness];
-                const outJoints = outputJointStates[handedness];
-                
-                outPose.active = true;
-                outJoints.active = true;
-                
-                outPose.position = { x: pose.transform.position.x, y: pose.transform.position.y, z: pose.transform.position.z };
-                outPose.quaternion = { x: pose.transform.orientation.x, y: pose.transform.orientation.y, z: pose.transform.orientation.z, w: pose.transform.orientation.w };
-
-                if (source.hand) {
-                    let i = 0;
-                    for (const joint of source.hand.values()) {
-                        if (i >= 25) break;
-                        const jointPose = xrFrame.getJointPose(joint, referenceSpace);
-                        if (jointPose) {
-                            outJoints.joints[i].position = { x: jointPose.transform.position.x, y: jointPose.transform.position.y, z: jointPose.transform.position.z };
-                            outJoints.joints[i].quaternion = { x: jointPose.transform.orientation.x, y: jointPose.transform.orientation.y, z: jointPose.transform.orientation.z, w: jointPose.transform.orientation.w };
-                        }
-                        i++;
+            
+            const state = handStates[handedness];
+            if (source.hand && state.active) {
+                let i = 0;
+                for (const joint of source.hand.values()) {
+                    if (i >= 25) break;
+                    const jointPose = xrFrame.getJointPose(joint, referenceSpace);
+                    if (jointPose) {
+                        state.joints[i].position = { x: jointPose.transform.position.x, y: jointPose.transform.position.y, z: jointPose.transform.position.z };
+                        state.joints[i].quaternion = { x: jointPose.transform.orientation.x, y: jointPose.transform.orientation.y, z: jointPose.transform.orientation.z, w: jointPose.transform.orientation.w };
                     }
-                } else {
-                    for (let i = 0; i < 25; i++) {
-                        outJoints.joints[i].position = { x: 0, y: 0, z: 0 };
-                    }
+                    i++;
                 }
             }
         }
@@ -78,8 +79,6 @@ export class XRSystem {
     }
 
     public transformHandsToAvatarSpace(
-        inputLeftHand: { position: Vector3, quaternion: Quaternion, active: boolean },
-        inputRightHand: { position: Vector3, quaternion: Quaternion, active: boolean },
         xrOrigin: { position: Vector3, quaternion: Quaternion },
         bodyYaw: number,
         headWorldPos: Vector3,
@@ -93,15 +92,15 @@ export class XRSystem {
         const xrOriginMatrix = this.tempMatrix.makeRotationFromQuaternion(xrOriginQuat)
             .setPosition(xrOrigin.position.x, xrOrigin.position.y, xrOrigin.position.z);
 
-        const processHand = (input: { position: Vector3, quaternion: Quaternion, active: boolean }, state: HandState) => {
-            state.active = input.active;
-            if (!input.active) return;
+        const processHand = (state: HandState) => {
+            if (!state.active) return;
 
-            const worldPos = new THREE.Vector3(input.position.x, input.position.y, input.position.z).applyMatrix4(xrOriginMatrix);
-            const worldQuat = new THREE.Quaternion(input.quaternion.x, input.quaternion.y, input.quaternion.z, input.quaternion.w).premultiply(xrOriginQuat);
+            // Poses are already in world space from updateHandPosesFromControllers
+            this.tempVec.set(state.position.x, state.position.y, state.position.z);
+            this.tempQuat.set(state.quaternion.x, state.quaternion.y, state.quaternion.z, state.quaternion.w);
 
-            const localPos = this.avatarTransform.worldToLocal(worldPos.clone());
-            const localQuat = worldQuat.clone().premultiply(this.avatarTransform.quaternion.clone().invert());
+            const localPos = this.avatarTransform.worldToLocal(this.tempVec.clone());
+            const localQuat = this.tempQuat.clone().premultiply(this.avatarTransform.quaternion.clone().invert());
 
             state.position = { x: localPos.x, y: localPos.y, z: localPos.z };
             state.quaternion = { x: localQuat.x, y: localQuat.y, z: localQuat.z, w: localQuat.w };
@@ -119,7 +118,7 @@ export class XRSystem {
             }
         };
 
-        processHand(inputLeftHand, handStates.left);
-        processHand(inputRightHand, handStates.right);
+        processHand(handStates.left);
+        processHand(handStates.right);
     }
 }

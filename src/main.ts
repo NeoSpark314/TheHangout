@@ -13,6 +13,7 @@ import { InputManager } from './input/InputManager';
 import { RoomManager } from './managers/RoomManager';
 import { AudioManager } from './managers/AudioManager';
 import { InteractionSystem } from './systems/InteractionSystem';
+import { XRSystem } from './systems/XRSystem';
 import { EntityFactory } from './factories/EntityFactory';
 import eventBus from './core/EventBus';
 import { EVENTS } from './utils/Constants';
@@ -42,6 +43,7 @@ async function bootstrap() {
   gameState.setManager('hud', new HUDManager());
   gameState.setManager('room', new RoomManager());
   gameState.setManager('audio', new AudioManager());
+  gameState.setManager('xr', new XRSystem());
   gameState.setManager('interaction', new InteractionSystem(gameState.managers.entity));
 
   const resumeAudio = () => {

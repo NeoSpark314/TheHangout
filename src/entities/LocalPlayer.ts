@@ -56,7 +56,7 @@ export class LocalPlayer extends PlayerEntity {
 
         eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config: any) => {
             if (this.view) {
-                (this.view as any).setColor(config.color);
+                this.view.setColor(config.color);
             }
         });
 
@@ -99,6 +99,7 @@ export class LocalPlayer extends PlayerEntity {
     public update(delta: number, frame?: XRFrame): void {
         const managers = gameState.managers;
         const render = managers.render;
+        const xr = managers.xr;
 
         for (const skill of this.skills) {
             if (skill.alwaysActive || skill === this.activeSkill) {
@@ -108,22 +109,21 @@ export class LocalPlayer extends PlayerEntity {
 
         this.updateVRHands(frame);
         
-        const headWorldPos = new THREE.Vector3();
-        render.camera.getWorldPosition(headWorldPos);
-        const headWorldQuat = new THREE.Quaternion();
-        render.camera.getWorldQuaternion(headWorldQuat);
-        const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
+        const headPose = xr.getCameraWorldPose(render.camera);
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headPose.yaw, 0, 'YXZ'));
+        const localHeadQuat = bodyQuat.clone().invert().multiply(new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w));
 
-        const bodyYaw = headEuler.y;
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.clone().invert().multiply(headWorldQuat);
-
-        this.transformHandsToAvatarSpace(bodyYaw, headWorldPos);
+        xr.transformHandsToAvatarSpace(
+            this.xrOrigin,
+            headPose.yaw,
+            headPose.position,
+            this.handStates
+        );
 
         this.view.applyState({
-            position: { x: headWorldPos.x, y: 0, z: headWorldPos.z },
-            yaw: bodyYaw,
-            headHeight: headWorldPos.y,
+            position: { x: headPose.position.x, y: 0, z: headPose.position.z },
+            yaw: headPose.yaw,
+            headHeight: headPose.position.y,
             headQuaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w },
             handStates: this.handStates,
             name: this.name,
@@ -141,6 +141,8 @@ export class LocalPlayer extends PlayerEntity {
     private updateVRHands(frame?: XRFrame): void {
         const managers = gameState.managers;
         const render = managers.render;
+        const xr = managers.xr;
+
         if (!render.isXRPresenting()) {
             this.handStates.left.active = false;
             this.handStates.right.active = false;
@@ -152,117 +154,57 @@ export class LocalPlayer extends PlayerEntity {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !xrFrame || !referenceSpace) return;
 
+        // Reset active state then poll
+        this.handStates.left.active = false;
+        this.handStates.right.active = false;
+
         let sourceIndex = 0;
         for (const source of session.inputSources) {
-            if (source.handedness === 'left') this._leftControllerIndex = sourceIndex;
-            if (source.handedness === 'right') this._rightControllerIndex = sourceIndex;
-            
-            if (source.gripSpace) {
-                const pose = xrFrame.getPose(source.gripSpace, referenceSpace);
-                if (pose) {
-                    const handState = source.handedness === 'left' ? this.handStates.left : this.handStates.right;
-                    const handPoseObj = source.handedness === 'left' ? this.leftHandPose : this.rightHandPose;
-
-                    handState.active = true;
-                    handPoseObj.position = { x: pose.transform.position.x, y: pose.transform.position.y, z: pose.transform.position.z };
-                    handPoseObj.quaternion = { x: pose.transform.orientation.x, y: pose.transform.orientation.y, z: pose.transform.orientation.z, w: pose.transform.orientation.w };
-                    
-                    if (source.hand) {
-                        let i = 0;
-                        for (const joint of source.hand.values()) {
-                            if (i >= 25) break;
-                            const jointPose = xrFrame.getJointPose(joint, referenceSpace);
-                            if (jointPose) {
-                                handState.joints[i].position = { x: jointPose.transform.position.x, y: jointPose.transform.position.y, z: jointPose.transform.position.z };
-                                handState.joints[i].quaternion = { x: jointPose.transform.orientation.x, y: jointPose.transform.orientation.y, z: jointPose.transform.orientation.z, w: jointPose.transform.orientation.w };
-                            }
-                            i++;
-                        }
-                    }
-                }
+            if (source.handedness === 'left') {
+                this._leftControllerIndex = sourceIndex;
+                this.handStates.left.active = true;
+            }
+            if (source.handedness === 'right') {
+                this._rightControllerIndex = sourceIndex;
+                this.handStates.right.active = true;
             }
             sourceIndex++;
         }
-    }
 
-    private transformHandsToAvatarSpace(bodyYaw: number, headWorldPos: THREE.Vector3): void {
-        const managers = gameState.managers;
-        const render = managers.render;
-        
-        const avatarTransform = new THREE.Object3D();
-        avatarTransform.position.set(headWorldPos.x, 0, headWorldPos.z);
-        avatarTransform.rotation.y = bodyYaw;
-        avatarTransform.updateMatrixWorld(true);
+        xr.updateHandPosesFromControllers(
+            render,
+            this.leftHandPose,
+            this.rightHandPose,
+            this.handStates,
+            this._leftControllerIndex,
+            this._rightControllerIndex
+        );
 
-        const processHand = (handPose: { position: Vector3, quaternion: Quaternion }, handState: HandState, controllerIndex: number) => {
-            if (!handState.active) return;
-
-            // Get controller from THREE.js
-            const controller = render.getXRController(controllerIndex);
-            const worldPos = new THREE.Vector3();
-            const worldQuat = new THREE.Quaternion();
-            controller.getWorldPosition(worldPos);
-            controller.getWorldQuaternion(worldQuat);
-
-            const localPos = avatarTransform.worldToLocal(worldPos.clone());
-            const localQuat = worldQuat.clone().premultiply(avatarTransform.quaternion.clone().invert());
-
-            handState.position = { x: localPos.x, y: localPos.y, z: localPos.z };
-            handState.quaternion = { x: localQuat.x, y: localQuat.y, z: localQuat.z, w: localQuat.w };
-
-            // Joints are already in reference space from updateVRHands, but they need to be world-transformed
-            // and then local-transformed to avatar space.
-            // However, a simpler way is to use the same logic as the hand if we have the xrOrigin
-            const xrOriginQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
-            const xrOriginMatrix = new THREE.Matrix4().makeRotationFromQuaternion(xrOriginQuat).setPosition(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
-
-            for (let i = 0; i < 25; i++) {
-                const j = handState.joints[i];
-                if (j.position.x !== 0 || j.position.y !== 0 || j.position.z !== 0) {
-                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z).applyMatrix4(xrOriginMatrix);
-                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w).premultiply(xrOriginQuat);
-                    const jLocalPos = avatarTransform.worldToLocal(jWorldPos);
-                    const jLocalQuat = jWorldQuat.premultiply(avatarTransform.quaternion.clone().invert());
-                    j.position = { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z };
-                    j.quaternion = { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w };
-                }
-            }
-        };
-
-        processHand(this.leftHandPose, this.handStates.left, this._leftControllerIndex);
-        processHand(this.rightHandPose, this.handStates.right, this._rightControllerIndex);
+        xr.updateJointsFromXRFrame(xrFrame, referenceSpace, session, this.handStates);
     }
 
     public getNetworkState(): any {
-        const render = gameState.managers.render;
-        if (!render) return {};
-
-        const headWorldPos = new THREE.Vector3();
-        render.camera.getWorldPosition(headWorldPos);
-        const headWorldQuat = new THREE.Quaternion();
-        render.camera.getWorldQuaternion(headWorldQuat);
-        const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
-        const bodyYaw = headEuler.y;
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.clone().invert().multiply(headWorldQuat);
+        const managers = gameState.managers;
+        const headPose = managers.xr.getCameraWorldPose(managers.render.camera);
+        
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headPose.yaw, 0, 'YXZ'));
+        const localHeadQuat = bodyQuat.clone().invert().multiply(new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w));
 
         return {
             id: this.id,
             type: this.type,
             name: this.name,
-            position: { x: headWorldPos.x, y: 0, z: headWorldPos.z },
-            yaw: bodyYaw,
-            headHeight: headWorldPos.y,
+            position: { x: headPose.position.x, y: 0, z: headPose.position.z },
+            yaw: headPose.yaw,
+            headHeight: headPose.position.y,
             head: {
-                position: { x: headWorldPos.x, y: headWorldPos.y, z: headWorldPos.z },
+                position: headPose.position,
                 quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
-            hands: JSON.parse(JSON.stringify(this.handStates)), // Deep copy to prevent ref issues
+            hands: JSON.parse(JSON.stringify(this.handStates)),
             avatarConfig: gameState.avatarConfig
         };
     }
-
-    public applyNetworkState(state: any): void {}
 
     public destroy(): void {
         super.destroy();
@@ -274,7 +216,7 @@ export class LocalPlayer extends PlayerEntity {
 
         const render = gameState.managers.render;
         if (render && this.view) {
-            (this.view as any).removeFromScene(render.scene);
+            this.view.removeFromScene(render.scene);
             this.view.destroy();
         }
     }

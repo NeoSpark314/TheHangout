@@ -3,6 +3,7 @@ import { NetworkEntity } from './NetworkEntity';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
+import { PhysicsPropState } from '../views/PhysicsPropView';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { PACKET_TYPES, EVENTS } from '../utils/Constants';
@@ -17,7 +18,7 @@ export interface PhysicsState {
 
 export class PhysicsEntity extends NetworkEntity implements IInteractable {
     public rigidBody: RAPIER.RigidBody;
-    public view: IView<any> | null;
+    public view: IView<PhysicsPropState> | null;
     public isGrabbable: boolean;
     public spawnPosition: Vector3 | null;
     public heldBy: string | null = null;
@@ -283,6 +284,15 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
         if (this.heldBy) {
             this.rigidBody.setNextKinematicTranslation({ x: state.p[0], y: state.p[1], z: state.p[2] });
             this.rigidBody.setNextKinematicRotation({ x: state.r[0], y: state.r[1], z: state.r[2], w: state.r[3] });
+        }
+    }
+
+    public destroy(): void {
+        super.destroy();
+        const render = gameState.managers.render;
+        if (render && this.view) {
+            this.view.removeFromScene(render.scene);
+            this.view.destroy();
         }
     }
 }

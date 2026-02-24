@@ -27,9 +27,7 @@ export class RemotePlayer extends PlayerEntity {
 
     private onVoiceStream(data: any): void {
         if (data.peerId === this.peerId) {
-            if ((this.view as any).attachVoiceStream) {
-                (this.view as any).attachVoiceStream(data.stream);
-            }
+            this.view.attachVoiceStream(data.stream);
         }
     }
 
@@ -89,7 +87,7 @@ export class RemotePlayer extends PlayerEntity {
         }
 
         const lerpFactor = 15 * delta;
-        const audioLevel = (this.view as any).getAudioLevel ? (this.view as any).getAudioLevel() : 0;
+        const audioLevel = this.view.getAudioLevel();
 
         this.view.applyState({
             position: this.targetPosition,
@@ -110,7 +108,7 @@ export class RemotePlayer extends PlayerEntity {
 
         const render = gameState.managers.render;
         if (render && this.view) {
-            (this.view as any).removeFromScene(render.scene);
+            this.view.removeFromScene(render.scene);
             this.view.destroy();
         }
     }

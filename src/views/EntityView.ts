@@ -14,6 +14,22 @@ export abstract class EntityView<TState> implements IView<TState> {
         // Optional override
     }
 
+    public setColor(color: string | number): void {
+        // Optional override
+    }
+
+    public setName(name: string): void {
+        // Optional override
+    }
+
+    public attachVoiceStream(stream: MediaStream): void {
+        // Optional override
+    }
+
+    public getAudioLevel(): number {
+        return 0;
+    }
+
     public addToScene(scene: THREE.Scene): void {
         if (this.mesh) scene.add(this.mesh);
     }

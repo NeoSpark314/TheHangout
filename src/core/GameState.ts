@@ -38,6 +38,7 @@ export interface Managers {
     room: RoomManager;
     audio: AudioManager;
     interaction: InteractionSystem;
+    xr: XRSystem;
 }
 
 export class GameState {

@@ -116,7 +116,7 @@ export class SpectatorEntity extends NetworkEntity {
         super.destroy();
         const render = gameState.managers.render;
         if (render && this.view) {
-            (this.view as any).removeFromScene(render.scene);
+            this.view.removeFromScene(render.scene);
             this.view.destroy();
         }
     }
