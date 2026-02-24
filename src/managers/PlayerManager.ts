@@ -11,10 +11,11 @@ export class PlayerManager {
     }
 
     public init(id: string): void {
+        const managers = gameState.managers;
         if (gameState.isDedicatedHost) {
             console.log('[PlayerManager] Dedicated Host mode — creating local spectator entity.');
             gameState.localPlayer = EntityFactory.createSpectator(id, true);
-            gameState.managers.entity?.addEntity(gameState.localPlayer);
+            managers.entity.addEntity(gameState.localPlayer);
             this.initialized = true;
             return;
         }
@@ -23,28 +24,29 @@ export class PlayerManager {
 
         let spawnIndex = 0;
         if (!gameState.isHost) {
-            if (gameState.managers.room && (gameState.managers.room as any).assignedSpawnIndex !== undefined) {
-                spawnIndex = (gameState.managers.room as any).assignedSpawnIndex;
-            } else if (gameState.managers.network) {
-                spawnIndex = (gameState.managers.network as any).connections.size;
+            if (managers.room && (managers.room as any).assignedSpawnIndex !== undefined) {
+                spawnIndex = (managers.room as any).assignedSpawnIndex;
+            } else if (managers.network) {
+                spawnIndex = managers.network.connections.size;
             }
         }
 
-        const spawn = (gameState.managers.room as any).getSpawnPoint(spawnIndex);
+        const spawn = (managers.room as any).getSpawnPoint ? (managers.room as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
 
         gameState.localPlayer = EntityFactory.createPlayer(id, {
             isLocal: true,
-            spawnPos: spawn.position,
-            spawnYaw: spawn.yaw,
+            spawnPos: spawn.position || { x: 0, y: 0, z: 0 },
+            spawnYaw: spawn.yaw || 0,
             color: gameState.avatarConfig.color || 0x00ffff
         }) as any;
 
-        gameState.managers.entity?.addEntity(gameState.localPlayer as any);
+        managers.entity.addEntity(gameState.localPlayer as any);
         this.initialized = true;
     }
 
     public handleRemoteEntityDiscovery(peerId: string, type: string): void {
-        if (gameState.managers.entity?.getEntity(peerId)) return;
+        const managers = gameState.managers;
+        if (managers.entity.getEntity(peerId)) return;
 
         console.log(`[PlayerManager] Discovering remote ${type} for ${peerId}`);
 
@@ -55,29 +57,30 @@ export class PlayerManager {
                 spawnYaw: 0,
                 color: 0xff00ff
             });
-            gameState.managers.entity?.addEntity(rp);
+            managers.entity.addEntity(rp);
         } else if (type === 'SPECTATOR') {
             const rs = EntityFactory.createSpectator(peerId, false);
-            gameState.managers.entity?.addEntity(rs);
+            managers.entity.addEntity(rs);
         }
 
         eventBus.emit(EVENTS.PEER_CONNECTED, peerId);
     }
 
     public onPeerDisconnected(peerId: string): void {
-        const entity = gameState.managers.entity?.getEntity(peerId);
+        const managers = gameState.managers;
+        const entity = managers.entity.getEntity(peerId);
         if (!entity || entity.type === 'SPECTATOR') {
-            gameState.managers.entity?.removeEntity(peerId);
+            managers.entity.removeEntity(peerId);
             return;
         }
 
         console.log(`[PlayerManager] Removing remote player for ${peerId}`);
         const name = (entity as any).name || 'Somebody';
 
-        gameState.managers.entity?.removeEntity(peerId);
+        managers.entity.removeEntity(peerId);
 
-        if (gameState.managers.hud) {
-            (gameState.managers.hud as any).showNotification(`${name} left the hangout.`);
+        if (managers.hud) {
+            managers.hud.showNotification(`${name} left the hangout.`);
         }
     }
 }

@@ -13,7 +13,7 @@ export class MediaManager {
 
     constructor() {
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
-            if (this.localStream && gameState.managers.network && (gameState as any).managers.network.peer) {
+            if (this.localStream && gameState.managers.network && gameState.managers.network.peer) {
                 this.callPeer(peerId);
             }
         });
@@ -55,7 +55,7 @@ export class MediaManager {
             }
             this.calls.clear();
 
-            const network = (gameState as any).managers.network;
+            const network = gameState.managers.network;
             if (network && network.peer) {
                 for (const peerId of network.connections.keys()) {
                     this.callPeer(peerId);
@@ -99,7 +99,7 @@ export class MediaManager {
     }
 
     public callPeer(targetPeerId: string): void {
-        const network = (gameState as any).managers.network;
+        const network = gameState.managers.network;
         const peer = network ? network.peer : null;
         if (!peer || !this.localStream) return;
 

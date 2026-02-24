@@ -24,8 +24,8 @@ export class SpectatorEntity extends NetworkEntity {
     }
 
     private initControls(): void {
-        const render = (gameState as any).managers.render;
-        if (!render) return;
+        const managers = gameState.managers;
+        const render = managers.render;
 
         const canvas = render.renderer.domElement;
         canvas.addEventListener('click', () => {
@@ -49,7 +49,6 @@ export class SpectatorEntity extends NetworkEntity {
             this.updateRemote(delta);
         }
 
-        const currentPos = this.isAuthority ? this.targetPosition : this.targetPosition; // Simplified
         this.view.applyState({
             position: this.targetPosition,
             lerpFactor: this.isAuthority ? 1.0 : 8 * delta
@@ -57,7 +56,7 @@ export class SpectatorEntity extends NetworkEntity {
     }
 
     private updateAuthority(delta: number): void {
-        const managers = (gameState as any).managers;
+        const managers = gameState.managers;
         const render = managers.render;
         const input = managers.input;
         if (!render || !input) return;
@@ -115,7 +114,7 @@ export class SpectatorEntity extends NetworkEntity {
 
     public destroy(): void {
         super.destroy();
-        const render = (gameState as any).managers.render;
+        const render = gameState.managers.render;
         if (render && this.view) {
             (this.view as any).removeFromScene(render.scene);
             this.view.destroy();

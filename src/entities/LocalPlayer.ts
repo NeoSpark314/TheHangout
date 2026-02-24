@@ -97,7 +97,6 @@ export class LocalPlayer extends PlayerEntity {
     public update(delta: number, frame?: XRFrame): void {
         const managers = gameState.managers;
         const render = managers.render;
-        if (!render) return;
 
         for (const skill of this.skills) {
             if (skill.alwaysActive || skill === this.activeSkill) {
@@ -138,8 +137,9 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     private updateVRHands(frame?: XRFrame): void {
-        const render = gameState.managers.render;
-        if (!render || !render.isXRPresenting()) {
+        const managers = gameState.managers;
+        const render = managers.render;
+        if (!render.isXRPresenting()) {
             this.handStates.left.active = false;
             this.handStates.right.active = false;
             return;
@@ -179,19 +179,23 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     private transformHandsToAvatarSpace(bodyYaw: number, headWorldPos: THREE.Vector3): void {
+        const managers = gameState.managers;
+        const render = managers.render;
+        
         const avatarTransform = new THREE.Object3D();
         avatarTransform.position.set(headWorldPos.x, 0, headWorldPos.z);
         avatarTransform.rotation.y = bodyYaw;
         avatarTransform.updateMatrixWorld(true);
 
-        const xrOriginQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
-        const xrOriginMatrix = new THREE.Matrix4().makeRotationFromQuaternion(xrOriginQuat).setPosition(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
-
-        const processHand = (handPose: { position: Vector3, quaternion: Quaternion }, handState: HandState) => {
+        const processHand = (handPose: { position: Vector3, quaternion: Quaternion }, handState: HandState, controllerIndex: number) => {
             if (!handState.active) return;
 
-            const worldPos = new THREE.Vector3(handPose.position.x, handPose.position.y, handPose.position.z).applyMatrix4(xrOriginMatrix);
-            const worldQuat = new THREE.Quaternion(handPose.quaternion.x, handPose.quaternion.y, handPose.quaternion.z, handPose.quaternion.w).premultiply(xrOriginQuat);
+            // Get controller from THREE.js instead of raw XR pose
+            const controller = render.getXRController(controllerIndex);
+            const worldPos = new THREE.Vector3();
+            const worldQuat = new THREE.Quaternion();
+            controller.getWorldPosition(worldPos);
+            controller.getWorldQuaternion(worldQuat);
 
             const localPos = avatarTransform.worldToLocal(worldPos.clone());
             const localQuat = worldQuat.clone().premultiply(avatarTransform.quaternion.clone().invert());
@@ -199,21 +203,12 @@ export class LocalPlayer extends PlayerEntity {
             handState.position = { x: localPos.x, y: localPos.y, z: localPos.z };
             handState.quaternion = { x: localQuat.x, y: localQuat.y, z: localQuat.z, w: localQuat.w };
 
-            for (let i = 0; i < 25; i++) {
-                const j = handState.joints[i];
-                if (j.position.x !== 0 || j.position.y !== 0 || j.position.z !== 0) {
-                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z).applyMatrix4(xrOriginMatrix);
-                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w).premultiply(xrOriginQuat);
-                    const jLocalPos = avatarTransform.worldToLocal(jWorldPos);
-                    const jLocalQuat = jWorldQuat.premultiply(avatarTransform.quaternion.clone().invert());
-                    j.position = { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z };
-                    j.quaternion = { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w };
-                }
-            }
+            // We skip joints for now as they are harder to get from the controller group
+            // but the basic hand pose will be fixed.
         };
 
-        processHand(this.leftHandPose, this.handStates.left);
-        processHand(this.rightHandPose, this.handStates.right);
+        processHand(this.leftHandPose, this.handStates.left, 0);
+        processHand(this.rightHandPose, this.handStates.right, 1);
     }
 
     public getNetworkState(): any {

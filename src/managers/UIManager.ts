@@ -229,7 +229,7 @@ export class UIManager {
             gameState.playerName = this.nameInput.value.trim() || 'Guest';
             if (gameState.voiceEnabled) {
                 this.ensureAudioContextResumed();
-                await (gameState as any).managers.media.toggleMicrophone();
+                await gameState.managers.media.toggleMicrophone();
             }
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
@@ -242,7 +242,7 @@ export class UIManager {
             gameState.playerName = this.nameInput.value.trim() || 'Host';
             if (gameState.voiceEnabled) {
                 this.ensureAudioContextResumed();
-                await (gameState as any).managers.media.toggleMicrophone();
+                await gameState.managers.media.toggleMicrophone();
             }
             const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
             this.disableAllButtons();
@@ -257,7 +257,7 @@ export class UIManager {
             this.dedicatedHostBtn.addEventListener('click', async () => {
                 if (gameState.voiceEnabled) {
                     this.ensureAudioContextResumed();
-                    await (gameState as any).managers.media.toggleMicrophone();
+                    await gameState.managers.media.toggleMicrophone();
                 }
                 const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
                 this.disableAllButtons();
@@ -275,7 +275,7 @@ export class UIManager {
             gameState.playerName = this.nameInput.value.trim() || 'Player';
             if (gameState.voiceEnabled) {
                 this.ensureAudioContextResumed();
-                await (gameState as any).managers.media.toggleMicrophone();
+                await gameState.managers.media.toggleMicrophone();
             }
             const targetId = this.roomInput.value.trim();
             if (!targetId) {
@@ -384,8 +384,8 @@ export class UIManager {
 
     private handleLeave(): void {
         if (this.leaveBtn) this.leaveBtn.style.display = 'none';
-        if (gameState.managers.network) (gameState as any).managers.network.disconnect();
-        if ((gameState as any).managers.media) (gameState as any).managers.media.stopMicrophone();
+        if (gameState.managers.network) gameState.managers.network.disconnect();
+        if (gameState.managers.media) gameState.managers.media.stopMicrophone();
         if (gameState.managers.entity) {
             const entities = Array.from(gameState.managers.entity.entities.values());
             entities.forEach(entity => {

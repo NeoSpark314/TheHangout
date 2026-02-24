@@ -108,7 +108,7 @@ export class RemotePlayer extends PlayerEntity {
         super.destroy();
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
 
-        const render = (gameState as any).managers.render;
+        const render = gameState.managers.render;
         if (render && this.view) {
             (this.view as any).removeFromScene(render.scene);
             this.view.destroy();

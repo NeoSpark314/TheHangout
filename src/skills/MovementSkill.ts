@@ -50,9 +50,9 @@ export class MovementSkill extends Skill {
     }
 
     public update(delta: number, player: LocalPlayer): void {
-        const render = gameState.managers.render;
-        const input = gameState.managers.input;
-        if (!render || !input) return;
+        const managers = gameState.managers;
+        const render = managers.render;
+        const input = managers.input;
 
         const isVR = render.isXRPresenting();
 

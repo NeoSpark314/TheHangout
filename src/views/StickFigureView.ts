@@ -84,7 +84,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     }
 
     private _setupAudio(): void {
-        const render = (gameState as any).managers.render;
+        const render = gameState.managers.render;
         if (render?.audioListener) {
             this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
             this.positionalAudio.setRefDistance(3);
@@ -303,7 +303,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
 
     private _billboardNameTag(): void {
         if (!this.nameTag) return;
-        const render = (gameState as any).managers.render;
+        const render = gameState.managers.render;
         if (!render || !render.camera) return;
 
         const cameraPos = new THREE.Vector3();
