@@ -20,39 +20,38 @@ Opens at `https://localhost/`. Self-signed SSL cert is auto-generated on first r
 
 ## Architecture
 
-The project follows a **Clean Architecture** pattern designed for high-performance spatial synchronization.
+The project follows a **Clean Architecture** pattern designed for high-performance spatial synchronization and modular gameplay features.
 
 | Layer | Tech | Role |
 |-------|------|------|
-| **Core** | TypeScript | App Orchestration, Game loop, Event Bus, Type-safe Global State. |
-| **Logic Entities** | Custom | "Source of Truth" for state (Physics, Networking, Poses). |
-| **Managers** | Custom | Lifecycle and orchestration (Network, Render, Physics). |
-| **Systems** | Custom | Logic Hubs (XR Math, Interaction). |
-| **Views** | Three.js | Purely visual representation of entities. |
+| **Core** | TypeScript | App Orchestration (`App`), Game loop (`GameEngine`), Event Bus, Type-safe Global State. |
+| **Logic Entities** | Custom | "Source of Truth" for state. They own logic, physics modes, and poses. |
+| **Managers** | Custom | Lifecycle and orchestration (Network, Render, Physics, Assets). |
+| **Systems** | Custom | Logic Hubs (XR Math, Interaction, Drawing). |
+| **Views** | Three.js | Purely visual representation of entities. No business logic here. |
 
 ### Engineering Principles
 
-1.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) own their logic and spatial state. The Rendering layer only *follows* or *represents* this state.
-2.  **Decoupling**: Logic entities communicate via events (`EventBus`) for networking and interaction. Skills receive dependencies via a modular interface rather than polling global state.
-3.  **Spatial Math**: Using **THREE.js** for spatial math (Vectors, Quaternions, Matrices) is encouraged, but THREE.js *Objects* (Meshes, Groups) remain confined to the View layer.
-4.  **Type Safety**: Manager access is strictly typed through `gameState.managers` to eliminate circular dependencies.
+1.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) drive the visuals. The Rendering layer only *follows* or *interpolates* this state.
+2.  **Domain-Driven Synchronization**: Networking is a pure transport. Entities handle their own specialized events (e.g., `OWNERSHIP_RELEASE`) to encapsulate internal state changes (like rigid body mode transitions).
+3.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Skills interact with these capabilities rather than specific classes, allowing for diverse objects (Physics Cubes, non-physics Pens, UI Buttons).
+4.  **Strictly Typed Network Contract**: All network traffic follows explicit interfaces in `IEntityState.ts` to prevent key mismatches and ensure type safety across the network boundary.
+5.  **Linear Lifecycle**: The `App` class enforces a strict initialization sequence: **Infrastructure (Physics) -> World (Room/Props) -> Engine (Loop)**.
 
 ## Core Systems
 
 ### App Orchestrator
-The `App` class (`src/core/App.ts`) manages the entire lifecycle of the application, from server detection and manager initialization to system startup. `main.ts` remains a minimal entry point.
+The `App` class manages the startup sequence, ensuring all managers are registered and systems are initialized in the correct order to prevent race conditions.
 
 ### Entity & View System
-All synced game objects follow the **Decoupled Entity Pattern**:
-- **Entities**: Logic-only. They calculate physics, handle ownership, and maintain poses.
-- **Views**: Three.js visual implementations. They receive state updates and update the scene.
-- **XRSystem**: Centralized math hub for transforming raw WebXR data into avatar-relative space.
+- **Entities**: Logic-only. They implement capabilities like `IGrabbable`.
+- **Views**: Visual-only. They implement `IView` and handle Three.js scene management and materials.
+- **EntityFactory**: A registry-based system for spawning entities by type string, making world population data-driven.
 
-### Networking (Dispatcher/Synchronizer)
-Networking is split into three concerns:
-- **Transport**: Raw PeerJS/Socket communication.
-- **Dispatcher**: Routes incoming packets to specialized `PacketHandlers`.
-- **Synchronizer**: Manages the 20Hz heartbeat loop for authoritative state syncing.
+### Modular Networking
+- **Transport**: Raw communication via PeerJS/Sockets.
+- **Dispatcher**: Routes incoming packets to specific `PacketHandlers`.
+- **Synchronizer**: A 20Hz loop that collects and broadcasts authoritative entity states using standardized interfaces.
 
 ## Controls
 
@@ -60,27 +59,28 @@ Networking is split into three concerns:
 - **Movement**: Left Thumbstick (Head-relative)
 - **Rotation**: Right Thumbstick (Snap Turn)
 - **Grab**: Grip button (hold to carry)
+- **Interact**: Index Trigger (Analog pressure supported for tools like Pens)
 - **Voice**: Microphone active by default (toggle via UI)
 
 ### Desktop Mode
 - **Movement**: WASD
 - **Look**: Mouse (Pointer Lock)
 - **Grab**: **E key** (hold to carry, release to throw)
+- **Interact**: **Left Mouse Click** (while holding)
 - **Voice**: Microphone toggle via UI button
 
 ## Project Structure
 
 ```
-├── index.html          # Entry HTML
 ├── src/
 │   ├── core/           # App, GameEngine, EventBus, GameState
-│   ├── entities/       # State Owners: LocalPlayer, RemotePlayer, PhysicsEntity
-│   ├── interfaces/     # Decoupling definitions (IEntity, IView, IInteractable)
-│   ├── managers/       # Orchestrators: Render, Network, Physics, Player, UI
-│   ├── network/        # Networking: Dispatcher, Synchronizer, PacketHandlers
-│   ├── skills/         # Gameplay: Movement, Grab (Modular interface)
+│   ├── entities/       # State Owners: LocalPlayer, PhysicsEntity, PenEntity
+│   ├── interfaces/     # Strict Contracts: IEntity, IView, IGrabbable, IEntityState
+│   ├── managers/       # Orchestrators: Render, Network, Physics, Assets, Drawing
+│   ├── network/        # Messaging: Dispatcher, Synchronizer, PacketHandlers
+│   ├── skills/         # Gameplay Logic: Movement, Grab
 │   ├── systems/        # Logic Hubs: XRSystem, InteractionSystem
-│   ├── views/          # Visuals: StickFigureView, PhysicsPropView
-│   └── utils/          # Math, Constants, Network Relays
+│   ├── views/          # Visuals: StickFigureView, PhysicsPropView, PenView
+│   └── utils/          # Math, Constants, DeviceUtils
 └── vite.config.js
 ```
