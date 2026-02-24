@@ -51,18 +51,22 @@ export class PlayerManager {
     public onPeerDisconnected(peerId: string): void {
         const managers = gameState.managers;
         const entity = managers.entity.getEntity(peerId);
-        if (!entity || entity.type === 'SPECTATOR') {
-            managers.entity.removeEntity(peerId);
+        
+        if (!entity) {
+            console.warn(`[PlayerManager] Received disconnect for unknown peer: ${peerId}`);
             return;
         }
 
-        console.log(`[PlayerManager] Removing remote player for ${peerId}`);
-        const name = (entity as any).name || 'Somebody';
+        console.log(`[PlayerManager] Removing entity for disconnected peer: ${peerId} (type: ${entity.type})`);
+        
+        const name = (entity as any).name;
+        const isPlayer = entity.type === 'REMOTE_PLAYER' || entity.type === 'LOCAL_PLAYER';
 
+        // Critical: Always trigger destruction and removal
         managers.entity.removeEntity(peerId);
 
-        if (managers.hud) {
-            managers.hud.showNotification(`${name} left the hangout.`);
+        if (isPlayer && managers.hud) {
+            managers.hud.showNotification(`${name || 'A player'} left the hangout.`);
         }
     }
 }

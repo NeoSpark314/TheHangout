@@ -48,4 +48,18 @@ export abstract class EntityView<TState> implements IView<TState> {
     }
 
     public abstract destroy(): void;
+
+    protected _cleanupMesh(): void {
+        if (!this.mesh) return;
+
+        if (this.mesh.parent) {
+            this.mesh.parent.remove(this.mesh);
+        }
+        
+        // Ensure it's removed from the interaction group too
+        const managers = gameState.managers;
+        if (managers && managers.render && managers.render.interactionGroup) {
+            managers.render.interactionGroup.remove(this.mesh);
+        }
+    }
 }

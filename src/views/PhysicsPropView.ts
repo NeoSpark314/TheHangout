@@ -60,6 +60,7 @@ export class PhysicsPropView extends EntityView<PhysicsPropState> {
     }
 
     public destroy(): void {
+        this._cleanupMesh();
         this.mesh.traverse((object) => {
             const mesh = object as THREE.Mesh;
             if (mesh.isMesh) {

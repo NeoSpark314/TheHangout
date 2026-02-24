@@ -528,6 +528,8 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     }
 
     public destroy(): void {
+        this._cleanupMesh();
+        
         if (this.audioElement) {
             this.audioElement.pause();
             this.audioElement.srcObject = null;

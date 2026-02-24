@@ -56,6 +56,7 @@ export class PenView extends EntityView<PenViewState> {
     }
 
     public destroy(): void {
+        this._cleanupMesh();
         this.mesh.traverse((obj) => {
             if (obj instanceof THREE.Mesh) {
                 obj.geometry.dispose();

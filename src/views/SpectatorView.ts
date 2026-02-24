@@ -74,6 +74,7 @@ export class SpectatorView extends EntityView<SpectatorViewState> {
     }
 
     public destroy(): void {
+        this._cleanupMesh();
         this.mesh.traverse((child) => {
             const mesh = child as THREE.Mesh;
             if (mesh.geometry) mesh.geometry.dispose();
