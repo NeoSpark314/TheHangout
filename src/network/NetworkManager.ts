@@ -223,13 +223,18 @@ export class NetworkManager implements NetworkTransport {
         for (const stateData of entityStates) {
             let entity = managers.entity.getEntity(stateData.id);
             if (!entity) {
-                // Generic discovery - works for players, props, etc.
+                // Skip if this is actually us (should already be in entities, but be safe)
+                if (gameState.localPlayer && stateData.id === gameState.localPlayer.id) continue;
+
+                // Role Reversal: If someone says they are a LOCAL_PLAYER, to us they are a REMOTE_PLAYER
+                const spawnType = stateData.type === 'LOCAL_PLAYER' ? 'REMOTE_PLAYER' : stateData.type;
+
                 const config = {
                     spawnPos: { x: 0, y: 0, z: 0 },
                     spawnYaw: 0,
                     isAuthority: false
                 };
-                entity = managers.entity.discover(stateData.id, stateData.type, config) || undefined;
+                entity = managers.entity.discover(stateData.id, spawnType, config) || undefined;
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as unknown as INetworkable<any>;
