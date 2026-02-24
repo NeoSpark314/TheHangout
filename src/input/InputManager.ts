@@ -1,15 +1,7 @@
 import eventBus from '../core/EventBus';
 import gameState from '../core/GameState';
 import { EVENTS, INPUT_CONFIG } from '../utils/Constants';
-import { Vector3, Quaternion } from '../interfaces/IMath';
 import { VirtualJoystick } from '../utils/VirtualJoystick';
-
-export enum ActionIntent {
-    Grab = 'Intent_Grab',
-    Interact = 'Intent_Interact',
-    Move = 'Intent_Move',
-    Primary = 'Intent_Primary'
-}
 
 export class InputManager {
     private keyboard: Record<string, boolean> = {};
@@ -30,6 +22,10 @@ export class InputManager {
         navCooldown: 0
     };
 
+    // XR Input State
+    public xrMove: { x: number, y: number } = { x: 0, y: 0 };
+    public xrTurn: number = 0; // -1 to 1 for snap/smooth turn intent
+
     constructor() {
         this.initKeyboard();
     }
@@ -46,7 +42,6 @@ export class InputManager {
     }
 
     public initMobileJoysticks(): void {
-        console.log('[InputManager] Initializing Mobile Joysticks');
         const left = document.getElementById('joystick-left');
         const right = document.getElementById('joystick-right');
         if (left) left.innerHTML = '';
@@ -78,6 +73,10 @@ export class InputManager {
         v.x += this.gamepad.move.x;
         v.y += this.gamepad.move.y;
 
+        // Add XR movement
+        v.x += this.xrMove.x;
+        v.y += this.xrMove.y;
+
         if (this.joysticks.move) {
             const jv = this.joysticks.move.getVector();
             v.x += jv.x;
@@ -107,6 +106,7 @@ export class InputManager {
 
     public update(delta: number, frame?: XRFrame): void {
         this.pollGamepad(delta);
+        this.pollXRInputs(frame);
     }
 
     private pollGamepad(delta: number): void {
@@ -131,6 +131,34 @@ export class InputManager {
         });
 
         this.handleUINavigation(delta, gp);
+    }
+
+    private pollXRInputs(frame?: XRFrame): void {
+        this.xrMove = { x: 0, y: 0 };
+        this.xrTurn = 0;
+
+        const render = gameState.managers.render;
+        if (!render || !render.isXRPresenting()) return;
+
+        const session = render.getXRSession();
+        if (!session) return;
+
+        for (const source of session.inputSources) {
+            if (source.gamepad) {
+                const axes = source.gamepad.axes;
+                // Standard mapping: Left stick for move, Right stick for turn
+                if (source.handedness === 'left') {
+                    // axes[2], axes[3] are often the sticks on many controllers
+                    const dx = axes.length >= 4 ? axes[2] : axes[0];
+                    const dy = axes.length >= 4 ? axes[3] : axes[1];
+                    if (Math.abs(dx) > 0.1) this.xrMove.x += dx;
+                    if (Math.abs(dy) > 0.1) this.xrMove.y += dy;
+                } else if (source.handedness === 'right') {
+                    const dx = axes.length >= 4 ? axes[2] : axes[0];
+                    if (Math.abs(dx) > 0.1) this.xrTurn = dx;
+                }
+            }
+        }
     }
 
     private handleUINavigation(delta: number, gp: Gamepad): void {
