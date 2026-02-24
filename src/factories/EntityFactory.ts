@@ -41,7 +41,7 @@ export class EntityFactory {
     }
 
     public static createGrabbable(id: string, size: number, position: Vector3, mesh: THREE.Mesh): PhysicsEntity | null {
-        const view = new PhysicsPropView(mesh);
+        const view = new PhysicsPropView(mesh, id);
         const managers = gameState.managers;
         
         if (!managers.physics) {

@@ -158,7 +158,8 @@ export class PropManager {
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(position.x, position.y, position.z);
             mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })));
-            EntityFactory.createGrabbable(`grabbable-${i}`, 0.12, position, mesh);
+            const entityId = `grabbable-${i}`;
+            EntityFactory.createGrabbable(entityId, 0.12, position, mesh);
         }
     }
 

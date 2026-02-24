@@ -63,10 +63,10 @@ export class GrabSkill extends Skill {
                 this._recordPosition('desktop', targetPos);
             }
         } else {
-            const ray = { 
-                origin: render.camera.position, 
-                direction: render.camera.getWorldDirection(new THREE.Vector3()) 
-            };
+            const dir = new THREE.Vector3();
+            render.camera.getWorldDirection(dir);
+            dir.normalize();
+            const ray = { origin: render.camera.position, direction: dir };
             const nearest = interactionSystem.findInteractableUnderRay(ray, this.desktopGrabDist);
 
             if (input.isKeyPressed('e') && nearest) {
@@ -75,11 +75,7 @@ export class GrabSkill extends Skill {
                 this.positionHistory.desktop = [];
             }
 
-            if (this.highlightedEntity !== nearest) {
-                if (this.highlightedEntity) this.highlightedEntity.onHoverExit(player.id);
-                if (nearest) nearest.onHoverEnter(player.id);
-                this.highlightedEntity = nearest;
-            }
+            this._updateHighlight(player.id, nearest);
         }
     }
 
@@ -90,8 +86,8 @@ export class GrabSkill extends Skill {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !frame || !referenceSpace) return;
 
-        let nearestEntity: IInteractable | null = null;
-        let nearestDist = this.grabRadius;
+        let nearestGlobal: IInteractable | null = null;
+        let minDistGlobal = this.grabRadius;
 
         for (const source of session.inputSources) {
             if (!source.gripSpace) continue;
@@ -112,6 +108,14 @@ export class GrabSkill extends Skill {
             this._recordPosition(hand, handWorldPos);
             const squeezing = source.gamepad && source.gamepad.buttons.length > 1 && source.gamepad.buttons[1].pressed;
 
+            // Point-based nearest check for VR
+            const result = interactionSystem.findNearestInteractable(handWorldPos, this.grabRadius);
+            
+            if (result && result.distance < minDistGlobal) {
+                minDistGlobal = result.distance;
+                nearestGlobal = result.interactable;
+            }
+
             if (this.held[hand]) {
                 if (!squeezing) {
                     const velocity = this._computeThrowVelocity(hand);
@@ -125,16 +129,22 @@ export class GrabSkill extends Skill {
                     }
                 }
             } else {
-                if (squeezing) {
-                    const ray = { origin: handWorldPos, direction: new THREE.Vector3(0, 0, -1).applyQuaternion(handWorldQuat) };
-                    const nearest = interactionSystem.findInteractableUnderRay(ray, this.grabRadius);
-                    if (nearest) {
-                        nearest.onGrab(player.id);
-                        this.held[hand] = nearest;
-                        this.positionHistory[hand] = [];
-                    }
+                if (squeezing && result) {
+                    result.interactable.onGrab(player.id);
+                    this.held[hand] = result.interactable;
+                    this.positionHistory[hand] = [];
                 }
             }
+        }
+
+        this._updateHighlight(player.id, nearestGlobal);
+    }
+
+    private _updateHighlight(playerId: string, nearest: IInteractable | null): void {
+        if (this.highlightedEntity !== nearest) {
+            if (this.highlightedEntity) this.highlightedEntity.onHoverExit(playerId);
+            if (nearest) nearest.onHoverEnter(playerId);
+            this.highlightedEntity = nearest;
         }
     }
 

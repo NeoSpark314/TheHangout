@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
 import { EntityManager } from '../managers/EntityManager';
+import gameState from '../core/GameState';
 
 export class InteractionSystem {
     private raycaster: THREE.Raycaster = new THREE.Raycaster();
@@ -10,35 +11,65 @@ export class InteractionSystem {
         this.entityManager = entityManager;
     }
 
+    /**
+     * Finds the first interactable object hit by a ray.
+     * Best for desktop crosshair interaction.
+     */
     public findInteractableUnderRay(ray: { origin: THREE.Vector3, direction: THREE.Vector3 }, maxDist: number): IInteractable | null {
+        const render = gameState.managers.render;
+        if (!render) return null;
+
         this.raycaster.ray.origin.copy(ray.origin);
         this.raycaster.ray.direction.copy(ray.direction);
-        
+        this.raycaster.near = 0;
+        this.raycaster.far = maxDist;
+
+        const intersects = this.raycaster.intersectObjects(render.scene.children, true);
+
+        for (const intersect of intersects) {
+            let obj: THREE.Object3D | null = intersect.object;
+            while (obj) {
+                const entityId = obj.userData.entityId;
+                if (entityId) {
+                    const entity = this.entityManager.getEntity(entityId);
+                    if (entity && (entity as any).isGrabbable) {
+                        return entity as unknown as IInteractable;
+                    }
+                }
+                obj = obj.parent;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds the absolute nearest interactable to a world point.
+     * Best for VR near-grab.
+     */
+    public findNearestInteractable(point: THREE.Vector3, maxDist: number): { interactable: IInteractable, distance: number } | null {
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
         for (const entity of this.entityManager.entities.values()) {
-            // Check if entity implements IInteractable and is grabbable
             const interactable = entity as unknown as IInteractable;
-            if (interactable.isGrabbable === true) {
-                const entityPos = (entity as any).rigidBody ? (entity as any).rigidBody.translation() : null;
-                if (!entityPos) continue;
+            if (interactable.isGrabbable && !(entity as any).heldBy) {
+                // We need the world position of the entity. 
+                // Since we don't have mesh references in logic, we check the physics body or stored state.
+                const rb = (entity as any).rigidBody;
+                if (!rb) continue;
 
-                const pos = new THREE.Vector3(entityPos.x, entityPos.y, entityPos.z);
-                
-                // Using distanceSqToPoint for performance and matching original threshold
-                const distToRay = this.raycaster.ray.distanceSqToPoint(pos);
-                
-                if (distToRay < 0.1) { // ~0.316m radius
-                    const dToCam = this.raycaster.ray.origin.distanceTo(pos);
-                    if (dToCam < minDist) {
-                        minDist = dToCam;
-                        nearest = interactable;
-                    }
+                const pos = rb.translation();
+                const entVec = new THREE.Vector3(pos.x, pos.y, pos.z);
+                const dist = point.distanceTo(entVec);
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = interactable;
                 }
             }
         }
 
-        return nearest;
+        return nearest ? { interactable: nearest, distance: minDist } : null;
     }
 }
