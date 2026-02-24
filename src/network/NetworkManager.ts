@@ -223,11 +223,13 @@ export class NetworkManager implements NetworkTransport {
         for (const stateData of entityStates) {
             let entity = managers.entity.getEntity(stateData.id);
             if (!entity) {
-                const isOwnEntity = gameState.localPlayer && stateData.id === gameState.localPlayer.id;
-                if (!isOwnEntity) {
-                    managers.player.handleRemoteEntityDiscovery(stateData.id, stateData.type);
-                    entity = managers.entity.getEntity(stateData.id);
-                }
+                // Generic discovery - works for players, props, etc.
+                const config = {
+                    spawnPos: { x: 0, y: 0, z: 0 },
+                    spawnYaw: 0,
+                    isAuthority: false
+                };
+                entity = managers.entity.discover(stateData.id, stateData.type, config) || undefined;
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as unknown as INetworkable<any>;

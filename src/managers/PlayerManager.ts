@@ -48,28 +48,6 @@ export class PlayerManager {
         this.initialized = true;
     }
 
-    public handleRemoteEntityDiscovery(peerId: string, type: string): void {
-        const managers = gameState.managers;
-        if (managers.entity.getEntity(peerId)) return;
-
-        console.log(`[PlayerManager] Discovering remote ${type} for ${peerId}`);
-
-        if (type === 'LOCAL_PLAYER' || type === 'REMOTE_PLAYER') {
-            const rp = EntityFactory.createPlayer(peerId, {
-                isLocal: false,
-                spawnPos: { x: 0, y: 0, z: 0 },
-                spawnYaw: 0,
-                color: 0xff00ff
-            });
-            managers.entity.addEntity(rp);
-        } else if (type === 'SPECTATOR') {
-            const rs = EntityFactory.createSpectator(peerId, false);
-            managers.entity.addEntity(rs);
-        }
-
-        eventBus.emit(EVENTS.PEER_CONNECTED, peerId);
-    }
-
     public onPeerDisconnected(peerId: string): void {
         const managers = gameState.managers;
         const entity = managers.entity.getEntity(peerId);

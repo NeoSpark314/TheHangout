@@ -1,11 +1,32 @@
 import { IEntity } from '../interfaces/IEntity';
 import { INetworkable } from '../interfaces/INetworkable';
+import { EntityFactory } from '../factories/EntityFactory';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 
 export class EntityManager {
     public entities: Map<string, IEntity>;
 
     constructor() {
         this.entities = new Map();
+    }
+
+    /**
+     * Discovers an entity. If it doesn't exist, it spawns it via the factory.
+     */
+    public discover(id: string, type: string, config: any = {}): IEntity | null {
+        if (this.entities.has(id)) return this.entities.get(id)!;
+
+        console.log(`[EntityManager] Discovering new ${type} with ID: ${id}`);
+        const entity = EntityFactory.spawn(type, id, config);
+        
+        if (entity) {
+            this.addEntity(entity);
+            eventBus.emit(EVENTS.PEER_CONNECTED, id); // Reuse for discovery notification
+            return entity;
+        }
+
+        return null;
     }
 
     public addEntity(entity: IEntity): void {
