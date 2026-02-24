@@ -4,6 +4,7 @@ import { LocalPlayer } from '../entities/LocalPlayer';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IGrabbable } from '../interfaces/IGrabbable';
 import { InteractionPointer } from '../interfaces/IPointer';
+import { isGrabbable, isInteractable } from '../utils/TypeGuards';
 import type { Managers } from '../core/GameState';
 
 /**
@@ -67,8 +68,8 @@ export class GrabSkill extends Skill {
                 this._recordPosition(pointer.id, targetPos);
 
                 // RICH INTERACTION (Trigger)
-                if (pointer.triggerValue > 0.01) {
-                    (held as unknown as IInteractable).onInteraction({
+                if (pointer.triggerValue > 0.01 && isInteractable(held)) {
+                    held.onInteraction({
                         type: 'trigger',
                         phase: pointer.triggerValue > 0.1 ? 'update' : 'start',
                         value: pointer.triggerValue,
@@ -76,7 +77,7 @@ export class GrabSkill extends Skill {
                         hand: pointer.hand
                     });
                 }
-                return held as unknown as IInteractable;
+                return isInteractable(held) ? held : null;
             }
         } else {
             // FIND NEW INTERACTABLE
@@ -90,10 +91,9 @@ export class GrabSkill extends Skill {
                 found = result?.interactable || null;
             }
 
-            if (pointer.isSqueezing && found && found.isGrabbable) {
-                const grabbable = found as unknown as IGrabbable;
-                grabbable.onGrab(player.id, pointer.hand || 'right');
-                this.heldObjects.set(pointer.id, grabbable);
+            if (pointer.isSqueezing && isGrabbable(found)) {
+                found.onGrab(player.id, pointer.hand || 'right');
+                this.heldObjects.set(pointer.id, found);
                 this.history.set(pointer.id, []);
             }
 

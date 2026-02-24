@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
 import { EntityManager } from '../managers/EntityManager';
+import { isGrabbable, isInteractable } from '../utils/TypeGuards';
 import gameState from '../core/GameState';
 
 export class InteractionSystem {
@@ -29,10 +30,8 @@ export class InteractionSystem {
         let minDist = maxDist;
 
         for (const entity of managers.entity.entities.values()) {
-            // Check if it's grabbable and NOT currently held
-            if ((entity as any).isGrabbable && !(entity as any).heldBy) {
-                const interactable = entity as unknown as IInteractable;
-                
+            // Check if it's grabbable, interactable and NOT currently held
+            if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
                 // Get world position from view if possible
                 const view = (entity as any).view;
                 if (!view || !view.mesh) continue;
@@ -42,7 +41,7 @@ export class InteractionSystem {
 
                 if (dist < minDist) {
                     minDist = dist;
-                    nearest = interactable;
+                    nearest = entity;
                 }
             }
         }
