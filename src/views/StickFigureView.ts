@@ -51,7 +51,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     private handMeshes: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private handCylinders: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private wristMeshes: { left: THREE.Mesh, right: THREE.Mesh };
-    private nameTag: THREE.Mesh | null = null;
+    private nameTag: THREE.Sprite | null = null;
 
     static HAND_INDICES = [
         0, 1, 1, 2, 2, 3, 3, 4,
@@ -302,22 +302,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     }
 
     private _billboardNameTag(): void {
-        if (!this.nameTag) return;
-        const render = gameState.managers.render;
-        if (!render || !render.camera) return;
-
-        const cameraPos = new THREE.Vector3();
-        render.camera.getWorldPosition(cameraPos);
-        const tagWorldPos = new THREE.Vector3();
-        this.nameTag.getWorldPosition(tagWorldPos);
-
-        const lookDir = new THREE.Vector3().subVectors(cameraPos, tagWorldPos);
-        lookDir.y = 0;
-
-        if (lookDir.lengthSq() > 0.0001) {
-            const target = tagWorldPos.clone().add(lookDir);
-            this.nameTag.lookAt(target);
-        }
+        // Sprites billboard automatically in Three.js, no manual rotation needed.
     }
 
     private _alignCylinder(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3, radius: number = 0.02): void {
@@ -346,10 +331,10 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         if (!name) {
             if (this.nameTag) {
                 this.mesh.remove(this.nameTag);
-                if (this.nameTag.material instanceof THREE.MeshBasicMaterial && this.nameTag.material.map) {
+                if (this.nameTag.material.map) {
                     this.nameTag.material.map.dispose();
                 }
-                (this.nameTag.material as THREE.Material).dispose();
+                this.nameTag.material.dispose();
                 this.nameTag = null;
             }
             return;
@@ -359,34 +344,46 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         const context = canvas.getContext('2d')!;
         canvas.width = 512;
         canvas.height = 128;
-        context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        (context as any).roundRect(0, 0, canvas.width, canvas.height, 20);
+        
+        // Background
+        context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        const radius = 30;
+        context.beginPath();
+        context.moveTo(radius, 0);
+        context.lineTo(canvas.width - radius, 0);
+        context.quadraticCurveTo(canvas.width, 0, canvas.width, radius);
+        context.lineTo(canvas.width, canvas.height - radius);
+        context.quadraticCurveTo(canvas.width, canvas.height, canvas.width - radius, canvas.height);
+        context.lineTo(radius, canvas.height);
+        context.quadraticCurveTo(0, canvas.height, 0, canvas.height - radius);
+        context.lineTo(0, radius);
+        context.quadraticCurveTo(0, 0, radius, 0);
+        context.closePath();
         context.fill();
-        context.font = 'bold 60px Inter, Arial, sans-serif';
+
+        context.font = 'bold 70px Inter, Arial, sans-serif';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
+        
         const fillStyle = typeof this.color === 'string' && this.color.startsWith('#')
             ? this.color
             : '#' + (this.color as number).toString(16).padStart(6, '0');
+        
         context.fillStyle = fillStyle;
-        context.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        context.shadowBlur = 4;
+        context.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        context.shadowBlur = 6;
         context.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);
 
         const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
 
         if (this.nameTag) {
-            const material = this.nameTag.material as THREE.MeshBasicMaterial;
-            const oldMap = material.map;
-            material.map = texture;
+            const oldMap = this.nameTag.material.map;
+            this.nameTag.material = spriteMaterial;
             if (oldMap) oldMap.dispose();
-            material.needsUpdate = true;
         } else {
-            const geometry = new THREE.PlaneGeometry(1.0, 0.25);
-            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
-            this.nameTag = new THREE.Mesh(geometry, material);
+            this.nameTag = new THREE.Sprite(spriteMaterial);
+            this.nameTag.scale.set(1.0, 0.25, 1.0);
             this.mesh.add(this.nameTag);
         }
         this._updateNameTagPosition();
@@ -561,9 +558,8 @@ export class StickFigureView extends EntityView<PlayerViewState> {
             }
         });
         if (this.nameTag) {
-            const material = this.nameTag.material as THREE.MeshBasicMaterial;
-            if (material.map) material.map.dispose();
-            material.dispose();
+            if (this.nameTag.material.map) this.nameTag.material.map.dispose();
+            this.nameTag.material.dispose();
         }
     }
 }

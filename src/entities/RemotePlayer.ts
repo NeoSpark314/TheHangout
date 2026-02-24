@@ -18,6 +18,7 @@ export class RemotePlayer extends PlayerEntity {
         super(peerId, 'REMOTE_PLAYER', false);
         this.peerId = peerId;
         this.view = view;
+        this.name = 'Player'; // Default
 
         this.onVoiceStream = this.onVoiceStream.bind(this);
         eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
@@ -95,7 +96,7 @@ export class RemotePlayer extends PlayerEntity {
             headHeight: this.headHeight,
             headQuaternion: this.headState.quaternion,
             handStates: this.handStates,
-            name: this.name,
+            name: this.name || 'Player',
             color: this.avatarColor,
             audioLevel: audioLevel,
             lerpFactor: lerpFactor

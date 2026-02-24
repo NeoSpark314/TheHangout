@@ -159,7 +159,7 @@ export class LocalPlayer extends PlayerEntity {
             headHeight: worldHeadPos.y,
             headQuaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w },
             handStates: this.handStates,
-            name: this.name,
+            name: this.name || 'You',
             color: gameState.avatarConfig.color,
             isLocal: true,
             audioLevel: managers.media ? managers.media.getLocalVolume() : 0,

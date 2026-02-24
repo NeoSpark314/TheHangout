@@ -39,6 +39,10 @@ export class PlayerManager {
             spawnYaw: spawn.yaw || 0,
             color: gameState.avatarConfig.color || 0x00ffff
         }) as any;
+        
+        if (gameState.localPlayer) {
+            (gameState.localPlayer as any).name = gameState.playerName || 'Player';
+        }
 
         managers.entity.addEntity(gameState.localPlayer as any);
         this.initialized = true;
