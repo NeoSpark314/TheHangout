@@ -7,12 +7,12 @@ import gameState from '../core/GameState';
 export class SpectatorEntity extends NetworkEntity {
     public view: IView<SpectatorViewState>;
     public targetPosition: Vector3 = { x: 0, y: 8, z: 10 };
+    public pitch: number = 0;
+    public yaw: number = 0;
     
     // Authority-only
     private moveSpeed: number = 8;
     private lookSpeed: number = 0.002;
-    private pitch: number = 0;
-    private yaw: number = 0;
 
     constructor(id: string, isAuthority: boolean = false, view: IView<SpectatorViewState>) {
         super(id, 'SPECTATOR', isAuthority);
@@ -82,17 +82,9 @@ export class SpectatorEntity extends NetworkEntity {
         if (input.isKeyPressed('e')) velocity.y += this.moveSpeed * delta;
         if (input.isKeyPressed('q')) velocity.y -= this.moveSpeed * delta;
 
-        render.cameraGroup.position.x += velocity.x;
-        render.cameraGroup.position.y += velocity.y;
-        render.cameraGroup.position.z += velocity.z;
-        render.cameraGroup.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
-
-        // Sync targetPosition to camera for networking
-        this.targetPosition = {
-            x: render.cameraGroup.position.x,
-            y: render.cameraGroup.position.y,
-            z: render.cameraGroup.position.z
-        };
+        this.targetPosition.x += velocity.x;
+        this.targetPosition.y += velocity.y;
+        this.targetPosition.z += velocity.z;
     }
 
     private updateRemote(delta: number): void {

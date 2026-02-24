@@ -109,21 +109,50 @@ export class LocalPlayer extends PlayerEntity {
 
         this.updateVRHands(frame);
         
-        const headPose = xr.getCameraWorldPose(render.camera);
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headPose.yaw, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.clone().invert().multiply(new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w));
+        // Calculate world pose from our own state (Source of Truth)
+        let worldHeadPos: Vector3;
+        let worldHeadQuat: Quaternion;
+        let bodyYaw: number;
+
+        if (render.isXRPresenting()) {
+            // In VR, the camera world pose IS the reference for our head
+            const headPose = xr.getCameraWorldPose(render.camera);
+            worldHeadPos = headPose.position;
+            worldHeadQuat = headPose.quaternion;
+            bodyYaw = headPose.yaw;
+        } else {
+            // In Desktop, our internal state drives the world pose
+            const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+            const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
+            
+            const localHeadPos = new THREE.Vector3(this.headPose.position.x, this.headPose.position.y, this.headPose.position.z);
+            const localHeadQuat = new THREE.Quaternion(this.headPose.quaternion.x, this.headPose.quaternion.y, this.headPose.quaternion.z, this.headPose.quaternion.w);
+
+            const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
+            const worldQuat = originQuat.clone().multiply(localHeadQuat);
+            
+            worldHeadPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+            worldHeadQuat = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
+            
+            const euler = new THREE.Euler().setFromQuaternion(originQuat, 'YXZ');
+            bodyYaw = euler.y;
+        }
+
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
+        const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
+        const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
 
         xr.transformHandsToAvatarSpace(
             this.xrOrigin,
-            headPose.yaw,
-            headPose.position,
+            bodyYaw,
+            worldHeadPos,
             this.handStates
         );
 
         this.view.applyState({
-            position: { x: headPose.position.x, y: 0, z: headPose.position.z },
-            yaw: headPose.yaw,
-            headHeight: headPose.position.y,
+            position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },
+            yaw: bodyYaw,
+            headHeight: worldHeadPos.y,
             headQuaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w },
             handStates: this.handStates,
             name: this.name,
@@ -185,20 +214,43 @@ export class LocalPlayer extends PlayerEntity {
 
     public getNetworkState(): any {
         const managers = gameState.managers;
-        const headPose = managers.xr.getCameraWorldPose(managers.render.camera);
+        const render = managers.render;
         
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headPose.yaw, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.clone().invert().multiply(new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w));
+        let worldHeadPos: Vector3;
+        let worldHeadQuat: Quaternion;
+        let bodyYaw: number;
+
+        if (render.isXRPresenting()) {
+            const headPose = managers.xr.getCameraWorldPose(render.camera);
+            worldHeadPos = headPose.position;
+            worldHeadQuat = headPose.quaternion;
+            bodyYaw = headPose.yaw;
+        } else {
+            const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+            const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
+            const localHeadPos = new THREE.Vector3(this.headPose.position.x, this.headPose.position.y, this.headPose.position.z);
+            const localHeadQuat = new THREE.Quaternion(this.headPose.quaternion.x, this.headPose.quaternion.y, this.headPose.quaternion.z, this.headPose.quaternion.w);
+            const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
+            const worldQuat = originQuat.clone().multiply(localHeadQuat);
+            worldHeadPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+            worldHeadQuat = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
+            const euler = new THREE.Euler().setFromQuaternion(originQuat, 'YXZ');
+            bodyYaw = euler.y;
+        }
+        
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
+        const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
+        const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
 
         return {
             id: this.id,
             type: this.type,
             name: this.name,
-            position: { x: headPose.position.x, y: 0, z: headPose.position.z },
-            yaw: headPose.yaw,
-            headHeight: headPose.position.y,
+            position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },
+            yaw: bodyYaw,
+            headHeight: worldHeadPos.y,
             head: {
-                position: headPose.position,
+                position: worldHeadPos,
                 quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
             hands: JSON.parse(JSON.stringify(this.handStates)),

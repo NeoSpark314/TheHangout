@@ -93,16 +93,7 @@ export class MovementSkill extends Skill {
             }
         }
 
-        // 2. Sync Renderer
-        render.cameraGroup.position.set(player.xrOrigin.position.x, player.xrOrigin.position.y, player.xrOrigin.position.z);
-        render.cameraGroup.quaternion.set(player.xrOrigin.quaternion.x, player.xrOrigin.quaternion.y, player.xrOrigin.quaternion.z, player.xrOrigin.quaternion.w);
-
-        if (!isVR) {
-            render.camera.position.set(player.headPose.position.x, player.headPose.position.y, player.headPose.position.z);
-            render.camera.quaternion.set(player.headPose.quaternion.x, player.headPose.quaternion.y, player.headPose.quaternion.z, player.headPose.quaternion.w);
-        }
-
-        // 3. Locomotion
+        // 2. Locomotion
         const move = input.getMovementVector();
         const moveVector = new THREE.Vector3(move.x, 0, move.y);
 
@@ -120,9 +111,6 @@ export class MovementSkill extends Skill {
             player.xrOrigin.position.x += moveVector.x * this.speed * delta;
             player.xrOrigin.position.y += moveVector.y * this.speed * delta;
             player.xrOrigin.position.z += moveVector.z * this.speed * delta;
-
-            // Immediate renderer update for smoothness
-            render.cameraGroup.position.set(player.xrOrigin.position.x, player.xrOrigin.position.y, player.xrOrigin.position.z);
         }
 
         player._lastMoveVector = { x: moveVector.x, y: moveVector.y, z: moveVector.z };

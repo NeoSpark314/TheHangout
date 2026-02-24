@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { isTrueHMD } from '../utils/DeviceUtils.js';
+import gameState from '../core/GameState';
 
 export class RenderManager {
     public container: HTMLElement;
@@ -59,8 +60,7 @@ export class RenderManager {
         this.camera.position.set(0, 0, 0);
         this.camera.rotation.set(0, 0, 0);
 
-        this.cameraGroup.position.set(15, 12, 15);
-        this.cameraGroup.lookAt(0, 0, 0);
+        this.cameraGroup.position.set(0, 0, 0);
 
         this.setupControllers();
 
@@ -83,28 +83,47 @@ export class RenderManager {
 
     public switchToPlayerView(): void {
         this.isMenuMode = false;
-        this.camera.rotation.set(0, 0, 0);
     }
 
     public switchToSpectatorView(): void {
         this.isMenuMode = false;
-        this.cameraGroup.rotation.set(0, 0, 0);
-        this.camera.rotation.set(0, 0, 0);
         this.cameraGroup.position.set(0, 8, 10);
     }
 
     public update(delta: number): void {
-        if (!this.isMenuMode) return;
+        if (this.isMenuMode) {
+            this.menuRotation += delta * 0.1;
+            const radius = 18;
+            this.cameraGroup.position.set(
+                Math.cos(this.menuRotation) * radius,
+                12,
+                Math.sin(this.menuRotation) * radius
+            );
+            this.camera.lookAt(0, 0, 0);
+            return;
+        }
 
-        this.menuRotation += delta * 0.1;
-        const radius = 18;
-        this.cameraGroup.position.set(
-            Math.cos(this.menuRotation) * radius,
-            12,
-            Math.sin(this.menuRotation) * radius
-        );
+        const player = gameState.localPlayer;
+        if (!player) return;
 
-        this.camera.lookAt(0, 0, 0);
+        // Camera following logic
+        if (player.type === 'LOCAL_PLAYER') {
+            const lp = player as any;
+            this.cameraGroup.position.set(lp.xrOrigin.position.x, lp.xrOrigin.position.y, lp.xrOrigin.position.z);
+            this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
+            
+            if (!this.isXRPresenting()) {
+                this.camera.position.set(lp.headPose.position.x, lp.headPose.position.y, lp.headPose.position.z);
+                this.camera.quaternion.set(lp.headPose.quaternion.x, lp.headPose.quaternion.y, lp.headPose.quaternion.z, lp.headPose.quaternion.w);
+            }
+        } else if (player.type === 'SPECTATOR') {
+            const sp = player as any;
+            if (sp.targetPosition) {
+                this.cameraGroup.position.set(sp.targetPosition.x, sp.targetPosition.y, sp.targetPosition.z);
+            }
+            this.cameraGroup.rotation.set(0, sp.yaw || 0, 0, 'YXZ');
+            this.camera.rotation.set(sp.pitch || 0, 0, 0, 'YXZ');
+        }
     }
 
     public setupControllers(): void {

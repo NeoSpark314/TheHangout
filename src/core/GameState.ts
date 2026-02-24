@@ -1,17 +1,18 @@
-import { EntityManager } from '../managers/EntityManager';
-import { PhysicsManager } from '../managers/PhysicsManager';
-import { NetworkManager } from '../network/NetworkManager';
-import { InputManager } from '../input/InputManager';
-import { RenderManager } from '../managers/RenderManager';
-import { PlayerManager } from '../managers/PlayerManager';
-import { RoomManager } from '../managers/RoomManager';
-import { UIManager } from '../managers/UIManager';
-import { HUDManager } from '../managers/HUDManager';
-import { MediaManager } from '../managers/MediaManager';
-import { AudioManager } from '../managers/AudioManager';
-import { InteractionSystem } from '../systems/InteractionSystem';
-import { LocalPlayer } from '../entities/LocalPlayer';
-import { SpectatorEntity } from '../entities/SpectatorEntity';
+import type { EntityManager } from '../managers/EntityManager';
+import type { PhysicsManager } from '../managers/PhysicsManager';
+import type { NetworkManager } from '../network/NetworkManager';
+import type { InputManager } from '../input/InputManager';
+import type { RenderManager } from '../managers/RenderManager';
+import type { PlayerManager } from '../managers/PlayerManager';
+import type { RoomManager } from '../managers/RoomManager';
+import type { UIManager } from '../managers/UIManager';
+import type { HUDManager } from '../managers/HUDManager';
+import type { MediaManager } from '../managers/MediaManager';
+import type { AudioManager } from '../managers/AudioManager';
+import type { InteractionSystem } from '../systems/InteractionSystem';
+import type { XRSystem } from '../systems/XRSystem';
+import type { LocalPlayer } from '../entities/LocalPlayer';
+import type { SpectatorEntity } from '../entities/SpectatorEntity';
 
 export interface AvatarConfig {
     color: string | number;
