@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { IView } from '../interfaces/IView';
 
+/**
+ * Architectural Role: Purely visual representation of an entity.
+ * Note: Views should never contain business logic or physics; they only
+ * represent the state provided by their corresponding Entity.
+ */
 export abstract class EntityView<TState> implements IView<TState> {
     public mesh: THREE.Object3D;
 

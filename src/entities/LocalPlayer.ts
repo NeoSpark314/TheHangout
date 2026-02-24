@@ -10,6 +10,10 @@ import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
+/**
+ * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).
+ * The RenderManager and Views must follow this state, never modify it directly.
+ */
 export class LocalPlayer extends PlayerEntity {
     public view: IView<PlayerViewState>;
     public skills: Skill[] = [];

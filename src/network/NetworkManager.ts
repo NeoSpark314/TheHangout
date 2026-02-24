@@ -9,6 +9,11 @@ import { NetworkDispatcher } from './NetworkDispatcher';
 import { NetworkSynchronizer, NetworkTransport } from './NetworkSynchronizer';
 import { PacketHandler } from './PacketHandler';
 
+/**
+ * Architectural Role: Manages transport and routing of network packets.
+ * Note: Use EventBus for cross-system requests (e.g. OWNERSHIP_REQUEST) 
+ * to keep entities decoupled from specific networking implementation details.
+ */
 export class NetworkManager implements NetworkTransport {
     public peer: Peer | null = null;
     private relaySocket: WebSocket | null = null;

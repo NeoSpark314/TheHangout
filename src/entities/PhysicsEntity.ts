@@ -16,6 +16,10 @@ export interface PhysicsState {
     o: string | null;
 }
 
+/**
+ * Source of Truth: This entity owns the logic and physical state of a prop.
+ * Visuals (PhysicsPropView) follow this state via interpolation.
+ */
 export class PhysicsEntity extends NetworkEntity implements IInteractable {
     public rigidBody: RAPIER.RigidBody;
     public view: IView<PhysicsPropState> | null;

@@ -4,7 +4,9 @@ import { HandState } from '../entities/PlayerEntity';
 import { RenderManager } from '../managers/RenderManager';
 
 /**
- * Handles Three.js specific XR coordinate transformations.
+ * Architectural Role: Centralized math hub for XR coordinate transformations.
+ * Note: Uses THREE.js classes (Vector3, Matrix4) strictly for spatial math. 
+ * This system should remain decoupled from THREE.js scene objects (Meshes, Groups).
  */
 export class XRSystem {
     private tempVec = new THREE.Vector3();
