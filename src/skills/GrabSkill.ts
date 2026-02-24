@@ -6,7 +6,7 @@ import gameState from '../core/GameState';
 
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.3;
-    private desktopGrabDist: number = 2.0;
+    private desktopGrabDist: number = 2.5; // Slightly increased for comfort
     private held: { left: IInteractable | null, right: IInteractable | null } = { left: null, right: null };
     private desktopHeld: IInteractable | null = null;
     private highlightedEntity: IInteractable | null = null;
@@ -39,34 +39,36 @@ export class GrabSkill extends Skill {
         const input = managers.input!;
         const render = managers.render!;
 
+        const camWorldPos = new THREE.Vector3();
+        render.camera.getWorldPosition(camWorldPos);
+        const camWorldDir = new THREE.Vector3();
+        render.camera.getWorldDirection(camWorldDir);
+
         if (this.desktopHeld) {
-            if (!input.isKeyPressed('e')) {
+            // Check if key is RELEASED
+            if (!input.isKeyDown('e')) {
                 const velocity = this._computeThrowVelocity('desktop');
                 this.desktopHeld.onRelease(velocity as any);
                 this.desktopHeld = null;
+                this.positionHistory.desktop = [];
             } else {
-                const targetPos = new THREE.Vector3();
-                const direction = new THREE.Vector3();
-                render.camera.getWorldDirection(direction);
-                targetPos.copy(render.camera.position).addScaledVector(direction, 1.0);
+                // Update held position: 1.2m in front of camera
+                const targetPos = camWorldPos.clone().addScaledVector(camWorldDir, 1.2);
                 
                 const rb = (this.desktopHeld as any).rigidBody;
                 if (rb) {
                     rb.setNextKinematicTranslation({ x: targetPos.x, y: targetPos.y, z: targetPos.z });
+                    
+                    const camQuat = new THREE.Quaternion();
+                    render.camera.getWorldQuaternion(camQuat);
                     rb.setNextKinematicRotation({ 
-                        x: render.camera.quaternion.x, 
-                        y: render.camera.quaternion.y, 
-                        z: render.camera.quaternion.z, 
-                        w: render.camera.quaternion.w 
+                        x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w 
                     });
                 }
                 this._recordPosition('desktop', targetPos);
             }
         } else {
-            const dir = new THREE.Vector3();
-            render.camera.getWorldDirection(dir);
-            dir.normalize();
-            const ray = { origin: render.camera.position, direction: dir };
+            const ray = { origin: camWorldPos, direction: camWorldDir };
             const nearest = interactionSystem.findInteractableUnderRay(ray, this.desktopGrabDist);
 
             if (input.isKeyPressed('e') && nearest) {
@@ -82,9 +84,9 @@ export class GrabSkill extends Skill {
     private _updateXR(_delta: number, player: LocalPlayer, interactionSystem: any): void {
         const render = gameState.managers.render!;
         const session = render.getXRSession();
-        const frame = render.getXRFrame();
+        const xrFrame = render.getXRFrame();
         const referenceSpace = render.getXRReferenceSpace();
-        if (!session || !frame || !referenceSpace) return;
+        if (!session || !xrFrame || !referenceSpace) return;
 
         let nearestGlobal: IInteractable | null = null;
         let minDistGlobal = this.grabRadius;
@@ -94,7 +96,7 @@ export class GrabSkill extends Skill {
             const hand = source.handedness as 'left' | 'right';
             if (hand !== 'left' && hand !== 'right') continue;
 
-            const pose = frame.getPose(source.gripSpace, referenceSpace);
+            const pose = xrFrame.getPose(source.gripSpace, referenceSpace);
             if (!pose) continue;
 
             const handWorldPos = new THREE.Vector3(
@@ -108,7 +110,7 @@ export class GrabSkill extends Skill {
             this._recordPosition(hand, handWorldPos);
             const squeezing = source.gamepad && source.gamepad.buttons.length > 1 && source.gamepad.buttons[1].pressed;
 
-            // Point-based nearest check for VR
+            // Nearest check
             const result = interactionSystem.findNearestInteractable(handWorldPos, this.grabRadius);
             
             if (result && result.distance < minDistGlobal) {

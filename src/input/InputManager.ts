@@ -60,6 +60,10 @@ export class InputManager {
         return this.justPressed.has(key);
     }
 
+    public isKeyDown(key: string): boolean {
+        return !!this.keyboard[key];
+    }
+
     public clearJustPressed(): void {
         this.justPressed.clear();
     }

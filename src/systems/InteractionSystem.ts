@@ -21,16 +21,22 @@ export class InteractionSystem {
 
         this.raycaster.ray.origin.copy(ray.origin);
         this.raycaster.ray.direction.copy(ray.direction);
-        this.raycaster.near = 0;
+        this.raycaster.near = 0.1; // Small near plane to avoid self-intersection
         this.raycaster.far = maxDist;
 
         const intersects = this.raycaster.intersectObjects(render.scene.children, true);
+        const localPlayerId = gameState.localPlayer?.id;
 
         for (const intersect of intersects) {
             let obj: THREE.Object3D | null = intersect.object;
             while (obj) {
                 const entityId = obj.userData.entityId;
                 if (entityId) {
+                    // Skip self
+                    if (localPlayerId && entityId === localPlayerId) {
+                        break; // Stop climbing this branch, check next intersect
+                    }
+
                     const entity = this.entityManager.getEntity(entityId);
                     if (entity && (entity as any).isGrabbable) {
                         return entity as unknown as IInteractable;
@@ -54,8 +60,6 @@ export class InteractionSystem {
         for (const entity of this.entityManager.entities.values()) {
             const interactable = entity as unknown as IInteractable;
             if (interactable.isGrabbable && !(entity as any).heldBy) {
-                // We need the world position of the entity. 
-                // Since we don't have mesh references in logic, we check the physics body or stored state.
                 const rb = (entity as any).rigidBody;
                 if (!rb) continue;
 

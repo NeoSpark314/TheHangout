@@ -24,7 +24,13 @@ export class LocalPlayer extends PlayerEntity {
 
     constructor(id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
         super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
+        this.isAuthority = true;
         this.view = view;
+        
+        this.view.mesh.userData.entityId = this.id;
+        this.view.mesh.traverse(child => {
+            child.userData.entityId = this.id;
+        });
 
         this.xrOrigin = {
             position: { ...spawnPos },
@@ -101,21 +107,18 @@ export class LocalPlayer extends PlayerEntity {
 
         this.updateVRHands(frame);
         
-        // 1. Correct Camera/Avatar alignment
         const headWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(headWorldPos);
-        const finalHeadQuat = new THREE.Quaternion();
-        render.camera.getWorldQuaternion(finalHeadQuat);
-        const finalHeadEuler = new THREE.Euler().setFromQuaternion(finalHeadQuat, 'YXZ');
+        const headWorldQuat = new THREE.Quaternion();
+        render.camera.getWorldQuaternion(headWorldQuat);
+        const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
 
-        const bodyYaw = finalHeadEuler.y;
+        const bodyYaw = headEuler.y;
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.clone().invert().multiply(finalHeadQuat);
+        const localHeadQuat = bodyQuat.clone().invert().multiply(headWorldQuat);
 
-        // 2. Transform hands to avatar space
         this.transformHandsToAvatarSpace(bodyYaw, headWorldPos);
 
-        // 3. Push complete state to view
         this.view.applyState({
             position: { x: headWorldPos.x, y: 0, z: headWorldPos.z },
             yaw: bodyYaw,
@@ -176,9 +179,6 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     private transformHandsToAvatarSpace(bodyYaw: number, headWorldPos: THREE.Vector3): void {
-        const render = gameState.managers.render;
-        if (!render) return;
-
         const avatarTransform = new THREE.Object3D();
         avatarTransform.position.set(headWorldPos.x, 0, headWorldPos.z);
         avatarTransform.rotation.y = bodyYaw;
@@ -217,14 +217,17 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public getNetworkState(): any {
+        const render = gameState.managers.render;
+        if (!render) return {};
+
         const headWorldPos = new THREE.Vector3();
-        gameState.managers.render?.camera.getWorldPosition(headWorldPos);
+        render.camera.getWorldPosition(headWorldPos);
         const headWorldQuat = new THREE.Quaternion();
-        gameState.managers.render?.camera.getWorldQuaternion(headWorldQuat);
+        render.camera.getWorldQuaternion(headWorldQuat);
         const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
         const bodyYaw = headEuler.y;
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
-        const localHeadQuat = bodyQuat.invert().multiply(headWorldQuat);
+        const localHeadQuat = bodyQuat.clone().invert().multiply(headWorldQuat);
 
         return {
             id: this.id,
@@ -237,7 +240,7 @@ export class LocalPlayer extends PlayerEntity {
                 position: { x: headWorldPos.x, y: headWorldPos.y, z: headWorldPos.z },
                 quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
             },
-            hands: this.handStates,
+            hands: JSON.parse(JSON.stringify(this.handStates)), // Deep copy to prevent ref issues
             avatarConfig: gameState.avatarConfig
         };
     }

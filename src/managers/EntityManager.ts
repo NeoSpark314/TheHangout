@@ -73,6 +73,9 @@ export class EntityManager {
                 }
             }
         }
+        if (states.length > 0) {
+            // console.log('[EntityManager] Authoritative states found:', states.length);
+        }
         return states;
     }
 

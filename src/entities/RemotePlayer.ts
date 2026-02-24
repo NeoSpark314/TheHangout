@@ -27,7 +27,6 @@ export class RemotePlayer extends PlayerEntity {
 
     private onVoiceStream(data: any): void {
         if (data.peerId === this.peerId) {
-            // We need a way to pass the stream to the view if it handles audio
             if ((this.view as any).attachVoiceStream) {
                 (this.view as any).attachVoiceStream(data.stream);
             }
@@ -35,7 +34,7 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     public getNetworkState(): any {
-        return null; // Remote players don't broadcast their own state (not authority)
+        return null;
     }
 
     public applyNetworkState(data: any): void {
@@ -61,19 +60,18 @@ export class RemotePlayer extends PlayerEntity {
 
         if (data.hands) {
             const deserializeHand = (netHand: any, localHand: any) => {
-                localHand.active = netHand.active;
+                localHand.active = !!netHand.active;
                 if (netHand.position) localHand.position = { ...netHand.position };
                 if (netHand.quaternion) localHand.quaternion = { ...netHand.quaternion };
 
                 if (netHand.joints && netHand.joints.length === 25) {
                     for (let i = 0; i < 25; i++) {
                         const jData = netHand.joints[i];
-                        localHand.joints[i].position = { ...jData.p };
-                        localHand.joints[i].quaternion = { ...jData.q };
-                    }
-                } else {
-                    for (let i = 0; i < 25; i++) {
-                        localHand.joints[i].position = { x: 0, y: 0, z: 0 };
+                        if (jData.position) localHand.joints[i].position = { ...jData.position };
+                        else if (jData.p) localHand.joints[i].position = { ...jData.p };
+                        
+                        if (jData.quaternion) localHand.joints[i].quaternion = { ...jData.quaternion };
+                        else if (jData.q) localHand.joints[i].quaternion = { ...jData.q };
                     }
                 }
             };
