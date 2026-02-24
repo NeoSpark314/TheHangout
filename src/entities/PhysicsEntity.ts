@@ -4,7 +4,8 @@ import { IInteractable } from '../interfaces/IInteractable';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import gameState from '../core/GameState';
-import { PACKET_TYPES } from '../utils/Constants';
+import eventBus from '../core/EventBus';
+import { PACKET_TYPES, EVENTS } from '../utils/Constants';
 
 export interface PhysicsState {
     p: [number, number, number];
@@ -68,8 +69,8 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
     }
 
     public syncAuthority(): void {
-        const localId = (gameState as any).localPlayer?.id || 'local';
-        const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && (gameState as any).isHost);
+        const localId = gameState.localPlayer?.id || 'local';
+        const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && gameState.isHost);
 
         if (this.isAuthority !== shouldBeAuthority) {
             console.log(`[PhysicsEntity] ${this.id} authority changing: ${this.isAuthority} -> ${shouldBeAuthority}`);
@@ -79,15 +80,14 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
 
     public requestOwnership(): void {
         if (this.isAuthority && this.ownerId) return;
-        this.handleAuthorityChange((gameState as any).localPlayer?.id || 'local');
+        this.handleAuthorityChange(gameState.localPlayer?.id || 'local');
 
         if (this.rigidBody) {
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
         }
 
-        const networkManager = (gameState as any).managers.network;
-        if (networkManager && !(gameState as any).isHost) {
-            networkManager.sendData((gameState as any).roomId, PACKET_TYPES.OWNERSHIP_REQUEST, { id: this.id });
+        if (!gameState.isHost) {
+            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { id: this.id });
         }
     }
 
@@ -103,16 +103,13 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
             }
         }
 
-        const networkManager = (gameState as any).managers.network;
-        if (networkManager) {
-            const state = this.getNetworkState();
-            networkManager.sendData((gameState as any).roomId, PACKET_TYPES.OWNERSHIP_RELEASE, {
-                id: this.id,
-                v: velocity ? [velocity.x, velocity.y, velocity.z] : [0, 0, 0],
-                p: state.p,
-                r: state.r
-            });
-        }
+        const state = this.getNetworkState();
+        eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
+            id: this.id,
+            v: velocity ? [velocity.x, velocity.y, velocity.z] : [0, 0, 0],
+            p: state.p,
+            r: state.r
+        });
     }
 
     // IInteractable implementation
@@ -184,7 +181,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
                 }
             }
 
-            if (!this.heldBy && this.ownerId !== null && !(gameState as any).isHost && this.rigidBody.isSleeping()) {
+            if (!this.heldBy && this.ownerId !== null && !gameState.isHost && this.rigidBody.isSleeping()) {
                 this.releaseOwnership();
             }
 

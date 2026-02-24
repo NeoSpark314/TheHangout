@@ -2,7 +2,7 @@ import { IEntity } from '../interfaces/IEntity';
 import { INetworkable } from '../interfaces/INetworkable';
 
 export class EntityManager {
-    public entities: Map<string, IEntity & Partial<INetworkable<any>>>;
+    public entities: Map<string, IEntity>;
 
     constructor() {
         this.entities = new Map();
@@ -36,7 +36,7 @@ export class EntityManager {
         const entity = this.entities.get(oldId);
         if (entity) {
             this.entities.delete(oldId);
-            (entity as any).id = newId;
+            entity.id = newId;
             this.entities.set(newId, entity);
         }
     }
@@ -47,7 +47,7 @@ export class EntityManager {
 
     public update(delta: number, frame?: XRFrame): void {
         for (const [id, entity] of this.entities.entries()) {
-            if (!(entity as any).destroyed) {
+            if (!entity.destroyed) {
                 try {
                     entity.update(delta, frame);
                 } catch (e) {
@@ -62,8 +62,9 @@ export class EntityManager {
     public getAuthoritativeStates(): any[] {
         const states: any[] = [];
         for (const entity of this.entities.values()) {
-            if (entity.isAuthority && !(entity as any).destroyed && (entity as any).getNetworkState) {
-                const state = (entity as any).getNetworkState();
+            const networkable = entity as unknown as INetworkable<any>;
+            if (entity.isAuthority && !entity.destroyed && networkable.getNetworkState) {
+                const state = networkable.getNetworkState();
                 if (state) {
                     states.push({
                         id: entity.id,
@@ -73,17 +74,15 @@ export class EntityManager {
                 }
             }
         }
-        if (states.length > 0) {
-            // console.log('[EntityManager] Authoritative states found:', states.length);
-        }
         return states;
     }
 
     public getWorldSnapshot(): any[] {
         const states: any[] = [];
         for (const entity of this.entities.values()) {
-            if (!(entity as any).destroyed && (entity as any).getNetworkState) {
-                const state = (entity as any).getNetworkState();
+            const networkable = entity as unknown as INetworkable<any>;
+            if (!entity.destroyed && networkable.getNetworkState) {
+                const state = networkable.getNetworkState();
                 if (state) {
                     states.push({
                         id: entity.id,

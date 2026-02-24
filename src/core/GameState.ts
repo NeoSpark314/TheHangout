@@ -26,18 +26,18 @@ export interface RoomConfig {
 }
 
 export interface Managers {
-    entity: EntityManager | null;
-    ui: UIManager | null;
-    network: NetworkManager | null;
-    media: MediaManager | null;
-    render: RenderManager | null;
-    physics: PhysicsManager | null;
-    player: PlayerManager | null;
-    input: InputManager | null;
-    hud: HUDManager | null;
-    room: RoomManager | null;
-    audio: AudioManager | null;
-    interaction: InteractionSystem | null;
+    entity: EntityManager;
+    ui: UIManager;
+    network: NetworkManager;
+    media: MediaManager;
+    render: RenderManager;
+    physics: PhysicsManager;
+    player: PlayerManager;
+    input: InputManager;
+    hud: HUDManager;
+    room: RoomManager;
+    audio: AudioManager;
+    interaction: InteractionSystem;
 }
 
 export class GameState {
@@ -60,20 +60,15 @@ export class GameState {
 
     public localPlayer: LocalPlayer | SpectatorEntity | null = null;
 
-    public managers: Managers = {
-        entity: null,
-        ui: null,
-        network: null,
-        media: null,
-        render: null,
-        physics: null,
-        player: null,
-        input: null,
-        hud: null,
-        room: null,
-        audio: null,
-        interaction: null
-    };
+    private _managers: Partial<Managers> = {};
+
+    public get managers(): Managers {
+        return this._managers as Managers;
+    }
+
+    public setManager<K extends keyof Managers>(key: K, instance: Managers[K]): void {
+        this._managers[key] = instance;
+    }
 
     public deltaTime: number = 0;
 }

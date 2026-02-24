@@ -31,21 +31,21 @@ async function bootstrap() {
     }
   } catch (e) {}
 
-  gameState.managers.entity = new EntityManager();
-  gameState.managers.ui = new UIManager();
-  gameState.managers.network = new NetworkManager();
-  gameState.managers.media = new MediaManager();
-  gameState.managers.render = new RenderManager();
-  gameState.managers.physics = new PhysicsManager();
-  gameState.managers.player = new PlayerManager();
-  gameState.managers.input = new InputManager();
-  gameState.managers.hud = new HUDManager();
-  gameState.managers.room = new RoomManager();
-  gameState.managers.audio = new AudioManager();
-  gameState.managers.interaction = new InteractionSystem(gameState.managers.entity);
+  gameState.setManager('entity', new EntityManager());
+  gameState.setManager('ui', new UIManager());
+  gameState.setManager('network', new NetworkManager());
+  gameState.setManager('media', new MediaManager());
+  gameState.setManager('render', new RenderManager());
+  gameState.setManager('physics', new PhysicsManager());
+  gameState.setManager('player', new PlayerManager());
+  gameState.setManager('input', new InputManager());
+  gameState.setManager('hud', new HUDManager());
+  gameState.setManager('room', new RoomManager());
+  gameState.setManager('audio', new AudioManager());
+  gameState.setManager('interaction', new InteractionSystem(gameState.managers.entity));
 
   const resumeAudio = () => {
-    gameState.managers.audio?.resume();
+    gameState.managers.audio.resume();
     window.removeEventListener('pointerdown', resumeAudio);
     window.removeEventListener('keydown', resumeAudio);
   };
@@ -66,12 +66,12 @@ async function bootstrap() {
     playerInitialized = true;
 
     if (gameState.isDedicatedHost) {
-      gameState.managers.render?.switchToSpectatorView();
+      gameState.managers.render.switchToSpectatorView();
       const spectator = EntityFactory.createSpectator(id, true);
-      gameState.managers.entity?.addEntity(spectator);
+      gameState.managers.entity.addEntity(spectator);
     } else {
-      gameState.managers.render?.switchToPlayerView();
-      gameState.managers.player?.init(id);
+      gameState.managers.render.switchToPlayerView();
+      gameState.managers.player.init(id);
     }
   };
 

@@ -80,13 +80,13 @@ export class PhysicsManager {
         this.world.createCollider(colliderDesc, rigidBody);
 
         const entityId = id || `grabbable-${this.nextPhysicsId++}`;
-        const physicsEntity = new PhysicsEntity(entityId, (gameState as any).isHost, rigidBody, {
+        const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
             view: view
         });
 
-        const entityManager = (gameState as any).managers.entity;
+        const entityManager = gameState.managers.entity;
         if (entityManager) {
             entityManager.addEntity(physicsEntity);
         }
