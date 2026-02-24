@@ -76,7 +76,7 @@ export class GameEngine {
         }
 
         if (gameState.managers.render) {
-            gameState.managers.render.update(delta);
+            gameState.managers.render.update(delta, gameState.localPlayer);
             gameState.managers.render.render();
         }
 
