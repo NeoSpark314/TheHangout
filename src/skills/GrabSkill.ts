@@ -78,11 +78,15 @@ export class GrabSkill extends Skill {
             const ray = { origin: camWorldPos, direction: camWorldDir };
             const interactable = interactionSystem.findInteractableUnderRay(ray, this.desktopGrabDist);
 
-            if (input.isKeyPressed('e') && interactable && (interactable as any).isGrabbable) {
-                const grabbable = interactable as unknown as IGrabbable;
-                grabbable.onGrab(player.id, 'right'); // Desktop defaults to right hand for logic
-                this.desktopHeld = grabbable;
-                this.positionHistory.desktop = [];
+            if (input.isKeyPressed('e') && interactable) {
+                console.log('[GrabSkill] Desktop hit:', (interactable as any).type || 'unknown', 'ID:', (interactable as any).id, 'Grabbable:', (interactable as any).isGrabbable);
+                
+                if ((interactable as any).isGrabbable) {
+                    const grabbable = interactable as unknown as IGrabbable;
+                    grabbable.onGrab(player.id, 'right');
+                    this.desktopHeld = grabbable;
+                    this.positionHistory.desktop = [];
+                }
             }
 
             this._updateHighlight(player.id, interactable);
@@ -141,11 +145,15 @@ export class GrabSkill extends Skill {
                 // Find nearest grabbable
                 const result = interactionSystem.findNearestInteractable(handWorldPos, this.grabRadius);
                 
-                if (squeezing && result && (result.interactable as any).isGrabbable) {
-                    const grabbable = result.interactable as unknown as IGrabbable;
-                    grabbable.onGrab(player.id, hand);
-                    this.held[hand] = grabbable;
-                    this.positionHistory[hand] = [];
+                if (squeezing && result) {
+                    console.log(`[GrabSkill] XR ${hand} hit:`, (result.interactable as any).type || 'unknown', 'ID:', (result.interactable as any).id, 'Grabbable:', (result.interactable as any).isGrabbable);
+                    
+                    if ((result.interactable as any).isGrabbable) {
+                        const grabbable = result.interactable as unknown as IGrabbable;
+                        grabbable.onGrab(player.id, hand);
+                        this.held[hand] = grabbable;
+                        this.positionHistory[hand] = [];
+                    }
                 }
 
                 return result?.interactable || null;

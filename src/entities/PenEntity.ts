@@ -4,8 +4,10 @@ import { IInteractable } from '../interfaces/IInteractable';
 import { InteractionEvent } from '../interfaces/IInteractionEvent';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
+import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
+import * as THREE from 'three';
 
 export interface PenState {
     p: [number, number, number];
@@ -21,6 +23,7 @@ export interface PenState {
 export class PenEntity extends NetworkEntity implements IGrabbable, IInteractable {
     public isGrabbable = true;
     public heldBy: string | null = null;
+    public ownerId: string | null = null;
     public view: IView<any> | null = null;
     
     private position: Vector3 = { x: 0, y: 0, z: 0 };
@@ -38,16 +41,29 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         this.heldBy = playerId;
+        this.ownerId = playerId;
         this.isAuthority = true;
         
         // Use the player's avatar color for drawing
         if (gameState.localPlayer && playerId === gameState.localPlayer.id) {
             this.color = gameState.avatarConfig.color;
+            this.requestOwnership();
+        }
+    }
+
+    public requestOwnership(): void {
+        const localId = gameState.localPlayer?.id || 'local';
+        this.ownerId = localId;
+        this.isAuthority = true;
+
+        if (!gameState.isHost) {
+            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { id: this.id });
         }
     }
 
     public onRelease(velocity?: Vector3): void {
         this.heldBy = null;
+        this.ownerId = null;
         this.isDrawing = false;
         this.lastDrawPosition = null;
     }
@@ -118,12 +134,21 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
             p: [this.position.x, this.position.y, this.position.z],
             r: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
             heldBy: this.heldBy,
+            ownerId: this.ownerId,
             isDrawing: this.isDrawing,
             color: this.color
-        };
+        } as any;
     }
 
-    public applyNetworkState(state: PenState): void {
+    public applyNetworkState(state: any): void {
+        const localId = gameState.localPlayer?.id || 'local';
+        
+        // Handle authority change if ownerId changed
+        if (state.ownerId !== undefined && state.ownerId !== this.ownerId) {
+            this.ownerId = state.ownerId;
+            this.isAuthority = (this.ownerId === localId);
+        }
+
         if (this.isAuthority) return;
 
         this.position = { x: state.p[0], y: state.p[1], z: state.p[2] };

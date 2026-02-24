@@ -62,8 +62,14 @@ export class InteractionSystem {
         let minDist = maxDist;
 
         for (const entity of managers.entity.entities.values()) {
-            // Check if it's grabbable and not currently held
-            if ((entity as any).isGrabbable && !(entity as any).heldBy) {
+            // Check if it's grabbable
+            if ((entity as any).isGrabbable) {
+                // If it's already held by someone ELSE, skip it. 
+                // If it's held by US, we still want to find it (for trigger interaction).
+                const localId = gameState.localPlayer?.id;
+                const heldBy = (entity as any).heldBy;
+                if (heldBy && localId && heldBy !== localId) continue;
+
                 const interactable = entity as unknown as IInteractable;
                 
                 // Get world position from view if possible, otherwise skip
