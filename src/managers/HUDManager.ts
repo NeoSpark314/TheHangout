@@ -133,7 +133,7 @@ export class HUDManager {
         this.draw();
     }
 
-    public update(): void {
+    public update(delta: number): void {
         const now = performance.now();
         if (this.crosshair) {
             const isXR = gameState.managers.render?.isXRPresenting();

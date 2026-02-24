@@ -37,9 +37,9 @@ export class PlayerManager {
             spawnPos: spawn.position,
             spawnYaw: spawn.yaw,
             color: gameState.avatarConfig.color || 0x00ffff
-        });
+        }) as any;
 
-        gameState.managers.entity?.addEntity(gameState.localPlayer);
+        gameState.managers.entity?.addEntity(gameState.localPlayer as any);
         this.initialized = true;
     }
 
@@ -51,6 +51,8 @@ export class PlayerManager {
         if (type === 'LOCAL_PLAYER' || type === 'REMOTE_PLAYER') {
             const rp = EntityFactory.createPlayer(peerId, {
                 isLocal: false,
+                spawnPos: { x: 0, y: 0, z: 0 },
+                spawnYaw: 0,
                 color: 0xff00ff
             });
             gameState.managers.entity?.addEntity(rp);

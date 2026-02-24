@@ -126,7 +126,7 @@ export class MediaManager {
 
     public getLocalVolume(): number {
         if (!this.localAnalyser || !this.freqData) return 0;
-        this.localAnalyser.getByteFrequencyData(this.freqData);
+        this.localAnalyser.getByteFrequencyData(this.freqData as any);
         let sum = 0;
         for (let i = 0; i < this.freqData.length; i++) {
             sum += this.freqData[i];
