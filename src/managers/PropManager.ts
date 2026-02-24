@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { EntityFactory } from '../factories/EntityFactory';
 import { RoomConfig } from '../core/GameState';
 import gameState from '../core/GameState';
@@ -88,16 +87,7 @@ export class PropManager {
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
 
-        const loader = new GLTFLoader();
-        loader.load('/models/duck.glb', (gltf) => {
-            const duck = gltf.scene;
-            const box = new THREE.Box3().setFromObject(duck);
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const targetScale = 0.25 / maxDim;
-            duck.scale.setScalar(targetScale);
-            const center = box.getCenter(new THREE.Vector3()).multiplyScalar(-targetScale);
-            duck.position.copy(center);
+        gameState.managers.assets.getNormalizedModel('/models/duck.glb', 0.25).then(duck => {
             this.hologram?.add(duck);
         });
     }

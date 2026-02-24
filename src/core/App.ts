@@ -13,6 +13,7 @@ import { RoomManager } from '../managers/RoomManager';
 import { AudioManager } from '../managers/AudioManager';
 import { InteractionSystem } from '../systems/InteractionSystem';
 import { XRSystem } from '../systems/XRSystem';
+import { AssetManager } from '../managers/AssetManager';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -72,6 +73,7 @@ export class App {
         gameState.setManager('hud', new HUDManager());
         gameState.setManager('room', new RoomManager());
         gameState.setManager('audio', new AudioManager());
+        gameState.setManager('assets', new AssetManager());
         gameState.setManager('xr', new XRSystem());
         gameState.setManager('interaction', new InteractionSystem(gameState.managers.entity));
     }
