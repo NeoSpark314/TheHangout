@@ -21,6 +21,8 @@ export class LocalPlayer extends PlayerEntity {
     public rightHandPose: { position: Vector3, quaternion: Quaternion };
 
     public _lastMoveVector: Vector3 = { x: 0, y: 0, z: 0 };
+    private _leftControllerIndex: number = 0;
+    private _rightControllerIndex: number = 1;
 
     constructor(id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
         super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
@@ -150,7 +152,11 @@ export class LocalPlayer extends PlayerEntity {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !xrFrame || !referenceSpace) return;
 
+        let sourceIndex = 0;
         for (const source of session.inputSources) {
+            if (source.handedness === 'left') this._leftControllerIndex = sourceIndex;
+            if (source.handedness === 'right') this._rightControllerIndex = sourceIndex;
+            
             if (source.gripSpace) {
                 const pose = xrFrame.getPose(source.gripSpace, referenceSpace);
                 if (pose) {
@@ -175,6 +181,7 @@ export class LocalPlayer extends PlayerEntity {
                     }
                 }
             }
+            sourceIndex++;
         }
     }
 
@@ -190,7 +197,7 @@ export class LocalPlayer extends PlayerEntity {
         const processHand = (handPose: { position: Vector3, quaternion: Quaternion }, handState: HandState, controllerIndex: number) => {
             if (!handState.active) return;
 
-            // Get controller from THREE.js instead of raw XR pose
+            // Get controller from THREE.js
             const controller = render.getXRController(controllerIndex);
             const worldPos = new THREE.Vector3();
             const worldQuat = new THREE.Quaternion();
@@ -203,12 +210,27 @@ export class LocalPlayer extends PlayerEntity {
             handState.position = { x: localPos.x, y: localPos.y, z: localPos.z };
             handState.quaternion = { x: localQuat.x, y: localQuat.y, z: localQuat.z, w: localQuat.w };
 
-            // We skip joints for now as they are harder to get from the controller group
-            // but the basic hand pose will be fixed.
+            // Joints are already in reference space from updateVRHands, but they need to be world-transformed
+            // and then local-transformed to avatar space.
+            // However, a simpler way is to use the same logic as the hand if we have the xrOrigin
+            const xrOriginQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
+            const xrOriginMatrix = new THREE.Matrix4().makeRotationFromQuaternion(xrOriginQuat).setPosition(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+
+            for (let i = 0; i < 25; i++) {
+                const j = handState.joints[i];
+                if (j.position.x !== 0 || j.position.y !== 0 || j.position.z !== 0) {
+                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z).applyMatrix4(xrOriginMatrix);
+                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w).premultiply(xrOriginQuat);
+                    const jLocalPos = avatarTransform.worldToLocal(jWorldPos);
+                    const jLocalQuat = jWorldQuat.premultiply(avatarTransform.quaternion.clone().invert());
+                    j.position = { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z };
+                    j.quaternion = { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w };
+                }
+            }
         };
 
-        processHand(this.leftHandPose, this.handStates.left, 0);
-        processHand(this.rightHandPose, this.handStates.right, 1);
+        processHand(this.leftHandPose, this.handStates.left, this._leftControllerIndex);
+        processHand(this.rightHandPose, this.handStates.right, this._rightControllerIndex);
     }
 
     public getNetworkState(): any {
