@@ -30,6 +30,7 @@ export class HUDManager {
 
     constructor() {
         this.group = new THREE.Group();
+        this.group.raycast = () => {}; // Disable raycasting for the whole HUD group
 
         this.listCanvas = document.createElement('canvas');
         this.listContext = this.listCanvas.getContext('2d')!;

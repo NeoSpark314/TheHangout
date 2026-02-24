@@ -10,6 +10,7 @@ export interface IView<TState> {
     attachVoiceStream(stream: MediaStream): void;
     getAudioLevel(): number;
     addToScene(scene: THREE.Scene): void;
+    addToInteractionGroup(group: THREE.Group): void;
     removeFromScene(scene: THREE.Scene): void;
     destroy(): void;
 }

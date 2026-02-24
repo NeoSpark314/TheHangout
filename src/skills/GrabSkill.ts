@@ -3,168 +3,102 @@ import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IGrabbable } from '../interfaces/IGrabbable';
-import { InteractionEvent } from '../interfaces/IInteractionEvent';
+import { InteractionPointer } from '../interfaces/IPointer';
 import type { Managers } from '../core/GameState';
 
+/**
+ * Unified skill for picking up and interacting with objects.
+ * Works for Desktop (Ray) and VR (Proximity) using the Pointer abstraction.
+ */
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.3;
-    private desktopGrabDist: number = 2.5;
-    private held: { left: IGrabbable | null, right: IGrabbable | null } = { left: null, right: null };
-    private desktopHeld: IGrabbable | null = null;
-    private highlightedEntity: IInteractable | null = null;
+    private raycastDist: number = 2.0;
     
-    private positionHistory: { left: any[], right: any[], desktop: any[] } = {
-        left: [], right: [], desktop: []
-    };
+    // Track held objects per pointer ID
+    private heldObjects: Map<string, IGrabbable> = new Map();
+    private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();
+    private highlightedEntity: IInteractable | null = null;
 
     constructor() {
         super('grab', 'Grab', { alwaysActive: false });
     }
 
     public update(delta: number, player: LocalPlayer, managers: Managers): void {
-        const input = managers.input;
-        const render = managers.render;
-        const interactionSystem = managers.interaction;
+        const pointers = managers.input.getPointers(managers.render, managers.xr);
+        
+        let bestHighlight: IInteractable | null = null;
 
-        if (render.isXRPresenting()) {
-            this._updateXR(delta, player, managers);
-        } else {
-            this._updateDesktop(delta, player, managers);
+        for (const pointer of pointers) {
+            const interactable = this.processPointer(pointer, player, managers);
+            
+            // Only the first pointer that finds something gets the global highlight
+            if (!bestHighlight && interactable) {
+                bestHighlight = interactable;
+            }
         }
+
+        this._updateHighlight(player.id, bestHighlight);
     }
 
-    private _updateDesktop(_delta: number, player: LocalPlayer, managers: Managers): void {
-        const input = managers.input;
-        const render = managers.render;
-        const interactionSystem = managers.interaction;
+    private processPointer(pointer: InteractionPointer, player: LocalPlayer, managers: Managers): IInteractable | null {
+        const held = this.heldObjects.get(pointer.id);
 
-        const camWorldPos = new THREE.Vector3();
-        render.camera.getWorldPosition(camWorldPos);
-        const camWorldDir = new THREE.Vector3();
-        render.camera.getWorldDirection(camWorldDir);
-
-        if (this.desktopHeld) {
-            // Update held position: 1.2m in front of camera
-            const targetPos = camWorldPos.clone().addScaledVector(camWorldDir, 1.2);
-            const camQuat = new THREE.Quaternion();
-            render.camera.getWorldQuaternion(camQuat);
-
-            this.desktopHeld.updateGrabbedPose(
-                { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w }
-            );
-
-            // Handle Interaction Trigger (Left Click or Primary Action)
-            // Note: For now we'll use a placeholder for actual mouse button state in InputManager
-            if (input.isKeyPressed('primary_action')) {
-                (this.desktopHeld as unknown as IInteractable).onInteraction({
-                    type: 'trigger',
-                    phase: 'start',
-                    value: 1.0,
-                    playerId: player.id
-                });
-            }
-
-            // Check if key is RELEASED
-            if (!input.isKeyDown('e')) {
-                const velocity = this._computeThrowVelocity('desktop');
-                this.desktopHeld.onRelease(velocity);
-                this.desktopHeld = null;
-                this.positionHistory.desktop = [];
+        if (held) {
+            if (!pointer.isSqueezing) {
+                // RELEASE
+                const velocity = this._computeThrowVelocity(pointer.id);
+                held.onRelease(velocity);
+                this.heldObjects.delete(pointer.id);
+                this.history.delete(pointer.id);
+                return null;
             } else {
-                this._recordPosition('desktop', targetPos);
+                // UPDATE HELD POSE
+                const targetPos = new THREE.Vector3(pointer.origin.x, pointer.origin.y, pointer.origin.z);
+                if (!pointer.isProximity) {
+                    // Raycast hold (Desktop): Move 1.2m in front of pointer
+                    targetPos.add(new THREE.Vector3(pointer.direction.x, pointer.direction.y, pointer.direction.z).multiplyScalar(1.2));
+                }
+
+                held.updateGrabbedPose(
+                    { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+                    pointer.quaternion || { x: 0, y: 0, z: 0, w: 1 } // Note: Need quat in IPointer if we want rotation
+                );
+
+                this._recordPosition(pointer.id, targetPos);
+
+                // RICH INTERACTION (Trigger)
+                if (pointer.triggerValue > 0.01) {
+                    (held as unknown as IInteractable).onInteraction({
+                        type: 'trigger',
+                        phase: pointer.triggerValue > 0.1 ? 'update' : 'start',
+                        value: pointer.triggerValue,
+                        playerId: player.id,
+                        hand: pointer.hand
+                    });
+                }
+                return held as unknown as IInteractable;
             }
         } else {
-            const ray = { origin: camWorldPos, direction: camWorldDir };
-            const interactable = interactionSystem.findInteractableUnderRay(ray, this.desktopGrabDist);
+            // FIND NEW INTERACTABLE
+            let found: IInteractable | null = null;
 
-            if (input.isKeyPressed('e') && interactable) {
-                console.log('[GrabSkill] Desktop hit:', (interactable as any).type || 'unknown', 'ID:', (interactable as any).id, 'Grabbable:', (interactable as any).isGrabbable);
-                
-                if ((interactable as any).isGrabbable) {
-                    const grabbable = interactable as unknown as IGrabbable;
-                    grabbable.onGrab(player.id, 'right');
-                    this.desktopHeld = grabbable;
-                    this.positionHistory.desktop = [];
-                }
+            if (pointer.isProximity) {
+                const result = managers.interaction.findNearestInteractable(
+                    new THREE.Vector3(pointer.origin.x, pointer.origin.y, pointer.origin.z),
+                    this.grabRadius
+                );
+                found = result?.interactable || null;
             }
 
-            this._updateHighlight(player.id, interactable);
+            if (pointer.isSqueezing && found && found.isGrabbable) {
+                const grabbable = found as unknown as IGrabbable;
+                grabbable.onGrab(player.id, pointer.hand || 'right');
+                this.heldObjects.set(pointer.id, grabbable);
+                this.history.set(pointer.id, []);
+            }
+
+            return found;
         }
-    }
-
-    private _updateXR(_delta: number, player: any, managers: Managers): void {
-        const render = managers.render;
-        const xr = managers.xr;
-        const interactionSystem = managers.interaction;
-
-        if (!render.isXRPresenting()) return;
-
-        const processHand = (hand: 'left' | 'right', controllerIndex: number) => {
-            const pose = xr.getControllerWorldPose(render, controllerIndex);
-            const handWorldPos = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z);
-            const handWorldQuat = new THREE.Quaternion(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w);
-
-            this._recordPosition(hand, handWorldPos);
-            
-            const session = render.getXRSession();
-            if (!session) return null;
-            
-            const source = session.inputSources[controllerIndex];
-            const triggerBtn = source?.gamepad?.buttons[0]; // Usually trigger
-            const gripBtn = source?.gamepad?.buttons[1]; // Usually grip/squeeze
-
-            const squeezing = (gripBtn?.value || 0) > 0.5;
-            const triggerValue = triggerBtn?.value || 0;
-
-            const held = this.held[hand];
-
-            if (held) {
-                if (!squeezing) {
-                    const velocity = this._computeThrowVelocity(hand);
-                    held.onRelease(velocity);
-                    this.held[hand] = null;
-                } else {
-                    held.updateGrabbedPose(
-                        { x: handWorldPos.x, y: handWorldPos.y, z: handWorldPos.z },
-                        { x: handWorldQuat.x, y: handWorldQuat.y, z: handWorldQuat.z, w: handWorldQuat.w }
-                    );
-
-                    // Pass rich interaction events while holding
-                    if (triggerValue > 0.01) {
-                        (held as unknown as IInteractable).onInteraction({
-                            type: 'trigger',
-                            phase: triggerValue > 0.1 ? 'update' : 'start',
-                            value: triggerValue,
-                            playerId: player.id,
-                            hand: hand
-                        });
-                    }
-                }
-            } else {
-                // Find nearest grabbable
-                const result = interactionSystem.findNearestInteractable(handWorldPos, this.grabRadius);
-                
-                if (squeezing && result) {
-                    console.log(`[GrabSkill] XR ${hand} hit:`, (result.interactable as any).type || 'unknown', 'ID:', (result.interactable as any).id, 'Grabbable:', (result.interactable as any).isGrabbable);
-                    
-                    if ((result.interactable as any).isGrabbable) {
-                        const grabbable = result.interactable as unknown as IGrabbable;
-                        grabbable.onGrab(player.id, hand);
-                        this.held[hand] = grabbable;
-                        this.positionHistory[hand] = [];
-                    }
-                }
-
-                return result?.interactable || null;
-            }
-            return null;
-        };
-
-        const leftResult = processHand('left', player._leftControllerIndex);
-        const rightResult = processHand('right', player._rightControllerIndex);
-
-        this._updateHighlight(player.id, leftResult || rightResult);
     }
 
     private _updateHighlight(playerId: string, nearest: IInteractable | null): void {
@@ -175,35 +109,25 @@ export class GrabSkill extends Skill {
         }
     }
 
-    private _recordPosition(key: 'left' | 'right' | 'desktop', pos: THREE.Vector3): void {
-        this.positionHistory[key].push({
-            pos: pos.clone(),
-            time: performance.now()
-        });
-        if (this.positionHistory[key].length > 5) {
-            this.positionHistory[key].shift();
-        }
+    private _recordPosition(id: string, pos: THREE.Vector3): void {
+        if (!this.history.has(id)) this.history.set(id, []);
+        const h = this.history.get(id)!;
+        h.push({ pos: pos.clone(), time: performance.now() });
+        if (h.length > 5) h.shift();
     }
 
-    private _computeThrowVelocity(key: 'left' | 'right' | 'desktop'): THREE.Vector3 {
-        const history = this.positionHistory[key];
-        if (history.length < 2) return new THREE.Vector3(0, 0, 0);
+    private _computeThrowVelocity(id: string): THREE.Vector3 {
+        const h = this.history.get(id);
+        if (!h || h.length < 2) return new THREE.Vector3(0, 0, 0);
 
-        const oldest = history[0];
-        const newest = history[history.length - 1];
+        const oldest = h[0];
+        const newest = h[h.length - 1];
         const dt = (newest.time - oldest.time) / 1000;
-
         if (dt < 0.001) return new THREE.Vector3(0, 0, 0);
 
-        const velocity = new THREE.Vector3()
-            .subVectors(newest.pos, oldest.pos)
-            .divideScalar(dt);
-
+        const velocity = new THREE.Vector3().subVectors(newest.pos, oldest.pos).divideScalar(dt);
         const maxSpeed = 15;
-        if (velocity.length() > maxSpeed) {
-            velocity.normalize().multiplyScalar(maxSpeed);
-        }
-
+        if (velocity.length() > maxSpeed) velocity.normalize().multiplyScalar(maxSpeed);
         return velocity;
     }
 }

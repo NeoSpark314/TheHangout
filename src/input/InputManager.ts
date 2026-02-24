@@ -1,7 +1,11 @@
+import * as THREE from 'three';
 import eventBus from '../core/EventBus';
 import gameState from '../core/GameState';
 import { EVENTS, INPUT_CONFIG } from '../utils/Constants';
 import { VirtualJoystick } from '../utils/VirtualJoystick';
+import { InteractionPointer } from '../interfaces/IPointer';
+import { RenderManager } from '../managers/RenderManager';
+import { XRSystem } from '../systems/XRSystem';
 
 export class InputManager {
     private keyboard: Record<string, boolean> = {};
@@ -172,6 +176,57 @@ export class InputManager {
                 }
             }
         }
+    }
+
+    public getPointers(render: RenderManager, xr: XRSystem): InteractionPointer[] {
+        const pointers: InteractionPointer[] = [];
+
+        if (render.isXRPresenting()) {
+            const session = render.getXRSession();
+            if (!session) return pointers;
+
+            for (let i = 0; i < session.inputSources.length; i++) {
+                const source = session.inputSources[i];
+                if (!source.handedness || (source.handedness !== 'left' && source.handedness !== 'right')) continue;
+
+                const pose = xr.getControllerWorldPose(render, i);
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w));
+
+                pointers.push({
+                    id: `xr_${source.handedness}`,
+                    origin: pose.position,
+                    direction: { x: dir.x, y: dir.y, z: dir.z },
+                    quaternion: pose.quaternion,
+                    isProximity: true,
+                    isSqueezing: (source.gamepad?.buttons[1]?.value || 0) > 0.5,
+                    isInteracting: (source.gamepad?.buttons[0]?.value || 0) > 0.5,
+                    triggerValue: source.gamepad?.buttons[0]?.value || 0,
+                    hand: source.handedness
+                });
+            }
+        } else {
+            // Desktop Pointer (Center of Camera)
+            const camPos = new THREE.Vector3();
+            const camDir = new THREE.Vector3();
+            const camQuat = new THREE.Quaternion();
+            render.camera.getWorldPosition(camPos);
+            render.camera.getWorldDirection(camDir);
+            render.camera.getWorldQuaternion(camQuat);
+
+            pointers.push({
+                id: 'desktop_main',
+                origin: { x: camPos.x, y: camPos.y, z: camPos.z },
+                direction: { x: camDir.x, y: camDir.y, z: camDir.z },
+                quaternion: { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w },
+                isProximity: false,
+                isSqueezing: this.isKeyDown('e'),
+                isInteracting: this.isKeyDown('primary_action'),
+                triggerValue: this.isKeyDown('primary_action') ? 1.0 : 0.0,
+                hand: 'right' // Default for logic
+            });
+        }
+
+        return pointers;
     }
 
     private handleUINavigation(delta: number, gp: Gamepad): void {

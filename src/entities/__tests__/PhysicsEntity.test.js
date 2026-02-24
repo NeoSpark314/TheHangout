@@ -77,26 +77,27 @@ describe('PhysicsEntity', () => {
     });
 
     it('should initialize with correct id and type', () => {
-        const entity = new PhysicsEntity('prop-1', true, mockMesh, mockRigidBody);
+        const entity = new PhysicsEntity('prop-1', true, mockRigidBody, { view: { mesh: mockMesh } });
         expect(entity.id).toBe('prop-1');
         expect(entity.type).toBe('PHYSICS_PROP');
     });
 
     it('should serialize network state correctly', () => {
-        const entity = new PhysicsEntity('prop-1', true, mockMesh, mockRigidBody);
+        const entity = new PhysicsEntity('prop-1', true, mockRigidBody, { view: { mesh: mockMesh } });
         const state = entity.getNetworkState();
 
-        expect(state.p).toEqual([1, 2, 3]);
-        expect(state.r).toEqual([0, 0, 0, 1]);
-        expect(state.v).toEqual([0, 0, 0]);
+        expect(state.position).toEqual([1, 2, 3]);
+        expect(state.quaternion).toEqual([0, 0, 0, 1]);
+        expect(state.velocity).toEqual([0, 0, 0]);
     });
 
     it('should handle authority changes', () => {
-        const entity = new PhysicsEntity('prop-1', true, mockMesh, mockRigidBody);
+        const entity = new PhysicsEntity('prop-1', true, mockRigidBody, { view: { mesh: mockMesh } });
         expect(entity.isAuthority).toBe(true);
 
         // Mock losing authority
-        entity.handleAuthorityChange('remote-123');
+        entity.onAuthorityChanged(false);
+        entity.ownerId = 'remote-123';
         expect(entity.isAuthority).toBe(false);
         expect(entity.ownerId).toBe('remote-123');
     });

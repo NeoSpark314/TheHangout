@@ -7,6 +7,7 @@ export class RenderManager {
     public scene: THREE.Scene;
     public camera: THREE.PerspectiveCamera;
     public cameraGroup: THREE.Group;
+    public interactionGroup: THREE.Group;
     public audioListener: THREE.AudioListener;
     public renderer: THREE.WebGLRenderer;
     public isMenuMode: boolean = true;
@@ -19,6 +20,10 @@ export class RenderManager {
         // Scene setup
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x0a041c); // Deep retro purple
+
+        // Interaction Group (isolated for performance and precision)
+        this.interactionGroup = new THREE.Group();
+        this.scene.add(this.interactionGroup);
 
         // Camera setup
         this.camera = new THREE.PerspectiveCamera(

@@ -39,6 +39,10 @@ export abstract class EntityView<TState> implements IView<TState> {
         if (this.mesh) scene.add(this.mesh);
     }
 
+    public addToInteractionGroup(group: THREE.Group): void {
+        if (this.mesh) group.add(this.mesh);
+    }
+
     public removeFromScene(scene: THREE.Scene): void {
         if (this.mesh) scene.remove(this.mesh);
     }

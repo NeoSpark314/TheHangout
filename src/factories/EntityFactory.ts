@@ -53,6 +53,7 @@ export class EntityFactory {
         const render = gameState.managers.render;
         if (render) {
             view.addToScene(render.scene);
+            view.addToInteractionGroup(render.interactionGroup);
         }
 
         return entity;
@@ -65,6 +66,7 @@ export class EntityFactory {
         const render = gameState.managers.render;
         if (render) {
             view.addToScene(render.scene);
+            view.addToInteractionGroup(render.interactionGroup);
         }
 
         return entity;
@@ -81,6 +83,7 @@ export class EntityFactory {
 
         if (managers.render) {
             view.addToScene(managers.render.scene);
+            view.addToInteractionGroup(managers.render.interactionGroup);
         }
 
         return managers.physics.createGrabbable(id, size, position, mesh, view);
@@ -97,6 +100,7 @@ export class EntityFactory {
         const render = gameState.managers.render;
         if (render) {
             view.addToScene(render.scene);
+            view.addToInteractionGroup(render.interactionGroup);
         }
 
         return entity;
