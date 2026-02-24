@@ -23,6 +23,12 @@ export class InteractionSystem {
         this.raycaster.ray.direction.copy(ray.direction);
         this.raycaster.near = 0.1;
         this.raycaster.far = maxDist;
+        
+        // CRITICAL: Three.js Sprites require the camera to be set on the raycaster
+        // for billboard intersection calculations.
+        if (render.camera) {
+            this.raycaster.camera = render.camera;
+        }
 
         const intersects = this.raycaster.intersectObjects(render.scene.children, true);
         const localPlayerId = gameState.localPlayer?.id;
