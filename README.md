@@ -18,81 +18,62 @@ npm run serve        # Start Express + local PeerJS signaling + WS Relay (port 4
 
 Opens at `https://localhost/`. Self-signed SSL cert is auto-generated on first run.
 
-**Reliability Note**: This mode includes an automatic **WebSocket Relay Fallback**. If your network blocks P2P (WebRTC), the app will automatically route traffic through the server on port 443. This bypasses typical corporate firewalls and deep packet inspection by disabling WebSocket compression and using a unified upgrade dispatcher.
-
-> [!NOTE]
-> Binding to port 443 on Linux/macOS typically requires `sudo`. On Windows, ensure the port is not being used by other services (like IIS or Skype).
-
-**Options** (CLI flags or env vars):
-```bash
-npm run serve -- --port 8443                      # Custom port
-npm run serve -- --key ./my.key --cert ./my.cert  # Custom SSL cert
-```
-
 ## Architecture
 
-| Layer | Tech | Notes |
-|-------|------|-------|
-| Rendering | Three.js | Scene, camera, XR session |
-| Physics | Rapier (WASM) | Rigid bodies, collision |
-| Networking | PeerJS (WebRTC) | P2P data + voice |
-| VR | WebXR | Hand tracking, head pose |
-| Server | Express + PeerJS Server | Optional local signaling |
-| Audio | Web Audio API | Procedural 8-bit / 80s SFX |
+The project follows a **Clean Architecture** pattern designed for high-performance spatial synchronization.
+
+| Layer | Tech | Role |
+|-------|------|------|
+| **Core** | TypeScript | Game loop, Event Bus, Type-safe Global State. |
+| **Logic Entities** | Custom | "Source of Truth" for state (Physics, Networking, Poses). |
+| **Managers** | Custom | Lifecycle and orchestration (Network, Render, Physics). |
+| **Systems** | Custom | Specialized logic (XR Math, Interaction). |
+| **Views** | Three.js | Purely visual representation of entities. |
+
+### Engineering Principles
+
+1.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) own their logic and spatial state. The Rendering layer only *follows* or *represents* this state.
+2.  **Decoupling**: Logic entities communicate via events (`EventBus`) for networking and interaction, rather than calling managers directly.
+3.  **Spatial Math**: Using **THREE.js** for spatial math (Vectors, Quaternions, Matrices) is encouraged and standardized across the codebase, but THREE.js *Objects* (Meshes, Groups) should remain confined to the View layer.
+4.  **Type Safety**: Manager access is strictly typed through `gameState.managers` to eliminate `any` casting and circular dependencies.
+
+## Core Systems
+
+### Entity & View System
+All synced game objects follow the **Decoupled Entity Pattern**:
+- **Entities** (`src/entities/`): Logic-only. They calculate physics, handle ownership, and maintain poses.
+- **Views** (`src/views/`): Three.js visual implementations. They receive state updates from entities and update the scene.
+- **XRSystem** (`src/systems/`): Centralized math hub for transforming raw WebXR data into avatar-relative space.
+
+### Camera & Possession
+The **RenderManager** acts as a "Follower." It does not move the player; instead, it observes the player currently assigned to `gameState.localPlayer` and syncs the Three.js camera to match the entity's head pose and origin.
 
 ## Controls
 
 ### VR Mode
-- **Movement**: Left Thumbstick
-- **Rotation**: Right Thumbstick (Snap/Smooth)
-- **Grab**: Squeeze/Grip button (hold to carry)
+- **Movement**: Left Thumbstick (Head-relative)
+- **Rotation**: Right Thumbstick (Snap Turn)
+- **Grab**: Grip button (hold to carry)
 - **Voice**: Microphone active by default (toggle via UI)
 
 ### Desktop Mode
 - **Movement**: WASD
 - **Look**: Mouse (Pointer Lock)
 - **Grab**: **E key** (hold to carry, release to throw)
-- **Aim**: Integrated crosshair HUD
 - **Voice**: Microphone toggle via UI button
-
-### Entity & View System
-
-All synced game objects follow the **Unified Entity Pattern** (see `NetworkEntity.js`) decoupled from their visuals:
-
-- **Entities** (`src/entities/`): Logic-only classes handling physics, networking, and state.
-- **Views** (`src/views/`): Three.js visual implementations (StickFigure, Spectator, Props).
-- **Factory** (`src/factories/`): Centralized `EntityFactory` for creating and wiring entities to their views.
-
-### Hosting Modes
-
-| Mode | Description |
-|------|-------------|
-| **Host & Play** | Host + play as a player avatar |
-| **Dedicated Host** | Host as a spectator (free-fly camera, no avatar) |
-| **Local Server** | Node.js serves the app + runs PeerJS signaling on LAN |
 
 ## Project Structure
 
 ```
 ├── index.html          # Entry HTML
-├── style.css           # Global styles
-├── server.js           # Local Node.js server
 ├── src/
-│   ├── core/           # GameState, EventBus, GameEngine
-│   ├── entities/       # Logic: LocalPlayer, RemotePlayer, Spectator, PhysicsEntity
-│   ├── factories/      # Creation: EntityFactory
-│   ├── views/          # Visuals: StickFigureView, SpectatorView, PhysicsPropView
-│   ├── managers/       # UI, Network, Render, Physics, Environment, Prop, Room
-│   ├── skills/         # Movement, Grab (player abilities)
-│   └── utils/          # Constants, DeviceUtils, HostKeepalive
+│   ├── core/           # GameEngine, EventBus, Type-safe GameState
+│   ├── entities/       # State Owners: LocalPlayer, RemotePlayer, PhysicsEntity
+│   ├── factories/      # Creation logic & wiring
+│   ├── interfaces/     # Strict decoupling definitions (IEntity, IView, IInteractable)
+│   ├── managers/       # Orchestrators: Render, Network, Physics, Player, UI
+│   ├── systems/        # Logic Hubs: XRSystem, InteractionSystem
+│   ├── views/          # Visuals: StickFigureView, PhysicsPropView
+│   └── utils/          # Math, Constants, Network Relays
 └── vite.config.js
 ```
-
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Vite dev server (HTTPS, hot reload) |
-| `npm run build` | Production build → `dist/` |
-| `npm run serve` | Local Express + PeerJS server |
-| `npm run preview` | Preview production build |
