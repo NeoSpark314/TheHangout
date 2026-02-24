@@ -3,9 +3,9 @@ import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
 import { PlayerViewState } from '../views/StickFigureView';
-import gameState from '../core/GameState.js';
-import eventBus from '../core/EventBus.js';
-import { EVENTS } from '../utils/Constants.js';
+import gameState from '../core/GameState';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 
 export class LocalPlayer extends PlayerEntity {
     public view: IView<PlayerViewState>;

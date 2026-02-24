@@ -2,9 +2,9 @@ import { PlayerEntity } from './PlayerEntity';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { PlayerViewState } from '../views/StickFigureView';
-import gameState from '../core/GameState.js';
-import eventBus from '../core/EventBus.js';
-import { EVENTS } from '../utils/Constants.js';
+import gameState from '../core/GameState';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 
 export class RemotePlayer extends PlayerEntity {
     public peerId: string;

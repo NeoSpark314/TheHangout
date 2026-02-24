@@ -1,11 +1,20 @@
-// managers/RenderManager.js
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { isTrueHMD } from '../utils/DeviceUtils.js';
 
 export class RenderManager {
+    public container: HTMLElement;
+    public scene: THREE.Scene;
+    public camera: THREE.PerspectiveCamera;
+    public cameraGroup: THREE.Group;
+    public audioListener: THREE.AudioListener;
+    public renderer: THREE.WebGLRenderer;
+    public isMenuMode: boolean = true;
+    private menuRotation: number = 0;
+    public controllers: THREE.Group[] = [];
+
     constructor() {
-        this.container = document.getElementById('app');
+        this.container = document.getElementById('app')!;
 
         // Scene setup
         this.scene = new THREE.Scene();
@@ -20,7 +29,6 @@ export class RenderManager {
         );
 
         // XR Camera Group (The "Dolly")
-        // In XR, we move the parent of the camera to position the user in the world
         this.cameraGroup = new THREE.Group();
         this.cameraGroup.add(this.camera);
         this.scene.add(this.cameraGroup);
@@ -39,7 +47,6 @@ export class RenderManager {
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
-        // Shadows are disabled for performance and aesthetic reasons in this Phase
         this.renderer.shadowMap.enabled = false;
 
         // WebXR Enable
@@ -47,10 +54,6 @@ export class RenderManager {
 
         this.renderer.domElement.style.display = 'block';
         this.container.appendChild(this.renderer.domElement);
-
-        // Initial Menu Camera (High, dramatic angle)
-        this.isMenuMode = true;
-        this.menuRotation = 0;
 
         // Ensure the camera itself has no local rotation/offset so it follows the group perfectly
         this.camera.position.set(0, 0, 0);
@@ -61,8 +64,7 @@ export class RenderManager {
 
         this.setupControllers();
 
-        // Add VR Button ONLY if we detect a true HMD (Quest, Vision Pro, or PC desktop)
-        // This prevents the button from showing up on iPhones/Android phones that just support generic 'cardboard'
+        // Add VR Button ONLY if we detect a true HMD
         if (isTrueHMD) {
             const vrButton = VRButton.createButton(this.renderer, {
                 optionalFeatures: ['hand-tracking']
@@ -76,32 +78,24 @@ export class RenderManager {
             setTimeout(() => this.onWindowResize(), 100);
         }, false);
 
-        // Initial calls to ensure correct size after DOM/CSS settling
         this.onWindowResize();
-        setTimeout(() => this.onWindowResize(), 10);
-        setTimeout(() => this.onWindowResize(), 100);
     }
 
-    switchToPlayerView() {
+    public switchToPlayerView(): void {
         this.isMenuMode = false;
-        // Reset camera tilt from menu mode
         this.camera.rotation.set(0, 0, 0);
-        // Don't reset position here as LocalPlayer.js initialization will snap it to (0, 1.6, 0)
     }
 
-    switchToSpectatorView() {
+    public switchToSpectatorView(): void {
         this.isMenuMode = false;
-        // Reset all rotations to avoid compound issues from menu mode
         this.cameraGroup.rotation.set(0, 0, 0);
         this.camera.rotation.set(0, 0, 0);
-        // Position at an elevated overview point
         this.cameraGroup.position.set(0, 8, 10);
     }
 
-    update(delta) {
+    public update(delta: number): void {
         if (!this.isMenuMode) return;
 
-        // Slower, more majestic cinematic rotation
         this.menuRotation += delta * 0.1;
         const radius = 18;
         this.cameraGroup.position.set(
@@ -110,60 +104,51 @@ export class RenderManager {
             Math.sin(this.menuRotation) * radius
         );
 
-        // Point the camera at the center of the platform
         this.camera.lookAt(0, 0, 0);
     }
 
-
-
-
-    setupControllers() {
+    public setupControllers(): void {
         this.controllers = [];
-
         for (let i = 0; i < 2; i++) {
             const controller = this.renderer.xr.getController(i);
-
             this.cameraGroup.add(controller);
             this.controllers.push(controller);
 
-            // Gaze/Select logic can be added here
             controller.addEventListener('selectstart', () => {
                 console.log(`Controller ${i} triggered selectstart`);
             });
         }
     }
 
-    add(object3D) {
+    public add(object3D: THREE.Object3D): void {
         this.scene.add(object3D);
     }
 
-    remove(object3D) {
+    public remove(object3D: THREE.Object3D): void {
         this.scene.remove(object3D);
     }
 
-    // --- XR Convenience Accessors ---
-
-    isXRPresenting() {
+    public isXRPresenting(): boolean {
         return this.renderer.xr.isPresenting;
     }
 
-    getXRSession() {
+    public getXRSession(): XRSession | null {
         return this.renderer.xr.getSession();
     }
 
-    getXRFrame() {
+    public getXRFrame(): any {
         return this.renderer.xr.getFrame();
     }
 
-    getXRReferenceSpace() {
+    public getXRReferenceSpace(): any {
         return this.renderer.xr.getReferenceSpace();
     }
 
-    getXRController(index) {
+    public getXRController(index: number): THREE.Group {
         return this.renderer.xr.getController(index);
     }
 
-    onWindowResize() {
+    public onWindowResize(): void {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
@@ -172,11 +157,11 @@ export class RenderManager {
         this.renderer.setSize(width, height);
     }
 
-    render() {
+    public render(): void {
         this.renderer.render(this.scene, this.camera);
     }
 
-    setAnimationLoop(callback) {
+    public setAnimationLoop(callback: (time: number, frame?: XRFrame) => void): void {
         this.renderer.setAnimationLoop(callback);
     }
 }

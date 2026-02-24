@@ -2,7 +2,7 @@ import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { IInteractable } from '../interfaces/IInteractable';
 import { Vector3, Quaternion } from '../interfaces/IMath';
-import gameState from '../core/GameState.js';
+import gameState from '../core/GameState';
 
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.3;

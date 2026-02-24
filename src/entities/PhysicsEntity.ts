@@ -3,8 +3,8 @@ import { NetworkEntity } from './NetworkEntity';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
-import gameState from '../core/GameState.js';
-import { PACKET_TYPES } from '../utils/Constants.js';
+import gameState from '../core/GameState';
+import { PACKET_TYPES } from '../utils/Constants';
 
 export interface PhysicsState {
     p: [number, number, number];

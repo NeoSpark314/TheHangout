@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
 import { EntityManager } from '../managers/EntityManager';
-import gameState from '../core/GameState.js';
+import gameState from '../core/GameState';
 
 export class InteractionSystem {
     private raycaster: THREE.Raycaster = new THREE.Raycaster();

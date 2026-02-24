@@ -1,35 +1,30 @@
-// views/SpectatorView.js
-
 import * as THREE from 'three';
-import { EntityView } from './EntityView.js';
+import { EntityView } from './EntityView';
+import { Vector3 } from '../interfaces/IMath';
 
-/**
- * Glowing orb visual for the dedicated host spectator.
- * Renders a translucent sphere with a spinning halo ring
- * and a "HOST" name tag.
- *
- * State contract (passed to update()):
- *   position   - THREE.Vector3  world position
- *   lerpFactor - number         interpolation weight (1.0 = snap)
- */
-export class SpectatorView extends EntityView {
+export interface SpectatorViewState {
+    position: Vector3;
+    lerpFactor?: number;
+}
+
+export class SpectatorView extends EntityView<SpectatorViewState> {
+    private ring: THREE.Mesh | null = null;
+
     constructor() {
-        super();
-        this.ring = null;
+        super(new THREE.Group());
         this._buildGeometry();
     }
 
-    _buildGeometry() {
-        // Glowing orb
+    private _buildGeometry(): void {
         const geometry = new THREE.SphereGeometry(0.15, 16, 16);
         const material = new THREE.MeshBasicMaterial({
             color: 0xff00ff,
             transparent: true,
             opacity: 0.7
         });
-        this.mesh = new THREE.Mesh(geometry, material);
+        const orb = new THREE.Mesh(geometry, material);
+        this.mesh.add(orb);
 
-        // Halo ring
         const ringGeometry = new THREE.RingGeometry(0.2, 0.25, 32);
         const ringMaterial = new THREE.MeshBasicMaterial({
             color: 0xff00ff,
@@ -40,16 +35,13 @@ export class SpectatorView extends EntityView {
         this.ring = new THREE.Mesh(ringGeometry, ringMaterial);
         this.mesh.add(this.ring);
 
-        // "HOST" name tag
         const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d')!;
         canvas.width = 256;
         canvas.height = 64;
-
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.roundRect(0, 0, canvas.width, canvas.height, 10);
+        (ctx as any).roundRect(0, 0, canvas.width, canvas.height, 10);
         ctx.fill();
-
         ctx.font = 'bold 36px Inter, Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -64,33 +56,31 @@ export class SpectatorView extends EntityView {
         this.mesh.add(nameSprite);
     }
 
-    update(state, delta) {
-        if (!this.mesh) return;
-
-        // Position
+    public applyState(state: SpectatorViewState, delta: number): void {
+        const lerpFactor = state.lerpFactor ?? 1.0;
         if (state.position) {
-            const lerpFactor = state.lerpFactor ?? 1.0;
+            const pos = new THREE.Vector3(state.position.x, state.position.y, state.position.z);
             if (lerpFactor < 1.0) {
-                this.mesh.position.lerp(state.position, lerpFactor);
+                this.mesh.position.lerp(pos, lerpFactor);
             } else {
-                this.mesh.position.copy(state.position);
+                this.mesh.position.copy(pos);
             }
         }
 
-        // Spin the ring
         if (this.ring) {
             this.ring.rotation.x += delta * 1.5;
             this.ring.rotation.y += delta * 0.8;
         }
     }
 
-    destroy() {
-        if (!this.mesh) return;
+    public destroy(): void {
         this.mesh.traverse((child) => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-                if (child.material.map) child.material.map.dispose();
-                child.material.dispose();
+            const mesh = child as THREE.Mesh;
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) {
+                const material = mesh.material as any;
+                if (material.map) material.map.dispose();
+                material.dispose();
             }
         });
     }

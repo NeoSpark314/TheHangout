@@ -1,33 +1,26 @@
-// managers/EnvironmentManager.js
-
 import * as THREE from 'three';
+import { RoomConfig } from '../core/GameState';
 
-/**
- * Handles the "world" background and static atmosphere of the room.
- * Responsible for:
- * - Sky, Fog, and Lighting
- * - Synthwave Sun
- * - Starfield & Distant Hills
- * - Floor & Grid Shader
- */
 export class EnvironmentManager {
-    constructor(scene, randomFunc) {
+    private scene: THREE.Scene;
+    private random: () => number;
+
+    private hills: THREE.Group | null = null;
+    private stars: THREE.Points | null = null;
+    private floor: THREE.Mesh | null = null;
+    private grid: THREE.Mesh | null = null;
+    private gridUniforms: any = null;
+    private lights: THREE.Group | null = null;
+    private sun: THREE.Mesh | null = null;
+
+    constructor(scene: THREE.Scene, randomFunc: () => number) {
         this.scene = scene;
         this.random = randomFunc;
-
-        this.hills = null;
-        this.stars = null;
-        this.floor = null;
-        this.grid = null;
-        this.gridUniforms = null;
-        this.lights = null;
-        this.sun = null;
     }
 
-    applyConfig(config) {
+    public applyConfig(config: RoomConfig): void {
         if (!config) return;
 
-        // Background & Fog
         if (config.skyColor) {
             this.scene.background = new THREE.Color(config.skyColor);
             const fogNear = config.fogNear || 10;
@@ -36,13 +29,12 @@ export class EnvironmentManager {
             if (!this.scene.fog) {
                 this.scene.fog = new THREE.Fog(config.skyColor, fogNear, fogFar);
             } else {
-                this.scene.fog.color.set(config.skyColor);
-                this.scene.fog.near = fogNear;
-                this.scene.fog.far = fogFar;
+                (this.scene.fog as THREE.Fog).color.set(config.skyColor);
+                (this.scene.fog as THREE.Fog).near = fogNear;
+                (this.scene.fog as THREE.Fog).far = fogFar;
             }
         }
 
-        // Components
         if (!this.hills) this.createDistantHills();
         if (!this.stars) this.createStarfield();
         if (!this.floor) this.createFloor();
@@ -50,20 +42,18 @@ export class EnvironmentManager {
         if (!this.sun) this.createSynthwaveSun();
     }
 
-    update(delta) {
-        // Animate Grid
+    public update(delta: number): void {
         if (this.gridUniforms) {
             this.gridUniforms.uTime.value += delta;
         }
 
-        // Animate Stars
         if (this.stars) {
             this.stars.rotation.y += delta * 0.01;
             this.stars.rotation.x += delta * 0.005;
         }
     }
 
-    createDistantHills() {
+    private createDistantHills(): void {
         this.hills = new THREE.Group();
         const hillCount = 36;
         const radius = 400;
@@ -105,11 +95,10 @@ export class EnvironmentManager {
 
             this.hills.add(mountain);
         }
-
         this.scene.add(this.hills);
     }
 
-    createStarfield() {
+    private createStarfield(): void {
         const starCount = 5000;
         const starGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(starCount * 3);
@@ -149,7 +138,7 @@ export class EnvironmentManager {
         this.scene.add(this.stars);
     }
 
-    createFloor() {
+    private createFloor(): void {
         const floorGeo = new THREE.PlaneGeometry(1000, 1000);
         const floorMat = new THREE.MeshStandardMaterial({
             color: 0x020205,
@@ -161,7 +150,6 @@ export class EnvironmentManager {
         this.floor.position.y = -0.05;
         this.scene.add(this.floor);
 
-        const gridGeo = new THREE.PlaneGeometry(1000, 1000);
         this.gridUniforms = {
             uTime: { value: 0 },
             uColor: { value: new THREE.Color(0x00ffff) },
@@ -200,25 +188,23 @@ export class EnvironmentManager {
             `
         });
 
-        this.grid = new THREE.Mesh(gridGeo, gridMat);
+        this.grid = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), gridMat);
         this.grid.rotation.x = -Math.PI / 2;
         this.grid.position.y = 0.01;
         this.scene.add(this.grid);
     }
 
-    setupLighting() {
+    private setupLighting(): void {
         this.lights = new THREE.Group();
         this.lights.add(new THREE.AmbientLight(0xff00ff, 0.5));
         this.lights.add(new THREE.HemisphereLight(0x00ffff, 0x800080, 1));
-
         const dirLight = new THREE.DirectionalLight(0xffaa88, 1.2);
         dirLight.position.set(0, 60, -600);
         this.lights.add(dirLight);
-
         this.scene.add(this.lights);
     }
 
-    createSynthwaveSun() {
+    private createSynthwaveSun(): void {
         const sunGeom = new THREE.CircleGeometry(120, 64);
         const sunMat = new THREE.ShaderMaterial({
             uniforms: {
@@ -248,26 +234,25 @@ export class EnvironmentManager {
             transparent: true,
             side: THREE.DoubleSide
         });
-
         this.sun = new THREE.Mesh(sunGeom, sunMat);
         this.sun.position.set(0, 60, -600);
         this.sun.lookAt(0, 60, 0);
         this.scene.add(this.sun);
     }
 
-    clearProcedural() {
-        const remove = (obj) => {
+    public clearProcedural(): void {
+        const remove = (obj: THREE.Object3D | null) => {
             if (!obj) return;
             this.scene.remove(obj);
             obj.traverse((child) => {
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
-                    else child.material.dispose();
+                const mesh = child as THREE.Mesh;
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) {
+                    if (Array.isArray(mesh.material)) mesh.material.forEach(m => m.dispose());
+                    else mesh.material.dispose();
                 }
             });
         };
-
         remove(this.hills);
         remove(this.stars);
         this.hills = null;

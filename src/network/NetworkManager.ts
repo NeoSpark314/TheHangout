@@ -1,26 +1,116 @@
 import Peer, { DataConnection } from 'peerjs';
-import eventBus from '../core/EventBus.js';
-import gameState from '../core/GameState.js';
-import { EVENTS, PACKET_TYPES } from '../utils/Constants.js';
+import eventBus from '../core/EventBus';
+import gameState from '../core/GameState';
+import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
 import { IEntity } from '../interfaces/IEntity';
+import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive';
+import { RelayConnection } from '../utils/RelayConnection';
 
 export class NetworkManager {
-    private peer: Peer | null = null;
-    private connections: Map<string, DataConnection> = new Map();
+    public peer: Peer | null = null;
+    private relaySocket: WebSocket | null = null;
+    public connections: Map<string, DataConnection | RelayConnection> = new Map();
     private syncRate: number = 1 / 20;
     private timeSinceLastSync: number = 0;
 
     constructor() {
         eventBus.on(EVENTS.CREATE_ROOM, (customId: string) => this.initHost(customId));
         eventBus.on(EVENTS.JOIN_ROOM, (roomId: string) => this.initGuest(roomId));
+
+        document.addEventListener('visibilitychange', () => {
+            if (!gameState.isDedicatedHost) return;
+            if (document.hidden) {
+                console.warn('[NetworkManager] Tab hidden — keepalive worker active.');
+                if (gameState.managers.hud) {
+                    gameState.managers.hud.showNotification('⚠ Tab hidden — sync running via worker', 8000);
+                }
+            }
+        });
+    }
+
+    private getPeerConfig(): any {
+        if (gameState.isLocalServer) {
+            return {
+                host: window.location.hostname,
+                port: parseInt(window.location.port) || 443,
+                path: '/peerjs',
+                secure: window.location.protocol === 'https:',
+                debug: 2,
+                config: { iceServers: [] }
+            };
+        }
+        return { debug: 2 };
+    }
+
+    public async initRelay(peerId: string, roomId: string): Promise<WebSocket | null> {
+        if (!gameState.isLocalServer) return null;
+
+        return new Promise((resolve, reject) => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            const port = window.location.port;
+            const portPart = (port === '443' || port === '80' || port === '') ? '' : `:${port}`;
+            const url = `${protocol}//${host}${portPart}/relay`;
+
+            this.relaySocket = new WebSocket(url);
+            this.relaySocket.onopen = () => {
+                this.relaySocket!.send(JSON.stringify({ type: 'join', roomId: roomId || peerId, peerId: peerId }));
+                resolve(this.relaySocket);
+            };
+
+            this.relaySocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'peer-joined') {
+                    if (gameState.isHost) {
+                        const conn = new RelayConnection(this.relaySocket!, peerId, data.peerId, true);
+                        this.setupConnection(conn as any);
+                    }
+                } else if (data.type === 'relay') {
+                    const conn = this.connections.get(data.from);
+                    if (conn instanceof RelayConnection) {
+                        conn.handleData(data.payload);
+                    } else if (!gameState.isHost && data.from === gameState.roomId) {
+                        const conn = new RelayConnection(this.relaySocket!, peerId, data.from, false);
+                        this.setupConnection(conn as any);
+                        conn.handleData(data.payload);
+                    }
+                } else if (data.type === 'peer-left') {
+                    const conn = this.connections.get(data.peerId);
+                    if (conn) conn.close();
+                }
+            };
+            this.relaySocket.onerror = (err) => reject(err);
+        });
     }
 
     public async initHost(customId: string): Promise<void> {
-        this.peer = customId ? new Peer(customId) : new Peer();
-        this.peer.on('open', (id) => {
+        const config = this.getPeerConfig();
+        this.peer = customId ? new Peer(customId, config) : new Peer(config);
+
+        if (gameState.isLocalServer) {
+            const initialId = customId || (this.peer.id ? this.peer.id : null);
+            if (initialId) {
+                this.initRelay(initialId, initialId).catch(e => console.error('[NetworkManager] Relay init failed:', e));
+            }
+        }
+
+        this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
-            (gameState as any).roomId = id;
+            gameState.roomId = id;
+
+            if (gameState.isLocalServer && !this.relaySocket) {
+                this.initRelay(id, id).catch(e => console.error('[NetworkManager] Relay init failed:', e));
+            }
+            if (gameState.managers.media) {
+                gameState.managers.media.bindPeer(this.peer);
+            }
+
+            if (gameState.isDedicatedHost) {
+                startKeepalive(() => {
+                    if (document.hidden) this.syncState();
+                });
+            }
             eventBus.emit(EVENTS.HOST_READY, id);
         });
 
@@ -30,20 +120,42 @@ export class NetworkManager {
     }
 
     public async initGuest(hostId: string): Promise<void> {
-        this.peer = new Peer();
-        this.peer.on('open', (id) => {
+        const config = this.getPeerConfig();
+        this.peer = new Peer(config);
+
+        if (gameState.isLocalServer) {
+            const tempId = 'guest-' + Math.random().toString(36).substr(2, 9);
+            this.initRelay(tempId, hostId).then(() => {
+                if (!this.connections.has(hostId)) {
+                    const conn = new RelayConnection(this.relaySocket!, tempId, hostId, false);
+                    this.setupConnection(conn as any);
+                }
+            }).catch(e => console.warn('[NetworkManager] Local Relay init failed:', e));
+        }
+
+        this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
-            (gameState as any).roomId = hostId;
+            gameState.roomId = hostId;
+            if (gameState.managers.media) {
+                gameState.managers.media.bindPeer(this.peer);
+            }
+            if (gameState.isLocalServer && this.connections.has(hostId)) return;
+
             const conn = this.peer!.connect(hostId, { reliable: true });
             this.setupConnection(conn);
         });
     }
 
-    private setupConnection(conn: DataConnection): void {
+    private setupConnection(conn: DataConnection | RelayConnection): void {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
-            if ((gameState as any).isHost) {
-                // Send initial snapshot
+            if (gameState.isHost) {
+                const welcomeConfig = { ...gameState.roomConfig, assignedSpawnIndex: this.connections.size };
+                this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, welcomeConfig);
+                if (gameState.managers.entity) {
+                    const snapshot = (gameState.managers.entity as any).getWorldSnapshot?.() || [];
+                    this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
+                }
             }
         });
 
@@ -54,26 +166,69 @@ export class NetworkManager {
         conn.on('close', () => {
             this.connections.delete(conn.peer);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, conn.peer);
+            if (gameState.isHost) {
+                this.reclaimOwnership(conn.peer);
+                this.broadcast(PACKET_TYPES.PEER_DISCONNECT, conn.peer);
+            }
+            if (!gameState.isHost && conn.peer === gameState.roomId) {
+                eventBus.emit(EVENTS.HOST_DISCONNECTED);
+            }
         });
     }
 
     private handleData(senderId: string, data: any): void {
-        const parsed = JSON.parse(data);
-        // Dispatch to entities via EntityManager
-        if (parsed.type === PACKET_TYPES.STATE_UPDATE || parsed.type === PACKET_TYPES.PLAYER_INPUT) {
-            this.applyStateUpdate(parsed.payload);
-        }
+        try {
+            const parsed = JSON.parse(data);
+            switch (parsed.type) {
+                case PACKET_TYPES.STATE_UPDATE:
+                    if (!gameState.isHost) this.applyStateUpdate(parsed.payload);
+                    break;
+                case PACKET_TYPES.PLAYER_INPUT:
+                    this.applyStateUpdate(parsed.payload);
+                    if (gameState.isHost) this.relayToOthers(senderId, parsed.type, parsed.payload);
+                    break;
+                case PACKET_TYPES.PEER_DISCONNECT:
+                    if (!gameState.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, parsed.payload);
+                    break;
+                case PACKET_TYPES.ROOM_CONFIG_UPDATE:
+                    if (!gameState.isHost && gameState.managers.room) gameState.managers.room.updateConfig(parsed.payload);
+                    break;
+                case PACKET_TYPES.OWNERSHIP_REQUEST:
+                    if (gameState.isHost) this.handleOwnershipRequest(senderId, parsed.payload);
+                    break;
+                case PACKET_TYPES.OWNERSHIP_RELEASE:
+                    if (gameState.isHost) this.handleOwnershipRelease(senderId, parsed.payload);
+                    break;
+                case PACKET_TYPES.OWNERSHIP_TRANSFER:
+                    if (!gameState.isHost) this.applyOwnershipTransfer(parsed.payload);
+                    break;
+            }
+        } catch (e) {}
     }
 
     private applyStateUpdate(entityStates: any[]): void {
-        const entityManager = (gameState as any).managers.entity;
+        const entityManager = gameState.managers.entity;
         if (!entityManager) return;
 
         for (const stateData of entityStates) {
-            const entity = entityManager.getEntity(stateData.id) as (IEntity & INetworkable<any>);
-            if (entity && !entity.isAuthority) {
-                entity.applyNetworkState(stateData.state);
+            let entity = entityManager.getEntity(stateData.id);
+            if (!entity) {
+                const isOwnEntity = gameState.localPlayer && stateData.id === gameState.localPlayer.id;
+                if (!isOwnEntity) {
+                    gameState.managers.player?.handleRemoteEntityDiscovery(stateData.id, stateData.type);
+                    entity = entityManager.getEntity(stateData.id);
+                }
             }
+            if (entity && !entity.isAuthority && (entity as any).applyNetworkState) {
+                (entity as any).applyNetworkState(stateData.state);
+            }
+        }
+    }
+
+    private relayToOthers(senderId: string, type: number, payload: any): void {
+        const data = JSON.stringify({ type, payload });
+        for (const [peerId, conn] of this.connections.entries()) {
+            if (conn.open && peerId !== senderId) conn.send(data);
         }
     }
 
@@ -86,30 +241,85 @@ export class NetworkManager {
     }
 
     private syncState(): void {
-        const entityManager = (gameState as any).managers.entity;
+        const entityManager = gameState.managers.entity;
         if (!entityManager) return;
 
         const authoritativeStates = entityManager.getAuthoritativeStates();
         if (authoritativeStates.length === 0) return;
 
-        if ((gameState as any).isHost) {
-            this.broadcast(PACKET_TYPES.STATE_UPDATE, authoritativeStates);
-        } else {
-            this.sendData((gameState as any).roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
+        if (gameState.isHost) {
+            const allStates = (entityManager as any).getWorldSnapshot?.() || authoritativeStates;
+            this.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
+        } else if (gameState.roomId) {
+            this.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
         }
     }
 
-    public sendData(targetId: string, type: string, payload: any): void {
+    private handleOwnershipRequest(senderId: string, payload: any): void {
+        const entity = gameState.managers.entity?.getEntity(payload.id);
+        if (!entity) return;
+        if (!(entity as any).ownerId || (entity as any).ownerId === senderId) {
+            (entity as any).ownerId = senderId;
+            entity.isAuthority = (senderId === (gameState.localPlayer?.id || 'local'));
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: senderId });
+        }
+    }
+
+    private handleOwnershipRelease(senderId: string, payload: any): void {
+        const entity = gameState.managers.entity?.getEntity(payload.id);
+        if (!entity || (entity as any).ownerId !== senderId) return;
+        (entity as any).ownerId = null;
+        entity.isAuthority = true;
+        if ((entity as any).rigidBody) {
+            if (payload.p) (entity as any).rigidBody.setTranslation({ x: payload.p[0], y: payload.p[1], z: payload.p[2] }, false);
+            if (payload.r) (entity as any).rigidBody.setRotation({ x: payload.r[0], y: payload.r[1], z: payload.r[2], w: payload.r[3] }, false);
+            if (payload.v) (entity as any).rigidBody.setLinvel({ x: payload.v[0], y: payload.v[1], z: payload.v[2] }, true);
+        }
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
+    }
+
+    private reclaimOwnership(peerId: string): void {
+        if (!gameState.managers.entity) return;
+        for (const entity of gameState.managers.entity.entities.values()) {
+            if ((entity as any).ownerId === peerId) {
+                (entity as any).ownerId = null;
+                entity.isAuthority = true;
+                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
+            }
+        }
+    }
+
+    private applyOwnershipTransfer(payload: any): void {
+        const entity = gameState.managers.entity?.getEntity(payload.id);
+        if (!entity) return;
+        const isLocalOwner = payload.ownerId === (gameState.localPlayer?.id || 'local');
+        (entity as any).ownerId = payload.ownerId;
+        entity.isAuthority = isLocalOwner;
+    }
+
+    public sendData(targetId: string, type: number, payload: any): void {
         const conn = this.connections.get(targetId);
-        if (conn && conn.open) {
-            conn.send(JSON.stringify({ type, payload }));
-        }
+        if (conn && conn.open) conn.send(JSON.stringify({ type, payload }));
     }
 
-    public broadcast(type: string, payload: any): void {
+    public broadcast(type: number, payload: any): void {
         const data = JSON.stringify({ type, payload });
         for (const conn of this.connections.values()) {
             if (conn.open) conn.send(data);
         }
+    }
+
+    public disconnect(): void {
+        stopKeepalive();
+        if (this.relaySocket) {
+            this.relaySocket.close();
+            this.relaySocket = null;
+        }
+        if (this.peer) {
+            this.peer.destroy();
+            this.peer = null;
+        }
+        this.connections.clear();
+        gameState.roomId = null;
     }
 }

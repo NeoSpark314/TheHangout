@@ -1,54 +1,60 @@
-// managers/HUDManager.js
 import * as THREE from 'three';
-import eventBus from '../core/EventBus.js';
-import gameState from '../core/GameState.js';
-import { EVENTS } from '../utils/Constants.js';
+import eventBus from '../core/EventBus';
+import gameState from '../core/GameState';
+import { EVENTS } from '../utils/Constants';
+
+interface Notification {
+    text: string;
+    startTime: number;
+    duration: number;
+}
 
 export class HUDManager {
+    public group: THREE.Group;
+    private listCanvas: HTMLCanvasElement;
+    private listContext: CanvasRenderingContext2D;
+    private listTexture: THREE.CanvasTexture | null = null;
+    private listMesh: THREE.Mesh | null = null;
+
+    private noteCanvas: HTMLCanvasElement;
+    private noteContext: CanvasRenderingContext2D;
+    private noteTexture: THREE.CanvasTexture | null = null;
+    private noteMesh: THREE.Mesh | null = null;
+
+    private crosshair: THREE.Mesh | null = null;
+    private opacity: number = 0.8;
+    private notifications: Notification[] = [];
+    private maxNotifications: number = 1;
+    private playerNames: string[] = [];
+    private _lastListRefresh: number = 0;
+
     constructor() {
         this.group = new THREE.Group();
 
-        // --- Panel 1: Participants (Top-Left) ---
         this.listCanvas = document.createElement('canvas');
-        this.listContext = this.listCanvas.getContext('2d');
+        this.listContext = this.listCanvas.getContext('2d')!;
         this.listCanvas.width = 512;
         this.listCanvas.height = 512;
-        this.listTexture = null;
-        this.listMesh = null;
 
-        // --- Panel 2: Notifications (Bottom-Center) ---
         this.noteCanvas = document.createElement('canvas');
-        this.noteContext = this.noteCanvas.getContext('2d');
-        this.noteCanvas.width = 1024; // Wider for text
+        this.noteContext = this.noteCanvas.getContext('2d')!;
+        this.noteCanvas.width = 1024;
         this.noteCanvas.height = 256;
-        this.noteTexture = null;
-        this.noteMesh = null;
-
-        // --- Crosshair (Center) ---
-        this.crosshair = null;
-
-        this.opacity = 0.8;
-        this.notifications = []; // { text, startTime, duration }
-        this.maxNotifications = 1; // Only show most recent in the new centered spot? Or stack?
-        this.playerNames = [];
 
         this.init();
 
-        // Listen for events
         eventBus.on(EVENTS.PEER_CONNECTED, () => this.updatePlayerList());
         eventBus.on(EVENTS.PEER_DISCONNECTED, () => this.updatePlayerList());
         eventBus.on(EVENTS.LOCAL_NAME_UPDATED, () => this.updatePlayerList());
-        eventBus.on(EVENTS.REMOTE_NAME_UPDATED, (data) => {
+        eventBus.on(EVENTS.REMOTE_NAME_UPDATED, (data: { name: string }) => {
             this.updatePlayerList();
             this.showNotification(`${data.name} joined the hangout!`);
         });
 
-        // Initial sync
         setTimeout(() => this.updatePlayerList(), 100);
     }
 
-    init() {
-        // --- List Panel Mesh ---
+    private init(): void {
         const listGeo = new THREE.PlaneGeometry(0.5, 0.5);
         this.listTexture = new THREE.CanvasTexture(this.listCanvas);
         const listMat = new THREE.MeshBasicMaterial({
@@ -60,10 +66,9 @@ export class HUDManager {
         });
         this.listMesh = new THREE.Mesh(listGeo, listMat);
         this.listMesh.renderOrder = 999;
-        this.listMesh.position.set(-0.5, 0.25, -1.0); // Top-Left, further back for comfort
+        this.listMesh.position.set(-0.5, 0.25, -1.0);
         this.group.add(this.listMesh);
 
-        // --- Notification Panel Mesh ---
         const noteGeo = new THREE.PlaneGeometry(1.0, 0.25);
         this.noteTexture = new THREE.CanvasTexture(this.noteCanvas);
         const noteMat = new THREE.MeshBasicMaterial({
@@ -75,10 +80,9 @@ export class HUDManager {
         });
         this.noteMesh = new THREE.Mesh(noteGeo, noteMat);
         this.noteMesh.renderOrder = 1000;
-        this.noteMesh.position.set(0, -0.35, -1.0); // Bottom-Center
+        this.noteMesh.position.set(0, -0.35, -1.0);
         this.group.add(this.noteMesh);
 
-        // --- Crosshair Mesh ---
         const crosshairGeo = new THREE.RingGeometry(0.002, 0.004, 32);
         const crosshairMat = new THREE.MeshBasicMaterial({
             color: 0x00ffff,
@@ -88,13 +92,13 @@ export class HUDManager {
             depthWrite: false
         });
         this.crosshair = new THREE.Mesh(crosshairGeo, crosshairMat);
-        this.crosshair.position.set(0, 0, -1.0); // Dead center
+        this.crosshair.position.set(0, 0, -1.0);
         this.group.add(this.crosshair);
 
         this.draw();
     }
 
-    updatePlayerList() {
+    public updatePlayerList(): void {
         const entityMgr = gameState.managers.entity;
         if (!entityMgr) return;
 
@@ -106,35 +110,31 @@ export class HUDManager {
 
         const entities = entityMgr.entities;
         for (const entity of entities.values()) {
-            if (entity.type === 'REMOTE_PLAYER' && entity.name) {
-                this.playerNames.push(entity.name);
+            if (entity.type === 'REMOTE_PLAYER' && (entity as any).name) {
+                this.playerNames.push((entity as any).name);
             }
-            if (entity.type === 'SPECTATOR' && entity.name) {
-                this.playerNames.push(`👁 ${entity.name}`);
+            if (entity.type === 'SPECTATOR' && (entity as any).name) {
+                this.playerNames.push(`👁 ${(entity as any).name}`);
             }
         }
 
         this.draw();
     }
 
-    showNotification(text, duration = 4000) {
+    public showNotification(text: string, duration: number = 4000): void {
         this.notifications.push({
             text: text.toUpperCase(),
             startTime: performance.now(),
             duration: duration
         });
-
         if (this.notifications.length > this.maxNotifications) {
             this.notifications.shift();
         }
-
         this.draw();
     }
 
-    update() {
+    public update(): void {
         const now = performance.now();
-
-        // Toggle crosshair visibility (hidden in XR)
         if (this.crosshair) {
             const isXR = gameState.managers.render?.isXRPresenting();
             this.crosshair.visible = !isXR;
@@ -142,34 +142,26 @@ export class HUDManager {
 
         const initialCount = this.notifications.length;
         this.notifications = this.notifications.filter(n => (now - n.startTime) < n.duration);
-
         if (this.notifications.length !== initialCount) {
             this.draw();
         }
 
-        // Periodically refresh participant list (catches auto-spawned entities)
         if (!this._lastListRefresh || now - this._lastListRefresh > 2000) {
             this._lastListRefresh = now;
             this.updatePlayerList();
         }
     }
 
-    draw() {
-        // --- Draw List Panel ---
+    private draw(): void {
         const lctx = this.listContext;
-        const lw = this.listCanvas.width;
-        const lh = this.listCanvas.height;
-
-        lctx.clearRect(0, 0, lw, lh);
+        lctx.clearRect(0, 0, this.listCanvas.width, this.listCanvas.height);
         lctx.save();
         lctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         this.drawRoundedRect(lctx, 0, 0, 250, 40 + (this.playerNames.length * 30), 15);
         lctx.fill();
-
         lctx.font = 'bold 28px Inter, Arial, sans-serif';
         lctx.fillStyle = '#00ffff';
         lctx.fillText('PARTICIPANTS:', 20, 45);
-
         lctx.font = '22px Inter, Arial, sans-serif';
         lctx.fillStyle = '#ffffff';
         this.playerNames.forEach((name, i) => {
@@ -178,42 +170,32 @@ export class HUDManager {
         lctx.restore();
         if (this.listTexture) this.listTexture.needsUpdate = true;
 
-        // --- Draw Notification Panel ---
         const nctx = this.noteContext;
-        const nw = this.noteCanvas.width;
-        const nh = this.noteCanvas.height;
-
-        nctx.clearRect(0, 0, nw, nh);
+        nctx.clearRect(0, 0, this.noteCanvas.width, this.noteCanvas.height);
         if (this.notifications.length > 0) {
-            const n = this.notifications[0]; // Just show topmost/latest
+            const n = this.notifications[0];
             const age = performance.now() - n.startTime;
             const opacity = Math.min(1.0, 1.0 - (age / n.duration) * 1.5);
-
             if (opacity > 0) {
                 nctx.save();
                 nctx.globalAlpha = opacity;
                 nctx.textAlign = 'center';
-
-                // Horizon OS style pill
                 nctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                this.drawRoundedRect(nctx, nw / 2 - 300, nh / 2 - 30, 600, 60, 30);
+                this.drawRoundedRect(nctx, this.noteCanvas.width / 2 - 300, this.noteCanvas.height / 2 - 30, 600, 60, 30);
                 nctx.fill();
-
-                // Border glow
                 nctx.strokeStyle = '#ff00ff';
                 nctx.lineWidth = 2;
                 nctx.stroke();
-
                 nctx.font = 'bold 24px Inter, Arial, sans-serif';
                 nctx.fillStyle = '#ffffff';
-                nctx.fillText(n.text, nw / 2, nh / 2 + 8);
+                nctx.fillText(n.text, this.noteCanvas.width / 2, this.noteCanvas.height / 2 + 8);
                 nctx.restore();
             }
         }
         if (this.noteTexture) this.noteTexture.needsUpdate = true;
     }
 
-    drawRoundedRect(ctx, x, y, width, height, radius) {
+    private drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
         ctx.lineTo(x + width - radius, y);

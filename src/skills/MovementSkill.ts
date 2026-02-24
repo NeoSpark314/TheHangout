@@ -1,7 +1,7 @@
 import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { Vector3, Quaternion } from '../interfaces/IMath';
-import gameState from '../core/GameState.js';
+import gameState from '../core/GameState';
 
 export class MovementSkill extends Skill {
     public speed: number = 5.0;

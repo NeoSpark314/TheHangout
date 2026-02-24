@@ -75,4 +75,21 @@ export class EntityManager {
         }
         return states;
     }
+
+    public getWorldSnapshot(): any[] {
+        const states: any[] = [];
+        for (const entity of this.entities.values()) {
+            if (!(entity as any).destroyed && (entity as any).getNetworkState) {
+                const state = (entity as any).getNetworkState();
+                if (state) {
+                    states.push({
+                        id: entity.id,
+                        type: entity.type,
+                        state: state
+                    });
+                }
+            }
+        }
+        return states;
+    }
 }

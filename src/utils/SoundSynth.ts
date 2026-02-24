@@ -1,17 +1,5 @@
-/**
- * SoundSynth.js
- * Procedural retro sound generation using Web Audio API.
- * 8-bit (Square) and 80s Synth (Triangle/Sawtooth) aesthetics.
- */
 export class SoundSynth {
-    /**
-     * Play an upward or downward arpeggio
-     * @param {AudioContext} ctx 
-     * @param {number[]} freqs - Array of frequencies
-     * @param {string} type - 'square', 'triangle', 'sawtooth'
-     * @param {number} speed - Duration of each note
-     */
-    static playArpeggio(ctx, freqs, type = 'square', speed = 0.08) {
+    public static playArpeggio(ctx: AudioContext, freqs: number[], type: OscillatorType = 'square', speed: number = 0.08): void {
         if (!ctx) return;
         const now = ctx.currentTime;
         
@@ -22,7 +10,6 @@ export class SoundSynth {
             osc.type = type;
             osc.frequency.setValueAtTime(freq, now + i * speed);
             
-            // Retro "pluck" envelope
             gain.gain.setValueAtTime(0, now + i * speed);
             gain.gain.linearRampToValueAtTime(0.1, now + i * speed + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.0001, now + (i + 1) * speed);
@@ -35,19 +22,13 @@ export class SoundSynth {
         });
     }
 
-    /**
-     * Play a collision sound based on intensity
-     * @param {AudioContext} ctx 
-     * @param {number} intensity - Normalized intensity (0 to 1)
-     */
-    static playCollision(ctx, intensity) {
+    public static playCollision(ctx: AudioContext, intensity: number): void {
         if (!ctx || intensity < 0.05) return;
         
         const now = ctx.currentTime;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         
-        // 80s "Tom" drum style collision
         osc.type = 'triangle';
         const startFreq = 100 + (intensity * 300);
         osc.frequency.setValueAtTime(startFreq, now);
@@ -64,10 +45,7 @@ export class SoundSynth {
         osc.stop(now + 0.2);
     }
 
-    /**
-     * Play a sharp "click" or "clink"
-     */
-    static playUI(ctx, freq = 880) {
+    public static playUI(ctx: AudioContext, freq: number = 880): void {
         if (!ctx) return;
         const now = ctx.currentTime;
         const osc = ctx.createOscillator();

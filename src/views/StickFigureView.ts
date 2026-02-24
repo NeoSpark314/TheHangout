@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EntityView } from './EntityView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { HandState } from '../entities/PlayerEntity';
-import gameState from '../core/GameState.js';
+import gameState from '../core/GameState';
 
 export interface PlayerViewState {
     position: Vector3;

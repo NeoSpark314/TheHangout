@@ -1,26 +1,25 @@
-/**
- * Mocks a PeerJS DataConnection over WebSockets for restricted networks.
- */
 export class RelayConnection {
-    constructor(socket, peerId, targetPeerId, isHost) {
-        this.listeners = {};
-        this.socket = socket;
-        this.peer = targetPeerId; // The ID of the person we are talking to
-        this.localId = peerId;
-        this.open = false;
-        this.isHost = isHost;
+    private listeners: Record<string, Function[]> = {};
+    private socket: WebSocket;
+    public peer: string;
+    public localId: string;
+    public open: boolean = false;
+    public isHost: boolean;
 
-        // PeerJS compatibility properties
-        this.metadata = {};
-        this.serialization = 'json';
-        this.reliable = true;
+    public metadata: any = {};
+    public serialization: string = 'json';
+    public reliable: boolean = true;
+
+    constructor(socket: WebSocket, peerId: string, targetPeerId: string, isHost: boolean) {
+        this.socket = socket;
+        this.peer = targetPeerId;
+        this.localId = peerId;
+        this.isHost = isHost;
 
         this._init();
     }
 
-    _init() {
-        // In a real relay, "open" happens when the socket is ready and the join is confirmed.
-        // For simplicity, we'll assume it's open shortly after creation if the socket is already connected.
+    private _init(): void {
         if (this.socket.readyState === WebSocket.OPEN) {
             setTimeout(() => {
                 this.open = true;
@@ -34,17 +33,17 @@ export class RelayConnection {
         }
     }
 
-    on(event, callback) {
+    public on(event: string, callback: Function): void {
         if (!this.listeners[event]) this.listeners[event] = [];
         this.listeners[event].push(callback);
     }
 
-    emit(event, data) {
+    public emit(event: string, data?: any): void {
         if (!this.listeners[event]) return;
         this.listeners[event].forEach(cb => cb(data));
     }
 
-    send(data) {
+    public send(data: any): void {
         if (this.socket.readyState !== WebSocket.OPEN) return;
 
         this.socket.send(JSON.stringify({
@@ -54,15 +53,12 @@ export class RelayConnection {
         }));
     }
 
-    close() {
-        // We don't necessarily close the whole socket here, 
-        // as it might be shared with other connections in the relay.
+    public close(): void {
         this.open = false;
         this.emit('close');
     }
 
-    // Called by NetworkManager when it receives a relay message for this connection
-    handleData(data) {
+    public handleData(data: any): void {
         this.emit('data', data);
     }
 }

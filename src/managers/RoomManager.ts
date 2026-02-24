@@ -1,27 +1,19 @@
-// managers/RoomManager.js
-
 import * as THREE from 'three';
-import gameState from '../core/GameState.js';
-import { EnvironmentManager } from './EnvironmentManager.js';
-import { PropManager } from './PropManager.js';
+import gameState, { RoomConfig } from '../core/GameState';
+import { EnvironmentManager } from './EnvironmentManager';
+import { PropManager } from './PropManager';
 
-/**
- * High-level orchestrator for the room.
- * Delegates actual creation and animation to EnvironmentManager and PropManager.
- */
 export class RoomManager {
-    constructor() {
-        this.scene = null;
-        this._seed = 0;
+    public scene: THREE.Scene | null = null;
+    private _seed: number = 0;
+    public environment: EnvironmentManager | null = null;
+    public props: PropManager | null = null;
+    private groundPhysics: boolean = false;
+    public assignedSpawnIndex?: number;
 
-        this.environment = null;
-        this.props = null;
-    }
+    constructor() {}
 
-    /**
-     * Seeded PRNG (mulberry32). Produces deterministic values 0..1 from this._seed.
-     */
-    random() {
+    private random(): number {
         this._seed |= 0;
         this._seed = (this._seed + 0x6D2B79F5) | 0;
         let t = Math.imul(this._seed ^ (this._seed >>> 15), 1 | this._seed);
@@ -29,53 +21,46 @@ export class RoomManager {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
-    init(scene) {
+    public init(scene: THREE.Scene): void {
         this.scene = scene;
         const randomBound = this.random.bind(this);
-
         this.environment = new EnvironmentManager(scene, randomBound);
         this.props = new PropManager(scene, randomBound);
-
         this.applyConfig(gameState.roomConfig);
     }
 
-    applyConfig(config) {
-        if (!this.scene || !config) return;
+    public applyConfig(config: RoomConfig): void {
+        if (!this.scene || !config || !this.environment || !this.props) return;
 
         console.log('[RoomManager] Coordinating Room Config:', config);
-
         if (config.seed !== undefined) {
             this._seed = config.seed;
         }
 
-        // Delegate to sub-managers
         this.environment.applyConfig(config);
         this.props.applyConfig(config);
 
-        // Ground physics (Shared responsibility)
         if (gameState.managers.physics && !this.groundPhysics) {
             gameState.managers.physics.createGround(25);
             this.groundPhysics = true;
         }
     }
 
-    update(delta) {
+    public update(delta: number): void {
         if (this.environment) this.environment.update(delta);
         if (this.props) this.props.update(delta);
     }
 
-    updateConfig(newConfig) {
+    public updateConfig(newConfig: Partial<RoomConfig> & { assignedSpawnIndex?: number }): void {
         const oldSeed = gameState.roomConfig.seed;
 
-        // Capture transient fields like assignedSpawnIndex if present
         if (newConfig.assignedSpawnIndex !== undefined) {
             this.assignedSpawnIndex = newConfig.assignedSpawnIndex;
-            delete newConfig.assignedSpawnIndex; // Don't pollute the persistent config
+            delete newConfig.assignedSpawnIndex;
         }
 
-        gameState.roomConfig = { ...gameState.roomConfig, ...newConfig };
+        gameState.roomConfig = { ...gameState.roomConfig, ...newConfig as RoomConfig };
 
-        // If the seed changed, tear down procedural elements so they get rebuilt
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this.clearProceduralElements();
         }
@@ -83,12 +68,12 @@ export class RoomManager {
         this.applyConfig(gameState.roomConfig);
     }
 
-    clearProceduralElements() {
+    public clearProceduralElements(): void {
         if (this.environment) this.environment.clearProcedural();
         if (this.props) this.props.clearProcedural();
     }
 
-    getSpawnPoint(index) {
+    public getSpawnPoint(index: number): { position: THREE.Vector3, yaw: number } {
         const radius = 2.5;
         const angle = (index * (Math.PI / 4)) + Math.PI;
         const x = Math.sin(angle) * radius;

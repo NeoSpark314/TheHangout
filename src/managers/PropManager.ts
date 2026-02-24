@@ -1,30 +1,25 @@
-// managers/PropManager.js
-
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { EntityFactory } from '../factories/EntityFactory.js';
-import gameState from '../core/GameState.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EntityFactory } from '../factories/EntityFactory';
+import { RoomConfig } from '../core/GameState';
+import gameState from '../core/GameState';
 
-/**
- * Handles local interactive objects and furniture in the room.
- * Responsible for:
- * - Table & Hologram
- * - Podest (Platform) & Decorations
- * - Spawning grabbable objects
- */
 export class PropManager {
-    constructor(scene, randomFunc) {
+    private scene: THREE.Scene;
+    private random: () => number;
+
+    private table: THREE.Mesh | null = null;
+    private hologram: THREE.Mesh | null = null;
+    private podest: THREE.Group | null = null;
+    private decorations: THREE.Group | null = null;
+    private grabbablesSpawned: boolean = false;
+
+    constructor(scene: THREE.Scene, randomFunc: () => number) {
         this.scene = scene;
         this.random = randomFunc;
-
-        this.table = null;
-        this.hologram = null;
-        this.podest = null;
-        this.decorations = null;
-        this.grabbablesSpawned = false;
     }
 
-    applyConfig(config) {
+    public applyConfig(config: RoomConfig): void {
         if (!config) return;
 
         if (!this.table) this.createTable();
@@ -34,8 +29,7 @@ export class PropManager {
         if (!this.grabbablesSpawned) this.createGrabbables();
     }
 
-    update(delta) {
-        // Animate Hologram
+    public update(delta: number): void {
         if (this.hologram) {
             this.hologram.rotation.y += delta * 1.5;
             this.hologram.rotation.z += delta * 0.5;
@@ -43,9 +37,8 @@ export class PropManager {
         }
     }
 
-    createTable() {
+    private createTable(): void {
         const tableGroup = new THREE.Group();
-
         const topGeo = new THREE.CylinderGeometry(2, 2, 0.1, 6);
         const topMat = new THREE.MeshStandardMaterial({
             color: 0x1a1a2e,
@@ -82,9 +75,8 @@ export class PropManager {
         }
     }
 
-    createHologram() {
+    private createHologram(): void {
         if (!this.table) return;
-
         const holoGeo = new THREE.IcosahedronGeometry(0.35, 1);
         const holoMat = new THREE.MeshBasicMaterial({
             color: 0x00ffff,
@@ -92,159 +84,97 @@ export class PropManager {
             transparent: true,
             opacity: 0.5
         });
-
         this.hologram = new THREE.Mesh(holoGeo, holoMat);
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
 
-        // Add the duck! 🦆
         const loader = new GLTFLoader();
-        const duckUrl = '/models/duck.glb';
-
-        loader.load(duckUrl, (gltf) => {
+        loader.load('/models/duck.glb', (gltf) => {
             const duck = gltf.scene;
-
-            // Normalize size and center
             const box = new THREE.Box3().setFromObject(duck);
             const size = box.getSize(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
             const targetScale = 0.25 / maxDim;
             duck.scale.setScalar(targetScale);
-
-            // Re-center after scaling
             const center = box.getCenter(new THREE.Vector3()).multiplyScalar(-targetScale);
             duck.position.copy(center);
-
-            // Add to hologram so it rotates/floats with it
-            this.hologram.add(duck);
-        }, undefined, (error) => {
-            console.error('[PropManager] Failed to load duck joke:', error);
+            this.hologram?.add(duck);
         });
     }
 
-    createPodest() {
+    private createPodest(): void {
         this.podest = new THREE.Group();
-        const cubeSize = 1.0;
-
         const podestMat = new THREE.MeshStandardMaterial({
             color: 0x0a0a20,
-            metalness: 0.8,
-            roughness: 0.5,
-            emissive: 0x000510
+            metalness: 0.8, roughness: 0.5, emissive: 0x000510
         });
-
         const wireMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3 });
-        const blockGeo = new THREE.BoxGeometry(cubeSize, 0.2, cubeSize);
+        const blockGeo = new THREE.BoxGeometry(1.0, 0.2, 1.0);
 
         for (let x = -4; x < 4; x++) {
             for (let z = -4; z < 4; z++) {
                 const hOffset = this.random() * 0.05;
                 const segment = new THREE.Mesh(blockGeo, podestMat);
                 segment.position.set(x + 0.5, 0.1 + hOffset, z + 0.5);
-
-                const segmentEdges = new THREE.EdgesGeometry(blockGeo);
-                const segmentOutline = new THREE.LineSegments(segmentEdges, wireMat);
+                const segmentOutline = new THREE.LineSegments(new THREE.EdgesGeometry(blockGeo), wireMat);
                 segment.add(segmentOutline);
-
                 this.podest.add(segment);
             }
         }
-
         this.scene.add(this.podest);
-
-        if (gameState.managers.physics) {
-            gameState.managers.physics.createCuboid(4.0, 0.1, 4.0, { x: 0, y: 0.1, z: 0 }, this.podest, true);
-        }
     }
 
-    createDecorations() {
+    private createDecorations(): void {
         this.decorations = new THREE.Group();
-        const pillarCount = 12;
-        const radius = 6.0;
-
         const pillarMat = new THREE.MeshStandardMaterial({
-            color: 0x050515,
-            metalness: 0.9,
-            roughness: 0.1,
-            emissive: 0x001122
+            color: 0x050515, metalness: 0.9, roughness: 0.1, emissive: 0x001122
         });
         const wireMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 });
 
-        for (let i = 0; i < pillarCount; i++) {
-            const angle = (i / pillarCount) * Math.PI * 2;
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
             const h = 0.5 + this.random() * 2.5;
             const w = 0.4 + this.random() * 0.6;
-
             const geo = new THREE.BoxGeometry(w, h, w);
             const pillar = new THREE.Mesh(geo, pillarMat);
-
-            pillar.position.set(
-                Math.sin(angle) * (radius + this.random() * 2),
-                h / 2,
-                Math.cos(angle) * (radius + this.random() * 2)
-            );
-
-            const edges = new THREE.EdgesGeometry(geo);
-            const outline = new THREE.LineSegments(edges, wireMat);
-            pillar.add(outline);
-
+            pillar.position.set(Math.sin(angle) * (6.0 + this.random() * 2), h / 2, Math.cos(angle) * (6.0 + this.random() * 2));
+            pillar.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat));
             this.decorations.add(pillar);
         }
-
         this.scene.add(this.decorations);
     }
 
-    createGrabbables() {
-        const physics = gameState.managers.physics;
-        if (!physics || !this.scene) return;
-
+    private createGrabbables(): void {
+        if (!this.scene) return;
         this.grabbablesSpawned = true;
-
-        const cubeSize = 0.12;
-        const cubeCount = 6;
-        const tableRadius = 1.0;
-        const tableY = 1.15;
-
         const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
-
-        for (let i = 0; i < cubeCount; i++) {
-            const angle = (i / cubeCount) * Math.PI * 2;
-            const x = Math.sin(angle) * tableRadius;
-            const z = Math.cos(angle) * tableRadius;
-            const position = { x, y: tableY, z };
-
-            const geo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const position = { x: Math.sin(angle), y: 1.15, z: Math.cos(angle) };
+            const geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
             const mat = new THREE.MeshStandardMaterial({
-                color: colors[i],
-                emissive: colors[i],
-                emissiveIntensity: 0.3,
-                metalness: 0.6,
-                roughness: 0.3
+                color: colors[i], emissive: colors[i], emissiveIntensity: 0.3, metalness: 0.6, roughness: 0.3
             });
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, tableY, z);
-
-            const edges = new THREE.EdgesGeometry(geo);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
-            mesh.add(new THREE.LineSegments(edges, lineMat));
-
-            EntityFactory.createGrabbable(`grabbable-${i}`, cubeSize, position, mesh);
+            mesh.position.set(position.x, position.y, position.z);
+            mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })));
+            EntityFactory.createGrabbable(`grabbable-${i}`, 0.12, position, mesh);
         }
     }
 
-    clearProcedural() {
-        const remove = (obj) => {
+    public clearProcedural(): void {
+        const remove = (obj: THREE.Object3D | null) => {
             if (!obj) return;
             this.scene.remove(obj);
             obj.traverse((child) => {
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
-                    else child.material.dispose();
+                const mesh = child as THREE.Mesh;
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) {
+                    if (Array.isArray(mesh.material)) mesh.material.forEach(m => m.dispose());
+                    else mesh.material.dispose();
                 }
             });
         };
-
         remove(this.podest);
         remove(this.decorations);
         this.podest = null;

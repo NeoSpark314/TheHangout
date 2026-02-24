@@ -1,16 +1,16 @@
-// core/EventBus.js
+type Callback = (data?: any) => void;
 
 class EventBus {
-    constructor() {
-        this.listeners = {};
-    }
+    private listeners: Record<string, Callback[]> = {};
+
+    constructor() {}
 
     /**
      * Subscribe to an event.
-     * @param {string} eventName The name of the event.
-     * @param {Function} callback The callback function when the event is emitted.
+     * @param eventName The name of the event.
+     * @param callback The callback function when the event is emitted.
      */
-    on(eventName, callback) {
+    public on(eventName: string, callback: Callback): void {
         if (!this.listeners[eventName]) {
             this.listeners[eventName] = [];
         }
@@ -19,10 +19,10 @@ class EventBus {
 
     /**
      * Unsubscribe from an event.
-     * @param {string} eventName The name of the event.
-     * @param {Function} callback The callback function to remove.
+     * @param eventName The name of the event.
+     * @param callback The callback function to remove.
      */
-    off(eventName, callback) {
+    public off(eventName: string, callback: Callback): void {
         if (!this.listeners[eventName]) return;
         this.listeners[eventName] = this.listeners[eventName].filter(
             (listener) => listener !== callback
@@ -31,10 +31,10 @@ class EventBus {
 
     /**
      * Emit an event.
-     * @param {string} eventName The name of the event.
-     * @param {any} data Optional data to pass to the callbacks.
+     * @param eventName The name of the event.
+     * @param data Optional data to pass to the callbacks.
      */
-    emit(eventName, data) {
+    public emit(eventName: string, data?: any): void {
         if (!this.listeners[eventName]) return;
         this.listeners[eventName].forEach((callback) => {
             try {
@@ -46,6 +46,5 @@ class EventBus {
     }
 }
 
-// Export a singleton instance
 const eventBus = new EventBus();
 export default eventBus;
