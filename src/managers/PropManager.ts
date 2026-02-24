@@ -109,6 +109,11 @@ export class PropManager {
                 const segmentOutline = new THREE.LineSegments(new THREE.EdgesGeometry(blockGeo), wireMat);
                 segment.add(segmentOutline);
                 this.podest.add(segment);
+
+                // Add static physics collider
+                if (gameState.managers.physics) {
+                    gameState.managers.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
+                }
             }
         }
         this.scene.add(this.podest);
@@ -130,6 +135,11 @@ export class PropManager {
             pillar.position.set(Math.sin(angle) * (6.0 + this.random() * 2), h / 2, Math.cos(angle) * (6.0 + this.random() * 2));
             pillar.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat));
             this.decorations.add(pillar);
+
+            // Add static physics collider
+            if (gameState.managers.physics) {
+                gameState.managers.physics.createCuboid(w / 2, h / 2, w / 2, { x: pillar.position.x, y: pillar.position.y, z: pillar.position.z }, null, true);
+            }
         }
         this.scene.add(this.decorations);
     }
