@@ -4,7 +4,7 @@ import { IInteractable } from '../interfaces/IInteractable';
 import { InteractionEvent } from '../interfaces/IInteractionEvent';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
-import { PenEntityState } from '../interfaces/IEntityState';
+import { PenEntityState, EntityType } from '../interfaces/IEntityState';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -26,7 +26,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     private lastDrawPosition: Vector3 | null = null;
 
     constructor(id: string, isAuthority: boolean, view: IView<any> | null) {
-        super(id, 'PEN', isAuthority);
+        super(id, EntityType.PEN, isAuthority);
         this.view = view;
     }
 
@@ -110,12 +110,14 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
 
     public getNetworkState(): PenEntityState {
         return {
-            position: [this.position.x, this.position.y, this.position.z],
-            quaternion: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
-            heldBy: this.heldBy,
+            id: this.id,
+            type: EntityType.PEN,
+            p: [this.position.x, this.position.y, this.position.z],
+            q: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
+            b: this.heldBy,
             ownerId: this.ownerId,
-            isDrawing: this.isDrawing,
-            color: this.color
+            draw: this.isDrawing,
+            c: this.color
         };
     }
 
@@ -123,10 +125,10 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         this.syncNetworkState(state);
         if (this.isAuthority) return;
 
-        if (state.position) this.position = { x: state.position[0], y: state.position[1], z: state.position[2] };
-        if (state.quaternion) this.quaternion = { x: state.quaternion[0], y: state.quaternion[1], z: state.quaternion[2], w: state.quaternion[3] };
-        this.heldBy = state.heldBy || null;
-        this.isDrawing = !!state.isDrawing;
-        this.color = state.color || 0xffffff;
+        if (state.p) this.position = { x: state.p[0], y: state.p[1], z: state.p[2] };
+        if (state.q) this.quaternion = { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] };
+        this.heldBy = state.b || null;
+        this.isDrawing = !!state.draw;
+        this.color = state.c || 0xffffff;
     }
 }

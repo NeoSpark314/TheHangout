@@ -6,6 +6,7 @@ import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
 import { PlayerViewState } from '../views/StickFigureView';
+import { PlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -29,7 +30,7 @@ export class LocalPlayer extends PlayerEntity {
     public _rightControllerIndex: number = 1;
 
     constructor(id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
-        super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
+        super(id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
         this.isAuthority = true;
         this.view = view;
         
@@ -216,7 +217,7 @@ export class LocalPlayer extends PlayerEntity {
         xr.updateJointsFromXRFrame(xrFrame, referenceSpace, session, this.handStates);
     }
 
-    public getNetworkState(): any {
+    public getNetworkState(): PlayerEntityState {
         const managers = gameState.managers;
         const render = managers.render;
         
@@ -248,22 +249,21 @@ export class LocalPlayer extends PlayerEntity {
 
         return {
             id: this.id,
-            type: this.type,
-            name: this.name,
-            position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },
-            yaw: bodyYaw,
-            headHeight: worldHeadPos.y,
-            head: {
-                position: worldHeadPos,
-                quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
-            },
+            type: EntityType.LOCAL_PLAYER,
+            n: this.name,
+            p: [worldHeadPos.x, 0, worldHeadPos.z],
+            y: bodyYaw,
+            h: worldHeadPos.y,
+            hq: [localHeadQuat.x, localHeadQuat.y, localHeadQuat.z, localHeadQuat.w],
             hands: JSON.parse(JSON.stringify(this.handStates)),
-            avatarConfig: gameState.avatarConfig,
+            conf: {
+                color: gameState.avatarConfig.color
+            },
             ownerId: this.ownerId
         };
     }
 
-    public applyNetworkState(state: any): void {
+    public applyNetworkState(state: PlayerEntityState): void {
         // LocalPlayer state is driven by input, not network updates.
         this.syncNetworkState(state);
     }

@@ -2,6 +2,7 @@ import { PlayerEntity } from './PlayerEntity';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { PlayerViewState } from '../views/StickFigureView';
+import { PlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -15,7 +16,7 @@ export class RemotePlayer extends PlayerEntity {
     private lastNetworkUpdateTime: number = performance.now();
 
     constructor(peerId: string, view: IView<PlayerViewState>) {
-        super(peerId, 'REMOTE_PLAYER', false);
+        super(peerId, EntityType.REMOTE_PLAYER, false);
         this.peerId = peerId;
         this.view = view;
         this.name = 'Player'; // Default
@@ -32,29 +33,28 @@ export class RemotePlayer extends PlayerEntity {
         }
     }
 
-    public getNetworkState(): any {
-        return null;
+    public getNetworkState(): PlayerEntityState | null {
+        return null; // Remote players don't broadcast their own state from here
     }
 
-    public applyNetworkState(data: any): void {
-        if (data.name !== undefined && data.name !== this.name) {
-            this.name = data.name;
+    public applyNetworkState(data: PlayerEntityState): void {
+        if (data.n !== undefined && data.n !== this.name) {
+            this.name = data.n;
             eventBus.emit(EVENTS.REMOTE_NAME_UPDATED, { peerId: this.peerId, name: this.name });
         }
 
-        if (data.avatarConfig && data.avatarConfig.color !== this.avatarColor) {
-            this.avatarColor = data.avatarConfig.color;
+        if (data.conf && data.conf.color !== this.avatarColor) {
+            this.avatarColor = data.conf.color;
         }
 
-        if (data.position) this.targetPosition = { ...data.position };
-        if (data.yaw !== undefined) this.targetYaw = data.yaw;
-        if (data.headHeight !== undefined) this.headHeight = data.headHeight;
+        if (data.p) this.targetPosition = { x: data.p[0], y: data.p[1], z: data.p[2] };
+        if (data.y !== undefined) this.targetYaw = data.y;
+        if (data.h !== undefined) this.headHeight = data.h;
 
         this.lastNetworkUpdateTime = performance.now();
 
-        if (data.head) {
-            if (data.head.position) this.headState.position = { ...data.head.position };
-            if (data.head.quaternion) this.headState.quaternion = { ...data.head.quaternion };
+        if (data.hq) {
+            this.headState.quaternion = { x: data.hq[0], y: data.hq[1], z: data.hq[2], w: data.hq[3] };
         }
 
         if (data.hands) {

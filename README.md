@@ -33,10 +33,10 @@ The project follows a **Clean Architecture** pattern designed for high-performan
 ### Engineering Principles
 
 1.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) drive the visuals. The Rendering layer only *follows* or *interpolates* this state.
-2.  **Domain-Driven Synchronization**: Networking is a pure transport. Entities handle their own specialized events (e.g., `OWNERSHIP_RELEASE`) to encapsulate internal state changes (like rigid body mode transitions).
-3.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Skills interact with these capabilities rather than specific classes, allowing for diverse objects (Physics Cubes, non-physics Pens, UI Buttons).
-4.  **Strictly Typed Network Contract**: All network traffic follows explicit interfaces in `IEntityState.ts` to prevent key mismatches and ensure type safety across the network boundary.
-5.  **Linear Lifecycle**: The `App` class enforces a strict initialization sequence: **Infrastructure (Physics) -> World (Room/Props) -> Engine (Loop)**.
+2.  **Domain-Driven Synchronization**: Networking is a pure transport. Entities handle their own specialized events (e.g., `OWNERSHIP_RELEASE`) to encapsulate internal state changes.
+3.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems use **Type Guards** to safely interact with these capabilities at runtime.
+4.  **Strictly Typed Network Contract**: All traffic follows a **Discriminated Union** in `IEntityState.ts`. We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
+5.  **Linear Lifecycle**: The `App` class enforces a strict initialization sequence: **Infrastructure -> World -> Engine**. Views implement a cleanup lifecycle (`_cleanupMesh`) to prevent memory leaks and "ghost" objects.
 
 ## Core Systems
 
@@ -44,29 +44,28 @@ The project follows a **Clean Architecture** pattern designed for high-performan
 The `App` class manages the startup sequence, ensuring all managers are registered and systems are initialized in the correct order to prevent race conditions.
 
 ### Entity & View System
-- **Entities**: Logic-only. They implement capabilities like `IGrabbable`.
-- **Views**: Visual-only. They implement `IView` and handle Three.js scene management and materials.
-- **EntityFactory**: A registry-based system for spawning entities by type string, making world population data-driven.
+- **Entities**: Logic-only state owners.
+- **Views**: Visual-only representations with a managed Three.js lifecycle.
+- **EntityFactory**: Data-driven spawning using the `EntityType` registry.
 
 ### Modular Networking
-- **Transport**: Raw communication via PeerJS/Sockets.
+- **Transport**: Raw communication via PeerJS/Sockets or local WebSocket Relay.
 - **Dispatcher**: Routes incoming packets to specific `PacketHandlers`.
-- **Synchronizer**: A 20Hz loop that collects and broadcasts authoritative entity states using standardized interfaces.
+- **Synchronizer**: A 20Hz loop that broadcasts authoritative entity states using standardized, bandwidth-efficient interfaces.
 
 ## Controls
 
 ### VR Mode
-- **Movement**: Left Thumbstick (Head-relative)
+- **Movement**: Left Thumbstick
 - **Rotation**: Right Thumbstick (Snap Turn)
-- **Grab**: Grip button (hold to carry)
-- **Interact**: Index Trigger (Analog pressure supported for tools like Pens)
-- **Voice**: Microphone active by default (toggle via UI)
+- **Grab**: Grip button (Proximity-based)
+- **Interact**: Index Trigger
+- **Voice**: Microphone active by default
 
 ### Desktop Mode
 - **Movement**: WASD
 - **Look**: Mouse (Pointer Lock)
-- **Grab**: **E key** (hold to carry, release to throw)
-- **Interact**: **Left Mouse Click** (while holding)
+- **Grab/Interact**: *[Experimental]* Raycast interaction is currently disabled. Proximity interaction only.
 - **Voice**: Microphone toggle via UI button
 
 ## Project Structure

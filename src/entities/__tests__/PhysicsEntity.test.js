@@ -86,9 +86,9 @@ describe('PhysicsEntity', () => {
         const entity = new PhysicsEntity('prop-1', true, mockRigidBody, { view: { mesh: mockMesh } });
         const state = entity.getNetworkState();
 
-        expect(state.position).toEqual([1, 2, 3]);
-        expect(state.quaternion).toEqual([0, 0, 0, 1]);
-        expect(state.velocity).toEqual([0, 0, 0]);
+        expect(state.p).toEqual([1, 2, 3]);
+        expect(state.q).toEqual([0, 0, 0, 1]);
+        expect(state.v).toEqual([0, 0, 0]);
     });
 
     it('should handle authority changes', () => {

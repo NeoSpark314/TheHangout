@@ -3,6 +3,7 @@ import eventBus from '../core/EventBus';
 import gameState from '../core/GameState';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
+import { EntityType } from '../interfaces/IEntityState';
 import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive';
 import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
@@ -228,7 +229,7 @@ export class NetworkManager implements NetworkTransport {
                 if (gameState.localPlayer && stateData.id === gameState.localPlayer.id) continue;
 
                 // Role Reversal: If someone says they are a LOCAL_PLAYER, to us they are a REMOTE_PLAYER
-                const spawnType = stateData.type === 'LOCAL_PLAYER' ? 'REMOTE_PLAYER' : stateData.type;
+                const spawnType = stateData.type === EntityType.LOCAL_PLAYER ? EntityType.REMOTE_PLAYER : stateData.type;
 
                 const config = {
                     spawnPos: { x: 0, y: 0, z: 0 },

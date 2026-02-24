@@ -6,7 +6,7 @@ import { InteractionEvent } from '../interfaces/IInteractionEvent';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { PhysicsPropView, PhysicsPropState } from '../views/PhysicsPropView';
-import { PhysicsEntityState } from '../interfaces/IEntityState';
+import { PhysicsEntityState, EntityType } from '../interfaces/IEntityState';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -27,7 +27,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private lerpFactor: number = 0.2;
 
     constructor(id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
-        super(id, 'PHYSICS_PROP', isAuthority);
+        super(id, EntityType.PHYSICS_PROP, isAuthority);
         this.rigidBody = rigidBody;
         this.view = options.view || null;
         this.isGrabbable = options.grabbable || false;
@@ -46,7 +46,6 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && gameState.isHost);
 
         if (this.isAuthority !== shouldBeAuthority) {
-            console.log(`[PhysicsEntity] ${this.id} authority changing: ${this.isAuthority} -> ${shouldBeAuthority}`);
             this.onAuthorityChanged(shouldBeAuthority);
         }
     }
@@ -68,9 +67,9 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         const state = this.getNetworkState();
         eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
             id: this.id,
-            velocity: velocity ? [velocity.x, velocity.y, velocity.z] : [0, 0, 0],
-            position: state.position,
-            quaternion: state.quaternion
+            velocity: state.v,
+            position: state.p,
+            quaternion: state.q
         });
     }
 
@@ -215,10 +214,12 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         const vel = this.rigidBody.linvel();
 
         return {
-            position: [pos.x, pos.y, pos.z],
-            quaternion: [rot.x, rot.y, rot.z, rot.w],
-            velocity: [vel.x, vel.y, vel.z],
-            heldBy: this.heldBy,
+            id: this.id,
+            type: EntityType.PHYSICS_PROP,
+            p: [pos.x, pos.y, pos.z],
+            q: [rot.x, rot.y, rot.z, rot.w],
+            v: [vel.x, vel.y, vel.z],
+            b: this.heldBy,
             ownerId: this.ownerId
         };
     }
@@ -230,12 +231,12 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         if (this.isAuthority) return;
 
         const wasHeld = this.heldBy;
-        this.heldBy = state.heldBy || null;
+        this.heldBy = state.b || null;
 
         const oldTargetPos = { ...this.targetPos };
         
-        if (state.position) this.targetPos = { x: state.position[0], y: state.position[1], z: state.position[2] };
-        if (state.quaternion) this.targetRot = { x: state.quaternion[0], y: state.quaternion[1], z: state.quaternion[2], w: state.quaternion[3] };
+        if (state.p) this.targetPos = { x: state.p[0], y: state.p[1], z: state.p[2] };
+        if (state.q) this.targetRot = { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] };
 
         const stateTransition = (this.heldBy !== wasHeld);
         const hugeJump = Math.pow(this.targetPos.x - oldTargetPos.x, 2) + 
@@ -266,8 +267,8 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             }
         }
 
-        if (!this.heldBy && wasHeld && state.velocity) {
-            this.rigidBody?.setLinvel({ x: state.velocity[0], y: state.velocity[1], z: state.velocity[2] }, true);
+        if (!this.heldBy && wasHeld && state.v) {
+            this.rigidBody?.setLinvel({ x: state.v[0], y: state.v[1], z: state.v[2] }, true);
         }
     }
 
@@ -280,3 +281,4 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
     }
 }
+
