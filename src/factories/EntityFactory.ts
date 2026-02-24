@@ -6,6 +6,8 @@ import { StickFigureView } from '../views/StickFigureView';
 import { SpectatorView } from '../views/SpectatorView';
 import { PhysicsPropView } from '../views/PhysicsPropView';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
+import { PenEntity } from '../entities/PenEntity';
+import { PenView } from '../views/PenView';
 import gameState from '../core/GameState';
 import { Vector3 } from '../interfaces/IMath';
 
@@ -18,6 +20,7 @@ export class EntityFactory {
         this.register('REMOTE_PLAYER', (id, config) => this.createPlayer(id, { ...config, isLocal: false }));
         this.register('SPECTATOR', (id, config) => this.createSpectator(id, config.isAuthority));
         this.register('PHYSICS_PROP', (id, config) => this.createGrabbable(id, config.size, config.position, config.mesh));
+        this.register('PEN', (id, config) => this.createPen(id, config));
     }
 
     public static register(type: string, creator: (id: string, config: any) => any): void {
@@ -77,5 +80,21 @@ export class EntityFactory {
         }
 
         return managers.physics.createGrabbable(id, size, position, mesh, view);
+    }
+
+    public static createPen(id: string, config: any): PenEntity {
+        const view = new PenView(id);
+        const entity = new PenEntity(id, !!config.isAuthority, view);
+        
+        if (config.position) {
+            entity.updateGrabbedPose(config.position, config.quaternion || { x: 0, y: 0, z: 0, w: 1 });
+        }
+
+        const render = gameState.managers.render;
+        if (render) {
+            view.addToScene(render.scene);
+        }
+
+        return entity;
     }
 }

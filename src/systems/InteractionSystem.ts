@@ -62,13 +62,16 @@ export class InteractionSystem {
         let minDist = maxDist;
 
         for (const entity of managers.entity.entities.values()) {
-            const interactable = entity as unknown as IInteractable;
-            if (interactable.isGrabbable && !(entity as any).heldBy) {
-                const logicEntity = entity as any;
-                if (!logicEntity.rigidBody) continue;
+            // Check if it's grabbable and not currently held
+            if ((entity as any).isGrabbable && !(entity as any).heldBy) {
+                const interactable = entity as unknown as IInteractable;
+                
+                // Get world position from view if possible, otherwise skip
+                const view = (entity as any).view;
+                if (!view || !view.mesh) continue;
 
-                const pos = logicEntity.rigidBody.translation();
-                const dist = point.distanceTo(this.tempVec.set(pos.x, pos.y, pos.z));
+                view.mesh.getWorldPosition(this.tempVec);
+                const dist = point.distanceTo(this.tempVec);
 
                 if (dist < minDist) {
                     minDist = dist;

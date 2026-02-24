@@ -137,6 +137,15 @@ export class PropManager {
     private createGrabbables(): void {
         if (!this.scene) return;
         this.grabbablesSpawned = true;
+
+        // Spawn a Pen
+        const penId = 'pen-1';
+        const pen = EntityFactory.spawn('PEN', penId, {
+            position: { x: 0.5, y: 1.15, z: 0.5 },
+            isAuthority: gameState.isHost
+        });
+        if (pen) gameState.managers.entity.addEntity(pen);
+
         const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2;
