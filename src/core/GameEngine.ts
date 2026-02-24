@@ -22,9 +22,13 @@ export class GameEngine {
         console.log('[GameEngine] Engine started.');
 
         if (gameState.managers.render) {
-            gameState.managers.render.setAnimationLoop(this.loop.bind(this));
+            gameState.managers.render.setAnimationLoop((time, frame) => this.loop(time, frame));
         } else {
-            requestAnimationFrame(this.loop.bind(this));
+            const wrap = (time: number) => {
+                this.loop(time);
+                if (this.isRunning) requestAnimationFrame(wrap);
+            };
+            requestAnimationFrame(wrap);
         }
     }
 
@@ -32,33 +36,27 @@ export class GameEngine {
         this.isRunning = false;
     }
 
-    private loop(currentTime?: number): void {
+    private loop(currentTime: number, frame?: XRFrame): void {
         if (!this.isRunning) return;
-
-        if (currentTime === undefined) currentTime = performance.now();
 
         const delta = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
         gameState.deltaTime = delta;
 
-        this.update(delta);
-
-        if (!gameState.managers.render) {
-            requestAnimationFrame(this.loop.bind(this));
-        }
+        this.update(delta, frame);
     }
 
-    private update(delta: number): void {
+    private update(delta: number, frame?: XRFrame): void {
         if (gameState.managers.network) {
             gameState.managers.network.update(delta);
         }
 
         if (gameState.managers.input) {
-            gameState.managers.input.update(delta);
+            gameState.managers.input.update(delta, frame);
         }
 
         if (gameState.managers.entity) {
-            gameState.managers.entity.update(delta);
+            gameState.managers.entity.update(delta, frame);
         }
 
         if (gameState.managers.physics) {

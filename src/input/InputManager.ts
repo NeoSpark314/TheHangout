@@ -101,7 +101,7 @@ export class InputManager {
         return v;
     }
 
-    public update(delta: number): void {
+    public update(delta: number, frame?: XRFrame): void {
         this.pollGamepad(delta);
     }
 

@@ -3,6 +3,6 @@ export interface IEntity {
     readonly type: string;
     isAuthority: boolean;
     
-    update(delta: number): void;
+    update(delta: number, frame?: any): void;
     destroy(): void;
 }

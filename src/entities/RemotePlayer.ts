@@ -83,7 +83,7 @@ export class RemotePlayer extends PlayerEntity {
         }
     }
 
-    public update(delta: number): void {
+    public update(delta: number, _frame?: XRFrame): void {
         if (performance.now() - this.lastNetworkUpdateTime > 5000) {
             console.warn(`[RemotePlayer] Player ${this.peerId} timed out. Destroying.`);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, this.peerId);

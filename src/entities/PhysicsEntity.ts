@@ -156,7 +156,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
         }
     }
 
-    public update(delta: number): void {
+    public update(delta: number, _frame?: XRFrame): void {
         if (!this.rigidBody) return;
 
         this.syncAuthority();

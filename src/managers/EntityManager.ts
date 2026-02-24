@@ -45,11 +45,11 @@ export class EntityManager {
         return this.entities.get(id);
     }
 
-    public update(delta: number): void {
+    public update(delta: number, frame?: XRFrame): void {
         for (const [id, entity] of this.entities.entries()) {
             if (!(entity as any).destroyed) {
                 try {
-                    entity.update(delta);
+                    entity.update(delta, frame);
                 } catch (e) {
                     console.error(`[EntityManager] Error updating entity ${id}:`, e);
                 }

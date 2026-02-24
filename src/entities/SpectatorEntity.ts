@@ -42,7 +42,7 @@ export class SpectatorEntity extends NetworkEntity {
         });
     }
 
-    public update(delta: number): void {
+    public update(delta: number, _frame?: XRFrame): void {
         if (this.isAuthority) {
             this.updateAuthority(delta);
         } else {
