@@ -272,10 +272,10 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         if (state.handStates) {
             this.updateWristMarkers(state.handStates.left, state.handStates.right, lerpFactor);
 
-            const leftArmPos = state.handStates.left.active
+            const leftArmPos = state.handStates.left.active && (state.handStates.left.joints[0].position.x !== 0 || this.wristMeshes.left.visible)
                 ? this.getLeftWristMarkerPosition()
                 : new THREE.Vector3(-0.25, 0.7, -0.05);
-            const rightArmPos = state.handStates.right.active
+            const rightArmPos = state.handStates.right.active && (state.handStates.right.joints[0].position.x !== 0 || this.wristMeshes.right.visible)
                 ? this.getRightWristMarkerPosition()
                 : new THREE.Vector3(0.25, 0.7, -0.05);
             this.updateArms(leftArmPos, rightArmPos);

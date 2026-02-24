@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
 import { EntityManager } from '../managers/EntityManager';
-import gameState from '../core/GameState';
 
 export class InteractionSystem {
     private raycaster: THREE.Raycaster = new THREE.Raycaster();
@@ -12,24 +11,25 @@ export class InteractionSystem {
     }
 
     public findInteractableUnderRay(ray: { origin: THREE.Vector3, direction: THREE.Vector3 }, maxDist: number): IInteractable | null {
-        this.raycaster.ray.copy(ray as any);
+        this.raycaster.ray.origin.copy(ray.origin);
+        this.raycaster.ray.direction.copy(ray.direction);
         
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
-        // In a real system, we'd use Three.js raycasting against meshes
-        // and then map back to entities. 
-        // For now, we'll iterate through interactable entities.
         for (const entity of this.entityManager.entities.values()) {
-            if ((entity as any).isGrabbable !== undefined) {
-                const interactable = entity as unknown as IInteractable;
+            // Check if entity implements IInteractable and is grabbable
+            const interactable = entity as unknown as IInteractable;
+            if (interactable.isGrabbable === true) {
                 const entityPos = (entity as any).rigidBody ? (entity as any).rigidBody.translation() : null;
                 if (!entityPos) continue;
 
                 const pos = new THREE.Vector3(entityPos.x, entityPos.y, entityPos.z);
-                const dist = this.raycaster.ray.distanceToPoint(pos);
                 
-                if (dist < 0.3) {
+                // Using distanceSqToPoint for performance and matching original threshold
+                const distToRay = this.raycaster.ray.distanceSqToPoint(pos);
+                
+                if (distToRay < 0.1) { // ~0.316m radius
                     const dToCam = this.raycaster.ray.origin.distanceTo(pos);
                     if (dToCam < minDist) {
                         minDist = dToCam;

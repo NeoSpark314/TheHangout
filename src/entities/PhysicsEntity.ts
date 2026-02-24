@@ -126,8 +126,11 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
 
     public onGrab(playerId: string): void {
         if (!this.rigidBody) return;
+        
+        // Ensure we have authority before changing state
+        this.requestOwnership();
+        
         this.heldBy = playerId;
-        this.isAuthority = true;
         this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
         this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
         this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);

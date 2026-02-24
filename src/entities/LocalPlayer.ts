@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { PlayerEntity, HandState } from './PlayerEntity';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
@@ -100,23 +101,26 @@ export class LocalPlayer extends PlayerEntity {
 
         this.updateVRHands();
         
-        // Push state to view
-        const headWorldPos = { x: 0, y: 1.7, z: 0 }; // Default
-        const bodyYaw = 0; // Default
-        
-        // Logic to extract world position from render camera if not in VR
-        if (render.camera) {
-            const camPos = (render.camera as any).position;
-            headWorldPos.x = camPos.x;
-            headWorldPos.y = camPos.y;
-            headWorldPos.z = camPos.z;
-        }
+        // 1. Correct Camera/Avatar alignment
+        const headWorldPos = new THREE.Vector3();
+        render.camera.getWorldPosition(headWorldPos);
+        const finalHeadQuat = new THREE.Quaternion();
+        render.camera.getWorldQuaternion(finalHeadQuat);
+        const finalHeadEuler = new THREE.Euler().setFromQuaternion(finalHeadQuat, 'YXZ');
 
+        const bodyYaw = finalHeadEuler.y;
+        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
+        const localHeadQuat = bodyQuat.clone().invert().multiply(finalHeadQuat);
+
+        // 2. Transform hands to avatar space
+        this.transformHandsToAvatarSpace(bodyYaw, headWorldPos);
+
+        // 3. Push complete state to view
         this.view.applyState({
-            position: this.xrOrigin.position,
+            position: { x: headWorldPos.x, y: 0, z: headWorldPos.z },
             yaw: bodyYaw,
             headHeight: headWorldPos.y,
-            headQuaternion: this.headPose.quaternion,
+            headQuaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w },
             handStates: this.handStates,
             name: this.name,
             color: gameState.avatarConfig.color,
@@ -154,7 +158,6 @@ export class LocalPlayer extends PlayerEntity {
                     handPoseObj.position = { x: pose.transform.position.x, y: pose.transform.position.y, z: pose.transform.position.z };
                     handPoseObj.quaternion = { x: pose.transform.orientation.x, y: pose.transform.orientation.y, z: pose.transform.orientation.z, w: pose.transform.orientation.w };
                     
-                    // Simplified joints sync
                     if (source.hand) {
                         let i = 0;
                         for (const joint of source.hand.values()) {
@@ -172,13 +175,64 @@ export class LocalPlayer extends PlayerEntity {
         }
     }
 
+    private transformHandsToAvatarSpace(bodyYaw: number, headWorldPos: THREE.Vector3): void {
+        const render = gameState.managers.render;
+        if (!render) return;
+
+        // Dummy group to help with worldToLocal without Three.js in PlayerEntity
+        const avatarTransform = new THREE.Object3D();
+        avatarTransform.position.set(headWorldPos.x, 0, headWorldPos.z);
+        avatarTransform.rotation.y = bodyYaw;
+        avatarTransform.updateMatrixWorld(true);
+
+        const xrOriginMatrix = new THREE.Matrix4().makeRotationFromQuaternion(
+            new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w)
+        ).setPosition(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+
+        const processHand = (handPose: { position: Vector3, quaternion: Quaternion }, handState: HandState) => {
+            if (!handState.active) return;
+
+            // Transform pose from XR Reference Space to World Space
+            const worldPos = new THREE.Vector3(handPose.position.x, handPose.position.y, handPose.position.z).applyMatrix4(xrOriginMatrix);
+            const worldQuat = new THREE.Quaternion(handPose.quaternion.x, handPose.quaternion.y, handPose.quaternion.z, handPose.quaternion.w);
+            const xrOriginQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
+            worldQuat.premultiply(xrOriginQuat);
+
+            // World to Local (Avatar Space)
+            const localPos = avatarTransform.worldToLocal(worldPos.clone());
+            const invAvatarQuat = avatarTransform.quaternion.clone().invert();
+            const localQuat = worldQuat.clone().premultiply(invAvatarQuat);
+
+            handState.position = { x: localPos.x, y: localPos.y, z: localPos.z };
+            handState.quaternion = { x: localQuat.x, y: localQuat.y, z: localQuat.z, w: localQuat.w };
+
+            // Joints
+            for (let i = 0; i < 25; i++) {
+                const j = handState.joints[i];
+                if (j.position.x !== 0 || j.position.y !== 0 || j.position.z !== 0) {
+                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z).applyMatrix4(xrOriginMatrix);
+                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w).premultiply(xrOriginQuat);
+                    
+                    const jLocalPos = avatarTransform.worldToLocal(jWorldPos);
+                    const jLocalQuat = jWorldQuat.premultiply(invAvatarQuat);
+                    
+                    j.position = { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z };
+                    j.quaternion = { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w };
+                }
+            }
+        };
+
+        processHand(this.leftHandPose, this.handStates.left);
+        processHand(this.rightHandPose, this.handStates.right);
+    }
+
     public getNetworkState(): any {
         return {
             id: this.id,
             type: this.type,
             name: this.name,
-            position: this.xrOrigin.position,
-            yaw: 0,
+            position: this.xrOrigin.position, // Dolly position
+            yaw: 0, // Should be bodyYaw
             headHeight: 1.7,
             head: {
                 position: this.headPose.position,
