@@ -69,12 +69,11 @@ async function bootstrap() {
 
     if (gameState.isDedicatedHost) {
       gameState.managers.render.switchToSpectatorView();
-      const spectator = EntityFactory.createSpectator(id, true);
-      gameState.managers.entity.addEntity(spectator);
     } else {
       gameState.managers.render.switchToPlayerView();
-      gameState.managers.player.init(id);
     }
+    
+    gameState.managers.player.init(id);
   };
 
   eventBus.on(EVENTS.HOST_READY, (id: string) => initPlayerOnce(id));
