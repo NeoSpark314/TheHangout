@@ -25,8 +25,6 @@ export class GrabSkill extends Skill {
         const render = managers.render;
         const interactionSystem = managers.interaction;
 
-        if (!input || !render || !interactionSystem) return;
-
         if (render.isXRPresenting()) {
             this._updateXR(delta, player, interactionSystem);
         } else {
@@ -36,8 +34,8 @@ export class GrabSkill extends Skill {
 
     private _updateDesktop(_delta: number, player: LocalPlayer, interactionSystem: any): void {
         const managers = gameState.managers;
-        const input = managers.input!;
-        const render = managers.render!;
+        const input = managers.input;
+        const render = managers.render;
 
         const camWorldPos = new THREE.Vector3();
         render.camera.getWorldPosition(camWorldPos);
@@ -81,43 +79,32 @@ export class GrabSkill extends Skill {
         }
     }
 
-    private _updateXR(_delta: number, player: LocalPlayer, interactionSystem: any): void {
-        const render = gameState.managers.render!;
-        const session = render.getXRSession();
-        const xrFrame = render.getXRFrame();
-        const referenceSpace = render.getXRReferenceSpace();
-        if (!session || !xrFrame || !referenceSpace) return;
+    private _updateXR(_delta: number, player: any, interactionSystem: any): void {
+        const managers = gameState.managers;
+        const render = managers.render;
+        const xr = managers.xr;
 
-        let nearestGlobal: IInteractable | null = null;
-        let minDistGlobal = this.grabRadius;
+        if (!render.isXRPresenting()) return;
 
-        for (const source of session.inputSources) {
-            if (!source.gripSpace) continue;
-            const hand = source.handedness as 'left' | 'right';
-            if (hand !== 'left' && hand !== 'right') continue;
-
-            const pose = xrFrame.getPose(source.gripSpace, referenceSpace);
-            if (!pose) continue;
-
-            const handWorldPos = new THREE.Vector3(
-                pose.transform.position.x, pose.transform.position.y, pose.transform.position.z
-            ).applyMatrix4(render.cameraGroup.matrixWorld);
-
-            const handWorldQuat = new THREE.Quaternion(
-                pose.transform.orientation.x, pose.transform.orientation.y, pose.transform.orientation.z, pose.transform.orientation.w
-            ).premultiply(render.cameraGroup.quaternion);
+        const processHand = (hand: 'left' | 'right', controllerIndex: number) => {
+            const pose = xr.getControllerWorldPose(render, controllerIndex);
+            const handWorldPos = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z);
+            const handWorldQuat = new THREE.Quaternion(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w);
 
             this._recordPosition(hand, handWorldPos);
-            const squeezing = source.gamepad && source.gamepad.buttons.length > 1 && source.gamepad.buttons[1].pressed;
+            
+            // Check for grip button (standard button 1)
+            const controller = render.getXRController(controllerIndex);
+            const session = render.getXRSession();
+            if (!session) return null;
+            
+            // Find input source for this controller
+            const source = session.inputSources[controllerIndex];
+            const squeezing = source?.gamepad?.buttons[1]?.pressed || false;
 
             // Nearest check
             const result = interactionSystem.findNearestInteractable(handWorldPos, this.grabRadius);
             
-            if (result && result.distance < minDistGlobal) {
-                minDistGlobal = result.distance;
-                nearestGlobal = result.interactable;
-            }
-
             if (this.held[hand]) {
                 if (!squeezing) {
                     const velocity = this._computeThrowVelocity(hand);
@@ -137,9 +124,13 @@ export class GrabSkill extends Skill {
                     this.positionHistory[hand] = [];
                 }
             }
-        }
+            return result?.interactable || null;
+        };
 
-        this._updateHighlight(player.id, nearestGlobal);
+        const leftResult = processHand('left', player._leftControllerIndex);
+        const rightResult = processHand('right', player._rightControllerIndex);
+
+        this._updateHighlight(player.id, leftResult || rightResult);
     }
 
     private _updateHighlight(playerId: string, nearest: IInteractable | null): void {

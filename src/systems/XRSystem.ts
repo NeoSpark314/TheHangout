@@ -78,6 +78,17 @@ export class XRSystem {
         };
     }
 
+    public getControllerWorldPose(render: RenderManager, index: number): { position: Vector3, quaternion: Quaternion } {
+        const controller = render.getXRController(index);
+        controller.getWorldPosition(this.tempVec);
+        controller.getWorldQuaternion(this.tempQuat);
+
+        return {
+            position: { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z },
+            quaternion: { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w }
+        };
+    }
+
     public transformHandsToAvatarSpace(
         xrOrigin: { position: Vector3, quaternion: Quaternion },
         bodyYaw: number,

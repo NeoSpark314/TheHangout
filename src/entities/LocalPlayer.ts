@@ -21,8 +21,8 @@ export class LocalPlayer extends PlayerEntity {
     public rightHandPose: { position: Vector3, quaternion: Quaternion };
 
     public _lastMoveVector: Vector3 = { x: 0, y: 0, z: 0 };
-    private _leftControllerIndex: number = 0;
-    private _rightControllerIndex: number = 1;
+    public _leftControllerIndex: number = 0;
+    public _rightControllerIndex: number = 1;
 
     constructor(id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
         super(id || 'local-player-id-temp', 'LOCAL_PLAYER', true);
