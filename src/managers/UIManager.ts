@@ -22,6 +22,7 @@ export class UIManager {
     private versionInfo: HTMLElement;
     private shaInfo: HTMLElement;
     private isMobile: boolean;
+    private _joysticksInitialized: boolean = false;
 
     constructor() {
         this.overlay = document.getElementById('ui-overlay')!;
@@ -142,6 +143,13 @@ export class UIManager {
         });
 
         this.loadFromStorage();
+    }
+
+    public update(delta: number): void {
+        if (this.overlay.style.display === 'none' && this.isMobile && !gameState.isDedicatedHost && !this._joysticksInitialized) {
+            gameState.managers.input?.initMobileJoysticks();
+            this._joysticksInitialized = true;
+        }
     }
 
     private loadFromStorage(): void {
@@ -295,15 +303,21 @@ export class UIManager {
     }
 
     public setStatus(msg: string): void {
-        if (this.statusText) this.statusText.textContent = msg;
+        if (this.statusText) {
+            this.statusText.textContent = msg;
+        }
     }
 
     public showError(msg: string): void {
-        if (this.errorText) this.errorText.textContent = msg;
+        if (this.errorText) {
+            this.errorText.textContent = msg;
+        }
     }
 
     public clearError(): void {
-        if (this.errorText) this.errorText.textContent = "";
+        if (this.errorText) {
+            this.errorText.textContent = "";
+        }
     }
 
     public hideOverlay(): void {
@@ -314,7 +328,11 @@ export class UIManager {
                 if (this.leaveBtn) this.leaveBtn.style.display = 'flex';
                 if (this.isMobile && !gameState.isDedicatedHost) {
                     const hud = document.getElementById('mobile-hud');
-                    if (hud) hud.style.display = 'flex';
+                    if (hud) {
+                        hud.style.display = 'flex';
+                        gameState.managers.input?.initMobileJoysticks();
+                        this._joysticksInitialized = true;
+                    }
                 }
             }, 500);
         }

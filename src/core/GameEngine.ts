@@ -69,6 +69,10 @@ export class GameEngine {
             gameState.managers.room.update(delta);
         }
 
+        if (gameState.managers.ui) {
+            gameState.managers.ui.update(delta);
+        }
+
         if (gameState.managers.hud) {
             gameState.managers.hud.update(delta);
         }

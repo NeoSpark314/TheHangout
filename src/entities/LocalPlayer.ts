@@ -2,6 +2,8 @@ import { PlayerEntity, HandState } from './PlayerEntity';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
+import { MovementSkill } from '../skills/MovementSkill';
+import { GrabSkill } from '../skills/GrabSkill';
 import { PlayerViewState } from '../views/StickFigureView';
 import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
@@ -12,7 +14,6 @@ export class LocalPlayer extends PlayerEntity {
     public skills: Skill[] = [];
     public activeSkill: Skill | null = null;
     
-    // Logic-only transforms
     public xrOrigin: { position: Vector3, quaternion: Quaternion };
     public headPose: { position: Vector3, quaternion: Quaternion };
     public leftHandPose: { position: Vector3, quaternion: Quaternion };
@@ -46,10 +47,21 @@ export class LocalPlayer extends PlayerEntity {
 
         eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config: any) => {
             if (this.view) {
-                this.view.setHighlight(false); // Placeholder or specific method
                 (this.view as any).setColor(config.color);
             }
         });
+
+        this.initSkills(spawnYaw);
+    }
+
+    private initSkills(spawnYaw: number): void {
+        const movement = new MovementSkill();
+        movement.setYaw(spawnYaw);
+        this.addSkill(movement);
+
+        const grab = new GrabSkill();
+        this.addSkill(grab);
+        this.setActiveSkill('grab');
     }
 
     public addSkill(skill: Skill): void {
@@ -76,37 +88,38 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public update(delta: number): void {
-        const managers = (gameState as any).managers;
-        if (!managers.render) return;
+        const managers = gameState.managers;
+        const render = managers.render;
+        if (!render) return;
 
-        // 1. Update skills
         for (const skill of this.skills) {
             if (skill.alwaysActive || skill === this.activeSkill) {
                 skill.update(delta, this);
             }
         }
 
-        // 2. Map VR Hands (Should be moved to a manager)
         this.updateVRHands();
-
-        // 3. Update view
-        // Logic for computing headWorldPos and bodyYaw would ideally be here 
-        // but without Three.js it needs to be carefully handled.
-        // For now, we'll use a simplified version or assume the view handles some of it.
         
-        // This is a bit of a shortcut - we're still using global gameState/managers
-        const headWorldPos = { x: 0, y: 1.7, z: 0 }; // Placeholder
-        const bodyYaw = 0; // Placeholder
-        const localHeadQuat = { x: 0, y: 0, z: 0, w: 1 }; // Placeholder
+        // Push state to view
+        const headWorldPos = { x: 0, y: 1.7, z: 0 }; // Default
+        const bodyYaw = 0; // Default
+        
+        // Logic to extract world position from render camera if not in VR
+        if (render.camera) {
+            const camPos = (render.camera as any).position;
+            headWorldPos.x = camPos.x;
+            headWorldPos.y = camPos.y;
+            headWorldPos.z = camPos.z;
+        }
 
         this.view.applyState({
-            position: this.xrOrigin.position, // Simplified
+            position: this.xrOrigin.position,
             yaw: bodyYaw,
             headHeight: headWorldPos.y,
-            headQuaternion: localHeadQuat,
+            headQuaternion: this.headPose.quaternion,
             handStates: this.handStates,
             name: this.name,
-            color: (gameState as any).avatarConfig.color,
+            color: gameState.avatarConfig.color,
             isLocal: true,
             audioLevel: managers.media ? managers.media.getLocalVolume() : 0,
             lerpFactor: 1.0
@@ -118,30 +131,65 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     private updateVRHands(): void {
-        // Placeholder - this logic uses Three.js XR session
+        const render = gameState.managers.render;
+        if (!render || !render.isXRPresenting()) {
+            this.handStates.left.active = false;
+            this.handStates.right.active = false;
+            return;
+        }
+
+        const session = render.getXRSession();
+        const frame = render.getXRFrame();
+        const referenceSpace = render.getXRReferenceSpace();
+        if (!session || !frame || !referenceSpace) return;
+
+        for (const source of session.inputSources) {
+            if (source.gripSpace) {
+                const pose = frame.getPose(source.gripSpace, referenceSpace);
+                if (pose) {
+                    const handState = source.handedness === 'left' ? this.handStates.left : this.handStates.right;
+                    const handPoseObj = source.handedness === 'left' ? this.leftHandPose : this.rightHandPose;
+
+                    handState.active = true;
+                    handPoseObj.position = { x: pose.transform.position.x, y: pose.transform.position.y, z: pose.transform.position.z };
+                    handPoseObj.quaternion = { x: pose.transform.orientation.x, y: pose.transform.orientation.y, z: pose.transform.orientation.z, w: pose.transform.orientation.w };
+                    
+                    // Simplified joints sync
+                    if (source.hand) {
+                        let i = 0;
+                        for (const joint of source.hand.values()) {
+                            if (i >= 25) break;
+                            const jointPose = frame.getJointPose(joint, referenceSpace);
+                            if (jointPose) {
+                                handState.joints[i].position = { x: jointPose.transform.position.x, y: jointPose.transform.position.y, z: jointPose.transform.position.z };
+                                handState.joints[i].quaternion = { x: jointPose.transform.orientation.x, y: jointPose.transform.orientation.y, z: jointPose.transform.orientation.z, w: jointPose.transform.orientation.w };
+                            }
+                            i++;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public getNetworkState(): any {
-        // Serialization logic (needs to be carefully implemented without Three.js)
         return {
             id: this.id,
             type: this.type,
             name: this.name,
             position: this.xrOrigin.position,
-            yaw: 0, // Placeholder
+            yaw: 0,
             headHeight: 1.7,
             head: {
-                position: this.headState.position,
-                quaternion: this.headState.quaternion
+                position: this.headPose.position,
+                quaternion: this.headPose.quaternion
             },
             hands: this.handStates,
-            avatarConfig: (gameState as any).avatarConfig
+            avatarConfig: gameState.avatarConfig
         };
     }
 
-    public applyNetworkState(state: any): void {
-        // LocalPlayer is usually authority, but if we need to sync from server:
-    }
+    public applyNetworkState(state: any): void {}
 
     public destroy(): void {
         super.destroy();
@@ -151,7 +199,7 @@ export class LocalPlayer extends PlayerEntity {
         this.skills = [];
         this.activeSkill = null;
 
-        const render = (gameState as any).managers.render;
+        const render = gameState.managers.render;
         if (render && this.view) {
             (this.view as any).removeFromScene(render.scene);
             this.view.destroy();
