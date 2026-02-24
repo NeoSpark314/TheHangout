@@ -46,12 +46,16 @@ export class XRSystem {
         session: XRSession,
         handStates: { left: HandState, right: HandState }
     ): void {
+        // Reset joint activity flags
+        const hasHand = { left: false, right: false };
+
         for (const source of session.inputSources) {
             const handedness = source.handedness as 'left' | 'right';
             if (handedness !== 'left' && handedness !== 'right') continue;
             
             const state = handStates[handedness];
             if (source.hand && state.active) {
+                hasHand[handedness] = true;
                 let i = 0;
                 for (const joint of source.hand.values()) {
                     if (i >= 25) break;
@@ -63,6 +67,15 @@ export class XRSystem {
                     i++;
                 }
             }
+        }
+
+        // CRITICAL: Clear joints for hands that are active (e.g. controllers) but don't have hand tracking
+        // This prevents transformHandsToAvatarSpace from double-transforming stale local joint data.
+        if (!hasHand.left && handStates.left.active) {
+            for (let i = 0; i < 25; i++) handStates.left.joints[i].position = { x: 0, y: 0, z: 0 };
+        }
+        if (!hasHand.right && handStates.right.active) {
+            for (let i = 0; i < 25; i++) handStates.right.joints[i].position = { x: 0, y: 0, z: 0 };
         }
     }
 
