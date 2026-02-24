@@ -1,6 +1,8 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { NetworkEntity } from './NetworkEntity';
 import { IInteractable } from '../interfaces/IInteractable';
+import { IGrabbable } from '../interfaces/IGrabbable';
+import { InteractionEvent } from '../interfaces/IInteractionEvent';
 import { IView } from '../interfaces/IView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { PhysicsPropState } from '../views/PhysicsPropView';
@@ -20,7 +22,7 @@ export interface PhysicsState {
  * Source of Truth: This entity owns the logic and physical state of a prop.
  * Visuals (PhysicsPropView) follow this state via interpolation.
  */
-export class PhysicsEntity extends NetworkEntity implements IInteractable {
+export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
     public view: IView<PhysicsPropState> | null;
     public isGrabbable: boolean;
@@ -117,21 +119,23 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
         });
     }
 
-    // IInteractable implementation
+    // --- IInteractable ---
     public onHoverEnter(playerId: string): void {
-        this.setHighlight(true);
+        if (this.view) this.view.setHighlight(true);
     }
 
     public onHoverExit(playerId: string): void {
-        this.setHighlight(false);
+        if (this.view) this.view.setHighlight(false);
     }
 
-    public onGrab(playerId: string): void {
+    public onInteraction(event: InteractionEvent): void {
+        // Implement logic for trigger pulls, etc.
+    }
+
+    // --- IGrabbable ---
+    public onGrab(playerId: string, hand: 'left' | 'right'): void {
         if (!this.rigidBody) return;
-        
-        // Ensure we have authority before changing state
         this.requestOwnership();
-        
         this.heldBy = playerId;
         this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
         this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -148,13 +152,10 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable {
         }
     }
 
-    public onPrimaryAction(playerId: string): void {
-        // Default: none
-    }
-
-    public setHighlight(on: boolean): void {
-        if (this.view) {
-            this.view.setHighlight(on);
+    public updateGrabbedPose(position: Vector3, quaternion: Quaternion): void {
+        if (this.rigidBody) {
+            this.rigidBody.setNextKinematicTranslation(position);
+            this.rigidBody.setNextKinematicRotation(quaternion);
         }
     }
 

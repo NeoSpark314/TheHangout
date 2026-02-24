@@ -39,6 +39,19 @@ export class InputManager {
         window.addEventListener('keyup', (e) => {
             this.keyboard[e.key.toLowerCase()] = false;
         });
+
+        // Map mouse click to primary_action
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                this.keyboard['primary_action'] = true;
+                this.justPressed.add('primary_action');
+            }
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) {
+                this.keyboard['primary_action'] = false;
+            }
+        });
     }
 
     public initMobileJoysticks(): void {
