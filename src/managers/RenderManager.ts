@@ -117,8 +117,8 @@ export class RenderManager {
             this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
 
             if (!this.isXRPresenting()) {
-                this.camera.position.set(lp.headPose.position.x, lp.headPose.position.y, lp.headPose.position.z);
-                this.camera.quaternion.set(lp.headPose.quaternion.x, lp.headPose.quaternion.y, lp.headPose.quaternion.z, lp.headPose.quaternion.w);
+                this.camera.position.set(lp.headState.position.x, lp.headState.position.y, lp.headState.position.z);
+                this.camera.quaternion.set(lp.headState.quaternion.x, lp.headState.quaternion.y, lp.headState.quaternion.z, lp.headState.quaternion.w);
             }
         } else if (possessedPlayer.type === 'SPECTATOR') {
             const sp = possessedPlayer;

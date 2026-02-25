@@ -70,15 +70,6 @@ export class MovementSkill extends Skill {
                 canvas.requestPointerLock();
             }
         });
-
-        document.addEventListener('mousemove', (e) => {
-            const render = managers.render;
-            if (document.pointerLockElement === canvas && render && !render.isXRPresenting()) {
-                this.yaw -= e.movementX * this.turnSpeed;
-                this.pitch -= e.movementY * this.turnSpeed;
-                this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
-            }
-        });
     }
 
     public update(delta: number, player: LocalPlayer, managers: IManagers): void {

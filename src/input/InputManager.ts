@@ -29,6 +29,22 @@ export class InputManager implements IUpdatable {
         this.gamepad = new GamepadManager(context);
         this.mobileJoystick = new MobileJoystickManager();
         this.xrInput = new XRInputManager(context);
+
+        this._initMouseLook();
+    }
+
+    private _initMouseLook(): void {
+        document.addEventListener('mousemove', (e) => {
+            const render = this.context.managers.render;
+            const canvas = document.getElementById('app');
+            if (document.pointerLockElement === canvas && render && !render.isXRPresenting()) {
+                // Divide by 15 to normalize discrete mouse pixel deltas to the continuous magnitude 
+                // used by joysticks and gamepads downstream in the Skills logic.
+                eventBus.emit(EVENTS.INTENT_LOOK, {
+                    delta: { x: e.movementX / 15, y: e.movementY / 15 }
+                } as ILookIntentPayload);
+            }
+        });
     }
 
     public initMobileJoysticks(): void {

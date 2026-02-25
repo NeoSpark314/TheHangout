@@ -21,9 +21,6 @@ export class LocalPlayer extends PlayerEntity {
     public activeSkill: Skill | null = null;
 
     public xrOrigin: { position: IVector3, quaternion: IQuaternion };
-    public headPose: { position: IVector3, quaternion: IQuaternion };
-    public leftHandPose: { position: IVector3, quaternion: IQuaternion };
-    public rightHandPose: { position: IVector3, quaternion: IQuaternion };
 
     public _lastMoveVector: IVector3 = { x: 0, y: 0, z: 0 };
     public _leftControllerIndex: number = 0;
@@ -42,21 +39,6 @@ export class LocalPlayer extends PlayerEntity {
         this.xrOrigin = {
             position: { ...spawnPos },
             quaternion: { x: 0, y: Math.sin(spawnYaw / 2), z: 0, w: Math.cos(spawnYaw / 2) }
-        };
-
-        this.headPose = {
-            position: { x: 0, y: 1.7, z: 0 },
-            quaternion: { x: 0, y: 0, z: 0, w: 1 }
-        };
-
-        this.leftHandPose = {
-            position: { x: -0.35, y: 1.1, z: -0.4 },
-            quaternion: { x: 0, y: 0, z: 0, w: 1 }
-        };
-
-        this.rightHandPose = {
-            position: { x: 0.35, y: 1.1, z: -0.4 },
-            quaternion: { x: 0, y: 0, z: 0, w: 1 }
         };
 
         eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config: any) => {
@@ -130,8 +112,8 @@ export class LocalPlayer extends PlayerEntity {
             const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
 
-            const localHeadPos = new THREE.Vector3(this.headPose.position.x, this.headPose.position.y, this.headPose.position.z);
-            const localHeadQuat = new THREE.Quaternion(this.headPose.quaternion.x, this.headPose.quaternion.y, this.headPose.quaternion.z, this.headPose.quaternion.w);
+            const localHeadPos = new THREE.Vector3(this.headState.position.x, this.headState.position.y, this.headState.position.z);
+            const localHeadQuat = new THREE.Quaternion(this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w);
 
             const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
             const worldQuat = originQuat.clone().multiply(localHeadQuat);
@@ -207,8 +189,6 @@ export class LocalPlayer extends PlayerEntity {
 
         xr.updateHandPosesFromControllers(
             render,
-            this.leftHandPose,
-            this.rightHandPose,
             this.handStates,
             this._leftControllerIndex,
             this._rightControllerIndex
@@ -233,8 +213,8 @@ export class LocalPlayer extends PlayerEntity {
         } else {
             const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
-            const localHeadPos = new THREE.Vector3(this.headPose.position.x, this.headPose.position.y, this.headPose.position.z);
-            const localHeadQuat = new THREE.Quaternion(this.headPose.quaternion.x, this.headPose.quaternion.y, this.headPose.quaternion.z, this.headPose.quaternion.w);
+            const localHeadPos = new THREE.Vector3(this.headState.position.x, this.headState.position.y, this.headState.position.z);
+            const localHeadQuat = new THREE.Quaternion(this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w);
             const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
             const worldQuat = originQuat.clone().multiply(localHeadQuat);
             worldHeadPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
