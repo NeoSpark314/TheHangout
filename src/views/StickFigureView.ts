@@ -166,8 +166,9 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
         if (this.audioElement && this.audioElement.buffered.length > 0) {
             const end = this.audioElement.buffered.end(this.audioElement.buffered.length - 1);
-            if (end - this.audioElement.currentTime > 0.5) {
-                this.audioElement.currentTime = end - 0.1;
+            // More aggressive catch-up: if we are more than 300ms behind, skip to the edge
+            if (end - this.audioElement.currentTime > 0.3) {
+                this.audioElement.currentTime = end - 0.05;
             }
 
             // Ensure it's actually playing

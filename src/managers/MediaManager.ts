@@ -152,8 +152,8 @@ export class MediaManager {
                     }));
                 }
             };
-            this.mediaRecorder.start(250); // 250ms chunks
-            console.log(`[MediaManager] Started MediaRecorder via WebSocket chunking at 250ms`);
+            this.mediaRecorder.start(100); // 100ms chunks for lower latency
+            console.log(`[MediaManager] Started MediaRecorder via WebSocket chunking at 100ms`);
         } catch (err) {
             console.error('[MediaManager] MediaRecorder error:', err);
         }
