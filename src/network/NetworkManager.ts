@@ -358,7 +358,17 @@ class PeerDisconnectHandler implements IPacketHandler {
 class RoomConfigHandler implements IPacketHandler {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: IRoomConfigUpdatePayload): void {
-        if (!this.context.isHost) this.context.managers.room.updateConfig(payload);
+        if (!this.context.isHost) {
+            this.context.managers.room.updateConfig(payload);
+
+            // If we are in local server mode, this is our cue that we are "connected" and ready to spawn
+            if (this.context.isLocalServer) {
+                const network = this.context.managers.network as any;
+                if (network.localPeerId) {
+                    eventBus.emit(EVENTS.PEER_CONNECTED, network.localPeerId);
+                }
+            }
+        }
     }
 }
 
