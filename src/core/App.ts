@@ -111,8 +111,9 @@ export class App {
         // Network/Player Initialization
         eventBus.on(EVENTS.HOST_READY, (id: string) => this.initPlayerOnce(id));
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
-            const localId = (managers.network as any).peer?.id;
-            if (!this.context.isHost && localId) {
+            const network = managers.network as any;
+            const localId = network.peer?.id || network.localPeerId;
+            if (!this.context.isHost && localId && (peerId === localId || !this.playerInitialized)) {
                 this.initPlayerOnce(localId);
             }
         });

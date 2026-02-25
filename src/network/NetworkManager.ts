@@ -21,6 +21,7 @@ import { IPacketHandler } from './PacketHandler';
  */
 export class NetworkManager implements IUpdatable, INetworkTransport {
     public peer: Peer | null = null;
+    public localPeerId: string | null = null;
     private relaySocket: WebSocket | null = null;
     public connections: Map<string, DataConnection | RelayConnection> = new Map();
 
@@ -145,6 +146,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             this.relaySocket = new WebSocket(url);
 
             const peerId = this.context.localPlayer?.id || 'guest-' + Math.random().toString(36).substr(2, 9);
+            this.localPeerId = peerId;
 
             this.relaySocket.onopen = () => {
                 console.log('[NetworkManager] Connected to Headless Server WebSocket');

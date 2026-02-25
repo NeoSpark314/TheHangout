@@ -239,6 +239,33 @@ export class UIManager implements IUpdatable {
     }
 
     private setupDefaultMode(): void {
+        if (this.context.isLocalServer) {
+            this.createBtn.style.display = 'none';
+            if (this.dedicatedHostBtn) this.dedicatedHostBtn.style.display = 'none';
+
+            this.joinBtn.textContent = 'Enter Hangout';
+            this.joinBtn.classList.remove('secondary-btn');
+            this.joinBtn.classList.add('primary-btn');
+
+            this.joinBtn.addEventListener('click', async () => {
+                this.context.playerName = this.nameInput.value.trim() || 'Player';
+                if (this.context.voiceEnabled) {
+                    this.ensureAudioContextResumed();
+                    await this.context.managers.media.toggleMicrophone();
+                }
+                const targetId = this.roomInput.value.trim() || this.generateReadableRoomId();
+                this.roomInput.value = targetId; // populate if random generated
+                this.disableAllButtons();
+                this.clearError();
+                this.saveToStorage();
+
+                this.context.isHost = false;
+                this.setStatus('Connecting to headless server...');
+                eventBus.emit(EVENTS.JOIN_ROOM, targetId);
+            });
+            return;
+        }
+
         this.createBtn.addEventListener('click', async () => {
             this.context.playerName = this.nameInput.value.trim() || 'Host';
             if (this.context.voiceEnabled) {
@@ -250,37 +277,27 @@ export class UIManager implements IUpdatable {
             this.clearError();
             this.saveToStorage();
 
-            if (this.context.isLocalServer) {
-                this.context.isHost = false;
-                this.setStatus('Connecting to dedicated server...');
-                eventBus.emit(EVENTS.JOIN_ROOM, customId);
-            } else {
-                this.context.isHost = true;
-                this.setStatus('Creating room...');
-                eventBus.emit(EVENTS.CREATE_ROOM, customId);
-            }
+            this.context.isHost = true;
+            this.setStatus('Creating room...');
+            eventBus.emit(EVENTS.CREATE_ROOM, customId);
         });
 
         if (this.dedicatedHostBtn) {
-            if (this.context.isLocalServer) {
-                this.dedicatedHostBtn.style.display = 'none';
-            } else {
-                this.dedicatedHostBtn.addEventListener('click', async () => {
-                    if (this.context.voiceEnabled) {
-                        this.ensureAudioContextResumed();
-                        await this.context.managers.media.toggleMicrophone();
-                    }
-                    const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
-                    this.disableAllButtons();
-                    this.clearError();
-                    this.saveToStorage();
-                    this.context.playerName = 'Host';
-                    this.context.isHost = true;
-                    this.context.isDedicatedHost = true;
-                    this.setStatus('Creating dedicated room...');
-                    eventBus.emit(EVENTS.CREATE_ROOM, customId);
-                });
-            }
+            this.dedicatedHostBtn.addEventListener('click', async () => {
+                if (this.context.voiceEnabled) {
+                    this.ensureAudioContextResumed();
+                    await this.context.managers.media.toggleMicrophone();
+                }
+                const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
+                this.disableAllButtons();
+                this.clearError();
+                this.saveToStorage();
+                this.context.playerName = 'Host';
+                this.context.isHost = true;
+                this.context.isDedicatedHost = true;
+                this.setStatus('Creating dedicated room...');
+                eventBus.emit(EVENTS.CREATE_ROOM, customId);
+            });
         }
 
         this.joinBtn.addEventListener('click', async () => {
