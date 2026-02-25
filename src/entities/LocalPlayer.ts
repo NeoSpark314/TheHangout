@@ -160,9 +160,7 @@ export class LocalPlayer extends PlayerEntity {
         const xr = managers.xr;
 
         if (!render.isXRPresenting()) {
-            this.handStates.left.active = false;
-            this.handStates.right.active = false;
-            return;
+            return; // AnimationSystem drives desktop hands
         }
 
         const session = render.getXRSession();

@@ -119,10 +119,18 @@ export class AnimationSystem implements IUpdatable {
             // Calculate Target Position (Reaching out 1.0m from local head)
             const targetPos = headLocalPos.clone().add(forwardVector.clone().multiplyScalar(1.0));
 
-            // Lerp based on interact time
-            const finalPos = new THREE.Vector3().lerpVectors(restPos, targetPos, t);
+            // Lerp based on interact time to get Local Position
+            const finalLocalPos = new THREE.Vector3().lerpVectors(restPos, targetPos, t);
 
-            state.position = { x: finalPos.x, y: finalPos.y, z: finalPos.z };
+            // Convert to WORLD Space because GrabSkill and XRSystem expect world-space during this phase
+            const originPos = new THREE.Vector3(this.localPlayer.xrOrigin.position.x, this.localPlayer.xrOrigin.position.y, this.localPlayer.xrOrigin.position.z);
+            const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
+
+            const worldPos = finalLocalPos.clone().applyQuaternion(originQuat).add(originPos);
+            const worldQuat = new THREE.Quaternion(headLocalRot.x, headLocalRot.y, headLocalRot.z, headLocalRot.w).premultiply(originQuat);
+
+            state.position = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+            state.quaternion = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
         }
     }
 }
