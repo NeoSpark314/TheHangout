@@ -1,16 +1,16 @@
 import { LocalPlayer } from '../entities/LocalPlayer';
-import type { Managers } from '../core/GameState';
+import type { IManagers } from '../core/GameState';
 
 export abstract class Skill {
     public id: string;
     public name: string;
-    public alwaysActive: boolean;
+    public isAlwaysActive: boolean;
     public isActive: boolean = false;
 
-    constructor(id: string, name: string, { alwaysActive = false }: { alwaysActive?: boolean } = {}) {
+    constructor(id: string, name: string, { isAlwaysActive = false }: { isAlwaysActive?: boolean } = {}) {
         this.id = id;
         this.name = name;
-        this.alwaysActive = alwaysActive;
+        this.isAlwaysActive = isAlwaysActive;
     }
 
     public activate(player: LocalPlayer): void {
@@ -21,7 +21,7 @@ export abstract class Skill {
         this.isActive = false;
     }
 
-    public abstract update(delta: number, player: LocalPlayer, managers: Managers): void;
+    public abstract update(delta: number, player: LocalPlayer, managers: IManagers): void;
 
     public getNetworkState(): any {
         return null;

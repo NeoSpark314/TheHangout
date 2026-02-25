@@ -1,9 +1,9 @@
-import { PacketHandler } from './PacketHandler';
+import { IPacketHandler } from './PacketHandler';
 
 export class NetworkDispatcher {
-    private handlers: Map<number, PacketHandler> = new Map();
+    private handlers: Map<number, IPacketHandler> = new Map();
 
-    public registerHandler(type: number, handler: PacketHandler): void {
+    public registerHandler(type: number, handler: IPacketHandler): void {
         this.handlers.set(type, handler);
     }
 

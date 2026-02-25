@@ -1,3 +1,3 @@
-export interface PacketHandler<T = unknown> {
+export interface IPacketHandler<T = unknown> {
     handle(senderId: string, payload: T): void;
 }

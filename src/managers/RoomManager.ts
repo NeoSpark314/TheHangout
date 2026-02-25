@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameContext, RoomConfig } from '../core/GameState';
+import { GameContext, IRoomConfig } from '../core/GameState';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { EnvironmentManager } from './EnvironmentManager';
 import { PropManager } from './PropManager';
@@ -11,7 +11,7 @@ export class RoomManager implements IUpdatable {
     private _seed: number = 0;
     public environment: EnvironmentManager | null = null;
     public props: PropManager | null = null;
-    private groundPhysics: boolean = false;
+    private hasGroundPhysics: boolean = false;
     public assignedSpawnIndex?: number;
 
     constructor(private context: GameContext) { }
@@ -33,13 +33,13 @@ export class RoomManager implements IUpdatable {
         // Ground is created strictly during applyConfig or init via master orchestrator
         if (this.context.managers.physics) {
             this.context.managers.physics.createGround(25);
-            this.groundPhysics = true;
+            this.hasGroundPhysics = true;
         }
 
         this.applyConfig(this.context.roomConfig);
     }
 
-    public applyConfig(config: RoomConfig): void {
+    public applyConfig(config: IRoomConfig): void {
         if (!this.scene || !config || !this.environment || !this.props) return;
 
         console.log('[RoomManager] Coordinating Room Config:', config);
@@ -56,7 +56,7 @@ export class RoomManager implements IUpdatable {
         if (this.props) this.props.update(delta);
     }
 
-    public updateConfig(newConfig: Partial<RoomConfig> & { assignedSpawnIndex?: number }): void {
+    public updateConfig(newConfig: Partial<IRoomConfig> & { assignedSpawnIndex?: number }): void {
         const oldSeed = this.context.roomConfig.seed;
 
         if (newConfig.assignedSpawnIndex !== undefined) {
@@ -64,7 +64,7 @@ export class RoomManager implements IUpdatable {
             delete newConfig.assignedSpawnIndex;
         }
 
-        this.context.roomConfig = { ...this.context.roomConfig, ...newConfig as RoomConfig };
+        this.context.roomConfig = { ...this.context.roomConfig, ...newConfig as IRoomConfig };
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this.clearProceduralElements();

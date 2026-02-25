@@ -16,11 +16,11 @@ import type { DrawingManager } from '../managers/DrawingManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
 import type { SpectatorEntity } from '../entities/SpectatorEntity';
 
-export interface AvatarConfig {
+export interface IAvatarConfig {
     color: string | number;
 }
 
-export interface RoomConfig {
+export interface IRoomConfig {
     environment: string;
     skyColor: string;
     fogNear: number;
@@ -28,7 +28,7 @@ export interface RoomConfig {
     seed: number;
 }
 
-export interface Managers {
+export interface IManagers {
     entity: EntityManager;
     ui: UIManager;
     network: NetworkManager;
@@ -57,11 +57,11 @@ export class GameContext {
     public isLocalServer: boolean = false;
     public roomId: string | null = null;
     public playerName: string = 'Player';
-    public avatarConfig: AvatarConfig = {
+    public avatarConfig: IAvatarConfig = {
         color: '#00ffff'
     };
     public voiceEnabled: boolean = false;
-    public roomConfig: RoomConfig = {
+    public roomConfig: IRoomConfig = {
         environment: 'cyber-stube',
         skyColor: '#0b0c10',
         fogNear: 5,
@@ -71,13 +71,13 @@ export class GameContext {
 
     public localPlayer: LocalPlayer | SpectatorEntity | null = null;
 
-    private _managers: Partial<Managers> = {};
+    private _managers: Partial<IManagers> = {};
 
-    public get managers(): Managers {
-        return this._managers as Managers;
+    public get managers(): IManagers {
+        return this._managers as IManagers;
     }
 
-    public setManager<K extends keyof Managers>(key: K, instance: Managers[K]): void {
+    public setManager<K extends keyof IManagers>(key: K, instance: IManagers[K]): void {
         this._managers[key] = instance;
     }
 

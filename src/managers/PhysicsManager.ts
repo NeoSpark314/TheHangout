@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
-import { Vector3 } from '../interfaces/IMath';
+import { IVector3 } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { PhysicsPropView } from '../views/PhysicsPropView';
 import { GameContext } from '../core/GameState';
@@ -35,7 +35,7 @@ export class PhysicsManager {
         this.world.createCollider(groundColliderDesc, groundBody);
     }
 
-    public createCuboid(hx: number, hy: number, hz: number, position: Vector3, mesh: any, isStatic: boolean = false): RAPIER.RigidBody | undefined {
+    public createCuboid(hx: number, hy: number, hz: number, position: IVector3, mesh: any, isStatic: boolean = false): RAPIER.RigidBody | undefined {
         if (!this.world) return;
         const rigidBodyDesc = isStatic
             ? RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
@@ -49,7 +49,7 @@ export class PhysicsManager {
         return rigidBody;
     }
 
-    public createHexagon(radius: number, height: number, position: Vector3, mesh: any, isStatic: boolean = false): RAPIER.RigidBody | undefined {
+    public createHexagon(radius: number, height: number, position: IVector3, mesh: any, isStatic: boolean = false): RAPIER.RigidBody | undefined {
         if (!this.world) return;
         const rigidBodyDesc = isStatic
             ? RAPIER.RigidBodyDesc.fixed()
@@ -65,7 +65,7 @@ export class PhysicsManager {
         return rigidBody;
     }
 
-    public createGrabbable(id: string, size: number, position: Vector3, mesh: any, view?: IView<any>): PhysicsEntity | null {
+    public createGrabbable(id: string, size: number, position: IVector3, mesh: any, view?: IView<any>): PhysicsEntity | null {
         if (!this.world) return null;
 
         const entityId = id || `grabbable-${this.nextPhysicsId++}`;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EntityFactory } from '../factories/EntityFactory';
-import { GameContext, RoomConfig } from '../core/GameState';
+import { GameContext, IRoomConfig } from '../core/GameState';
 
 export class PropManager {
     private scene: THREE.Scene;
@@ -10,21 +10,21 @@ export class PropManager {
     private hologram: THREE.Mesh | null = null;
     private podest: THREE.Group | null = null;
     private decorations: THREE.Group | null = null;
-    private grabbablesSpawned: boolean = false;
+    private hasSpawnedGrabbables: boolean = false;
 
     constructor(scene: THREE.Scene, randomFunc: () => number, private context: GameContext) {
         this.scene = scene;
         this.random = randomFunc;
     }
 
-    public applyConfig(config: RoomConfig): void {
+    public applyConfig(config: IRoomConfig): void {
         if (!config) return;
 
         if (!this.table) this.createTable();
         if (!this.hologram) this.createHologram();
         if (!this.podest) this.createPodest();
         if (!this.decorations) this.createDecorations();
-        if (!this.grabbablesSpawned) this.createGrabbables();
+        if (!this.hasSpawnedGrabbables) this.createGrabbables();
     }
 
     public update(delta: number): void {
@@ -145,7 +145,7 @@ export class PropManager {
 
     private createGrabbables(): void {
         if (!this.scene) return;
-        this.grabbablesSpawned = true;
+        this.hasSpawnedGrabbables = true;
 
         // Spawn a Pen
         const penId = 'pen-1';

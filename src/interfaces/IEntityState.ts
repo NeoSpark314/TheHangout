@@ -1,4 +1,4 @@
-import { HandState } from '../entities/PlayerEntity';
+import { IHandState } from '../entities/PlayerEntity';
 
 /**
  * High-performance spatial types using flat arrays to minimize 
@@ -17,7 +17,7 @@ export enum EntityType {
     PEN = 'PEN'
 }
 
-export interface BaseEntityState {
+export interface IBaseEntityState {
     id: string;
     type: EntityType;
     ownerId: string | null;
@@ -26,7 +26,7 @@ export interface BaseEntityState {
 /**
  * State for Player entities (Local and Remote)
  */
-export interface PlayerEntityState extends BaseEntityState {
+export interface IPlayerEntityState extends IBaseEntityState {
     type: EntityType.LOCAL_PLAYER | EntityType.REMOTE_PLAYER;
     n: string; // name
     p: Vec3Arr; // body position
@@ -34,8 +34,8 @@ export interface PlayerEntityState extends BaseEntityState {
     h: number; // head height
     hq: QuatArr; // local head quaternion
     hands: {
-        left: HandState;
-        right: HandState;
+        left: IHandState;
+        right: IHandState;
     };
     conf: {
         color: string | number;
@@ -45,7 +45,7 @@ export interface PlayerEntityState extends BaseEntityState {
 /**
  * State for Physics-driven props
  */
-export interface PhysicsEntityState extends BaseEntityState {
+export interface IPhysicsEntityState extends IBaseEntityState {
     type: EntityType.PHYSICS_PROP;
     p: Vec3Arr; // position
     q: QuatArr; // quaternion
@@ -56,12 +56,12 @@ export interface PhysicsEntityState extends BaseEntityState {
 /**
  * State for the Drawing Pen
  */
-export interface PenEntityState extends BaseEntityState {
+export interface IPenEntityState extends IBaseEntityState {
     type: EntityType.PEN;
     p: Vec3Arr; // position
     q: QuatArr; // quaternion
     b: string | null; // heldBy (playerId)
-    draw: boolean; // isDrawing
+    isDrawing: boolean; // isDrawing
     c: string | number; // color
 }
 
@@ -69,13 +69,13 @@ export interface PenEntityState extends BaseEntityState {
  * Discriminated Union for all networkable entity states.
  * Use the 'type' field to safely narrow the state in logic.
  */
-export type EntityState = PlayerEntityState | PhysicsEntityState | PenEntityState;
+export type IEntityState = IPlayerEntityState | IPhysicsEntityState | IPenEntityState;
 
 /**
  * Packet structure for batch state updates
  */
-export interface StateUpdatePacket {
+export interface IStateUpdatePacket {
     id: string;
     type: EntityType;
-    state: EntityState;
+    state: IEntityState;
 }

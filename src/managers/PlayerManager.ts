@@ -4,7 +4,7 @@ import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants.js';
 
 export class PlayerManager {
-    public initialized: boolean = false;
+    public isInitialized: boolean = false;
 
     constructor(private context: GameContext) {
         eventBus.on(EVENTS.PEER_DISCONNECTED, (peerId: string) => this.onPeerDisconnected(peerId));
@@ -16,7 +16,7 @@ export class PlayerManager {
             console.log('[PlayerManager] Dedicated Host mode — creating local spectator entity.');
             this.context.localPlayer = EntityFactory.createSpectator(this.context, id, true);
             managers.entity.addEntity(this.context.localPlayer);
-            this.initialized = true;
+            this.isInitialized = true;
             return;
         }
 
@@ -45,7 +45,7 @@ export class PlayerManager {
         }
 
         managers.entity.addEntity(this.context.localPlayer as any);
-        this.initialized = true;
+        this.isInitialized = true;
     }
 
     public onPeerDisconnected(peerId: string): void {

@@ -1,21 +1,21 @@
 import { PlayerEntity } from './PlayerEntity';
-import { Vector3, Quaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
-import { PlayerViewState } from '../views/StickFigureView';
-import { PlayerEntityState, EntityType } from '../interfaces/IEntityState';
+import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
+import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
 export class RemotePlayer extends PlayerEntity {
     public peerId: string;
-    public view: IView<PlayerViewState>;
-    public targetPosition: Vector3 = { x: 0, y: 5, z: 0 };
+    public view: IView<IPlayerViewState>;
+    public targetPosition: IVector3 = { x: 0, y: 5, z: 0 };
     public targetYaw: number = 0;
     public avatarColor: string | number | undefined;
     private lastNetworkUpdateTime: number = performance.now();
 
-    constructor(protected context: GameContext, peerId: string, view: IView<PlayerViewState>) {
+    constructor(protected context: GameContext, peerId: string, view: IView<IPlayerViewState>) {
         super(context, peerId, EntityType.REMOTE_PLAYER, false);
         this.peerId = peerId;
         this.view = view;
@@ -33,11 +33,11 @@ export class RemotePlayer extends PlayerEntity {
         }
     }
 
-    public getNetworkState(): PlayerEntityState | null {
+    public getNetworkState(): IPlayerEntityState | null {
         return null; // Remote players don't broadcast their own state from here
     }
 
-    public applyNetworkState(data: PlayerEntityState): void {
+    public applyNetworkState(data: IPlayerEntityState): void {
         if (data.n !== undefined && data.n !== this.name) {
             this.name = data.n;
             eventBus.emit(EVENTS.REMOTE_NAME_UPDATED, { peerId: this.peerId, name: this.name });

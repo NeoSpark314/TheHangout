@@ -1,37 +1,36 @@
 import { NetworkEntity } from './NetworkEntity';
 import { GameContext } from '../core/GameState';
-import { Vector3, Quaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
 
-export interface HandJointState {
-    position: Vector3;
-    quaternion: Quaternion;
+export interface IHandJointState {
+    position: IVector3;
+    quaternion: IQuaternion;
 }
 
-export interface HandState {
+export interface IHandState {
     active: boolean;
-    position: Vector3;
-    quaternion: Quaternion;
-    joints: HandJointState[];
+    position: IVector3;
+    quaternion: IQuaternion;
+    joints: IHandJointState[];
 }
 
 export abstract class PlayerEntity extends NetworkEntity {
     public name: string = '';
     public headHeight: number = 1.7;
-    public headState: { position: Vector3, quaternion: Quaternion };
-    public handStates: { left: HandState, right: HandState };
+    public headState: { position: IVector3, quaternion: IQuaternion };
+    public handStates: { left: IHandState, right: IHandState };
 
     constructor(protected context: GameContext, id: string, type: string, isAuthority: boolean) {
         super(context, id, type, isAuthority);
 
         this.headState = {
-            position: { x: 0, y: 0.8, z: 0 },
+            position: { x: 0, y: this.headHeight, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 }
         };
-
-        const createHandState = (offsetX: number): HandState => {
-            const state: HandState = {
+        const createHandState = (offsetX: number): IHandState => {
+            const state: IHandState = {
                 active: false,
-                position: { x: offsetX, y: 0, z: 0 },
+                position: { x: offsetX, y: 0.8, z: 0 },
                 quaternion: { x: 0, y: 0, z: 0, w: 1 },
                 joints: []
             };

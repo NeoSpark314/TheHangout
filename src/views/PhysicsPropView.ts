@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
-import { Vector3, Quaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
 
-export interface PhysicsPropState {
-    position: Vector3;
-    quaternion: Quaternion;
+export interface IPhysicsPropState {
+    position: IVector3;
+    quaternion: IQuaternion;
     lerpFactor: number;
 }
 
-export class PhysicsPropView extends EntityView<PhysicsPropState> {
+export class PhysicsPropView extends EntityView<IPhysicsPropState> {
     private _originalEmissive: THREE.Color = new THREE.Color(0x000000);
 
     constructor(mesh: THREE.Mesh, entityId: string) {
         super(mesh);
-        
+
         // Essential for InteractionSystem mapping
         this.mesh.userData.entityId = entityId;
         this.mesh.traverse(child => {
@@ -46,14 +46,14 @@ export class PhysicsPropView extends EntityView<PhysicsPropState> {
         });
     }
 
-    public applyState(state: PhysicsPropState, delta: number): void {
+    public applyState(state: IPhysicsPropState, delta: number): void {
         if (state.lerpFactor >= 1.0) {
             this.mesh.position.set(state.position.x, state.position.y, state.position.z);
             this.mesh.quaternion.set(state.quaternion.x, state.quaternion.y, state.quaternion.z, state.quaternion.w);
         } else {
             const targetPos = new THREE.Vector3(state.position.x, state.position.y, state.position.z);
             const targetRot = new THREE.Quaternion(state.quaternion.x, state.quaternion.y, state.quaternion.z, state.quaternion.w);
-            
+
             this.mesh.position.lerp(targetPos, state.lerpFactor);
             this.mesh.quaternion.slerp(targetRot, state.lerpFactor);
         }

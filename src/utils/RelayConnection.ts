@@ -8,7 +8,7 @@ export class RelayConnection {
 
     public metadata: any = {};
     public serialization: string = 'json';
-    public reliable: boolean = true;
+    public isReliable: boolean = true;
 
     constructor(socket: WebSocket, peerId: string, targetPeerId: string, isHost: boolean) {
         this.socket = socket;

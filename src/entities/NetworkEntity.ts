@@ -8,7 +8,7 @@ export abstract class NetworkEntity implements IEntity, INetworkable<any> {
     public id: string;
     public type: string;
     public isAuthority: boolean;
-    public destroyed: boolean = false;
+    public isDestroyed: boolean = false;
     public ownerId: string | null = null;
 
     constructor(protected context: GameContext, id: string, type: string, isAuthority: boolean = false) {
@@ -75,6 +75,6 @@ export abstract class NetworkEntity implements IEntity, INetworkable<any> {
     }
 
     destroy(): void {
-        this.destroyed = true;
+        this.isDestroyed = true;
     }
 }

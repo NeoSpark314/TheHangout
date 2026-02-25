@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { PlayerEntity, HandState } from './PlayerEntity';
+import { PlayerEntity, IHandState } from './PlayerEntity';
 import { IView } from '../interfaces/IView';
 import { GameContext } from '../core/GameState';
-import { Vector3, Quaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
-import { PlayerViewState } from '../views/StickFigureView';
-import { PlayerEntityState, EntityType } from '../interfaces/IEntityState';
+import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
+import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -16,20 +16,20 @@ import { EVENTS } from '../utils/Constants';
  * The RenderManager and Views must follow this state, never modify it directly.
  */
 export class LocalPlayer extends PlayerEntity {
-    public view: IView<PlayerViewState>;
+    public view: IView<IPlayerViewState>;
     public skills: Skill[] = [];
     public activeSkill: Skill | null = null;
 
-    public xrOrigin: { position: Vector3, quaternion: Quaternion };
-    public headPose: { position: Vector3, quaternion: Quaternion };
-    public leftHandPose: { position: Vector3, quaternion: Quaternion };
-    public rightHandPose: { position: Vector3, quaternion: Quaternion };
+    public xrOrigin: { position: IVector3, quaternion: IQuaternion };
+    public headPose: { position: IVector3, quaternion: IQuaternion };
+    public leftHandPose: { position: IVector3, quaternion: IQuaternion };
+    public rightHandPose: { position: IVector3, quaternion: IQuaternion };
 
-    public _lastMoveVector: Vector3 = { x: 0, y: 0, z: 0 };
+    public _lastMoveVector: IVector3 = { x: 0, y: 0, z: 0 };
     public _leftControllerIndex: number = 0;
     public _rightControllerIndex: number = 1;
 
-    constructor(protected context: GameContext, id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
+    constructor(protected context: GameContext, id: string, spawnPos: IVector3, spawnYaw: number, view: IView<IPlayerViewState>) {
         super(context, id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
         this.isAuthority = true;
         this.view = view;
@@ -80,18 +80,18 @@ export class LocalPlayer extends PlayerEntity {
 
     public addSkill(skill: Skill): void {
         this.skills.push(skill);
-        if (skill.alwaysActive) {
+        if (skill.isAlwaysActive) {
             skill.activate(this);
         }
     }
 
     public setActiveSkill(id: string): void {
-        if (this.activeSkill && !this.activeSkill.alwaysActive) {
+        if (this.activeSkill && !this.activeSkill.isAlwaysActive) {
             this.activeSkill.deactivate(this);
         }
 
         const skill = this.skills.find(s => s.id === id);
-        if (skill && !skill.alwaysActive) {
+        if (skill && !skill.isAlwaysActive) {
             skill.activate(this);
             this.activeSkill = skill;
         }
@@ -107,7 +107,7 @@ export class LocalPlayer extends PlayerEntity {
         const xr = managers.xr;
 
         for (const skill of this.skills) {
-            if (skill.alwaysActive || skill === this.activeSkill) {
+            if (skill.isAlwaysActive || skill === this.activeSkill) {
                 skill.update(delta, this, managers);
             }
         }
@@ -115,8 +115,8 @@ export class LocalPlayer extends PlayerEntity {
         this.updateVRHands(frame);
 
         // Calculate world pose from our own state (Source of Truth)
-        let worldHeadPos: Vector3;
-        let worldHeadQuat: Quaternion;
+        let worldHeadPos: IVector3;
+        let worldHeadQuat: IQuaternion;
         let bodyYaw: number;
 
         if (render.isXRPresenting()) {
@@ -217,12 +217,12 @@ export class LocalPlayer extends PlayerEntity {
         xr.updateJointsFromXRFrame(xrFrame, referenceSpace, session, this.handStates);
     }
 
-    public getNetworkState(): PlayerEntityState {
+    public getNetworkState(): IPlayerEntityState {
         const managers = this.context.managers;
         const render = managers.render;
 
-        let worldHeadPos: Vector3;
-        let worldHeadQuat: Quaternion;
+        let worldHeadPos: IVector3;
+        let worldHeadQuat: IQuaternion;
         let bodyYaw: number;
 
         if (render.isXRPresenting()) {
@@ -263,7 +263,7 @@ export class LocalPlayer extends PlayerEntity {
         };
     }
 
-    public applyNetworkState(state: PlayerEntityState): void {
+    public applyNetworkState(state: IPlayerEntityState): void {
         // LocalPlayer state is driven by input, not network updates.
         this.syncNetworkState(state);
     }

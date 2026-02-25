@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
-import { Vector3 } from '../interfaces/IMath';
-import type { Managers } from '../core/GameState';
+import { IVector3 } from '../interfaces/IMath';
+import type { IManagers } from '../core/GameState';
 
 export class MovementSkill extends Skill {
     public speed: number = 5.0;
@@ -13,7 +13,7 @@ export class MovementSkill extends Skill {
     private _wasSnapTurnPressed: boolean = false;
 
     constructor() {
-        super('movement', 'Movement', { alwaysActive: true });
+        super('movement', 'Movement', { isAlwaysActive: true });
     }
 
     public setYaw(yaw: number): void {
@@ -24,7 +24,7 @@ export class MovementSkill extends Skill {
         super.activate(player);
     }
 
-    private _attachInputListeners(player: LocalPlayer, managers: Managers): void {
+    private _attachInputListeners(player: LocalPlayer, managers: IManagers): void {
         const canvas = document.getElementById('app');
         if (!canvas) return;
 
@@ -45,7 +45,7 @@ export class MovementSkill extends Skill {
         });
     }
 
-    public update(delta: number, player: LocalPlayer, managers: Managers): void {
+    public update(delta: number, player: LocalPlayer, managers: IManagers): void {
         const render = managers.render;
         const input = managers.input;
 
@@ -104,10 +104,10 @@ export class MovementSkill extends Skill {
             const headWorldQuat = new THREE.Quaternion();
             render.camera.getWorldQuaternion(headWorldQuat);
             const headEuler = new THREE.Euler().setFromQuaternion(headWorldQuat, 'YXZ');
-            
+
             // Transform local movement to world space relative to head heading
             moveVector.applyEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
-            
+
             player.xrOrigin.position.x += moveVector.x * this.speed * delta;
             player.xrOrigin.position.y += moveVector.y * this.speed * delta;
             player.xrOrigin.position.z += moveVector.z * this.speed * delta;
@@ -116,7 +116,7 @@ export class MovementSkill extends Skill {
         player._lastMoveVector = { x: moveVector.x, y: moveVector.y, z: moveVector.z };
     }
 
-    private applyVRTurn(player: LocalPlayer, deltaYaw: number, managers: Managers): void {
+    private applyVRTurn(player: LocalPlayer, deltaYaw: number, managers: IManagers): void {
         const render = managers.render;
 
         // Pivot around camera world position
@@ -130,7 +130,7 @@ export class MovementSkill extends Skill {
         currentPos.add(pivotXZ);
 
         player.xrOrigin.position = { x: currentPos.x, y: currentPos.y, z: currentPos.z };
-        
+
         this.yaw += deltaYaw;
         player.xrOrigin.quaternion = {
             x: 0,

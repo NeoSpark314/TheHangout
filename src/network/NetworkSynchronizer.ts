@@ -1,17 +1,17 @@
 import { GameContext } from '../core/GameState';
 import { PACKET_TYPES } from '../utils/Constants';
 
-export interface NetworkTransport {
+export interface INetworkTransport {
     broadcast(type: number, payload: any): void;
     sendData(targetId: string, type: number, payload: any): void;
 }
 
 export class NetworkSynchronizer {
-    private transport: NetworkTransport;
+    private transport: INetworkTransport;
     private syncRate: number = 1 / 20;
     private timeSinceLastSync: number = 0;
 
-    constructor(transport: NetworkTransport, private context: GameContext) {
+    constructor(transport: INetworkTransport, private context: GameContext) {
         this.transport = transport;
     }
 

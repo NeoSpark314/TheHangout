@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { Vector3, Quaternion } from '../interfaces/IMath';
-import { HandState } from '../entities/PlayerEntity';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IHandState } from '../entities/PlayerEntity';
 import { RenderManager } from '../managers/RenderManager';
 
 /**
  * Architectural Role: Centralized math hub for XR coordinate transformations.
- * Note: Uses THREE.js classes (Vector3, Matrix4) strictly for spatial math. 
+ * Note: Uses THREE.js classes (IVector3, Matrix4) strictly for spatial math. 
  * This system should remain decoupled from THREE.js scene objects (Meshes, Groups).
  */
 export class XRSystem {
@@ -16,13 +16,13 @@ export class XRSystem {
 
     public updateHandPosesFromControllers(
         render: RenderManager,
-        leftHandPose: { position: Vector3, quaternion: Quaternion },
-        rightHandPose: { position: Vector3, quaternion: Quaternion },
-        handStates: { left: HandState, right: HandState },
+        leftHandPose: { position: IVector3, quaternion: IQuaternion },
+        rightHandPose: { position: IVector3, quaternion: IQuaternion },
+        handStates: { left: IHandState, right: IHandState },
         leftControllerIndex: number,
         rightControllerIndex: number
     ): void {
-        const process = (pose: { position: Vector3, quaternion: Quaternion }, state: HandState, index: number) => {
+        const process = (pose: { position: IVector3, quaternion: IQuaternion }, state: IHandState, index: number) => {
             if (!state.active) return;
             const controller = render.getXRController(index);
             controller.getWorldPosition(this.tempVec);
@@ -46,7 +46,7 @@ export class XRSystem {
         xrFrame: XRFrame,
         referenceSpace: XRReferenceSpace,
         session: XRSession,
-        handStates: { left: HandState, right: HandState }
+        handStates: { left: IHandState, right: IHandState }
     ): void {
         // Reset joint activity flags
         const hasHand = { left: false, right: false };
@@ -81,7 +81,7 @@ export class XRSystem {
         }
     }
 
-    public getCameraWorldPose(camera: THREE.Camera): { position: Vector3, quaternion: Quaternion, yaw: number } {
+    public getCameraWorldPose(camera: THREE.Camera): { position: IVector3, quaternion: IQuaternion, yaw: number } {
         camera.getWorldPosition(this.tempVec);
         camera.getWorldQuaternion(this.tempQuat);
         const euler = new THREE.Euler().setFromQuaternion(this.tempQuat, 'YXZ');
@@ -93,7 +93,7 @@ export class XRSystem {
         };
     }
 
-    public getControllerWorldPose(render: RenderManager, index: number): { position: Vector3, quaternion: Quaternion } {
+    public getControllerWorldPose(render: RenderManager, index: number): { position: IVector3, quaternion: IQuaternion } {
         const controller = render.getXRController(index);
         controller.getWorldPosition(this.tempVec);
         controller.getWorldQuaternion(this.tempQuat);
@@ -105,10 +105,10 @@ export class XRSystem {
     }
 
     public transformHandsToAvatarSpace(
-        xrOrigin: { position: Vector3, quaternion: Quaternion },
+        xrOrigin: { position: IVector3, quaternion: IQuaternion },
         bodyYaw: number,
-        headWorldPos: Vector3,
-        handStates: { left: HandState, right: HandState }
+        headWorldPos: IVector3,
+        handStates: { left: IHandState, right: IHandState }
     ): void {
         this.avatarTransform.position.set(headWorldPos.x, 0, headWorldPos.z);
         this.avatarTransform.rotation.y = bodyYaw;
@@ -118,7 +118,7 @@ export class XRSystem {
         const xrOriginMatrix = this.tempMatrix.makeRotationFromQuaternion(xrOriginQuat)
             .setPosition(xrOrigin.position.x, xrOrigin.position.y, xrOrigin.position.z);
 
-        const processHand = (state: HandState) => {
+        const processHand = (state: IHandState) => {
             if (!state.active) return;
 
             // Poses are already in world space from updateHandPosesFromControllers

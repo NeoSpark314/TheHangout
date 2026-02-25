@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
-import { Vector3, Quaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
 
-export interface PenViewState {
-    position: Vector3;
-    quaternion: Quaternion;
+export interface IPenViewState {
+    position: IVector3;
+    quaternion: IQuaternion;
     isDrawing: boolean;
     color: string | number;
 }
 
-export class PenView extends EntityView<PenViewState> {
+export class PenView extends EntityView<IPenViewState> {
     private material: THREE.MeshStandardMaterial;
 
     constructor(entityId: string) {
@@ -19,7 +19,7 @@ export class PenView extends EntityView<PenViewState> {
 
         const bodyGeo = new THREE.CylinderGeometry(0.015, 0.01, 0.2, 8);
         bodyGeo.rotateX(Math.PI / 2);
-        
+
         const material = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const mesh = new THREE.Mesh(bodyGeo, material);
         mesh.userData.entityId = entityId;
@@ -37,10 +37,10 @@ export class PenView extends EntityView<PenViewState> {
         this.material = material;
     }
 
-    public applyState(state: PenViewState, delta: number): void {
+    public applyState(state: IPenViewState, delta: number): void {
         this.mesh.position.set(state.position.x, state.position.y, state.position.z);
         this.mesh.quaternion.set(state.quaternion.x, state.quaternion.y, state.quaternion.z, state.quaternion.w);
-        
+
         // Visual feedback for drawing (e.g. tip glows)
         const tip = this.mesh.children[1] as THREE.Mesh;
         if (state.isDrawing) {

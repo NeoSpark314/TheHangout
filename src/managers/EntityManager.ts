@@ -1,5 +1,5 @@
 import { IEntity } from '../interfaces/IEntity';
-import { EntityType, PlayerEntityState } from '../interfaces/IEntityState';
+import { EntityType, IPlayerEntityState } from '../interfaces/IEntityState';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { INetworkable } from '../interfaces/INetworkable';
 import { EntityFactory } from '../factories/EntityFactory';
@@ -71,7 +71,7 @@ export class EntityManager implements IUpdatable {
 
     public update(delta: number, frame?: XRFrame): void {
         for (const [id, entity] of this.entities.entries()) {
-            if (!entity.destroyed) {
+            if (!entity.isDestroyed) {
                 try {
                     entity.update(delta, frame);
                 } catch (e) {
@@ -87,7 +87,7 @@ export class EntityManager implements IUpdatable {
         const states: any[] = [];
         for (const entity of this.entities.values()) {
             const networkable = entity as unknown as INetworkable<any>;
-            if (entity.isAuthority && !entity.destroyed && networkable.getNetworkState) {
+            if (entity.isAuthority && !entity.isDestroyed && networkable.getNetworkState) {
                 const state = networkable.getNetworkState();
                 if (state) {
                     states.push({
@@ -105,7 +105,7 @@ export class EntityManager implements IUpdatable {
         const states: any[] = [];
         for (const entity of this.entities.values()) {
             const networkable = entity as unknown as INetworkable<any>;
-            if (!entity.destroyed && networkable.getNetworkState) {
+            if (!entity.isDestroyed && networkable.getNetworkState) {
                 const state = networkable.getNetworkState();
                 if (state) {
                     states.push({

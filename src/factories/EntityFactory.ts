@@ -9,7 +9,7 @@ import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { PenEntity } from '../entities/PenEntity';
 import { PenView } from '../views/PenView';
 import { GameContext } from '../core/GameState';
-import { Vector3 } from '../interfaces/IMath';
+import { IVector3 } from '../interfaces/IMath';
 
 export class EntityFactory {
     private static registry: Map<string, (context: GameContext, id: string, config: any) => any> = new Map();
@@ -40,7 +40,7 @@ export class EntityFactory {
         return creator(context, id, config);
     }
 
-    public static createPlayer(context: GameContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: Vector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
+    public static createPlayer(context: GameContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
         const view = new StickFigureView(context, {
             color: color || (isLocal ? context.avatarConfig.color : 0xff00ff),
             isLocal: isLocal
@@ -72,7 +72,7 @@ export class EntityFactory {
         return entity;
     }
 
-    public static createGrabbable(context: GameContext, id: string, size: number, position: Vector3, mesh: THREE.Mesh): PhysicsEntity | null {
+    public static createGrabbable(context: GameContext, id: string, size: number, position: IVector3, mesh: THREE.Mesh): PhysicsEntity | null {
         const view = new PhysicsPropView(mesh, id);
         const managers = context.managers;
 

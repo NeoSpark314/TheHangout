@@ -6,7 +6,7 @@ interface JoystickOptions {
 export class VirtualJoystick {
     private container: HTMLElement | null;
     private options: JoystickOptions;
-    private active: boolean = false;
+    private isActive: boolean = false;
     private basePos: { x: number, y: number } = { x: 0, y: 0 };
     private currentPos: { x: number, y: number } = { x: 0, y: 0 };
     private vector: { x: number, y: number } = { x: 0, y: 0 };
@@ -75,7 +75,7 @@ export class VirtualJoystick {
         const touch = e.targetTouches[0];
         const rect = this.container!.getBoundingClientRect();
 
-        this.active = true;
+        this.isActive = true;
         this.basePos = {
             x: touch.clientX - rect.left,
             y: touch.clientY - rect.top
@@ -91,7 +91,7 @@ export class VirtualJoystick {
     }
 
     private handleMove(e: TouchEvent): void {
-        if (!this.active) return;
+        if (!this.isActive) return;
         e.preventDefault();
 
         const touch = e.targetTouches[0];
@@ -119,7 +119,7 @@ export class VirtualJoystick {
     }
 
     private handleEnd(e: TouchEvent): void {
-        this.active = false;
+        this.isActive = false;
         this.base.style.opacity = '0.2';
         this.base.style.left = '50%';
         this.base.style.top = '50%';

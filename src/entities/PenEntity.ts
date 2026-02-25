@@ -1,10 +1,10 @@
 import { NetworkEntity } from './NetworkEntity';
 import { IGrabbable } from '../interfaces/IGrabbable';
 import { IInteractable } from '../interfaces/IInteractable';
-import { InteractionEvent } from '../interfaces/IInteractionEvent';
-import { Vector3, Quaternion } from '../interfaces/IMath';
+import { IInteractionEvent } from '../interfaces/IInteractionEvent';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
-import { PenEntityState, EntityType } from '../interfaces/IEntityState';
+import { IPenEntityState, EntityType } from '../interfaces/IEntityState';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -18,12 +18,12 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     public heldBy: string | null = null;
     public view: IView<any> | null = null;
 
-    private position: Vector3 = { x: 0, y: 0, z: 0 };
-    private quaternion: Quaternion = { x: 0, y: 0, z: 0, w: 1 };
+    private position: IVector3 = { x: 0, y: 0, z: 0 };
+    private quaternion: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private isDrawing = false;
     private color: string | number = 0xffffff;
 
-    private lastDrawPosition: Vector3 | null = null;
+    private lastDrawPosition: IVector3 | null = null;
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, view: IView<any> | null) {
         super(context, id, EntityType.PEN, isAuthority);
@@ -41,13 +41,13 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         }
     }
 
-    public onRelease(velocity?: Vector3): void {
+    public onRelease(velocity?: IVector3): void {
         this.heldBy = null;
         this.isDrawing = false;
         this.lastDrawPosition = null;
     }
 
-    public updateGrabbedPose(position: Vector3, quaternion: Quaternion): void {
+    public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
         this.position = { ...position };
         this.quaternion = { ...quaternion };
     }
@@ -61,7 +61,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         if (this.view) this.view.setHighlight(false);
     }
 
-    public onInteraction(event: InteractionEvent): void {
+    public onInteraction(event: IInteractionEvent): void {
         if (event.type === 'trigger') {
             if (event.phase === 'start' && !this.isDrawing) {
                 this.isDrawing = true;
@@ -96,8 +96,8 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
                 // Only draw if we've moved enough (1cm) to save bandwidth/performance
                 if (distSq > 0.0001) {
                     eventBus.emit(EVENTS.PEN_DRAW_SEGMENT, {
-                        start: [this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z],
-                        end: [tipPos.x, tipPos.y, tipPos.z],
+                        startPos: [this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z],
+                        endPos: [tipPos.x, tipPos.y, tipPos.z],
                         color: this.color
                     });
                     this.lastDrawPosition = { x: tipPos.x, y: tipPos.y, z: tipPos.z };
@@ -108,7 +108,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         }
     }
 
-    public getNetworkState(): PenEntityState {
+    public getNetworkState(): IPenEntityState {
         return {
             id: this.id,
             type: EntityType.PEN,
@@ -116,19 +116,19 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
             q: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
             b: this.heldBy,
             ownerId: this.ownerId,
-            draw: this.isDrawing,
+            isDrawing: this.isDrawing,
             c: this.color
         };
     }
 
-    public applyNetworkState(state: PenEntityState): void {
+    public applyNetworkState(state: IPenEntityState): void {
         this.syncNetworkState(state);
         if (this.isAuthority) return;
 
         if (state.p) this.position = { x: state.p[0], y: state.p[1], z: state.p[2] };
         if (state.q) this.quaternion = { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] };
         this.heldBy = state.b || null;
-        this.isDrawing = !!state.draw;
+        this.isDrawing = !!state.isDrawing;
         this.color = state.c || 0xffffff;
     }
 }

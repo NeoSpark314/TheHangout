@@ -2,11 +2,11 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { NetworkEntity } from './NetworkEntity';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IGrabbable } from '../interfaces/IGrabbable';
-import { InteractionEvent } from '../interfaces/IInteractionEvent';
+import { IInteractionEvent } from '../interfaces/IInteractionEvent';
 import { IView } from '../interfaces/IView';
-import { Vector3, Quaternion } from '../interfaces/IMath';
-import { PhysicsPropView, PhysicsPropState } from '../views/PhysicsPropView';
-import { PhysicsEntityState, EntityType } from '../interfaces/IEntityState';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { PhysicsPropView, IPhysicsPropState } from '../views/PhysicsPropView';
+import { IPhysicsEntityState, EntityType } from '../interfaces/IEntityState';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -17,13 +17,13 @@ import { EVENTS } from '../utils/Constants';
  */
 export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
-    public view: IView<PhysicsPropState> | null;
+    public view: IView<IPhysicsPropState> | null;
     public isGrabbable: boolean;
-    public spawnPosition: Vector3 | null;
+    public spawnPosition: IVector3 | null;
     public heldBy: string | null = null;
 
-    private targetPos: Vector3 = { x: 0, y: 0, z: 0 };
-    private targetRot: Quaternion = { x: 0, y: 0, z: 0, w: 1 };
+    private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
+    private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lerpFactor: number = 0.2;
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
@@ -50,7 +50,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
     }
 
-    public releasePhysicsOwnership(velocity?: Vector3): void {
+    public releasePhysicsOwnership(velocity?: IVector3): void {
         if (!this.isAuthority) return;
 
         if (this.rigidBody) {
@@ -82,7 +82,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         if (this.view) this.view.setHighlight(false);
     }
 
-    public onInteraction(event: InteractionEvent): void {
+    public onInteraction(event: IInteractionEvent): void {
         // Implementation for tool usage
     }
 
@@ -97,13 +97,13 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
     }
 
-    public onRelease(velocity?: Vector3): void {
+    public onRelease(velocity?: IVector3): void {
         if (!this.rigidBody) return;
         this.heldBy = null;
         this.releasePhysicsOwnership(velocity);
     }
 
-    public updateGrabbedPose(position: Vector3, quaternion: Quaternion): void {
+    public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
         this.targetPos = { ...position };
         this.targetRot = { ...quaternion };
 
@@ -208,7 +208,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
     }
 
-    public getNetworkState(): PhysicsEntityState {
+    public getNetworkState(): IPhysicsEntityState {
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
         const vel = this.rigidBody.linvel();
@@ -224,7 +224,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         };
     }
 
-    public applyNetworkState(state: PhysicsEntityState): void {
+    public applyNetworkState(state: IPhysicsEntityState): void {
         this.syncNetworkState(state);
 
         // If we are currently the authority (holding it), ignore the server's outdated state

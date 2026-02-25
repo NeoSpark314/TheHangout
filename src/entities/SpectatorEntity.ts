@@ -1,12 +1,12 @@
 import { NetworkEntity } from './NetworkEntity';
 import { IView } from '../interfaces/IView';
-import { Vector3 } from '../interfaces/IMath';
-import { SpectatorViewState } from '../views/SpectatorView';
+import { IVector3 } from '../interfaces/IMath';
+import { SpectatorView, ISpectatorViewState } from '../views/SpectatorView';
 import { GameContext } from '../core/GameState';
 
 export class SpectatorEntity extends NetworkEntity {
-    public view: IView<SpectatorViewState>;
-    public targetPosition: Vector3 = { x: 0, y: 8, z: 10 };
+    public view: IView<ISpectatorViewState>;
+    public targetPosition: IVector3 = { x: 0, y: 8, z: 10 };
     public pitch: number = 0;
     public yaw: number = 0;
 
@@ -14,7 +14,7 @@ export class SpectatorEntity extends NetworkEntity {
     private moveSpeed: number = 8;
     private lookSpeed: number = 0.002;
 
-    constructor(protected context: GameContext, id: string, isAuthority: boolean = false, view: IView<SpectatorViewState>) {
+    constructor(protected context: GameContext, id: string, isAuthority: boolean = false, view: IView<ISpectatorViewState>) {
         super(context, id, 'SPECTATOR', isAuthority);
         this.view = view;
 

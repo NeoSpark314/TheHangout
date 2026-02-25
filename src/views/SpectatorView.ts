@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
-import { Vector3 } from '../interfaces/IMath';
+import { IVector3 } from '../interfaces/IMath';
 
-export interface SpectatorViewState {
-    position: Vector3;
+export interface ISpectatorViewState {
+    position: IVector3;
     lerpFactor?: number;
 }
 
-export class SpectatorView extends EntityView<SpectatorViewState> {
+export class SpectatorView extends EntityView<ISpectatorViewState> {
     private ring: THREE.Mesh | null = null;
 
     constructor() {
@@ -56,7 +56,7 @@ export class SpectatorView extends EntityView<SpectatorViewState> {
         this.mesh.add(nameSprite);
     }
 
-    public applyState(state: SpectatorViewState, delta: number): void {
+    public applyState(state: ISpectatorViewState, delta: number): void {
         const lerpFactor = state.lerpFactor ?? 1.0;
         if (state.position) {
             const pos = new THREE.Vector3(state.position.x, state.position.y, state.position.z);

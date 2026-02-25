@@ -3,9 +3,9 @@ import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IGrabbable } from '../interfaces/IGrabbable';
-import { InteractionPointer } from '../interfaces/IPointer';
+import { IInteractionPointer } from '../interfaces/IPointer';
 import { isGrabbable, isInteractable } from '../utils/TypeGuards';
-import type { Managers } from '../core/GameState';
+import type { IManagers } from '../core/GameState';
 
 /**
  * Unified skill for picking up and interacting with objects.
@@ -14,24 +14,24 @@ import type { Managers } from '../core/GameState';
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.3;
     private raycastDist: number = 2.0;
-    
+
     // Track held objects per pointer ID
     private heldObjects: Map<string, IGrabbable> = new Map();
     private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();
     private highlightedEntity: IInteractable | null = null;
 
     constructor() {
-        super('grab', 'Grab', { alwaysActive: false });
+        super('grab', 'Grab', { isAlwaysActive: false });
     }
 
-    public update(delta: number, player: LocalPlayer, managers: Managers): void {
+    public update(delta: number, player: LocalPlayer, managers: IManagers): void {
         const pointers = managers.input.getPointers(managers.render, managers.xr);
-        
+
         let bestHighlight: IInteractable | null = null;
 
         for (const pointer of pointers) {
             const interactable = this.processPointer(pointer, player, managers);
-            
+
             // Only the first pointer that finds something gets the global highlight
             if (!bestHighlight && interactable) {
                 bestHighlight = interactable;
@@ -41,7 +41,7 @@ export class GrabSkill extends Skill {
         this._updateHighlight(player.id, bestHighlight);
     }
 
-    private processPointer(pointer: InteractionPointer, player: LocalPlayer, managers: Managers): IInteractable | null {
+    private processPointer(pointer: IInteractionPointer, player: LocalPlayer, managers: IManagers): IInteractable | null {
         const held = this.heldObjects.get(pointer.id);
 
         if (held) {

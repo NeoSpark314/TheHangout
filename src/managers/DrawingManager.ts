@@ -2,12 +2,7 @@ import * as THREE from 'three';
 import eventBus from '../core/EventBus';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { GameContext } from '../core/GameState';
-
-export interface LineSegment {
-    start: [number, number, number];
-    end: [number, number, number];
-    color: string | number;
-}
+import { IDrawSegmentPayload } from '../interfaces/INetworkPacket';
 
 /**
  * Manages rendering and syncing of 3D drawings.
@@ -20,7 +15,7 @@ export class DrawingManager {
         this.scene = scene;
         this.lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
 
-        eventBus.on(EVENTS.PEN_DRAW_SEGMENT, (segment: LineSegment) => {
+        eventBus.on(EVENTS.PEN_DRAW_SEGMENT, (segment: IDrawSegmentPayload) => {
             this.drawLine(segment);
 
             // Broadcast to others if we are the one drawing
@@ -30,10 +25,10 @@ export class DrawingManager {
         });
     }
 
-    public drawLine(segment: LineSegment): void {
+    public drawLine(segment: IDrawSegmentPayload): void {
         const points = [];
-        points.push(new THREE.Vector3(...segment.start));
-        points.push(new THREE.Vector3(...segment.end));
+        points.push(new THREE.Vector3(...segment.startPos));
+        points.push(new THREE.Vector3(...segment.endPos));
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const color = new THREE.Color(segment.color as any);

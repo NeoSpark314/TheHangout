@@ -3,14 +3,14 @@ import eventBus from '../core/EventBus';
 import { GameContext } from '../core/GameState';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
-import { EntityType, StateUpdatePacket } from '../interfaces/IEntityState';
-import { RoomConfigUpdatePayload, DrawSegmentPayload } from '../interfaces/INetworkPacket';
+import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
+import { IRoomConfigUpdatePayload, IDrawSegmentPayload } from '../interfaces/INetworkPacket';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive';
 import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
-import { NetworkSynchronizer, NetworkTransport } from './NetworkSynchronizer';
-import { PacketHandler } from './PacketHandler';
+import { NetworkSynchronizer, INetworkTransport } from './NetworkSynchronizer';
+import { IPacketHandler } from './PacketHandler';
 
 /**
  * Architectural Role: Responsible for establishing and managing peer-to-peer WebRTC connections.
@@ -19,7 +19,7 @@ import { PacketHandler } from './PacketHandler';
  * Note: Use EventBus for cross-system requests (e.g. OWNERSHIP_REQUEST) 
  * to keep entities decoupled from specific networking implementation details.
  */
-export class NetworkManager implements IUpdatable, NetworkTransport {
+export class NetworkManager implements IUpdatable, INetworkTransport {
     public peer: Peer | null = null;
     private relaySocket: WebSocket | null = null;
     public connections: Map<string, DataConnection | RelayConnection> = new Map();
@@ -224,7 +224,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
         (this.synchronizer as any).syncState();
     }
 
-    public applyStateUpdate(entityStates: StateUpdatePacket[]): void {
+    public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
         const managers = this.context.managers;
         for (const stateData of entityStates) {
             let entity = managers.entity.getEntity(stateData.id);
@@ -334,18 +334,18 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
  * HANDLERS
  */
 
-class StateUpdateHandler implements PacketHandler {
+class StateUpdateHandler implements IPacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: StateUpdatePacket[]): void {
+    handle(senderId: string, payload: IStateUpdatePacket[]): void {
         if (!this.context.isHost) {
             this.context.managers.network.applyStateUpdate(payload);
         }
     }
 }
 
-class PlayerInputHandler implements PacketHandler {
+class PlayerInputHandler implements IPacketHandler {
     constructor(private network: NetworkManager, private context: GameContext) { }
-    handle(senderId: string, payload: StateUpdatePacket[]): void {
+    handle(senderId: string, payload: IStateUpdatePacket[]): void {
         this.network.applyStateUpdate(payload);
         if (this.context.isHost) {
             this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, payload);
@@ -353,44 +353,44 @@ class PlayerInputHandler implements PacketHandler {
     }
 }
 
-class PeerDisconnectHandler implements PacketHandler {
+class PeerDisconnectHandler implements IPacketHandler {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: unknown): void {
         if (!this.context.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, payload);
     }
 }
 
-class RoomConfigHandler implements PacketHandler {
+class RoomConfigHandler implements IPacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: RoomConfigUpdatePayload): void {
+    handle(senderId: string, payload: IRoomConfigUpdatePayload): void {
         if (!this.context.isHost) this.context.managers.room.updateConfig(payload);
     }
 }
 
-class OwnershipRequestHandler implements PacketHandler {
+class OwnershipRequestHandler implements IPacketHandler {
     constructor(private network: NetworkManager, private context: GameContext) { }
     handle(senderId: string, payload: { entityId: string }): void {
         if (this.context.isHost) this.network.handleOwnershipRequest(senderId, payload);
     }
 }
 
-class OwnershipReleaseHandler implements PacketHandler {
+class OwnershipReleaseHandler implements IPacketHandler {
     constructor(private network: NetworkManager, private context: GameContext) { }
     handle(senderId: string, payload: { entityId: string, newOwnerId: string }): void {
         if (this.context.isHost) this.network.handleOwnershipRelease(senderId, payload);
     }
 }
 
-class OwnershipTransferHandler implements PacketHandler {
+class OwnershipTransferHandler implements IPacketHandler {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: { entityId: string, newOwnerId: string | null }): void {
         if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
     }
 }
 
-class DrawLineHandler implements PacketHandler {
+class DrawLineHandler implements IPacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: DrawSegmentPayload): void {
+    handle(senderId: string, payload: IDrawSegmentPayload): void {
         if (this.context.managers.drawing) {
             this.context.managers.drawing.drawLine(payload);
         }

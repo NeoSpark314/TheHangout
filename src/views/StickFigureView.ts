@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
-import { Vector3, Quaternion } from '../interfaces/IMath';
-import { HandState } from '../entities/PlayerEntity';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IHandState } from '../entities/PlayerEntity';
 import { GameContext } from '../core/GameState';
 
-export interface PlayerViewState {
-    position: Vector3;
+export interface IPlayerViewState {
+    position: IVector3;
     yaw: number;
     headHeight: number;
-    headQuaternion: Quaternion;
-    handStates: { left: HandState, right: HandState };
+    headQuaternion: IQuaternion;
+    handStates: { left: IHandState, right: IHandState };
     name?: string;
     color?: string | number;
     isLocal?: boolean;
@@ -17,7 +17,7 @@ export interface PlayerViewState {
     lerpFactor?: number;
 }
 
-export class StickFigureView extends EntityView<PlayerViewState> {
+export class StickFigureView extends EntityView<IPlayerViewState> {
     public color: string | number;
     public isLocal: boolean;
     public headMesh!: THREE.Mesh;
@@ -232,7 +232,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         }
     }
 
-    public applyState(state: PlayerViewState, delta: number): void {
+    public applyState(state: IPlayerViewState, delta: number): void {
         const lerpFactor = state.lerpFactor ?? 1.0;
 
         if (state.position) {
@@ -448,7 +448,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         this._alignCylinder(this.rightForearm, rightElbow, rightHandPos, 0.02);
     }
 
-    public updateWristMarkers(leftHandInfo: HandState, rightHandInfo: HandState, lerpFactor: number = 1.0): void {
+    public updateWristMarkers(leftHandInfo: IHandState, rightHandInfo: IHandState, lerpFactor: number = 1.0): void {
         const leftHasJoints = leftHandInfo.active && leftHandInfo.joints[0].position.x !== 0; // Rough check
         const rightHasJoints = rightHandInfo.active && rightHandInfo.joints[0].position.x !== 0;
 
@@ -474,7 +474,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         this._updateHandJoints(leftHandInfo, rightHandInfo, lerpFactor);
     }
 
-    private _updateHandJoints(leftHandInfo: HandState, rightHandInfo: HandState, lerpFactor: number): void {
+    private _updateHandJoints(leftHandInfo: IHandState, rightHandInfo: IHandState, lerpFactor: number): void {
         const leftHasJoints = leftHandInfo.active && leftHandInfo.joints[0].position.x !== 0;
         const rightHasJoints = rightHandInfo.active && rightHandInfo.joints[0].position.x !== 0;
 

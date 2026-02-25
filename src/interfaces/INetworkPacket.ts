@@ -1,40 +1,39 @@
-import { EntityState } from './IEntityState';
-import { RoomConfig } from '../core/GameState';
+import { IEntityState } from './IEntityState';
+import { IRoomConfig } from '../core/GameState';
 
-export interface OwnershipTransferPayload {
+export interface IOwnershipTransferPayload {
     entityId: string;
-    newOwnerId: string;
+    newOwnerId: string | null;
 }
 
-export interface OwnershipRequestPayload {
-    entityId: string;
-}
-
-export interface OwnershipReleasePayload {
+export interface IOwnershipRequestPayload {
     entityId: string;
 }
 
-export interface DrawSegmentPayload {
-    start: [number, number, number];
-    end: [number, number, number];
+export interface IOwnershipReleasePayload {
+    entityId: string;
+}
+
+export interface IDrawSegmentPayload {
+    startPos: number[]; // [x,y,z]
+    endPos: number[];   // [x,y,z]
     color: string | number;
 }
 
-export interface PeerDisconnectPayload {
+export interface IPeerDisconnectPayload {
     peerId: string;
 }
 
-export interface RoomConfigUpdatePayload extends Partial<RoomConfig> {
+export interface IRoomConfigUpdatePayload extends Partial<IRoomConfig> {
     assignedSpawnIndex?: number;
 }
 
 // A discriminated union of all possible packet payloads
 export type NetworkPayload =
-    | EntityState[]
-    | OwnershipTransferPayload
-    | OwnershipRequestPayload
-    | OwnershipReleasePayload
-    | DrawSegmentPayload
-    | PeerDisconnectPayload
-    | RoomConfigUpdatePayload
+    | IOwnershipTransferPayload
+    | IOwnershipRequestPayload
+    | IOwnershipReleasePayload
+    | IDrawSegmentPayload
+    | IPeerDisconnectPayload
+    | IRoomConfigUpdatePayload
     | any; // Fallback for unsupported packets

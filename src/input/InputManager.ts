@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { INPUT_CONFIG } from '../utils/Constants';
-import { InteractionPointer } from '../interfaces/IPointer';
+import { IInteractionPointer } from '../interfaces/IPointer';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { RenderManager } from '../managers/RenderManager';
 import { XRSystem } from '../systems/XRSystem';
@@ -90,8 +90,8 @@ export class InputManager implements IUpdatable {
         return this.xrInput.turn;
     }
 
-    public getPointers(render: RenderManager, xr: XRSystem): InteractionPointer[] {
-        const pointers: InteractionPointer[] = [];
+    public getPointers(render: RenderManager, xr: XRSystem): IInteractionPointer[] {
+        const pointers: IInteractionPointer[] = [];
 
         if (render.isXRPresenting()) {
             const session = render.getXRSession();
