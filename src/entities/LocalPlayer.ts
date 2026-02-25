@@ -149,9 +149,9 @@ export class LocalPlayer extends PlayerEntity {
             lerpFactor: 1.0
         }, delta);
 
-        if (Math.pow(this._lastMoveVector.x, 2) + Math.pow(this._lastMoveVector.y, 2) + Math.pow(this._lastMoveVector.z, 2) > 0) {
-            eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
-        }
+        // Always emit state if this player is the authority, so that head and hand 
+        // movements are synchronized even if locomotion input is zero.
+        eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
     }
 
     private updateVRHands(frame?: XRFrame): void {

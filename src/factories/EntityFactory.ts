@@ -10,6 +10,7 @@ import { PenEntity } from '../entities/PenEntity';
 import { PenView } from '../views/PenView';
 import { GameContext } from '../core/GameState';
 import { IVector3 } from '../interfaces/IMath';
+import { NullView } from '../views/NullView';
 
 export class EntityFactory {
     private static registry: Map<string, (context: GameContext, id: string, config: any) => any> = new Map();
@@ -41,17 +42,19 @@ export class EntityFactory {
     }
 
     public static createPlayer(context: GameContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
-        const view = new StickFigureView(context, {
-            color: color || (isLocal ? context.avatarConfig.color : 0xff00ff),
-            isLocal: isLocal
-        });
+        const render = context.managers.render;
+        const view = render
+            ? new StickFigureView(context, {
+                color: color || (isLocal ? context.avatarConfig.color : 0xff00ff),
+                isLocal: isLocal
+            })
+            : new NullView(id);
 
         const entity = isLocal
             ? new LocalPlayer(context, id, spawnPos, spawnYaw, view)
             : new RemotePlayer(context, id, view);
 
-        const render = context.managers.render;
-        if (render) {
+        if (render && view instanceof StickFigureView) {
             view.addToScene(render.scene);
             view.addToInteractionGroup(render.interactionGroup);
         }
@@ -60,11 +63,11 @@ export class EntityFactory {
     }
 
     public static createSpectator(context: GameContext, id: string, isAuthority: boolean): SpectatorEntity {
-        const view = new SpectatorView();
+        const render = context.managers.render;
+        const view = render ? new SpectatorView() : new NullView(id);
         const entity = new SpectatorEntity(context, id, isAuthority, view);
 
-        const render = context.managers.render;
-        if (render) {
+        if (render && view instanceof SpectatorView) {
             view.addToScene(render.scene);
             view.addToInteractionGroup(render.interactionGroup);
         }
@@ -73,32 +76,35 @@ export class EntityFactory {
     }
 
     public static createGrabbable(context: GameContext, id: string, size: number, position: IVector3, mesh: THREE.Mesh): PhysicsEntity | null {
-        const view = new PhysicsPropView(mesh, id);
         const managers = context.managers;
+        const render = managers.render;
+
+        // Ensure PhysicsPropView isn't created if there's no mesh or render context
+        const view = render && mesh ? new PhysicsPropView(mesh, id) : new NullView(id);
 
         if (!managers.physics) {
             console.error('[EntityFactory] Physics manager not found');
             return null;
         }
 
-        if (managers.render) {
-            view.addToScene(managers.render.scene);
-            view.addToInteractionGroup(managers.render.interactionGroup);
+        if (render && view instanceof PhysicsPropView) {
+            view.addToScene(render.scene);
+            view.addToInteractionGroup(render.interactionGroup);
         }
 
         return managers.physics.createGrabbable(id, size, position, mesh, view);
     }
 
     public static createPen(context: GameContext, id: string, config: any): PenEntity {
-        const view = new PenView(id);
+        const render = context.managers.render;
+        const view = render ? new PenView(id) : new NullView(id);
         const entity = new PenEntity(context, id, !!config.isAuthority, view);
 
         if (config.position) {
             entity.updateGrabbedPose(config.position, config.quaternion || { x: 0, y: 0, z: 0, w: 1 });
         }
 
-        const render = context.managers.render;
-        if (render) {
+        if (render && view instanceof PenView) {
             view.addToScene(render.scene);
             view.addToInteractionGroup(render.interactionGroup);
         }

@@ -291,7 +291,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public sendData(targetId: string, type: number, payload: unknown): void {
-        const conn = this.connections.get(targetId);
+        const conn = this.connections.get(targetId) || (this.context.isLocalServer ? this.connections.get('SERVER') : undefined);
         if (conn && conn.open) conn.send(JSON.stringify({ type, payload }));
     }
 
