@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import eventBus from '../core/EventBus';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 
 export interface LineSegment {
     start: [number, number, number];
@@ -16,16 +16,16 @@ export class DrawingManager {
     private scene: THREE.Scene;
     private lineMaterial: THREE.LineBasicMaterial;
 
-    constructor(scene: THREE.Scene) {
+    constructor(scene: THREE.Scene, private context: GameContext) {
         this.scene = scene;
         this.lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
-        
+
         eventBus.on(EVENTS.PEN_DRAW_SEGMENT, (segment: LineSegment) => {
             this.drawLine(segment);
-            
+
             // Broadcast to others if we are the one drawing
-            if (gameState.managers.network) {
-                gameState.managers.network.broadcast(PACKET_TYPES.DRAW_LINE_SEGMENT, segment);
+            if (this.context.managers.network) {
+                this.context.managers.network.broadcast(PACKET_TYPES.DRAW_LINE_SEGMENT, segment);
             }
         });
     }

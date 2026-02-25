@@ -46,7 +46,12 @@ export interface Managers {
     drawing: DrawingManager;
 }
 
-export class GameState {
+/**
+ * GameContext acts as the central dependency injection container and state holder.
+ * It replaces the legacy global singleton approach, making dependencies explicit
+ * and improving testability and modularity across the application.
+ */
+export class GameContext {
     public isHost: boolean = false;
     public isDedicatedHost: boolean = false;
     public isLocalServer: boolean = false;
@@ -78,6 +83,3 @@ export class GameState {
 
     public deltaTime: number = 0;
 }
-
-const gameState = new GameState();
-export default gameState;

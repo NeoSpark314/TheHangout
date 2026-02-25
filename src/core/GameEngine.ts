@@ -1,28 +1,53 @@
-import eventBus from './EventBus';
-import gameState from './GameState';
 import { EVENTS } from '../utils/Constants';
+import { GameContext } from './GameState';
+import { IUpdatable } from '../interfaces/IUpdatable';
 
+/**
+ * The core simulation runner for the application.
+ * Executes all registered systems (IUpdatable) each frame.
+ */
 export class GameEngine {
     private isRunning: boolean = false;
     private lastTime: number = performance.now();
+    private updateSystems: IUpdatable[] = [];
+    private endFrameCallbacks: Array<(delta: number) => void> = [];
 
-    constructor() {}
+    constructor(private context: GameContext) { }
 
-    public async initialize(): Promise<void> {
-        console.log('[GameEngine] Initializing...');
-        eventBus.on(EVENTS.SCENE_READY, () => {
-            this.start();
-        });
+    /**
+     * Registers a subsystem or manager to be updated every frame.
+     * Order of registration determines execution order.
+     */
+    public addSystem(system: IUpdatable): void {
+        this.updateSystems.push(system);
     }
 
+    /**
+     * Registers a callback to execute at the end of the update frame,
+     * useful for cleanup tasks like clearing single-frame input flags.
+     */
+    public onEndFrame(callback: (delta: number) => void): void {
+        this.endFrameCallbacks.push(callback);
+    }
+
+    /**
+     * Prepares the engine for simulation. Called by App during bootstrap.
+     */
+    public async initialize(): Promise<void> {
+        console.log('[GameEngine] Initializing...');
+    }
+
+    /**
+     * Starts the animation loop and begins updating registered systems.
+     */
     public start(): void {
         if (this.isRunning) return;
         this.isRunning = true;
         this.lastTime = performance.now();
         console.log('[GameEngine] Engine started.');
 
-        if (gameState.managers.render) {
-            gameState.managers.render.setAnimationLoop((time, frame) => this.loop(time, frame));
+        if (this.context.managers.render) {
+            this.context.managers.render.setAnimationLoop((time, frame) => this.loop(time, frame));
         } else {
             const wrap = (time: number) => {
                 this.loop(time);
@@ -32,6 +57,9 @@ export class GameEngine {
         }
     }
 
+    /**
+     * Stops the engine simulation loop.
+     */
     public stop(): void {
         this.isRunning = false;
     }
@@ -41,47 +69,18 @@ export class GameEngine {
 
         const delta = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
-        gameState.deltaTime = delta;
+        this.context.deltaTime = delta;
 
         this.update(delta, frame);
     }
 
     private update(delta: number, frame?: XRFrame): void {
-        if (gameState.managers.network) {
-            gameState.managers.network.update(delta);
+        for (const system of this.updateSystems) {
+            system.update(delta, frame);
         }
 
-        if (gameState.managers.input) {
-            gameState.managers.input.update(delta, frame);
-        }
-
-        if (gameState.managers.entity) {
-            gameState.managers.entity.update(delta, frame);
-        }
-
-        if (gameState.managers.physics) {
-            gameState.managers.physics.step(delta);
-        }
-
-        if (gameState.managers.room) {
-            gameState.managers.room.update(delta);
-        }
-
-        if (gameState.managers.ui) {
-            gameState.managers.ui.update(delta);
-        }
-
-        if (gameState.managers.hud) {
-            gameState.managers.hud.update(delta);
-        }
-
-        if (gameState.managers.render) {
-            gameState.managers.render.update(delta, gameState.localPlayer);
-            gameState.managers.render.render();
-        }
-
-        if (gameState.managers.input) {
-            gameState.managers.input.clearJustPressed();
+        for (const callback of this.endFrameCallbacks) {
+            callback(delta);
         }
     }
 }

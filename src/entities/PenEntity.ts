@@ -5,7 +5,7 @@ import { InteractionEvent } from '../interfaces/IInteractionEvent';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { PenEntityState, EntityType } from '../interfaces/IEntityState';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import * as THREE from 'three';
@@ -17,16 +17,16 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     public isGrabbable = true;
     public heldBy: string | null = null;
     public view: IView<any> | null = null;
-    
+
     private position: Vector3 = { x: 0, y: 0, z: 0 };
     private quaternion: Quaternion = { x: 0, y: 0, z: 0, w: 1 };
     private isDrawing = false;
     private color: string | number = 0xffffff;
-    
+
     private lastDrawPosition: Vector3 | null = null;
 
-    constructor(id: string, isAuthority: boolean, view: IView<any> | null) {
-        super(id, EntityType.PEN, isAuthority);
+    constructor(protected context: GameContext, id: string, isAuthority: boolean, view: IView<any> | null) {
+        super(context, id, EntityType.PEN, isAuthority);
         this.view = view;
     }
 
@@ -34,10 +34,10 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         this.heldBy = playerId;
         this.requestOwnership();
-        
+
         // Use the player's avatar color for drawing
-        if (gameState.localPlayer && playerId === gameState.localPlayer.id) {
-            this.color = gameState.avatarConfig.color;
+        if (this.context.localPlayer && playerId === this.context.localPlayer.id) {
+            this.color = this.context.avatarConfig.color;
         }
     }
 
@@ -92,7 +92,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
 
             if (this.lastDrawPosition) {
                 const distSq = tipPos.distanceToSquared(new THREE.Vector3(this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z));
-                
+
                 // Only draw if we've moved enough (1cm) to save bandwidth/performance
                 if (distSq > 0.0001) {
                     eventBus.emit(EVENTS.PEN_DRAW_SEGMENT, {

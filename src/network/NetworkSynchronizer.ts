@@ -1,4 +1,4 @@
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import { PACKET_TYPES } from '../utils/Constants';
 
 export interface NetworkTransport {
@@ -11,7 +11,7 @@ export class NetworkSynchronizer {
     private syncRate: number = 1 / 20;
     private timeSinceLastSync: number = 0;
 
-    constructor(transport: NetworkTransport) {
+    constructor(transport: NetworkTransport, private context: GameContext) {
         this.transport = transport;
     }
 
@@ -24,17 +24,17 @@ export class NetworkSynchronizer {
     }
 
     private syncState(): void {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
         if (!managers.entity) return;
 
         const authoritativeStates = managers.entity.getAuthoritativeStates();
         if (authoritativeStates.length === 0) return;
 
-        if (gameState.isHost) {
+        if (this.context.isHost) {
             const allStates = managers.entity.getWorldSnapshot();
             this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
-        } else if (gameState.roomId) {
-            this.transport.sendData(gameState.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
+        } else if (this.context.roomId) {
+            this.transport.sendData(this.context.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
         }
     }
 }

@@ -1,7 +1,7 @@
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { SoundSynth } from '../utils/SoundSynth';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 
 export class AudioManager {
     public ctx: AudioContext | null = null;
@@ -10,12 +10,12 @@ export class AudioManager {
     private readonly JOIN_FREQS = [440, 554.37, 659.25, 880];
     private readonly LEAVE_FREQS = [880, 659.25, 554.37, 440];
 
-    constructor() {
+    constructor(private context: GameContext) {
         this.setupListeners();
     }
 
     public async resume(): Promise<void> {
-        const render = gameState.managers.render;
+        const render = this.context.managers.render;
         if (render && render.audioListener) {
             this.ctx = render.audioListener.context as AudioContext;
         }

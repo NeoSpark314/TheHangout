@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { isTrueHMD } from '../utils/DeviceUtils.js';
+import { GameContext } from '../core/GameState';
 
 export class RenderManager {
     public container: HTMLElement;
@@ -14,7 +15,7 @@ export class RenderManager {
     private menuRotation: number = 0;
     public controllers: THREE.Group[] = [];
 
-    constructor() {
+    constructor(private context: GameContext) {
         this.container = document.getElementById('app')!;
 
         // Scene setup
@@ -114,7 +115,7 @@ export class RenderManager {
             const lp = possessedPlayer;
             this.cameraGroup.position.set(lp.xrOrigin.position.x, lp.xrOrigin.position.y, lp.xrOrigin.position.z);
             this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
-            
+
             if (!this.isXRPresenting()) {
                 this.camera.position.set(lp.headPose.position.x, lp.headPose.position.y, lp.headPose.position.z);
                 this.camera.quaternion.set(lp.headPose.quaternion.x, lp.headPose.quaternion.y, lp.headPose.quaternion.z, lp.headPose.quaternion.w);

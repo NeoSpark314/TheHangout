@@ -1,4 +1,4 @@
-import gameState from './GameState';
+import { GameContext } from './GameState';
 import { GameEngine } from './GameEngine';
 import { UIManager } from '../managers/UIManager';
 import { NetworkManager } from '../network/NetworkManager';
@@ -23,9 +23,11 @@ import { EVENTS } from '../utils/Constants';
  */
 export class App {
     private engine: GameEngine;
+    public context: GameContext;
 
     constructor() {
-        this.engine = new GameEngine();
+        this.context = new GameContext();
+        this.engine = new GameEngine(this.context);
     }
 
     public async bootstrap(): Promise<void> {
@@ -35,15 +37,16 @@ export class App {
             await this.detectServerInfo();
             this.initializeManagers();
             this.setupGlobalEventListeners();
-            
+
             // 1. Infrastructure (Physics must be first)
-            await gameState.managers.physics.init();
-            
+            await this.context.managers.physics.init();
+
             // 2. World (Requires Physics)
             await this.initSystems();
-            
+
             // 3. Engine (Starts simulation)
             await this.engine.initialize();
+            this.engine.start();
 
             console.log('[App] Bootstrap complete. Scene ready.');
             eventBus.emit(EVENTS.SCENE_READY);
@@ -59,7 +62,7 @@ export class App {
             if (resp.ok) {
                 const info = await resp.json();
                 if (info.local) {
-                    gameState.isLocalServer = true;
+                    this.context.isLocalServer = true;
                     console.log('[App] Local server detected — using local PeerJS signaling.');
                 }
             }
@@ -69,25 +72,25 @@ export class App {
     }
 
     private initializeManagers(): void {
-        gameState.setManager('entity', new EntityManager());
-        gameState.setManager('ui', new UIManager());
-        gameState.setManager('network', new NetworkManager());
-        gameState.setManager('media', new MediaManager());
-        gameState.setManager('render', new RenderManager());
-        gameState.setManager('physics', new PhysicsManager());
-        gameState.setManager('player', new PlayerManager());
-        gameState.setManager('input', new InputManager());
-        gameState.setManager('hud', new HUDManager());
-        gameState.setManager('room', new RoomManager());
-        gameState.setManager('audio', new AudioManager());
-        gameState.setManager('assets', new AssetManager());
-        gameState.setManager('drawing', new DrawingManager(gameState.managers.render.scene));
-        gameState.setManager('xr', new XRSystem());
-        gameState.setManager('interaction', new InteractionSystem(gameState.managers.entity));
+        this.context.setManager('entity', new EntityManager(this.context));
+        this.context.setManager('ui', new UIManager(this.context));
+        this.context.setManager('network', new NetworkManager(this.context));
+        this.context.setManager('media', new MediaManager(this.context));
+        this.context.setManager('render', new RenderManager(this.context));
+        this.context.setManager('physics', new PhysicsManager(this.context));
+        this.context.setManager('player', new PlayerManager(this.context));
+        this.context.setManager('input', new InputManager(this.context));
+        this.context.setManager('hud', new HUDManager(this.context));
+        this.context.setManager('room', new RoomManager(this.context));
+        this.context.setManager('audio', new AudioManager(this.context));
+        this.context.setManager('assets', new AssetManager(this.context));
+        this.context.setManager('drawing', new DrawingManager(this.context.managers.render.scene, this.context));
+        this.context.setManager('xr', new XRSystem());
+        this.context.setManager('interaction', new InteractionSystem(this.context.managers.entity));
     }
 
     private setupGlobalEventListeners(): void {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
 
         // Audio Activation
         const resumeAudio = () => {
@@ -107,17 +110,47 @@ export class App {
         eventBus.on(EVENTS.HOST_READY, (id: string) => this.initPlayerOnce(id));
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
             const localId = (managers.network as any).peer?.id;
-            if (!gameState.isHost && localId) {
+            if (!this.context.isHost && localId) {
                 this.initPlayerOnce(localId);
             }
         });
     }
 
     private async initSystems(): Promise<void> {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
 
         if (managers.render && managers.room) {
             managers.room.init(managers.render.scene);
+        }
+
+        // Register systems to GameEngine in the exact desired execution order
+        if (managers.network) this.engine.addSystem(managers.network as any);
+        if (managers.input) this.engine.addSystem(managers.input as any);
+        if (managers.entity) this.engine.addSystem(managers.entity as any);
+
+        // Physics needs a small wrapper because its update method is called 'step' and only takes delta
+        if (managers.physics) {
+            this.engine.addSystem({
+                update: (delta) => managers.physics!.step(delta)
+            });
+        }
+
+        if (managers.room) this.engine.addSystem(managers.room as any);
+        if (managers.ui) this.engine.addSystem(managers.ui as any);
+        if (managers.hud) this.engine.addSystem(managers.hud as any);
+
+        if (managers.render) {
+            this.engine.addSystem({
+                update: (delta) => {
+                    managers.render!.update(delta, this.context.localPlayer);
+                    managers.render!.render();
+                }
+            });
+        }
+
+        // Tasks at the end of the frame
+        if (managers.input) {
+            this.engine.onEndFrame(() => managers.input!.clearJustPressed());
         }
     }
 
@@ -126,13 +159,13 @@ export class App {
         if (this.playerInitialized || !id) return;
         this.playerInitialized = true;
 
-        const managers = gameState.managers;
-        if (gameState.isDedicatedHost) {
+        const managers = this.context.managers;
+        if (this.context.isDedicatedHost) {
             managers.render.switchToSpectatorView();
         } else {
             managers.render.switchToPlayerView();
         }
-        
+
         managers.player.init(id);
     }
 }

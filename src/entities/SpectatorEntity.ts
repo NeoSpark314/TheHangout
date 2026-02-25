@@ -2,20 +2,20 @@ import { NetworkEntity } from './NetworkEntity';
 import { IView } from '../interfaces/IView';
 import { Vector3 } from '../interfaces/IMath';
 import { SpectatorViewState } from '../views/SpectatorView';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 
 export class SpectatorEntity extends NetworkEntity {
     public view: IView<SpectatorViewState>;
     public targetPosition: Vector3 = { x: 0, y: 8, z: 10 };
     public pitch: number = 0;
     public yaw: number = 0;
-    
+
     // Authority-only
     private moveSpeed: number = 8;
     private lookSpeed: number = 0.002;
 
-    constructor(id: string, isAuthority: boolean = false, view: IView<SpectatorViewState>) {
-        super(id, 'SPECTATOR', isAuthority);
+    constructor(protected context: GameContext, id: string, isAuthority: boolean = false, view: IView<SpectatorViewState>) {
+        super(context, id, 'SPECTATOR', isAuthority);
         this.view = view;
 
         if (this.isAuthority) {
@@ -24,7 +24,7 @@ export class SpectatorEntity extends NetworkEntity {
     }
 
     private initControls(): void {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
         const render = managers.render;
 
         const canvas = render.renderer.domElement;
@@ -56,13 +56,13 @@ export class SpectatorEntity extends NetworkEntity {
     }
 
     private updateAuthority(delta: number): void {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
         const render = managers.render;
         const input = managers.input;
         if (!render || !input) return;
 
         const moveVec = input.getMovementVector();
-        
+
         // Simplified movement math
         const forward = {
             x: -Math.sin(this.yaw),
@@ -106,7 +106,7 @@ export class SpectatorEntity extends NetworkEntity {
 
     public destroy(): void {
         super.destroy();
-        const render = gameState.managers.render;
+        const render = this.context.managers.render;
         if (render && this.view) {
             this.view.removeFromScene(render.scene);
             this.view.destroy();

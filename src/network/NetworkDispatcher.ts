@@ -7,11 +7,11 @@ export class NetworkDispatcher {
         this.handlers.set(type, handler);
     }
 
-    public dispatch(senderId: string, data: any): void {
+    public dispatch(senderId: string, data: unknown): void {
         try {
-            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+            const parsed = typeof data === 'string' ? JSON.parse(data) : data as any;
             const handler = this.handlers.get(parsed.type);
-            
+
             if (handler) {
                 handler.handle(senderId, parsed.payload);
             }

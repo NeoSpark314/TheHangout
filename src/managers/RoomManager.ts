@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import gameState, { RoomConfig } from '../core/GameState';
+import { GameContext, RoomConfig } from '../core/GameState';
+import { IUpdatable } from '../interfaces/IUpdatable';
 import { EnvironmentManager } from './EnvironmentManager';
 import { PropManager } from './PropManager';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
-export class RoomManager {
+export class RoomManager implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
     public environment: EnvironmentManager | null = null;
@@ -13,7 +14,7 @@ export class RoomManager {
     private groundPhysics: boolean = false;
     public assignedSpawnIndex?: number;
 
-    constructor() {}
+    constructor(private context: GameContext) { }
 
     private random(): number {
         this._seed |= 0;
@@ -28,14 +29,14 @@ export class RoomManager {
         const randomBound = this.random.bind(this);
         this.environment = new EnvironmentManager(scene, randomBound);
         this.props = new PropManager(scene, randomBound);
-        
+
         // Ground is created strictly during applyConfig or init via master orchestrator
-        if (gameState.managers.physics) {
-            gameState.managers.physics.createGround(25);
+        if (this.context.managers.physics) {
+            this.context.managers.physics.createGround(25);
             this.groundPhysics = true;
         }
 
-        this.applyConfig(gameState.roomConfig);
+        this.applyConfig(this.context.roomConfig);
     }
 
     public applyConfig(config: RoomConfig): void {
@@ -56,20 +57,20 @@ export class RoomManager {
     }
 
     public updateConfig(newConfig: Partial<RoomConfig> & { assignedSpawnIndex?: number }): void {
-        const oldSeed = gameState.roomConfig.seed;
+        const oldSeed = this.context.roomConfig.seed;
 
         if (newConfig.assignedSpawnIndex !== undefined) {
             this.assignedSpawnIndex = newConfig.assignedSpawnIndex;
             delete newConfig.assignedSpawnIndex;
         }
 
-        gameState.roomConfig = { ...gameState.roomConfig, ...newConfig as RoomConfig };
+        this.context.roomConfig = { ...this.context.roomConfig, ...newConfig as RoomConfig };
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this.clearProceduralElements();
         }
 
-        this.applyConfig(gameState.roomConfig);
+        this.applyConfig(this.context.roomConfig);
     }
 
     public clearProceduralElements(): void {

@@ -1,4 +1,5 @@
 import { NetworkEntity } from './NetworkEntity';
+import { GameContext } from '../core/GameState';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 
 export interface HandJointState {
@@ -19,8 +20,8 @@ export abstract class PlayerEntity extends NetworkEntity {
     public headState: { position: Vector3, quaternion: Quaternion };
     public handStates: { left: HandState, right: HandState };
 
-    constructor(id: string, type: string, isAuthority: boolean) {
-        super(id, type, isAuthority);
+    constructor(protected context: GameContext, id: string, type: string, isAuthority: boolean) {
+        super(context, id, type, isAuthority);
 
         this.headState = {
             position: { x: 0, y: 0.8, z: 0 },

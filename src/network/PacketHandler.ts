@@ -1,3 +1,3 @@
-export interface PacketHandler {
-    handle(senderId: string, payload: any): void;
+export interface PacketHandler<T = unknown> {
+    handle(senderId: string, payload: T): void;
 }

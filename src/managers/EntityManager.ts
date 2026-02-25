@@ -1,13 +1,16 @@
 import { IEntity } from '../interfaces/IEntity';
+import { EntityType, PlayerEntityState } from '../interfaces/IEntityState';
+import { IUpdatable } from '../interfaces/IUpdatable';
 import { INetworkable } from '../interfaces/INetworkable';
 import { EntityFactory } from '../factories/EntityFactory';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
+import { GameContext } from '../core/GameState';
 
-export class EntityManager {
+export class EntityManager implements IUpdatable {
     public entities: Map<string, IEntity>;
 
-    constructor() {
+    constructor(private context: GameContext) {
         this.entities = new Map();
     }
 
@@ -18,8 +21,8 @@ export class EntityManager {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
         console.log(`[EntityManager] Discovering new ${type} with ID: ${id}`);
-        const entity = EntityFactory.spawn(type, id, config);
-        
+        const entity = EntityFactory.spawn(this.context, type, id, config);
+
         if (entity) {
             this.addEntity(entity);
             eventBus.emit(EVENTS.PEER_CONNECTED, id); // Reuse for discovery notification

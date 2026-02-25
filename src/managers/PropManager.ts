@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { EntityFactory } from '../factories/EntityFactory';
-import { RoomConfig } from '../core/GameState';
-import gameState from '../core/GameState';
+import { GameContext, RoomConfig } from '../core/GameState';
 
 export class PropManager {
     private scene: THREE.Scene;
@@ -13,7 +12,7 @@ export class PropManager {
     private decorations: THREE.Group | null = null;
     private grabbablesSpawned: boolean = false;
 
-    constructor(scene: THREE.Scene, randomFunc: () => number) {
+    constructor(scene: THREE.Scene, randomFunc: () => number, private context: GameContext) {
         this.scene = scene;
         this.random = randomFunc;
     }
@@ -68,9 +67,9 @@ export class PropManager {
 
         this.scene.add(tableGroup);
 
-        if (gameState.managers.physics) {
-            gameState.managers.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
-            gameState.managers.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
+        if (this.context.managers.physics) {
+            this.context.managers.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
+            this.context.managers.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
         }
     }
 
@@ -87,7 +86,7 @@ export class PropManager {
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
 
-        gameState.managers.assets.getNormalizedModel('/models/duck.glb', 0.25).then(duck => {
+        this.context.managers.assets.getNormalizedModel('/models/duck.glb', 0.25).then(duck => {
             this.hologram?.add(duck);
         });
     }
@@ -111,8 +110,8 @@ export class PropManager {
                 this.podest.add(segment);
 
                 // Add static physics collider
-                if (gameState.managers.physics) {
-                    gameState.managers.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
+                if (this.context.managers.physics) {
+                    this.context.managers.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
                 }
             }
         }
@@ -137,8 +136,8 @@ export class PropManager {
             this.decorations.add(pillar);
 
             // Add static physics collider
-            if (gameState.managers.physics) {
-                gameState.managers.physics.createCuboid(w / 2, h / 2, w / 2, { x: pillar.position.x, y: pillar.position.y, z: pillar.position.z }, null, true);
+            if (this.context.managers.physics) {
+                this.context.managers.physics.createCuboid(w / 2, h / 2, w / 2, { x: pillar.position.x, y: pillar.position.y, z: pillar.position.z }, null, true);
             }
         }
         this.scene.add(this.decorations);
@@ -150,11 +149,11 @@ export class PropManager {
 
         // Spawn a Pen
         const penId = 'pen-1';
-        const pen = EntityFactory.spawn('PEN', penId, {
+        const pen = EntityFactory.spawn(this.context, 'PEN', penId, {
             position: { x: 0.5, y: 1.15, z: 0.5 },
-            isAuthority: gameState.isHost
+            isAuthority: this.context.isHost
         });
-        if (pen) gameState.managers.entity.addEntity(pen);
+        if (pen) this.context.managers.entity.addEntity(pen);
 
         const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
         for (let i = 0; i < 6; i++) {
@@ -168,7 +167,7 @@ export class PropManager {
             mesh.position.set(position.x, position.y, position.z);
             mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })));
             const entityId = `grabbable-${i}`;
-            EntityFactory.createGrabbable(entityId, 0.12, position, mesh);
+            EntityFactory.createGrabbable(this.context, entityId, 0.12, position, mesh);
         }
     }
 

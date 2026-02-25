@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { PlayerEntity, HandState } from './PlayerEntity';
 import { IView } from '../interfaces/IView';
+import { GameContext } from '../core/GameState';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
 import { PlayerViewState } from '../views/StickFigureView';
 import { PlayerEntityState, EntityType } from '../interfaces/IEntityState';
-import gameState from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -19,7 +19,7 @@ export class LocalPlayer extends PlayerEntity {
     public view: IView<PlayerViewState>;
     public skills: Skill[] = [];
     public activeSkill: Skill | null = null;
-    
+
     public xrOrigin: { position: Vector3, quaternion: Quaternion };
     public headPose: { position: Vector3, quaternion: Quaternion };
     public leftHandPose: { position: Vector3, quaternion: Quaternion };
@@ -29,11 +29,11 @@ export class LocalPlayer extends PlayerEntity {
     public _leftControllerIndex: number = 0;
     public _rightControllerIndex: number = 1;
 
-    constructor(id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
-        super(id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
+    constructor(protected context: GameContext, id: string, spawnPos: Vector3, spawnYaw: number, view: IView<PlayerViewState>) {
+        super(context, id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
         this.isAuthority = true;
         this.view = view;
-        
+
         this.view.mesh.userData.entityId = this.id;
         this.view.mesh.traverse(child => {
             child.userData.entityId = this.id;
@@ -102,7 +102,7 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public update(delta: number, frame?: XRFrame): void {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
         const render = managers.render;
         const xr = managers.xr;
 
@@ -113,7 +113,7 @@ export class LocalPlayer extends PlayerEntity {
         }
 
         this.updateVRHands(frame);
-        
+
         // Calculate world pose from our own state (Source of Truth)
         let worldHeadPos: Vector3;
         let worldHeadQuat: Quaternion;
@@ -129,16 +129,16 @@ export class LocalPlayer extends PlayerEntity {
             // In Desktop, our internal state drives the world pose
             const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
-            
+
             const localHeadPos = new THREE.Vector3(this.headPose.position.x, this.headPose.position.y, this.headPose.position.z);
             const localHeadQuat = new THREE.Quaternion(this.headPose.quaternion.x, this.headPose.quaternion.y, this.headPose.quaternion.z, this.headPose.quaternion.w);
 
             const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
             const worldQuat = originQuat.clone().multiply(localHeadQuat);
-            
+
             worldHeadPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
             worldHeadQuat = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
-            
+
             const euler = new THREE.Euler().setFromQuaternion(originQuat, 'YXZ');
             bodyYaw = euler.y;
         }
@@ -161,7 +161,7 @@ export class LocalPlayer extends PlayerEntity {
             headQuaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w },
             handStates: this.handStates,
             name: this.name || 'You',
-            color: gameState.avatarConfig.color,
+            color: this.context.avatarConfig.color,
             isLocal: true,
             audioLevel: managers.media ? managers.media.getLocalVolume() : 0,
             lerpFactor: 1.0
@@ -173,7 +173,7 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     private updateVRHands(frame?: XRFrame): void {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
         const render = managers.render;
         const xr = managers.xr;
 
@@ -218,9 +218,9 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public getNetworkState(): PlayerEntityState {
-        const managers = gameState.managers;
+        const managers = this.context.managers;
         const render = managers.render;
-        
+
         let worldHeadPos: Vector3;
         let worldHeadQuat: Quaternion;
         let bodyYaw: number;
@@ -242,7 +242,7 @@ export class LocalPlayer extends PlayerEntity {
             const euler = new THREE.Euler().setFromQuaternion(originQuat, 'YXZ');
             bodyYaw = euler.y;
         }
-        
+
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
         const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
@@ -257,7 +257,7 @@ export class LocalPlayer extends PlayerEntity {
             hq: [localHeadQuat.x, localHeadQuat.y, localHeadQuat.z, localHeadQuat.w],
             hands: JSON.parse(JSON.stringify(this.handStates)),
             conf: {
-                color: gameState.avatarConfig.color
+                color: this.context.avatarConfig.color
             },
             ownerId: this.ownerId
         };
@@ -276,7 +276,7 @@ export class LocalPlayer extends PlayerEntity {
         this.skills = [];
         this.activeSkill = null;
 
-        const render = gameState.managers.render;
+        const render = this.context.managers.render;
         if (render && this.view) {
             this.view.removeFromScene(render.scene);
             this.view.destroy();

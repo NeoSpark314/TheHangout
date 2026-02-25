@@ -1,9 +1,10 @@
 import eventBus from '../core/EventBus';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import { EVENTS } from '../utils/Constants';
 import { isMobile } from '../utils/DeviceUtils';
+import { IUpdatable } from '../interfaces/IUpdatable';
 
-export class UIManager {
+export class UIManager implements IUpdatable {
     private overlay: HTMLElement;
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;
@@ -24,7 +25,7 @@ export class UIManager {
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
 
-    constructor() {
+    constructor(private context: GameContext) {
         this.overlay = document.getElementById('ui-overlay')!;
         this.nameInput = document.getElementById('player-name') as HTMLInputElement;
         this.createBtn = document.getElementById('create-btn') as HTMLButtonElement;
@@ -59,7 +60,7 @@ export class UIManager {
 
         const networkBadge = document.getElementById('network-mode');
         if (networkBadge) {
-            if (gameState.isLocalServer) {
+            if (this.context.isLocalServer) {
                 networkBadge.textContent = '🖥 Local Network';
                 networkBadge.classList.add('local');
             } else {
@@ -81,7 +82,7 @@ export class UIManager {
         }
 
         this.nameInput.addEventListener('input', () => {
-            gameState.playerName = this.nameInput.value.trim();
+            this.context.playerName = this.nameInput.value.trim();
             this.saveToStorage();
         });
 
@@ -103,10 +104,10 @@ export class UIManager {
 
         if (this.avatarColorInput) {
             this.avatarColorInput.addEventListener('input', () => {
-                gameState.avatarConfig.color = this.avatarColorInput.value;
+                this.context.avatarConfig.color = this.avatarColorInput.value;
                 this.saveToStorage();
-                eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, gameState.avatarConfig);
-                this.updateAvatarButtonColor(gameState.avatarConfig.color as string);
+                eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, this.context.avatarConfig);
+                this.updateAvatarButtonColor(this.context.avatarConfig.color as string);
             });
         }
 
@@ -117,7 +118,7 @@ export class UIManager {
         }
 
         eventBus.on(EVENTS.HOST_READY, (peerId: string) => {
-            if (gameState.isHost) {
+            if (this.context.isHost) {
                 this.setStatus('Room Created! Starting...');
                 this.ensureAudioContextResumed();
                 setTimeout(() => this.hideOverlay(), 1000);
@@ -125,7 +126,7 @@ export class UIManager {
         });
 
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
-            if (!gameState.isHost) {
+            if (!this.context.isHost) {
                 this.setStatus('Connected!');
                 setTimeout(() => this.hideOverlay(), 1000);
             }
@@ -146,8 +147,8 @@ export class UIManager {
     }
 
     public update(delta: number): void {
-        if (this.overlay.style.display === 'none' && this.isMobile && !gameState.isDedicatedHost && !this._joysticksInitialized) {
-            gameState.managers.input?.initMobileJoysticks();
+        if (this.overlay.style.display === 'none' && this.isMobile && !this.context.isDedicatedHost && !this._joysticksInitialized) {
+            this.context.managers.input?.initMobileJoysticks();
             this._joysticksInitialized = true;
         }
     }
@@ -161,24 +162,24 @@ export class UIManager {
 
         const storedVoice = localStorage.getItem('hangout_voiceEnabled');
         if (storedVoice === 'true') {
-            gameState.voiceEnabled = true;
+            this.context.voiceEnabled = true;
             this.updateVoiceButton(true);
         }
 
         const storedColor = localStorage.getItem('hangout_avatarColor');
         if (storedColor) {
-            gameState.avatarConfig.color = storedColor;
+            this.context.avatarConfig.color = storedColor;
         } else {
             const palette = ['#00ffff', '#ff00ff', '#39ff14', '#fffd01', '#ff3131', '#bc13fe', '#ff5e00', '#00ff08'];
             const randomColor = palette[Math.floor(Math.random() * palette.length)];
-            gameState.avatarConfig.color = randomColor;
+            this.context.avatarConfig.color = randomColor;
             localStorage.setItem('hangout_avatarColor', randomColor);
         }
 
-        if (this.avatarColorInput) this.avatarColorInput.value = gameState.avatarConfig.color as string;
-        this.updateAvatarButtonColor(gameState.avatarConfig.color as string);
+        if (this.avatarColorInput) this.avatarColorInput.value = this.context.avatarConfig.color as string;
+        this.updateAvatarButtonColor(this.context.avatarConfig.color as string);
 
-        gameState.playerName = this.nameInput.value.trim();
+        this.context.playerName = this.nameInput.value.trim();
 
         if (this.versionInfo) this.versionInfo.textContent = `v${__APP_VERSION__}`;
         if (this.shaInfo) this.shaInfo.textContent = `build: ${__GIT_SHA__}`;
@@ -189,13 +190,13 @@ export class UIManager {
         const room = this.roomInput.value.trim();
         if (name) {
             localStorage.setItem('hangout_playerName', name);
-            gameState.playerName = name;
+            this.context.playerName = name;
             eventBus.emit(EVENTS.LOCAL_NAME_UPDATED, name);
         }
-        if (gameState.avatarConfig.color) {
-            localStorage.setItem('hangout_avatarColor', gameState.avatarConfig.color as string);
+        if (this.context.avatarConfig.color) {
+            localStorage.setItem('hangout_avatarColor', this.context.avatarConfig.color as string);
         }
-        localStorage.setItem('hangout_voiceEnabled', String(gameState.voiceEnabled));
+        localStorage.setItem('hangout_voiceEnabled', String(this.context.voiceEnabled));
         if (room) {
             localStorage.setItem('hangout_lastRoomId', room);
         }
@@ -222,14 +223,14 @@ export class UIManager {
     }
 
     private setupGuestMode(roomId: string): void {
-        gameState.isHost = false;
+        this.context.isHost = false;
         if (this.createBtn) this.createBtn.style.display = 'none';
         this.roomInput.value = roomId;
         this.joinBtn.addEventListener('click', async () => {
-            gameState.playerName = this.nameInput.value.trim() || 'Guest';
-            if (gameState.voiceEnabled) {
+            this.context.playerName = this.nameInput.value.trim() || 'Guest';
+            if (this.context.voiceEnabled) {
                 this.ensureAudioContextResumed();
-                await gameState.managers.media.toggleMicrophone();
+                await this.context.managers.media.toggleMicrophone();
             }
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
@@ -239,43 +240,43 @@ export class UIManager {
 
     private setupDefaultMode(): void {
         this.createBtn.addEventListener('click', async () => {
-            gameState.playerName = this.nameInput.value.trim() || 'Host';
-            if (gameState.voiceEnabled) {
+            this.context.playerName = this.nameInput.value.trim() || 'Host';
+            if (this.context.voiceEnabled) {
                 this.ensureAudioContextResumed();
-                await gameState.managers.media.toggleMicrophone();
+                await this.context.managers.media.toggleMicrophone();
             }
             const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
             this.disableAllButtons();
             this.clearError();
             this.saveToStorage();
-            gameState.isHost = true;
+            this.context.isHost = true;
             this.setStatus('Creating room...');
             eventBus.emit(EVENTS.CREATE_ROOM, customId);
         });
 
         if (this.dedicatedHostBtn) {
             this.dedicatedHostBtn.addEventListener('click', async () => {
-                if (gameState.voiceEnabled) {
+                if (this.context.voiceEnabled) {
                     this.ensureAudioContextResumed();
-                    await gameState.managers.media.toggleMicrophone();
+                    await this.context.managers.media.toggleMicrophone();
                 }
                 const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
                 this.disableAllButtons();
                 this.clearError();
                 this.saveToStorage();
-                gameState.playerName = 'Host';
-                gameState.isHost = true;
-                gameState.isDedicatedHost = true;
+                this.context.playerName = 'Host';
+                this.context.isHost = true;
+                this.context.isDedicatedHost = true;
                 this.setStatus('Creating dedicated room...');
                 eventBus.emit(EVENTS.CREATE_ROOM, customId);
             });
         }
 
         this.joinBtn.addEventListener('click', async () => {
-            gameState.playerName = this.nameInput.value.trim() || 'Player';
-            if (gameState.voiceEnabled) {
+            this.context.playerName = this.nameInput.value.trim() || 'Player';
+            if (this.context.voiceEnabled) {
                 this.ensureAudioContextResumed();
-                await gameState.managers.media.toggleMicrophone();
+                await this.context.managers.media.toggleMicrophone();
             }
             const targetId = this.roomInput.value.trim();
             if (!targetId) {
@@ -285,7 +286,7 @@ export class UIManager {
             this.disableAllButtons();
             this.clearError();
             this.saveToStorage();
-            gameState.isHost = false;
+            this.context.isHost = false;
             this.setStatus('Connecting to host...');
             eventBus.emit(EVENTS.JOIN_ROOM, targetId);
         });
@@ -326,11 +327,11 @@ export class UIManager {
             setTimeout(() => {
                 this.overlay.style.display = 'none';
                 if (this.leaveBtn) this.leaveBtn.style.display = 'flex';
-                if (this.isMobile && !gameState.isDedicatedHost) {
+                if (this.isMobile && !this.context.isDedicatedHost) {
                     const hud = document.getElementById('mobile-hud');
                     if (hud) {
                         hud.style.display = 'flex';
-                        gameState.managers.input?.initMobileJoysticks();
+                        this.context.managers.input?.initMobileJoysticks();
                         this._joysticksInitialized = true;
                     }
                 }
@@ -339,9 +340,9 @@ export class UIManager {
     }
 
     private ensureAudioContextResumed(): void {
-        if (gameState.managers.render && gameState.managers.render.audioListener) {
-            if (gameState.managers.render.audioListener.context.state === 'suspended') {
-                gameState.managers.render.audioListener.context.resume();
+        if (this.context.managers.render && this.context.managers.render.audioListener) {
+            if (this.context.managers.render.audioListener.context.state === 'suspended') {
+                this.context.managers.render.audioListener.context.resume();
             }
         }
     }
@@ -360,8 +361,8 @@ export class UIManager {
     }
 
     private async toggleVoice(): Promise<void> {
-        gameState.voiceEnabled = !gameState.voiceEnabled;
-        this.updateVoiceButton(gameState.voiceEnabled);
+        this.context.voiceEnabled = !this.context.voiceEnabled;
+        this.updateVoiceButton(this.context.voiceEnabled);
     }
 
     private updateVoiceButton(enabled: boolean): void {
@@ -384,17 +385,17 @@ export class UIManager {
 
     private handleLeave(): void {
         if (this.leaveBtn) this.leaveBtn.style.display = 'none';
-        if (gameState.managers.network) gameState.managers.network.disconnect();
-        if (gameState.managers.media) gameState.managers.media.stopMicrophone();
-        if (gameState.managers.entity) {
-            const entities = Array.from(gameState.managers.entity.entities.values());
+        if (this.context.managers.network) this.context.managers.network.disconnect();
+        if (this.context.managers.media) this.context.managers.media.stopMicrophone();
+        if (this.context.managers.entity) {
+            const entities = Array.from(this.context.managers.entity.entities.values());
             entities.forEach(entity => {
                 if (entity.type !== 'LOCAL_PLAYER') {
-                    gameState.managers.entity!.removeEntity(entity.id);
+                    this.context.managers.entity!.removeEntity(entity.id);
                 }
             });
         }
-        gameState.isDedicatedHost = false;
+        this.context.isDedicatedHost = false;
         this.showOverlay();
         this.setStatus('Ready');
         this.enableAllButtons();

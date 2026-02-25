@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import eventBus from '../core/EventBus';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import { EVENTS } from '../utils/Constants';
+import { IUpdatable } from '../interfaces/IUpdatable';
 
 interface Notification {
     text: string;
@@ -9,7 +10,7 @@ interface Notification {
     duration: number;
 }
 
-export class HUDManager {
+export class HUDManager implements IUpdatable {
     public group: THREE.Group;
     private listCanvas: HTMLCanvasElement;
     private listContext: CanvasRenderingContext2D;
@@ -28,9 +29,9 @@ export class HUDManager {
     private playerNames: string[] = [];
     private _lastListRefresh: number = 0;
 
-    constructor() {
+    constructor(private context: GameContext) {
         this.group = new THREE.Group();
-        this.group.raycast = () => {}; // Disable raycasting for the whole HUD group
+        this.group.raycast = () => { }; // Disable raycasting for the whole HUD group
 
         this.listCanvas = document.createElement('canvas');
         this.listContext = this.listCanvas.getContext('2d')!;
@@ -100,13 +101,13 @@ export class HUDManager {
     }
 
     public updatePlayerList(): void {
-        const entityMgr = gameState.managers.entity;
+        const entityMgr = this.context.managers.entity;
         if (!entityMgr) return;
 
         this.playerNames = [];
-        if (gameState.playerName) {
-            const suffix = gameState.isDedicatedHost ? '(SPECTATOR)' : '(YOU)';
-            this.playerNames.push(`${gameState.isDedicatedHost ? 'Host' : gameState.playerName} ${suffix}`);
+        if (this.context.playerName) {
+            const suffix = this.context.isDedicatedHost ? '(SPECTATOR)' : '(YOU)';
+            this.playerNames.push(`${this.context.isDedicatedHost ? 'Host' : this.context.playerName} ${suffix}`);
         }
 
         const entities = entityMgr.entities;
@@ -137,7 +138,7 @@ export class HUDManager {
     public update(delta: number): void {
         const now = performance.now();
         if (this.crosshair) {
-            const isXR = gameState.managers.render?.isXRPresenting();
+            const isXR = this.context.managers.render?.isXRPresenting();
             this.crosshair.visible = !isXR;
         }
 

@@ -4,7 +4,7 @@ import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { Vector3 } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { PhysicsPropView } from '../views/PhysicsPropView';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -13,6 +13,8 @@ export class PhysicsManager {
     private nextPhysicsId: number = 0;
     private accumulator: number = 0;
     private fixedTimeStep: number = 1 / 60;
+
+    constructor(private context: GameContext) { }
 
     public async init(): Promise<void> {
         await RAPIER.init();
@@ -76,9 +78,9 @@ export class PhysicsManager {
             const defaultMesh = new THREE.Mesh(geo, mat);
             defaultMesh.position.set(position.x, position.y, position.z);
             finalView = new PhysicsPropView(defaultMesh, entityId);
-            
-            if (gameState.managers.render) {
-                finalView.addToScene(gameState.managers.render.scene);
+
+            if (this.context.managers.render) {
+                finalView.addToScene(this.context.managers.render.scene);
             }
         }
 
@@ -97,13 +99,13 @@ export class PhysicsManager {
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(colliderDesc, rigidBody);
 
-        const physicsEntity = new PhysicsEntity(entityId, gameState.isHost, rigidBody, {
+        const physicsEntity = new PhysicsEntity(entityId, this.context.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
             view: finalView
         });
 
-        const entityManager = gameState.managers.entity;
+        const entityManager = this.context.managers.entity;
         if (entityManager) {
             entityManager.addEntity(physicsEntity);
         }

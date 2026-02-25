@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
 import { EntityManager } from '../managers/EntityManager';
 import { isGrabbable, isInteractable } from '../utils/TypeGuards';
-import gameState from '../core/GameState';
 
 export class InteractionSystem {
     private raycaster: THREE.Raycaster = new THREE.Raycaster();
@@ -25,11 +24,10 @@ export class InteractionSystem {
      * Best for VR near-grab.
      */
     public findNearestInteractable(point: THREE.Vector3, maxDist: number): { interactable: IInteractable, distance: number } | null {
-        const managers = gameState.managers;
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
-        for (const entity of managers.entity.entities.values()) {
+        for (const entity of this.entityManager.entities.values()) {
             // Check if it's grabbable, interactable and NOT currently held
             if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
                 // Get world position from view if possible

@@ -1,6 +1,6 @@
 import { MediaConnection } from 'peerjs';
 import eventBus from '../core/EventBus';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import { EVENTS } from '../utils/Constants';
 
 export class MediaManager {
@@ -11,9 +11,9 @@ export class MediaManager {
     private localAnalyser: AnalyserNode | null = null;
     private freqData: Uint8Array | null = null;
 
-    constructor() {
+    constructor(private context: GameContext) {
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
-            if (this.localStream && gameState.managers.network && gameState.managers.network.peer) {
+            if (this.localStream && this.context.managers.network && this.context.managers.network.peer) {
                 this.callPeer(peerId);
             }
         });
@@ -37,7 +37,7 @@ export class MediaManager {
             this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             console.log('[MediaManager] Microphone access granted.');
 
-            const render = gameState.managers.render;
+            const render = this.context.managers.render;
             if (render && render.audioListener) {
                 this.audioContext = render.audioListener.context as AudioContext;
             } else if (!this.audioContext) {
@@ -55,7 +55,7 @@ export class MediaManager {
             }
             this.calls.clear();
 
-            const network = gameState.managers.network;
+            const network = this.context.managers.network;
             if (network && network.peer) {
                 for (const peerId of network.connections.keys()) {
                     this.callPeer(peerId);
@@ -99,7 +99,7 @@ export class MediaManager {
     }
 
     public callPeer(targetPeerId: string): void {
-        const network = gameState.managers.network;
+        const network = this.context.managers.network;
         const peer = network ? network.peer : null;
         if (!peer || !this.localStream) return;
 

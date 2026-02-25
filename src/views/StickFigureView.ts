@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { EntityView } from './EntityView';
 import { Vector3, Quaternion } from '../interfaces/IMath';
 import { HandState } from '../entities/PlayerEntity';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 
 export interface PlayerViewState {
     position: Vector3;
@@ -23,7 +23,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     public headMesh!: THREE.Mesh;
     private currentHeadHeight: number = 1.7;
     private _lastName: string = '';
-    
+
     private accentMaterial!: THREE.MeshBasicMaterial;
     private cyberMaterial!: THREE.MeshBasicMaterial;
     private darkMaterial!: THREE.MeshBasicMaterial;
@@ -65,11 +65,11 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     private audioAnalyser: THREE.AudioAnalyser | null = null;
     private audioElement: HTMLAudioElement | null = null;
 
-    constructor({ color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
+    constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
         this.color = color;
         this.isLocal = isLocal;
-        
+
         // Initializing wrist meshes to avoid 'used before assigned' error, 
         // though _buildGeometry will re-assign them properly.
         const dummyGeom = new THREE.BoxGeometry(0.01, 0.01, 0.01);
@@ -84,7 +84,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
     }
 
     private _setupAudio(): void {
-        const render = gameState.managers.render;
+        const render = this.context.managers.render;
         if (render?.audioListener) {
             this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
             this.positionalAudio.setRefDistance(3);
@@ -344,7 +344,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         const context = canvas.getContext('2d')!;
         canvas.width = 512;
         canvas.height = 128;
-        
+
         // Background
         context.fillStyle = 'rgba(0, 0, 0, 0.6)';
         const radius = 30;
@@ -364,11 +364,11 @@ export class StickFigureView extends EntityView<PlayerViewState> {
         context.font = 'bold 70px Inter, Arial, sans-serif';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
-        
+
         const fillStyle = typeof this.color === 'string' && this.color.startsWith('#')
             ? this.color
             : '#' + (this.color as number).toString(16).padStart(6, '0');
-        
+
         context.fillStyle = fillStyle;
         context.shadowColor = 'rgba(0, 0, 0, 0.9)';
         context.shadowBlur = 6;
@@ -529,7 +529,7 @@ export class StickFigureView extends EntityView<PlayerViewState> {
 
     public destroy(): void {
         this._cleanupMesh();
-        
+
         if (this.audioElement) {
             this.audioElement.pause();
             this.audioElement.srcObject = null;

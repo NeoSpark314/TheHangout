@@ -3,7 +3,7 @@ import { Vector3, Quaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { PlayerViewState } from '../views/StickFigureView';
 import { PlayerEntityState, EntityType } from '../interfaces/IEntityState';
-import gameState from '../core/GameState';
+import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -15,8 +15,8 @@ export class RemotePlayer extends PlayerEntity {
     public avatarColor: string | number | undefined;
     private lastNetworkUpdateTime: number = performance.now();
 
-    constructor(peerId: string, view: IView<PlayerViewState>) {
-        super(peerId, EntityType.REMOTE_PLAYER, false);
+    constructor(protected context: GameContext, peerId: string, view: IView<PlayerViewState>) {
+        super(context, peerId, EntityType.REMOTE_PLAYER, false);
         this.peerId = peerId;
         this.view = view;
         this.name = 'Player'; // Default
@@ -68,7 +68,7 @@ export class RemotePlayer extends PlayerEntity {
                         const jData = netHand.joints[i];
                         if (jData.position) localHand.joints[i].position = { ...jData.position };
                         else if (jData.p) localHand.joints[i].position = { ...jData.p };
-                        
+
                         if (jData.quaternion) localHand.joints[i].quaternion = { ...jData.quaternion };
                         else if (jData.q) localHand.joints[i].quaternion = { ...jData.q };
                     }
@@ -107,7 +107,7 @@ export class RemotePlayer extends PlayerEntity {
         super.destroy();
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
 
-        const render = gameState.managers.render;
+        const render = this.context.managers.render;
         if (render && this.view) {
             this.view.removeFromScene(render.scene);
             this.view.destroy();
