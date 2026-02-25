@@ -99,7 +99,7 @@ export class PhysicsManager {
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         this.world.createCollider(colliderDesc, rigidBody);
 
-        const physicsEntity = new PhysicsEntity(entityId, this.context.isHost, rigidBody, {
+        const physicsEntity = new PhysicsEntity(this.context, entityId, this.context.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
             view: finalView

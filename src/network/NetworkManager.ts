@@ -3,7 +3,8 @@ import eventBus from '../core/EventBus';
 import { GameContext } from '../core/GameState';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
-import { EntityType } from '../interfaces/IEntityState';
+import { EntityType, StateUpdatePacket } from '../interfaces/IEntityState';
+import { RoomConfigUpdatePayload, DrawSegmentPayload } from '../interfaces/INetworkPacket';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive';
 import { RelayConnection } from '../utils/RelayConnection';
@@ -69,7 +70,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.DRAW_LINE_SEGMENT, new DrawLineHandler(this.context));
     }
 
-    private getPeerConfig(): RTCConfiguration {
+    private getPeerConfig(): any {
         if (this.context.isLocalServer) {
             return {
                 host: window.location.hostname,
@@ -104,7 +105,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
                 if (data.type === 'peer-joined') {
                     if (this.context.isHost) {
                         const conn = new RelayConnection(this.relaySocket!, peerId, data.peerId, true);
-                        this.setupConnection(conn as DataConnection);
+                        this.setupConnection(conn);
                     }
                 } else if (data.type === 'relay') {
                     const conn = this.connections.get(data.from);
@@ -112,7 +113,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
                         conn.handleData(data.payload);
                     } else if (!this.context.isHost && data.from === this.context.roomId) {
                         const conn = new RelayConnection(this.relaySocket!, peerId, data.from, false);
-                        this.setupConnection(conn as RelayConnection);
+                        this.setupConnection(conn);
                         conn.handleData(data.payload);
                     }
                 } else if (data.type === 'peer-left') {
@@ -168,7 +169,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
             this.initRelay(tempId, hostId).then(() => {
                 if (!this.connections.has(hostId)) {
                     const conn = new RelayConnection(this.relaySocket!, tempId, hostId, false);
-                    this.setupConnection(conn as DataConnection);
+                    this.setupConnection(conn);
                 }
             }).catch(e => console.warn('[NetworkManager] Local Relay init failed:', e));
         }
@@ -223,7 +224,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
         (this.synchronizer as any).syncState();
     }
 
-    public applyStateUpdate(entityStates: unknown[]): void {
+    public applyStateUpdate(entityStates: StateUpdatePacket[]): void {
         const managers = this.context.managers;
         for (const stateData of entityStates) {
             let entity = managers.entity.getEntity(stateData.id);
@@ -257,36 +258,36 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
 
     public reclaimOwnership(peerId: string): void {
         for (const entity of this.context.managers.entity.entities.values()) {
-            const logicEntity = entity as { ownerId?: string, isLocallyControlled?: boolean };
+            const logicEntity = entity as { ownerId?: string | null, isLocallyControlled?: boolean };
             if (logicEntity.ownerId === peerId && !logicEntity.isLocallyControlled) {
                 logicEntity.ownerId = null;
                 entity.isAuthority = true;
-                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
+                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
             }
         }
     }
 
-    public applyOwnershipTransfer(payload: { entityId: string, newOwnerId: string }): void {
-        const entity = this.context.managers.entity.getEntity(payload.id);
+    public applyOwnershipTransfer(payload: { entityId: string, newOwnerId: string | null }): void {
+        const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
-        const isLocalOwner = payload.ownerId === (this.context.localPlayer?.id || 'local');
-        (entity as { ownerId?: string }).ownerId = payload.newOwnerId;
+        const isLocalOwner = payload.newOwnerId === (this.context.localPlayer?.id || 'local');
+        (entity as { ownerId?: string | null }).ownerId = payload.newOwnerId;
         entity.isAuthority = isLocalOwner;
     }
 
     public handleOwnershipRequest(senderId: string, payload: { entityId: string }): void {
-        const entity = this.context.managers.entity.getEntity(payload.id);
+        const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
             logicEntity.ownerId = senderId;
             entity.isAuthority = (senderId === (this.context.localPlayer?.id || 'local'));
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: senderId });
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId });
         }
     }
 
     public handleOwnershipRelease(senderId: string, payload: { entityId: string }): void {
-        const entity = this.context.managers.entity.getEntity(payload.id);
+        const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (logicEntity.ownerId !== senderId) return;
@@ -299,7 +300,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
             logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
         }
 
-        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { id: entity.id, ownerId: null });
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
     }
 
     public sendData(targetId: string, type: number, payload: unknown): void {
@@ -335,7 +336,7 @@ export class NetworkManager implements IUpdatable, NetworkTransport {
 
 class StateUpdateHandler implements PacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: unknown[]): void {
+    handle(senderId: string, payload: StateUpdatePacket[]): void {
         if (!this.context.isHost) {
             this.context.managers.network.applyStateUpdate(payload);
         }
@@ -344,7 +345,7 @@ class StateUpdateHandler implements PacketHandler {
 
 class PlayerInputHandler implements PacketHandler {
     constructor(private network: NetworkManager, private context: GameContext) { }
-    handle(senderId: string, payload: unknown): void {
+    handle(senderId: string, payload: StateUpdatePacket[]): void {
         this.network.applyStateUpdate(payload);
         if (this.context.isHost) {
             this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, payload);
@@ -361,7 +362,7 @@ class PeerDisconnectHandler implements PacketHandler {
 
 class RoomConfigHandler implements PacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: { entityId: string }): void {
+    handle(senderId: string, payload: RoomConfigUpdatePayload): void {
         if (!this.context.isHost) this.context.managers.room.updateConfig(payload);
     }
 }
@@ -382,14 +383,14 @@ class OwnershipReleaseHandler implements PacketHandler {
 
 class OwnershipTransferHandler implements PacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: unknown): void {
+    handle(senderId: string, payload: { entityId: string, newOwnerId: string | null }): void {
         if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
     }
 }
 
 class DrawLineHandler implements PacketHandler {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: unknown): void {
+    handle(senderId: string, payload: DrawSegmentPayload): void {
         if (this.context.managers.drawing) {
             this.context.managers.drawing.drawLine(payload);
         }

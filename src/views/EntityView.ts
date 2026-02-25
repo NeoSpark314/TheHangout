@@ -8,6 +8,7 @@ import { IView } from '../interfaces/IView';
  */
 export abstract class EntityView<TState> implements IView<TState> {
     public mesh: THREE.Object3D;
+    private interactionGroup: THREE.Group | null = null;
 
     constructor(mesh: THREE.Object3D) {
         this.mesh = mesh;
@@ -40,6 +41,7 @@ export abstract class EntityView<TState> implements IView<TState> {
     }
 
     public addToInteractionGroup(group: THREE.Group): void {
+        this.interactionGroup = group;
         if (this.mesh) group.add(this.mesh);
     }
 
@@ -55,11 +57,8 @@ export abstract class EntityView<TState> implements IView<TState> {
         if (this.mesh.parent) {
             this.mesh.parent.remove(this.mesh);
         }
-        
-        // Ensure it's removed from the interaction group too
-        const managers = gameState.managers;
-        if (managers && managers.render && managers.render.interactionGroup) {
-            managers.render.interactionGroup.remove(this.mesh);
+        if (this.interactionGroup) {
+            this.interactionGroup.remove(this.mesh);
         }
     }
 }

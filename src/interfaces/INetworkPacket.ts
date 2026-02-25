@@ -1,4 +1,5 @@
 import { EntityState } from './IEntityState';
+import { RoomConfig } from '../core/GameState';
 
 export interface OwnershipTransferPayload {
     entityId: string;
@@ -23,10 +24,8 @@ export interface PeerDisconnectPayload {
     peerId: string;
 }
 
-export interface RoomConfigUpdatePayload {
-    sceneIndex?: number;
-    // other configuration properties
-    [key: string]: unknown;
+export interface RoomConfigUpdatePayload extends Partial<RoomConfig> {
+    assignedSpawnIndex?: number;
 }
 
 // A discriminated union of all possible packet payloads

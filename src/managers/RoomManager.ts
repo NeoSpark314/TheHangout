@@ -28,7 +28,7 @@ export class RoomManager implements IUpdatable {
         this.scene = scene;
         const randomBound = this.random.bind(this);
         this.environment = new EnvironmentManager(scene, randomBound);
-        this.props = new PropManager(scene, randomBound);
+        this.props = new PropManager(scene, randomBound, this.context);
 
         // Ground is created strictly during applyConfig or init via master orchestrator
         if (this.context.managers.physics) {
