@@ -424,7 +424,8 @@ class ServerConnection {
     }
     public send(data: any) {
         if (this.open && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify(data));
+            // Data from NetworkManager is already stringified JSON
+            this.socket.send(typeof data === 'string' ? data : JSON.stringify(data));
         }
     }
     public close() {

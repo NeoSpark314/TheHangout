@@ -14,9 +14,8 @@ export class EntityManager implements IUpdatable {
         this.entities = new Map();
     }
 
-    /**
-     * Discovers an entity. If it doesn't exist, it spawns it via the factory.
-     */
+    public defaultType: string = 'unknown';
+
     public discover(id: string, type: string, config: any = {}): IEntity | null {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
@@ -43,7 +42,6 @@ export class EntityManager implements IUpdatable {
             const old = this.entities.get(entity.id);
             old?.destroy();
         }
-
         this.entities.set(entity.id, entity);
     }
 

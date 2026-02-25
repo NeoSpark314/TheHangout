@@ -65,6 +65,9 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     public removeClient(peerId: string): void {
         this.connections.delete(peerId);
         this.reclaimOwnership(peerId);
+        if (this.context.managers.entity) {
+            this.context.managers.entity.removeEntity(peerId);
+        }
         this.broadcast(PACKET_TYPES.PEER_DISCONNECT, peerId);
     }
 
