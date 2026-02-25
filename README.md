@@ -32,11 +32,13 @@ The project follows a **Clean Architecture** pattern designed for high-performan
 
 ### Engineering Principles
 
-1.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) drive the visuals. The Rendering layer only *follows* or *interpolates* this state.
-2.  **Domain-Driven Synchronization**: Networking is a pure transport. Entities handle their own specialized events (e.g., `OWNERSHIP_RELEASE`) to encapsulate internal state changes.
-3.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems use **Type Guards** to safely interact with these capabilities at runtime.
-4.  **Strictly Typed Network Contract**: All traffic follows a **Discriminated Union** in `IEntityState.ts`. We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
-5.  **Linear Lifecycle**: The `App` class enforces a strict initialization sequence: **Infrastructure -> World -> Engine**. Views implement a cleanup lifecycle (`_cleanupMesh`) to prevent memory leaks and "ghost" objects.
+1.  **Dependency Injection (DI)**: Core context (`GameContext`) is explicitly passed via constructors. No hidden global singletons, making dependencies obvious and easily testable.
+2.  **Open/Closed Game Loop**: The `GameEngine` iterates over an array of dynamically injected `IUpdatable` systems. New managers or mechanics can be slotted into the frame loop without altering the engine code.
+3.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) drive the mechanics. The Rendering layer only *follows* or *interpolates* this state via distinct `EntityView` instances.
+4.  **Domain-Driven Synchronization**: Networking is a pure transport. Entities handle their own specialized events to encapsulate internal state changes.
+5.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems safely query these capabilities at runtime.
+6.  **Strictly Typed Network Contract**: All traffic utilizes explicitly typed packet payloads (`INetworkPacket.ts`) and Discriminated Unions (`IEntityState.ts`). We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
+7.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
 
 ## Core Systems
 
@@ -72,14 +74,14 @@ The `App` class manages the startup sequence, ensuring all managers are register
 
 ```
 ├── src/
-│   ├── core/           # App, GameEngine, EventBus, GameState
+│   ├── core/           # App, GameEngine, EventBus, GameContext
 │   ├── entities/       # State Owners: LocalPlayer, PhysicsEntity, PenEntity
-│   ├── interfaces/     # Strict Contracts: IEntity, IView, IGrabbable, IEntityState
+│   ├── interfaces/     # Strict Contracts: IUpdatable, IEntity, IView, IEntityState, INetworkPacket
 │   ├── managers/       # Orchestrators: Render, Network, Physics, Assets, Drawing
 │   ├── network/        # Messaging: Dispatcher, Synchronizer, PacketHandlers
-│   ├── skills/         # Gameplay Logic: Movement, Grab
+│   ├── input/          # Hardware Input Layers: Keyboard, Gamepad, XR, Joystick
 │   ├── systems/        # Logic Hubs: XRSystem, InteractionSystem
 │   ├── views/          # Visuals: StickFigureView, PhysicsPropView, PenView
-│   └── utils/          # Math, Constants, DeviceUtils
+│   └── utils/          # Math, Constants, HostKeepalive
 └── vite.config.js
 ```
