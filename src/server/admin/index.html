@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TheHangout Admin — Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>TH_ADMIN <span style="font-size: 0.5em; opacity: 0.5;">v1.0-headless</span></h1>
+            <div class="server-stats">
+                <div>UPTIME: <span id="server-uptime">...</span></div>
+                <div>RAM: <span id="server-ram">...</span></div>
+            </div>
+        </header>
+
+        <div id="rooms" class="room-grid">Loading active sessions...</div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+
+</html>

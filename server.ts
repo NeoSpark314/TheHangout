@@ -94,6 +94,15 @@ app.get('/api/admin/rooms', (req, res) => {
     res.json(data);
 });
 
+app.get('/api/admin/server-stats', (req, res) => {
+    const memory = process.memoryUsage();
+    const uptime = Math.floor(process.uptime());
+    res.json({
+        uptime,
+        ram: Math.round(memory.rss / 1024 / 1024)
+    });
+});
+
 app.post('/api/admin/room/:id/command', (req, res) => {
     const { id } = req.params;
     const { command, payload } = req.body;
@@ -120,161 +129,9 @@ app.post('/api/admin/room/:id/command', (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/admin', (req, res) => {
-    const memory = process.memoryUsage();
-    const uptime = Math.floor(process.uptime());
-
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>TheHangout Admin — Dashboard</title>
-            <style>
-                :root {
-                    --bg: #0b0c10;
-                    --card: #1f2833;
-                    --text: #c5c6c7;
-                    --primary: #66fcf1;
-                    --secondary: #45a29e;
-                    --danger: #ff4c4c;
-                }
-                body { 
-                    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
-                    background: var(--bg); 
-                    color: var(--text); 
-                    margin: 0; 
-                    padding: 20px; 
-                }
-                .container { max-width: 1200px; margin: 0 auto; }
-                header { 
-                    display: flex; 
-                    justify-content: space-between; 
-                    align-items: center; 
-                    border-bottom: 2px solid var(--card);
-                    padding-bottom: 20px;
-                    margin-bottom: 30px;
-                }
-                h1 { margin: 0; color: var(--primary); font-weight: 300; letter-spacing: 2px; }
-                .server-stats { display: flex; gap: 20px; font-size: 0.9em; opacity: 0.8; }
-                .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
-                .room-card { 
-                    background: var(--card); 
-                    border-radius: 12px; 
-                    padding: 24px; 
-                    border: 1px solid #333;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                }
-                .room-id { color: var(--primary); font-size: 1.4em; margin-bottom: 15px; display: block; }
-                .stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95em; }
-                .stat-label { opacity: 0.6; }
-                .stat-value { font-weight: 600; color: #fff; }
-                
-                .controls { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; border-top: 1px solid #333; padding-top: 15px; }
-                button { 
-                    background: #333; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; 
-                    cursor: pointer; font-size: 0.85em; transition: all 0.2s; 
-                }
-                button:hover { background: #444; color: var(--primary); }
-                button.primary { background: var(--secondary); }
-                button.danger { background: #551a1a; }
-                button.danger:hover { background: var(--danger); }
-                
-                .broadcast-group { display: flex; gap: 5px; width: 100%; margin-top: 10px; }
-                .broadcast-group input { 
-                    flex: 1; background: #111; border: 1px solid #333; color: #fff; 
-                    padding: 8px; border-radius: 6px; font-size: 0.85em;
-                }
-                
-                .tag { font-size: 0.7em; background: #333; padding: 2px 6px; border-radius: 4px; margin-right: 4px; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <header>
-                    <h1>TH_ADMIN <span style="font-size: 0.5em; opacity: 0.5;">v1.0-headless</span></h1>
-                    <div class="server-stats">
-                        <div>UPTIME: <span id="server-uptime">${uptime}s</span></div>
-                        <div>RAM: <span>${Math.round(memory.rss / 1024 / 1024)}MB</span></div>
-                    </div>
-                </header>
-                
-                <div id="rooms" class="room-grid">Loading active sessions...</div>
-            </div>
-
-            <script>
-                async function sendCommand(roomId, command, payload = null) {
-                    try {
-                        const res = await fetch(\`/api/admin/room/\${roomId}/command\`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ command, payload })
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            console.log('Command successful');
-                            fetchRooms();
-                        }
-                    } catch (e) { console.error(e); }
-                }
-
-                async function fetchRooms() {
-                    const res = await fetch('/api/admin/rooms');
-                    const rooms = await res.json();
-                    const el = document.getElementById('rooms');
-                    
-                    if (rooms.length === 0) {
-                        el.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 50px; opacity: 0.5;">NO ACTIVE SESSIONS</div>';
-                        return;
-                    }
-
-                    el.innerHTML = rooms.map(r => \`
-                        <div class="room-card">
-                            <span class="room-id">\${r.id}</span>
-                            <div class="stat-row">
-                                <span class="stat-label">Uptime</span>
-                                <span class="stat-value">\${r.uptime}s</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Clients</span>
-                                <span class="stat-value">\${r.clients}</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Entities</span>
-                                <span class="stat-value">\${r.entityCount} (\${r.entityBreakdown.players}P / \${r.entityBreakdown.props}E)</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">Physics</span>
-                                <span class="stat-value">\${r.physics.bodies} bodies / \${r.physics.colliders} colliders</span>
-                            </div>
-                            
-                            <div style="margin-top: 10px; font-size: 0.8em;">
-                                <span class="stat-label">Peers:</span> 
-                                <div style="margin-top: 5px;">
-                                    \${r.peerIds.map(p => \`<span class="tag">\${p}</span>\`).join('') || 'None'}
-                                </div>
-                            </div>
-
-                            <div class="controls">
-                                <button onclick="sendCommand('\${r.id}', 'spawn_cube')" class="primary">Spawn Cube</button>
-                                <button onclick="sendCommand('\${r.id}', 'reset')" class="danger">Reset Room</button>
-                                
-                                <div class="broadcast-group">
-                                    <input type="text" id="bc-\${r.id}" placeholder="System message...">
-                                    <button onclick="const m = document.getElementById('bc-\${r.id}').value; sendCommand('\${r.id}', 'broadcast', m); document.getElementById('bc-\${r.id}').value=''">Send</button>
-                                </div>
-                            </div>
-                        </div>
-                    \`).join('');
-                }
-
-                setInterval(fetchRooms, 3000);
-                fetchRooms();
-            </script>
-        </body>
-        </html>
-    `);
-});
+// Serve the static admin dashboard files
+const adminPath = path.join(__dirname, 'src', 'server', 'admin');
+app.use('/admin', express.static(adminPath));
 
 // Serve the built client
 const distPath = path.join(__dirname, 'dist');
@@ -351,8 +208,8 @@ server.on('upgrade', (request, socket, head) => {
 });
 wss.on('connection', (ws) => {
     console.log('[Relay] New Connection established');
-    let currentRoomId = null;
-    let currentPeerId = null;
+    let currentRoomId: string | null = null;
+    let currentPeerId: string | null = null;
 
     ws.on('message', (message) => {
         try {
@@ -362,6 +219,8 @@ wss.on('connection', (ws) => {
                 currentRoomId = data.roomId;
                 currentPeerId = data.peerId;
 
+                if (!currentRoomId || !currentPeerId) return;
+
                 if (!activeRooms.has(currentRoomId)) {
                     const networkMgr = new ServerNetworkManager();
                     const room = new HeadlessRoom(currentRoomId, networkMgr);
@@ -370,8 +229,10 @@ wss.on('connection', (ws) => {
                 }
 
                 const room = activeRooms.get(currentRoomId);
-                room.network.addClient(currentPeerId, ws);
-                console.log(`[Relay] Peer ${currentPeerId} joined room ${currentRoomId}`);
+                if (room) {
+                    room.network.addClient(currentPeerId, ws);
+                    console.log(`[Relay] Peer ${currentPeerId} joined room ${currentRoomId}`);
+                }
 
             } else {
                 if (currentRoomId && currentPeerId) {
@@ -407,7 +268,7 @@ wss.on('connection', (ws) => {
 server.listen(PORT, '0.0.0.0', () => {
     const interfaces = Object.values(os.networkInterfaces())
         .flat()
-        .filter(i => i.family === 'IPv4' && !i.internal);
+        .filter((i: any) => i && i.family === 'IPv4' && !i.internal);
 
     console.log('');
     console.log('  ╔══════════════════════════════════════════╗');
@@ -415,7 +276,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('  ╠══════════════════════════════════════════╣');
     console.log(`  ║  Local:   https://localhost:${PORT}/`);
     for (const iface of interfaces) {
-        console.log(`  ║  Network: https://${iface.address}:${PORT}/`);
+        if (iface) console.log(`  ║  Network: https://${iface.address}:${PORT}/`);
     }
     console.log('  ╚══════════════════════════════════════════╝');
     console.log('');
