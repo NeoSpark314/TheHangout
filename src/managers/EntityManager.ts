@@ -38,8 +38,9 @@ export class EntityManager implements IUpdatable {
         }
 
         if (this.entities.has(entity.id)) {
-            console.warn(`[EntityManager] Entity with ID ${entity.id} already exists. Overwriting.`);
             const old = this.entities.get(entity.id);
+            if (old === entity) return; // Ignore re-adding the exact same instance
+            console.warn(`[EntityManager] Entity with ID ${entity.id} already exists. Overwriting.`);
             old?.destroy();
         }
         this.entities.set(entity.id, entity);

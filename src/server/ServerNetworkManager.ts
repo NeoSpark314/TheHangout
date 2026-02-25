@@ -23,7 +23,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.PLAYER_INPUT, {
             handle: (senderId: string, payload: IStateUpdatePacket[]) => {
                 this.applyStateUpdate(payload);
-                this.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, payload);
+                // Headless server broadcasts its own authoritative state via synchronizer.
+                // Re-broadcasting raw inputs causes rubber-banding and duplication conflicts BUT
+                // we must relay avatars so clients can see each other's LOCAL_PLAYER updates!
+                const avatarPackets = payload.filter(p => p.type === EntityType.LOCAL_PLAYER);
+                if (avatarPackets.length > 0) {
+                    this.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, avatarPackets);
+                }
             }
         });
 

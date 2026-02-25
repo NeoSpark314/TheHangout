@@ -150,8 +150,7 @@ export class PropManager {
         // Spawn a Pen
         const penId = 'pen-1';
         const pen = EntityFactory.spawn(this.context, 'PEN', penId, {
-            position: { x: 0.5, y: 1.15, z: 0.5 },
-            isAuthority: this.context.isHost
+            position: { x: 0.5, y: 1.15, z: 0.5 }
         });
         if (pen) this.context.managers.entity.addEntity(pen);
 

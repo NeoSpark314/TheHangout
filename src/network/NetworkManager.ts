@@ -335,7 +335,11 @@ class PlayerInputHandler implements IPacketHandler {
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         this.network.applyStateUpdate(payload);
         if (this.context.isHost) {
-            this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, payload);
+            // Only relay player avatars. Physics props are broadcast authoritatively via STATE_UPDATE.
+            const avatarPackets = payload.filter(p => p.type === EntityType.LOCAL_PLAYER);
+            if (avatarPackets.length > 0) {
+                this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, avatarPackets);
+            }
         }
     }
 }
