@@ -14,6 +14,7 @@ export class RenderManager {
     public isMenuMode: boolean = true;
     private menuRotation: number = 0;
     public controllers: THREE.Group[] = [];
+    private raycaster: THREE.Raycaster = new THREE.Raycaster();
 
     constructor(private context: GameContext) {
         this.container = document.getElementById('app')!;
@@ -186,5 +187,14 @@ export class RenderManager {
 
     public setAnimationLoop(callback: (time: number, frame?: XRFrame) => void): void {
         this.renderer.setAnimationLoop(callback);
+    }
+
+    /**
+     * Helper method to cast a ray into the scene and quickly get intersection results.
+     */
+    public raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDist: number): THREE.Intersection[] {
+        this.raycaster.set(origin, direction);
+        this.raycaster.far = maxDist;
+        return this.raycaster.intersectObjects(this.scene.children, true);
     }
 }

@@ -1,14 +1,10 @@
 import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
-import { EntityManager } from '../managers/EntityManager';
+import { GameContext } from '../core/GameState';
 import { isGrabbable, isInteractable } from '../utils/TypeGuards';
 
 export class InteractionSystem {
-    private raycaster: THREE.Raycaster = new THREE.Raycaster();
-    private entityManager: EntityManager;
-
-    constructor(entityManager: EntityManager) {
-        this.entityManager = entityManager;
+    constructor(private context: GameContext) {
     }
 
     /**
@@ -16,6 +12,29 @@ export class InteractionSystem {
      * Currently disabled.
      */
     public findInteractableUnderRay(ray: { origin: THREE.Vector3, direction: THREE.Vector3 }, maxDist: number): IInteractable | null {
+        if (!this.context.managers.render) return null;
+
+        const hits = this.context.managers.render.raycast(ray.origin, ray.direction, maxDist);
+        if (hits.length === 0) return null;
+
+        const entityManager = this.context.managers.entity;
+
+        for (const hit of hits) {
+            let hitObj: THREE.Object3D | null = hit.object;
+            while (hitObj) {
+                const entityId = hitObj.userData.entityId;
+                if (entityId) {
+                    const entity = entityManager.getEntity(entityId);
+                    if (entity && isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
+                        return entity as unknown as IInteractable;
+                    }
+                    // We hit a mesh linked to an entity, but it wasn't interactable, so stop climbing the tree
+                    break;
+                }
+                hitObj = hitObj.parent;
+            }
+        }
+
         return null;
     }
 
@@ -27,7 +46,7 @@ export class InteractionSystem {
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
-        for (const entity of this.entityManager.entities.values()) {
+        for (const entity of this.context.managers.entity.entities.values()) {
             // Check if it's grabbable, interactable and NOT currently held
             if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
                 // Get world position from view if possible

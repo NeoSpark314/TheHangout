@@ -74,19 +74,21 @@ export class AnimationSystem implements IUpdatable {
         // Desktop / Mobile Procedural Animation
         this._bobTime += this._isMoving ? delta * 15 : 0;
 
-        const headPos = new THREE.Vector3();
-        const headDir = new THREE.Vector3();
-        render.camera.getWorldPosition(headPos);
-        render.camera.getWorldDirection(headDir);
-
         // Update head to local space (RenderManager translates camera relative to xrOrigin)
         const headBobY = this._isMoving ? Math.sin(this._bobTime) * 0.05 : 0;
         this.localPlayer.headState.position = { x: 0, y: this.localPlayer.headHeight + headBobY, z: 0 };
 
+        // Local head information (relative to xrOrigin)
+        const headLocalPos = new THREE.Vector3(0, this.localPlayer.headHeight + headBobY, 0);
+        // We use camera's local rotation directly. Since camera is parented to cameraGroup (which is at xrOrigin),
+        // camera.quaternion is our local Look Rotation.
+        const headLocalRot = render.camera.quaternion.clone();
+
         for (const hand of ['left', 'right'] as const) {
             const state = this.localPlayer.handStates[hand];
             state.active = true;
-            state.quaternion = { x: 0, y: 0, z: 0, w: 1 }; // Default Desktop hand rotation
+            // Align the hand's visual rotation with the camera's looking direction
+            state.quaternion = { x: headLocalRot.x, y: headLocalRot.y, z: headLocalRot.z, w: headLocalRot.w };
 
             // Update interaction animation timer
             if (this._interactState[hand]) {
@@ -97,27 +99,27 @@ export class AnimationSystem implements IUpdatable {
 
             const t = this._interactTime[hand];
 
-            // Calculate Rest Position (Hips area)
-            const sideOffset = hand === 'left' ? -0.4 : 0.4;
-            const rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(render.camera.quaternion);
-            const downVector = new THREE.Vector3(0, -1, 0).applyQuaternion(render.camera.quaternion);
-            const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(render.camera.quaternion);
+            // Calculate Rest Position (Hips area) locally
+            const sideOffset = hand === 'left' ? -0.3 : 0.3;
+            const rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(headLocalRot);
+            const downVector = new THREE.Vector3(0, -1, 0).applyQuaternion(headLocalRot);
+            const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(headLocalRot);
 
             // Bobbing offset
             const bobY = this._isMoving ? Math.sin(this._bobTime + (hand === 'left' ? 0 : Math.PI)) * 0.1 : 0;
             const bobZ = this._isMoving ? Math.cos(this._bobTime + (hand === 'left' ? 0 : Math.PI)) * 0.1 : 0;
 
-            const restPos = headPos.clone()
-                .add(downVector.clone().multiplyScalar(0.6)) // down from head
+            const restPos = headLocalPos.clone()
+                .add(downVector.clone().multiplyScalar(0.5)) // down from head
                 .add(rightVector.clone().multiplyScalar(sideOffset)) // out to side
                 .add(forwardVector.clone().multiplyScalar(0.2 + bobZ)); // slightly forward
 
             restPos.y += bobY;
 
-            // Calculate Target Position (Reaching out 1.2m)
-            const targetPos = headPos.clone().add(headDir.clone().multiplyScalar(1.2));
+            // Calculate Target Position (Reaching out 1.0m from local head)
+            const targetPos = headLocalPos.clone().add(forwardVector.clone().multiplyScalar(1.0));
 
-            // Lerp based on interact time to animate the hand shooting forward
+            // Lerp based on interact time
             const finalPos = new THREE.Vector3().lerpVectors(restPos, targetPos, t);
 
             state.position = { x: finalPos.x, y: finalPos.y, z: finalPos.z };

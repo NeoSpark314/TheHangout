@@ -88,7 +88,7 @@ export class App {
         this.context.setManager('drawing', new DrawingManager(this.context.managers.render.scene, this.context));
         this.context.setManager('animation', new AnimationSystem());
         this.context.setManager('xr', new XRSystem());
-        this.context.setManager('interaction', new InteractionSystem(this.context.managers.entity));
+        this.context.setManager('interaction', new InteractionSystem(this.context));
     }
 
     private setupGlobalEventListeners(): void {

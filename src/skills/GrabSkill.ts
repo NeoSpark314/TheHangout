@@ -117,9 +117,21 @@ export class GrabSkill extends Skill {
                 // Clear highlight if we are holding something
                 this._updateHighlight(player.id, hand, null);
             } else {
-                // FIND NEW INTERACTABLE
-                const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
-                const result = managers.interaction.findNearestInteractable(targetPos, this.grabRadius);
+                let result: { interactable: IInteractable, distance: number } | null = null;
+
+                if (managers.render.isXRPresenting()) {
+                    const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+                    result = managers.interaction.findNearestInteractable(targetPos, this.grabRadius);
+                } else if (hand === 'right') { // Desktop mode only uses right hand for interacting
+                    const origin = new THREE.Vector3();
+                    const direction = new THREE.Vector3();
+                    managers.render.camera.getWorldPosition(origin);
+                    managers.render.camera.getWorldDirection(direction);
+
+                    const hit = managers.interaction.findInteractableUnderRay({ origin, direction }, 3.0);
+                    if (hit) result = { interactable: hit, distance: 0 };
+                }
+
                 this._updateHighlight(player.id, hand, result?.interactable || null);
             }
         }
