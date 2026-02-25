@@ -189,13 +189,10 @@ export class RenderManager {
         this.renderer.setAnimationLoop(callback);
     }
 
-    /**
-     * Helper method to cast a ray into the scene and quickly get intersection results.
-     */
     public raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDist: number): THREE.Intersection[] {
         this.raycaster.set(origin, direction);
         this.raycaster.far = maxDist;
         this.raycaster.camera = this.camera;
-        return this.raycaster.intersectObjects(this.scene.children, true);
+        return this.raycaster.intersectObjects(this.interactionGroup.children, true);
     }
 }
