@@ -11,6 +11,10 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private synchronizer!: NetworkSynchronizer;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
 
+    // Traffic metrics
+    public bytesReceived: number = 0;
+    public bytesSent: number = 0;
+
     constructor() {
         this.dispatcher = new NetworkDispatcher();
     }
@@ -87,28 +91,38 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             return;
         }
         this.dispatcher.dispatch(peerId, messageData);
+        // Approximate byte size
+        this.bytesReceived += JSON.stringify(messageData).length;
     }
 
     // --- INetworkTransport implementation ---
     public sendData(targetId: string, type: number, payload: unknown): void {
         const ws = this.connections.get(targetId);
         if (ws && ws.readyState === 1) { // 1 = OPEN
-            ws.send(JSON.stringify({ type, payload }));
+            const data = JSON.stringify({ type, payload });
+            ws.send(data);
+            this.bytesSent += data.length;
         }
     }
 
     public broadcast(type: number, payload: unknown): void {
         const data = JSON.stringify({ type, payload });
+        const dataLength = data.length;
         for (const ws of this.connections.values()) {
-            if (ws?.readyState === 1) ws.send(data);
+            if (ws?.readyState === 1) {
+                ws.send(data);
+                this.bytesSent += dataLength;
+            }
         }
     }
 
     public relayToOthers(senderId: string, type: number, payload: unknown): void {
         const data = JSON.stringify({ type, payload, senderId }); // Inject senderId to identify source
+        const dataLength = data.length;
         for (const [peerId, ws] of this.connections.entries()) {
             if (peerId !== senderId && ws?.readyState === 1) {
                 ws.send(data);
+                this.bytesSent += dataLength;
             }
         }
     }

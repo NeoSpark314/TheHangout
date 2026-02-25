@@ -67,14 +67,26 @@ export class HeadlessRoom {
         const physicsMgr = this.context.managers.physics;
         const entities = Array.from(entityMgr.entities.values());
 
+        const players = entities.filter(e => e.type === 'REMOTE_PLAYER');
+
         return {
             id: this.roomId,
             uptime: Math.floor((Date.now() - this.startTime) / 1000),
             clients: this.network.connections.size,
-            peerIds: Array.from(this.network.connections.keys()),
+            peers: Array.from(this.network.connections.keys()).map(id => {
+                const entity = entityMgr.getEntity(id);
+                return {
+                    id,
+                    name: (entity as any)?.name || 'Connecting...'
+                };
+            }),
+            network: {
+                in: this.network.bytesReceived,
+                out: this.network.bytesSent
+            },
             entityCount: entities.length,
             entityBreakdown: {
-                players: entities.filter(e => e.type === 'REMOTE_PLAYER').length,
+                players: players.length,
                 props: entities.filter(e => e.type === 'PHYSICS_PROP').length
             },
             physics: {

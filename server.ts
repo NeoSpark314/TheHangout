@@ -20,6 +20,8 @@ import { WebSocketServer } from 'ws';
 import { HeadlessRoom } from './src/server/HeadlessRoom.js';
 import { ServerNetworkManager } from './src/server/ServerNetworkManager.js';
 
+const activeRooms = new Map<string, HeadlessRoom>(); // roomId -> HeadlessRoom
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- CLI args (with env var fallback) ---
@@ -174,7 +176,6 @@ const wss = new WebSocketServer({
     noServer: true,
     perMessageDeflate: false // Disable compression to avoid 'Invalid frame header' in some environments
 });
-const activeRooms = new Map(); // roomId -> HeadlessRoom
 
 // Take over 'upgrade' handling to ensure strict routing between PeerJS and Relay
 const originalUpgradeListeners = server.listeners('upgrade').slice();

@@ -26,6 +26,14 @@ async function fetchServerStats() {
     }
 }
 
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 async function fetchRooms() {
     try {
         const res = await fetch('/api/admin/rooms');
@@ -49,6 +57,10 @@ async function fetchRooms() {
                     <span class="stat-value">${r.clients}</span>
                 </div>
                 <div class="stat-row">
+                    <span class="stat-label">Network</span>
+                    <span class="stat-value">↓${formatBytes(r.network.in)} / ↑${formatBytes(r.network.out)}</span>
+                </div>
+                <div class="stat-row">
                     <span class="stat-label">Entities</span>
                     <span class="stat-value">${r.entityCount} (${r.entityBreakdown.players}P / ${r.entityBreakdown.props}E)</span>
                 </div>
@@ -57,10 +69,15 @@ async function fetchRooms() {
                     <span class="stat-value">${r.physics.bodies} bodies / ${r.physics.colliders} colliders</span>
                 </div>
                 
-                <div style="margin-top: 10px; font-size: 0.8em;">
-                    <span class="stat-label">Peers:</span> 
-                    <div style="margin-top: 5px;">
-                        ${r.peerIds.map(p => `<span class="tag">${p}</span>`).join('') || 'None'}
+                <div style="margin-top: 15px; border-top: 1px solid #333; padding-top: 10px;">
+                    <span class="stat-label" style="display: block; margin-bottom: 8px;">Active Peers:</span> 
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${r.peers.map(p => `
+                            <div class="peer-row">
+                                <span class="tag">${p.id.slice(0, 8)}</span>
+                                <span class="peer-name">${p.name}</span>
+                            </div>
+                        `).join('') || '<span style="opacity: 0.5; font-size: 0.8em;">None</span>'}
                     </div>
                 </div>
 

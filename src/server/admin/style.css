@@ -140,4 +140,23 @@ button.danger:hover {
     padding: 2px 6px;
     border-radius: 4px;
     margin-right: 4px;
+    color: var(--secondary);
+    font-family: monospace;
+}
+
+.peer-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9em;
+}
+
+.peer-name {
+    color: #fff;
+    font-weight: 500;
+}
+
+.network-badge {
+    font-size: 0.75em;
+    opacity: 0.8;
 }
