@@ -20,7 +20,7 @@ Opens at `https://localhost/`. Self-signed SSL cert is auto-generated on first r
 
 ## Architecture
 
-The project follows a **Clean Architecture** pattern designed for high-performance spatial synchronization and modular gameplay features.
+The project follows a **Clean Object-Oriented (OOP) Architecture** pattern based on a robust Entity Class Hierarchy. It is designed for high-performance spatial synchronization and modular gameplay features while remaining approachable and easy to maintain without the complexity of an ECS.
 
 | Layer | Tech | Role |
 |-------|------|------|

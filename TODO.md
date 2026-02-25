@@ -30,24 +30,23 @@
 
 ### Future Architectural Roadmap & Next Major Refactoring Steps
 
-To achieve the ultimate goal of easily extending and developing individual parts without needing to understand or touch unrelated code, these subsequent architectural paradigms should be pursued:
+To achieve the ultimate goal of easily extending and developing individual parts without needing to understand or touch unrelated code, we are committing to our **Object-Oriented (OOP) Entity Class Hierarchy**. The next steps focus on solidifying this architecture through rigorous consistency and modularity:
 
-1. **Extract Rendering Engine (Three.js) Behind an Abstract Interface**
-   * **Goal:** Completely decouple the core game logic from `Three.js`. 
-   * **Action:** Instead of entities or managers directly importing and instantiating `THREE.Mesh` or `THREE.Group`, define an abstract rendering bridge (e.g., `IRenderer`, `IMesh`). A concrete `ThreeRenderer` implementation would handle the WebGL specifics.
-   * **Benefit:** This strictly stops visual logic from intertwining with gameplay code. It enables running headless servers (Node.js) without needing to mock DOM or Three.js objects cleanly, and theoretically allows swapping rendering engines (e.g., transitioning to Babylon.js) with zero changes to gameplay rules.
+1. **Standardize Naming Conventions & Codebase Cleanup**
+   * **Goal:** Ensure perfect consistency across all files, classes, and variables so developers immediately know what a piece of code does by its name.
+   * **Action:** Audit the entire codebase. Ensure all interfaces start with `I` (e.g., `IGrabbable`), all boolean flags are predictably named (`isReady`, `hasAuthority`), and folder structures strictly align with their contents (e.g., no loose logic files outside of `skills/`, `systems/`, or `managers/`). Standardize event names and payload structures.
 
-2. **Transition to an Entity Component System (ECS) Architecture**
-   * **Goal:** Move away from deep, rigid class inheritance hierarchies (`Entity -> NetworkEntity -> PlayerEntity -> LocalPlayer`).
-   * **Action:** Refactor `EntityManager` logic into an ECS model. Entities become pure ID numbers. Behaviors and rules are refactored into modular Data Components (`Renderable`, `PhysicsBody`, `NetworkSynchronized`, `PlayerInput`) and pure logic Systems (`PhysicsSystem`, `DrawingSystem`).
-   * **Benefit:** Exponentially easier to prototype and add new items or mechanics safely. Creating a completely new object like a "flying, networked laser" simply requires attaching the `Physics`, `Network`, and `Laser` components to an ID, avoiding the need to inherit from massive base classes or duplicate functionality. 
+2. **Event-Driven Gameplay Logic vs. Direct Input Polling**
+   * **Goal:** Decouple the origin of player intent from the execution of the mechanic.
+   * **Action:** Shift the input layers to fire semantic intent commands (e.g., `ACTION_JUMP`, `INTENT_MOVE_FORWARD`) via an Input Command Queue. Game logic systems process these abstract intents rather than polling a specific `InputManager.gamepad`.
+   * **Benefit:** Game rules no longer care *how* an action was triggered. Implementing a new input method (like eye-tracking interactions or AI-driven companions) requires absolutely zero changes in the gameplay execution code.
 
-3. **Event-Driven Gameplay Logic vs. Direct Input Polling**
-   * **Goal:** While the `InputManager` is now separated into hardware concerns, core code still directly calls `input.getMovementVector()`.
-   * **Action:** Shift the input layers to fire semantic intent commands (`ACTION_JUMP`, `INTENT_MOVE_FORWARD`) via an Input Command Queue. Game logic systems process these abstract intents rather than querying a manager for hardware-specific state.
-   * **Benefit:** Game rules no longer care *how* a move happens. It means implementing new hardware (e.g., eye-tracking interactions or AI-driven bots) requires zero adaptation in the core gameplay components.
+3. **Modularizing Remaining "God-Class" Managers**
+   * **Goal:** Ensure all systems follow the Single Responsibility Principle, making them vastly easier to mentally parse and adapt.
+   * **Action:** Break down large managers (like `NetworkManager` and `RoomManager`). For instance, `NetworkManager` currently handles WebRTC setup, data relays, synchronization loops, and ownership rules simultaneously. These should become isolated, injected services (e.g., `OwnershipService`, `SyncService`, `PeerConnectionService`).
+   * **Benefit:** Adding a feature like "Team Ownership" logic only requires developer context inside a 50-line `OwnershipService`, preventing the risk of accidentally breaking the core connection logic.
 
-4. **Modularizing Remaining "God-Class" Managers**
-   * **Goal:** Ensure all managers follow the Single Responsibility Principle, making them vastly easier to mentally parse and adapt.
-   * **Action:** Break down large managers (like `NetworkManager` and `RoomManager`). For instance, `NetworkManager` still handles setup, relay handling, state sync loops, and ownership arbitration. These should become isolated injected services (`OwnershipService`, `RelayService`).
-   * **Benefit:** Adding a feature like "Team Ownership" logic only requires developer context inside a 50-line `OwnershipService`, rather than forcing them to reason around a massive 400-line routing file. This guarantees safe isolation.
+4. **Enhance Entity Capabilities through Composition (Mixins/Interfaces)**
+   * **Goal:** Prevent massive, bloated base classes (`NetworkEntity`, `PlayerEntity`) while sticking to OOP.
+   * **Action:** Instead of deep inheritance trees, use Interfaces (`IInteractable`, `IGrabbable`) and potentially Mixins or discrete logic components (like `MovementSkill` or `GrabSkill`) instantiated within the Entity.
+   * **Benefit:** You can create a new entity (like a physical bouncing ball) that simply implements `IGrabbable` without needing to inherit from a huge generic base class that includes irrelevant logic.
