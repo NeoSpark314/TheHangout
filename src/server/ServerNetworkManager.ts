@@ -135,6 +135,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             const logicEntity = entity as any;
             if (logicEntity.ownerId === peerId) {
                 logicEntity.ownerId = null;
+                if (logicEntity.heldBy !== undefined) logicEntity.heldBy = null;
                 entity.isAuthority = true;
                 this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
             }

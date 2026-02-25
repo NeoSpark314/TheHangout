@@ -116,6 +116,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
     public onNetworkEvent(type: string, payload: any): void {
         if (type === 'OWNERSHIP_RELEASE' && this.rigidBody) {
+            this.heldBy = null; // Reset held status locally
             // Restore Dynamic physics locally
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
 

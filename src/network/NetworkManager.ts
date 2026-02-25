@@ -245,9 +245,10 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
     public reclaimOwnership(peerId: string): void {
         for (const entity of this.context.managers.entity.entities.values()) {
-            const logicEntity = entity as { ownerId?: string | null, isLocallyControlled?: boolean };
+            const logicEntity = entity as any;
             if (logicEntity.ownerId === peerId && !logicEntity.isLocallyControlled) {
                 logicEntity.ownerId = null;
+                if (logicEntity.heldBy !== undefined) logicEntity.heldBy = null;
                 entity.isAuthority = true;
                 this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
             }
