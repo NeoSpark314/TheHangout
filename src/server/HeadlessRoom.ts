@@ -50,6 +50,8 @@ export class HeadlessRoom {
         // Pass null for scene in headless environment
         this.context.managers.room.init(null as any);
 
+        console.log(`[HeadlessRoom] Entity List AFTER Room Init:`, Array.from(this.context.managers.entity.entities.keys()));
+
         this.engine.start();
         console.log(`[HeadlessRoom] Simulation Loop Started for ${this.roomId} at 60Hz`);
     }

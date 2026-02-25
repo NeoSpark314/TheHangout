@@ -156,7 +156,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 const serverConn = new ServerConnection(this.relaySocket!, peerId);
                 this.setupConnection(serverConn as any);
 
-                eventBus.emit(EVENTS.PEER_CONNECTED, peerId);
+                // Wait to emit connection until server responds to match PeerJS behavior
 
                 // MediaManager integration hook
                 if (this.context.managers.media && (this.context.managers.media as any).bindWebSocket) {
@@ -335,10 +335,14 @@ class PlayerInputHandler implements IPacketHandler {
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         this.network.applyStateUpdate(payload);
         if (this.context.isHost) {
-            // Only relay player avatars. Physics props are broadcast authoritatively via STATE_UPDATE.
-            const avatarPackets = payload.filter(p => p.type === EntityType.LOCAL_PLAYER);
-            if (avatarPackets.length > 0) {
-                this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, avatarPackets);
+            // Only relay player avatars and objects the host is NOT authoritative over
+            const relayPackets = payload.filter(p => {
+                if (p.type === EntityType.LOCAL_PLAYER) return true;
+                const entity = this.context.managers.entity.getEntity(p.id);
+                return entity && !entity.isAuthority;
+            });
+            if (relayPackets.length > 0) {
+                this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, relayPackets);
             }
         }
     }

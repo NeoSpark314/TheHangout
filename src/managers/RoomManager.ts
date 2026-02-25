@@ -25,22 +25,26 @@ export class RoomManager implements IUpdatable {
     }
 
     public init(scene: THREE.Scene): void {
-        this.scene = scene;
-        const randomBound = this.random.bind(this);
-        this.environment = new EnvironmentManager(scene, randomBound);
-        this.props = new PropManager(scene, randomBound, this.context);
+        try {
+            this.scene = scene;
+            const randomBound = this.random.bind(this);
+            this.environment = new EnvironmentManager(scene, randomBound);
+            this.props = new PropManager(scene, randomBound, this.context);
 
-        // Ground is created strictly during applyConfig or init via master orchestrator
-        if (this.context.managers.physics) {
-            this.context.managers.physics.createGround(25);
-            this.hasGroundPhysics = true;
+            // Ground is created strictly during applyConfig or init via master orchestrator
+            if (this.context.managers.physics) {
+                this.context.managers.physics.createGround(25);
+                this.hasGroundPhysics = true;
+            }
+
+            this.applyConfig(this.context.roomConfig);
+        } catch (e) {
+            console.error('[RoomManager] init crashed:', e);
         }
-
-        this.applyConfig(this.context.roomConfig);
     }
 
     public applyConfig(config: IRoomConfig): void {
-        if (!this.scene || !config || !this.environment || !this.props) return;
+        if (!config || !this.environment || !this.props) return;
 
         console.log('[RoomManager] Coordinating Room Config:', config);
         if (config.seed !== undefined) {

@@ -20,11 +20,15 @@ export class PropManager {
     public applyConfig(config: IRoomConfig): void {
         if (!config) return;
 
-        if (!this.table) this.createTable();
-        if (!this.hologram) this.createHologram();
-        if (!this.podest) this.createPodest();
-        if (!this.decorations) this.createDecorations();
-        if (!this.hasSpawnedGrabbables) this.createGrabbables();
+        try {
+            if (!this.table) this.createTable();
+            if (!this.hologram) this.createHologram();
+            if (!this.podest) this.createPodest();
+            if (!this.decorations) this.createDecorations();
+            if (!this.hasSpawnedGrabbables) this.createGrabbables();
+        } catch (e) {
+            console.error('[PropManager] applyConfig crashed:', e);
+        }
     }
 
     public update(delta: number): void {
@@ -65,7 +69,9 @@ export class PropManager {
         base.position.y = 0.5;
         tableGroup.add(base);
 
-        this.scene.add(tableGroup);
+        if (this.scene) {
+            this.scene.add(tableGroup);
+        }
 
         if (this.context.managers.physics) {
             this.context.managers.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
@@ -74,7 +80,7 @@ export class PropManager {
     }
 
     private createHologram(): void {
-        if (!this.table) return;
+        if (!this.table || !this.scene) return;
         const holoGeo = new THREE.IcosahedronGeometry(0.35, 1);
         const holoMat = new THREE.MeshBasicMaterial({
             color: 0x00ffff,
@@ -103,11 +109,13 @@ export class PropManager {
         for (let x = -4; x < 4; x++) {
             for (let z = -4; z < 4; z++) {
                 const hOffset = this.random() * 0.05;
-                const segment = new THREE.Mesh(blockGeo, podestMat);
-                segment.position.set(x + 0.5, 0.1 + hOffset, z + 0.5);
-                const segmentOutline = new THREE.LineSegments(new THREE.EdgesGeometry(blockGeo), wireMat);
-                segment.add(segmentOutline);
-                this.podest.add(segment);
+                if (this.scene) {
+                    const segment = new THREE.Mesh(blockGeo, podestMat);
+                    segment.position.set(x + 0.5, 0.1 + hOffset, z + 0.5);
+                    const segmentOutline = new THREE.LineSegments(new THREE.EdgesGeometry(blockGeo), wireMat);
+                    segment.add(segmentOutline);
+                    this.podest.add(segment);
+                }
 
                 // Add static physics collider
                 if (this.context.managers.physics) {
@@ -115,7 +123,7 @@ export class PropManager {
                 }
             }
         }
-        this.scene.add(this.podest);
+        if (this.scene) this.scene.add(this.podest);
     }
 
     private createDecorations(): void {
@@ -130,21 +138,26 @@ export class PropManager {
             const h = 0.5 + this.random() * 2.5;
             const w = 0.4 + this.random() * 0.6;
             const geo = new THREE.BoxGeometry(w, h, w);
-            const pillar = new THREE.Mesh(geo, pillarMat);
-            pillar.position.set(Math.sin(angle) * (6.0 + this.random() * 2), h / 2, Math.cos(angle) * (6.0 + this.random() * 2));
-            pillar.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat));
-            this.decorations.add(pillar);
+            const posX = Math.sin(angle) * (6.0 + this.random() * 2);
+            const posZ = Math.cos(angle) * (6.0 + this.random() * 2);
+
+            if (this.scene) {
+                const pillar = new THREE.Mesh(geo, pillarMat);
+                pillar.position.set(posX, h / 2, posZ);
+                pillar.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat));
+                this.decorations.add(pillar);
+            }
 
             // Add static physics collider
             if (this.context.managers.physics) {
-                this.context.managers.physics.createCuboid(w / 2, h / 2, w / 2, { x: pillar.position.x, y: pillar.position.y, z: pillar.position.z }, null, true);
+                this.context.managers.physics.createCuboid(w / 2, h / 2, w / 2, { x: posX, y: h / 2, z: posZ }, null, true);
             }
         }
-        this.scene.add(this.decorations);
+        if (this.scene) this.scene.add(this.decorations);
     }
 
     private createGrabbables(): void {
-        if (!this.scene) return;
+        console.log('[PropManager] createGrabbables running...');
         this.hasSpawnedGrabbables = true;
 
         // Spawn a Pen
@@ -158,21 +171,26 @@ export class PropManager {
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2;
             const position = { x: Math.sin(angle), y: 1.15, z: Math.cos(angle) };
-            const geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-            const mat = new THREE.MeshStandardMaterial({
-                color: colors[i], emissive: colors[i], emissiveIntensity: 0.3, metalness: 0.6, roughness: 0.3
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(position.x, position.y, position.z);
-            mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })));
+
+            let mesh = undefined;
+            if (this.scene) {
+                const geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: colors[i], emissive: colors[i], emissiveIntensity: 0.3, metalness: 0.6, roughness: 0.3
+                });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(position.x, position.y, position.z);
+                mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })));
+            }
+
             const entityId = `grabbable-${i}`;
-            EntityFactory.createGrabbable(this.context, entityId, 0.12, position, mesh);
+            EntityFactory.createGrabbable(this.context, entityId, 0.12, position, mesh as any);
         }
     }
 
     public clearProcedural(): void {
         const remove = (obj: THREE.Object3D | null) => {
-            if (!obj) return;
+            if (!obj || !this.scene) return;
             this.scene.remove(obj);
             obj.traverse((child) => {
                 const mesh = child as THREE.Mesh;
