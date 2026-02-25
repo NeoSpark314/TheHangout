@@ -54,9 +54,9 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         if (!this.isAuthority) return;
 
         if (this.rigidBody) {
+            this.rigidBody.wakeUp();
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
             if (velocity && (Math.abs(velocity.x) > 0.1 || Math.abs(velocity.y) > 0.1 || Math.abs(velocity.z) > 0.1)) {
-                this.rigidBody.wakeUp();
                 this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
             }
         }
@@ -118,10 +118,11 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             // Restore Dynamic physics locally
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
 
+            this.rigidBody.wakeUp();
+
             if (payload.position) this.rigidBody.setTranslation({ x: payload.position[0], y: payload.position[1], z: payload.position[2] }, false);
             if (payload.quaternion) this.rigidBody.setRotation({ x: payload.quaternion[0], y: payload.quaternion[1], z: payload.quaternion[2], w: payload.quaternion[3] }, false);
             if (payload.velocity) {
-                this.rigidBody.wakeUp();
                 this.rigidBody.setLinvel({ x: payload.velocity[0], y: payload.velocity[1], z: payload.velocity[2] }, true);
             }
         }
@@ -150,16 +151,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 }, delta);
             }
 
-            if (!this.heldBy && !this.rigidBody.isSleeping()) {
-                const vel = this.rigidBody.linvel();
-                const angvel = this.rigidBody.angvel();
-                if (Math.abs(vel.x) < 0.02 && Math.abs(vel.y) < 0.02 && Math.abs(vel.z) < 0.02 &&
-                    Math.abs(angvel.x) < 0.02 && Math.abs(angvel.y) < 0.02 && Math.abs(angvel.z) < 0.02) {
-                    this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                    this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-                    this.rigidBody.sleep();
-                }
-            }
+
 
             if (!this.heldBy && this.ownerId !== null && !this.context.isHost && this.rigidBody.isSleeping()) {
                 this.releasePhysicsOwnership();
