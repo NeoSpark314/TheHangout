@@ -32,6 +32,10 @@ export abstract class EntityView<TState> implements IView<TState> {
         // Optional override
     }
 
+    public attachAudioChunk(base64Chunk: string): void {
+        // Optional override
+    }
+
     public getAudioLevel(): number {
         return 0;
     }

@@ -19,7 +19,7 @@ export class EnvironmentManager {
     }
 
     public applyConfig(config: IRoomConfig): void {
-        if (!config) return;
+        if (!config || !this.scene) return;
 
         if (config.skyColor) {
             this.scene.background = new THREE.Color(config.skyColor);
