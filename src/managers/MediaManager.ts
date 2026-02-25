@@ -44,8 +44,14 @@ export class MediaManager {
             const render = this.context.managers.render;
             if (render && render.audioListener) {
                 this.audioContext = render.audioListener.context as AudioContext;
-            } else if (!this.audioContext) {
+            }
+
+            if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
             }
 
             this.localSource = this.audioContext!.createMediaStreamSource(this.localStream);
@@ -137,6 +143,8 @@ export class MediaManager {
                         binaryStr += String.fromCharCode(ui8[i]);
                     }
                     const base64 = btoa(binaryStr);
+
+                    if (Math.random() < 0.01) console.log(`[MediaManager] Sending audio chunk (${base64.length} chars)`);
 
                     this.websocket.send(JSON.stringify({
                         type: PACKET_TYPES.AUDIO_CHUNK,

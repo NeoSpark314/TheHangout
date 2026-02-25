@@ -38,6 +38,9 @@ export class RemotePlayer extends PlayerEntity {
 
     private onAudioChunk(data: any): void {
         if (data.senderId === this.peerId) {
+            if (Math.random() < 0.01) { // 1% sample to avoid spam
+                console.log(`[RemotePlayer] Receiving audio chunk from ${this.peerId} (${data.payload.length} chars)`);
+            }
             this.view.attachAudioChunk(data.payload);
         }
     }

@@ -169,6 +169,11 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             if (end - this.audioElement.currentTime > 0.5) {
                 this.audioElement.currentTime = end - 0.1;
             }
+
+            // Ensure it's actually playing
+            if (this.audioElement.paused) {
+                this.audioElement.play().catch(() => { });
+            }
         }
     }
 
@@ -589,16 +594,26 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
         if (this.audioElement) {
             this.audioElement.pause();
+            const oldSrc = this.audioElement.src;
+            this.audioElement.src = '';
             this.audioElement.srcObject = null;
+            this.audioElement.load();
+            if (oldSrc && oldSrc.startsWith('blob:')) {
+                URL.revokeObjectURL(oldSrc);
+            }
             this.audioElement = null;
         }
 
         if (this.positionalAudio) {
-            if (this.positionalAudio.hasPlaybackControl) {
-                this.positionalAudio.stop();
-            }
-            if (this.positionalAudio.source) {
-                this.positionalAudio.disconnect();
+            try {
+                if (this.positionalAudio.hasPlaybackControl) {
+                    this.positionalAudio.stop();
+                }
+                if (this.positionalAudio.source) {
+                    this.positionalAudio.disconnect();
+                }
+            } catch (e) {
+                // Ignore disconnect errors
             }
             this.headMesh.remove(this.positionalAudio);
         }

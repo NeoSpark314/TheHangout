@@ -227,9 +227,9 @@ export class UIManager implements IUpdatable {
         if (this.createBtn) this.createBtn.style.display = 'none';
         this.roomInput.value = roomId;
         this.joinBtn.addEventListener('click', async () => {
+            this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Guest';
             if (this.context.voiceEnabled) {
-                this.ensureAudioContextResumed();
                 await this.context.managers.media.toggleMicrophone();
             }
             this.setStatus('Connecting to host...');
@@ -248,9 +248,9 @@ export class UIManager implements IUpdatable {
             this.joinBtn.classList.add('primary-btn');
 
             this.joinBtn.addEventListener('click', async () => {
+                this.ensureAudioContextResumed();
                 this.context.playerName = this.nameInput.value.trim() || 'Player';
                 if (this.context.voiceEnabled) {
-                    this.ensureAudioContextResumed();
                     await this.context.managers.media.toggleMicrophone();
                 }
                 const targetId = this.roomInput.value.trim() || this.generateReadableRoomId();
@@ -267,9 +267,9 @@ export class UIManager implements IUpdatable {
         }
 
         this.createBtn.addEventListener('click', async () => {
+            this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Host';
             if (this.context.voiceEnabled) {
-                this.ensureAudioContextResumed();
                 await this.context.managers.media.toggleMicrophone();
             }
             const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
@@ -301,9 +301,9 @@ export class UIManager implements IUpdatable {
         }
 
         this.joinBtn.addEventListener('click', async () => {
+            this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Player';
             if (this.context.voiceEnabled) {
-                this.ensureAudioContextResumed();
                 await this.context.managers.media.toggleMicrophone();
             }
             const targetId = this.roomInput.value.trim();
