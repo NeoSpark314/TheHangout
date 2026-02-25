@@ -1,45 +1,16 @@
-### Architectural & Maintenance TODOs (COMPLETED)
+### My TODO notes:
 
-* [x] **Implement Dependency Injection (DI)** * Replaced the global `gameState` singleton in `GameState.ts` with a DI approach (`GameContext`).
-* [x] Passed dependencies explicitly through constructors so class requirements are immediately visible.
+- Add a good debug visualization layer for physics and networking: should be optional to enable; show current ownership of objects as label; show collision shapes and maybe also velocity vectors
+- Make the drawing pen work
+- Rebuild local server to fully serve potentilaly multiple rooms (separate basic admin website maybe; should relay all audio to solve internal p2p block in many company networks)
 
+Future:
+- Connect WebXR full body tracking;
+- Whiteboard prop?
+- Solve screensharing (maybe local only for now and have an extra /screenshare route on the webserver that relays the stream)
 
-* [x] **Refactor the Game Loop for Extensibility** * Removed the hardcoded manager checks inside the `update` loop of `GameEngine.ts`.
-* [x] Introduced an `IUpdatable` interface and dynamically register systems so the engine conforms to the Open/Closed Principle.
-
-
-* [x] **Enforce Strict Typing and Encapsulation**
-* [x] Audited and removed `any` casting associated with network payloads (`NetworkManager`, `NetworkDispatcher`).
-* [x] Expose proper public methods or getters/setters to handle cross-system data access safely.
-
-
-* [x] **Deconstruct the Input Manager**
-* [x] Split the overly complex `InputManager.ts` into distinct, single-responsibility layers (KeyboardManager, GamepadManager, MobileJoystickManager, XRInputManager).
-* [x] Separated raw hardware polling (Gamepad, XR, DOM), semantic action mapping (gameplay intents), and UI navigation logic (CSS manipulation).
-
-
-* [x] **Fix Initialization Control Flow**
-* [x] Removed reliance on the global `EventBus.ts` for linear startup sequences like triggering `SCENE_READY` inside GameEngine.
-* [x] Using explicit Promises, `await`, or direct method calls to handle application bootstrapping predicting in `App.ts`.
-
-
-* [x] **Establish Code Documentation Standards**
-* [x] Added reasonable, consistent Code Documentation (JSDoc) across core architectural classes to ensure approaching future maintainers is simple.
-
----
 
 ### Future Architectural Roadmap & Next Major Refactoring Steps
-
-To achieve the ultimate goal of easily extending and developing individual parts without needing to understand or touch unrelated code, we are committing to our **Object-Oriented (OOP) Entity Class Hierarchy**. The next steps focus on solidifying this architecture through rigorous consistency and modularity:
-
-1. **Standardize Naming Conventions & Codebase Cleanup**
-   * **Goal:** Ensure perfect consistency across all files, classes, and variables so developers immediately know what a piece of code does by its name.
-   * **Action:** Audit the entire codebase. Ensure all interfaces start with `I` (e.g., `IGrabbable`), all boolean flags are predictably named (`isReady`, `hasAuthority`), and folder structures strictly align with their contents (e.g., no loose logic files outside of `skills/`, `systems/`, or `managers/`). Standardize event names and payload structures.
-
-2. **Event-Driven Gameplay Logic vs. Direct Input Polling**
-   * **Goal:** Decouple the origin of player intent from the execution of the mechanic.
-   * **Action:** Shift the input layers to fire semantic intent commands (e.g., `ACTION_JUMP`, `INTENT_MOVE_FORWARD`) via an Input Command Queue. Game logic systems process these abstract intents rather than polling a specific `InputManager.gamepad`.
-   * **Benefit:** Game rules no longer care *how* an action was triggered. Implementing a new input method (like eye-tracking interactions or AI-driven companions) requires absolutely zero changes in the gameplay execution code.
 
 3. **Modularizing Remaining "God-Class" Managers**
    * **Goal:** Ensure all systems follow the Single Responsibility Principle, making them vastly easier to mentally parse and adapt.

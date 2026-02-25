@@ -92,6 +92,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.requestOwnership();
 
         this.heldBy = playerId;
+        this.rigidBody.wakeUp();
         this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
         this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
         this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -247,6 +248,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
         if (this.rigidBody) {
             if (this.heldBy && !wasHeld) {
+                this.rigidBody.wakeUp();
                 this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
             } else if (!this.heldBy && wasHeld) {
                 this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
