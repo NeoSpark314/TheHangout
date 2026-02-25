@@ -64,6 +64,9 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private positionalAudio: THREE.PositionalAudio | null = null;
     private audioAnalyser: THREE.AudioAnalyser | null = null;
     private audioElement: HTMLAudioElement | null = null;
+    private mediaSource: MediaSource | null = null;
+    private sourceBuffer: SourceBuffer | null = null;
+    private bufferQueue: Uint8Array[] = [];
 
     constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -111,6 +114,60 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
                 this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
             } catch (e) {
                 console.error('[StickFigureView] Failed to set media stream source:', e);
+            }
+        }
+    }
+
+    public attachAudioChunk(base64Chunk: string): void {
+        if (!this.positionalAudio) return;
+
+        if (!this.mediaSource) {
+            this.mediaSource = new MediaSource();
+            if (!this.audioElement) {
+                this.audioElement = new Audio();
+                this.audioElement.autoplay = true;
+            }
+            this.audioElement.src = URL.createObjectURL(this.mediaSource);
+            this.positionalAudio.setMediaElementSource(this.audioElement as HTMLMediaElement);
+            this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
+
+            this.mediaSource.addEventListener('sourceopen', () => {
+                const mimeType = 'audio/webm; codecs=opus';
+                if (MediaSource.isTypeSupported(mimeType)) {
+                    this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeType);
+                    this.sourceBuffer.addEventListener('updateend', () => this.processAudioQueue());
+                    this.processAudioQueue();
+                }
+            });
+        }
+
+        try {
+            const binaryStr = atob(base64Chunk);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+
+            this.bufferQueue.push(bytes);
+            if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                this.processAudioQueue();
+            }
+        } catch (e) { /* ignore parse error */ }
+    }
+
+    private processAudioQueue(): void {
+        if (!this.sourceBuffer || this.sourceBuffer.updating || this.bufferQueue.length === 0) return;
+        const chunk = this.bufferQueue.shift()!;
+        try {
+            this.sourceBuffer.appendBuffer(chunk as any);
+        } catch (e) {
+            // Usually happens if buffer gets full or corrupted chunk
+        }
+
+        if (this.audioElement && this.audioElement.buffered.length > 0) {
+            const end = this.audioElement.buffered.end(this.audioElement.buffered.length - 1);
+            if (end - this.audioElement.currentTime > 0.5) {
+                this.audioElement.currentTime = end - 0.1;
             }
         }
     }

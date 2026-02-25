@@ -17,6 +17,9 @@ import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
 import { WebSocketServer } from 'ws';
 
+import { HeadlessRoom } from './src/server/HeadlessRoom.js';
+import { ServerNetworkManager } from './src/server/ServerNetworkManager.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- CLI args (with env var fallback) ---
@@ -81,6 +84,48 @@ app.get('/api/server-info', (req, res) => {
     });
 });
 
+app.get('/api/admin/rooms', (req, res) => {
+    const data = [];
+    for (const [id, room] of activeRooms.entries()) {
+        data.push({
+            id,
+            clients: room.network.connections.size,
+            entities: room.context.managers.entity.entities.size
+        });
+    }
+    res.json(data);
+});
+
+app.get('/admin', (req, res) => {
+    res.send(`
+        <html>
+        <head><title>TheHangout Admin</title><style>body { font-family: sans-serif; background: #222; color: #fff; padding: 2em; }</style></head>
+        <body>
+            <h1>TheHangout Admin Dashboard</h1>
+            <div id="rooms">Loading...</div>
+            <script>
+                async function fetchRooms() {
+                    const res = await fetch('/api/admin/rooms');
+                    const rooms = await res.json();
+                    const el = document.getElementById('rooms');
+                    if (rooms.length === 0) el.innerHTML = '<p>No active rooms.</p>';
+                    else {
+                        el.innerHTML = rooms.map(r => 
+                            '<div style="border:1px solid #444; padding:1em; margin-bottom:1em; border-radius: 8px;">' +
+                            '<h3 style="margin-top:0; color: #00ffff;">Room: ' + r.id + '</h3>' +
+                            '<p>Clients connected: <span style="font-weight:bold;">' + r.clients + '</span> | Entities ticking: <span style="font-weight:bold;">' + r.entities + '</span></p>' +
+                            '</div>'
+                        ).join('');
+                    }
+                }
+                fetchRooms();
+                setInterval(fetchRooms, 2000);
+            </script>
+        </body>
+        </html>
+    `);
+});
+
 // Serve the built client
 const distPath = path.join(__dirname, 'dist');
 if (!fs.existsSync(distPath)) {
@@ -123,7 +168,7 @@ const wss = new WebSocketServer({
     noServer: true,
     perMessageDeflate: false // Disable compression to avoid 'Invalid frame header' in some environments
 });
-const rooms = new Map(); // roomId -> Set of sockets
+const activeRooms = new Map(); // roomId -> HeadlessRoom
 
 // Take over 'upgrade' handling to ensure strict routing between PeerJS and Relay
 const originalUpgradeListeners = server.listeners('upgrade').slice();
@@ -162,50 +207,28 @@ wss.on('connection', (ws) => {
 
     ws.on('message', (message) => {
         try {
-            const data = JSON.parse(message);
+            const data = typeof message === 'string' ? JSON.parse(message) : JSON.parse(message.toString());
 
             if (data.type === 'join') {
                 currentRoomId = data.roomId;
                 currentPeerId = data.peerId;
 
-                if (!rooms.has(currentRoomId)) {
-                    rooms.set(currentRoomId, new Map());
+                if (!activeRooms.has(currentRoomId)) {
+                    const networkMgr = new ServerNetworkManager();
+                    const room = new HeadlessRoom(currentRoomId, networkMgr);
+                    activeRooms.set(currentRoomId, room);
+                    room.start();
                 }
-                rooms.get(currentRoomId).set(currentPeerId, ws);
 
+                const room = activeRooms.get(currentRoomId);
+                room.network.addClient(currentPeerId, ws);
                 console.log(`[Relay] Peer ${currentPeerId} joined room ${currentRoomId}`);
 
-                // Notify others in the room
-                const room = rooms.get(currentRoomId);
-                for (const [peerId, socket] of room.entries()) {
-                    if (peerId !== currentPeerId && socket.readyState === 1) {
-                        socket.send(JSON.stringify({ type: 'peer-joined', peerId: currentPeerId }));
-                    }
-                }
-            } else if (data.type === 'relay') {
-                const room = rooms.get(currentRoomId);
-                if (room) {
-                    if (data.target) {
-                        // Unicast
-                        const targetSocket = room.get(data.target);
-                        if (targetSocket && targetSocket.readyState === 1) {
-                            targetSocket.send(JSON.stringify({
-                                type: 'relay',
-                                from: currentPeerId,
-                                payload: data.payload
-                            }));
-                        }
-                    } else {
-                        // Broadcast
-                        for (const [peerId, socket] of room.entries()) {
-                            if (peerId !== currentPeerId && socket.readyState === 1) {
-                                socket.send(JSON.stringify({
-                                    type: 'relay',
-                                    from: currentPeerId,
-                                    payload: data.payload
-                                }));
-                            }
-                        }
+            } else {
+                if (currentRoomId && currentPeerId) {
+                    const room = activeRooms.get(currentRoomId);
+                    if (room) {
+                        room.network.handleMessage(currentPeerId, data);
                     }
                 }
             }
@@ -216,20 +239,15 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         if (currentRoomId && currentPeerId) {
-            const room = rooms.get(currentRoomId);
+            const room = activeRooms.get(currentRoomId);
             if (room) {
-                room.delete(currentPeerId);
+                room.network.removeClient(currentPeerId);
                 console.log(`[Relay] Peer ${currentPeerId} left room ${currentRoomId}`);
 
-                // Notify others
-                for (const [peerId, socket] of room.entries()) {
-                    if (socket.readyState === 1) {
-                        socket.send(JSON.stringify({ type: 'peer-left', peerId: currentPeerId }));
-                    }
-                }
-
-                if (room.size === 0) {
-                    rooms.delete(currentRoomId);
+                if (room.network.connections.size === 0) {
+                    room.stop();
+                    activeRooms.delete(currentRoomId);
+                    console.log(`[Relay] Closed empty room ${currentRoomId}`);
                 }
             }
         }

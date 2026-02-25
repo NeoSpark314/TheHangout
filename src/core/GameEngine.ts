@@ -48,12 +48,22 @@ export class GameEngine {
 
         if (this.context.managers.render) {
             this.context.managers.render.setAnimationLoop((time, frame) => this.loop(time, frame));
-        } else {
+        } else if (typeof requestAnimationFrame !== 'undefined') {
             const wrap = (time: number) => {
                 this.loop(time);
                 if (this.isRunning) requestAnimationFrame(wrap);
             };
             requestAnimationFrame(wrap);
+        } else {
+            // Node.js Headless mode fallback
+            const tickRateMs = 1000 / 60; // 60 Hz
+            const intervalLoop = setInterval(() => {
+                if (!this.isRunning) {
+                    clearInterval(intervalLoop);
+                    return;
+                }
+                this.loop(performance.now());
+            }, tickRateMs);
         }
     }
 

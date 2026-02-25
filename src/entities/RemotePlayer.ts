@@ -24,12 +24,21 @@ export class RemotePlayer extends PlayerEntity {
         this.onVoiceStream = this.onVoiceStream.bind(this);
         eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
 
+        this.onAudioChunk = this.onAudioChunk.bind(this);
+        eventBus.on(EVENTS.AUDIO_CHUNK_RECEIVED, this.onAudioChunk);
+
         console.log(`[RemotePlayer] Created avatar for ${this.peerId}`);
     }
 
     private onVoiceStream(data: any): void {
         if (data.peerId === this.peerId) {
             this.view.attachVoiceStream(data.stream);
+        }
+    }
+
+    private onAudioChunk(data: any): void {
+        if (data.senderId === this.peerId) {
+            this.view.attachAudioChunk(data.payload);
         }
     }
 
@@ -106,6 +115,7 @@ export class RemotePlayer extends PlayerEntity {
     public destroy(): void {
         super.destroy();
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
+        eventBus.off(EVENTS.AUDIO_CHUNK_RECEIVED, this.onAudioChunk);
 
         const render = this.context.managers.render;
         if (render && this.view) {

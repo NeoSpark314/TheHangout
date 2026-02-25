@@ -249,27 +249,38 @@ export class UIManager implements IUpdatable {
             this.disableAllButtons();
             this.clearError();
             this.saveToStorage();
-            this.context.isHost = true;
-            this.setStatus('Creating room...');
-            eventBus.emit(EVENTS.CREATE_ROOM, customId);
+
+            if (this.context.isLocalServer) {
+                this.context.isHost = false;
+                this.setStatus('Connecting to dedicated server...');
+                eventBus.emit(EVENTS.JOIN_ROOM, customId);
+            } else {
+                this.context.isHost = true;
+                this.setStatus('Creating room...');
+                eventBus.emit(EVENTS.CREATE_ROOM, customId);
+            }
         });
 
         if (this.dedicatedHostBtn) {
-            this.dedicatedHostBtn.addEventListener('click', async () => {
-                if (this.context.voiceEnabled) {
-                    this.ensureAudioContextResumed();
-                    await this.context.managers.media.toggleMicrophone();
-                }
-                const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
-                this.disableAllButtons();
-                this.clearError();
-                this.saveToStorage();
-                this.context.playerName = 'Host';
-                this.context.isHost = true;
-                this.context.isDedicatedHost = true;
-                this.setStatus('Creating dedicated room...');
-                eventBus.emit(EVENTS.CREATE_ROOM, customId);
-            });
+            if (this.context.isLocalServer) {
+                this.dedicatedHostBtn.style.display = 'none';
+            } else {
+                this.dedicatedHostBtn.addEventListener('click', async () => {
+                    if (this.context.voiceEnabled) {
+                        this.ensureAudioContextResumed();
+                        await this.context.managers.media.toggleMicrophone();
+                    }
+                    const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
+                    this.disableAllButtons();
+                    this.clearError();
+                    this.saveToStorage();
+                    this.context.playerName = 'Host';
+                    this.context.isHost = true;
+                    this.context.isDedicatedHost = true;
+                    this.setStatus('Creating dedicated room...');
+                    eventBus.emit(EVENTS.CREATE_ROOM, customId);
+                });
+            }
         }
 
         this.joinBtn.addEventListener('click', async () => {

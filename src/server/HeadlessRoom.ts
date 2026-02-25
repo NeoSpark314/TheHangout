@@ -1,0 +1,61 @@
+import { GameContext } from '../core/GameState';
+import { GameEngine } from '../core/GameEngine';
+import { EntityManager } from '../managers/EntityManager';
+import { PhysicsManager } from '../managers/PhysicsManager';
+import { RoomManager } from '../managers/RoomManager';
+import { ServerNetworkManager } from './ServerNetworkManager';
+
+export class HeadlessRoom {
+    public context: GameContext;
+    public engine: GameEngine;
+    public network: ServerNetworkManager;
+
+    constructor(public roomId: string, networkTransport: ServerNetworkManager) {
+        this.context = new GameContext();
+        this.context.isHost = true;
+        this.context.isDedicatedHost = true;
+        this.context.isLocalServer = true;
+        this.context.roomId = roomId;
+        this.context.playerName = 'Dedicated_Server';
+        this.context.voiceEnabled = false;
+
+        this.network = networkTransport;
+        this.network.setContext(this.context);
+
+        const entityMgr = new EntityManager(this.context);
+        this.context.setManager('entity', entityMgr);
+
+        const physicsMgr = new PhysicsManager(this.context);
+        this.context.setManager('physics', physicsMgr);
+
+        const roomMgr = new RoomManager(this.context);
+        this.context.setManager('room', roomMgr);
+
+        this.context.setManager('network', this.network as any);
+
+        this.engine = new GameEngine(this.context);
+        this.engine.addSystem({
+            update: (delta) => physicsMgr.step(delta)
+        });
+        this.engine.addSystem(roomMgr);
+        this.engine.addSystem(entityMgr);
+        this.engine.addSystem(this.network);
+    }
+
+    public async start(): Promise<void> {
+        console.log(`[HeadlessRoom] Initializing Room: ${this.roomId}`);
+
+        await this.context.managers.physics.init();
+
+        // Pass null for scene in headless environment
+        this.context.managers.room.init(null as any);
+
+        this.engine.start();
+        console.log(`[HeadlessRoom] Simulation Loop Started for ${this.roomId} at 60Hz`);
+    }
+
+    public stop(): void {
+        this.engine.stop();
+        console.log(`[HeadlessRoom] Stopped ${this.roomId}`);
+    }
+}

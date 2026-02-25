@@ -84,65 +84,19 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         return { debug: 2 };
     }
 
-    public async initRelay(peerId: string, roomId: string): Promise<WebSocket | null> {
-        if (!this.context.isLocalServer) return null;
-
-        return new Promise((resolve, reject) => {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.hostname;
-            const port = window.location.port;
-            const portPart = (port === '443' || port === '80' || port === '') ? '' : `:${port}`;
-            const url = `${protocol}//${host}${portPart}/relay`;
-
-            this.relaySocket = new WebSocket(url);
-            this.relaySocket.onopen = () => {
-                this.relaySocket!.send(JSON.stringify({ type: 'join', roomId: roomId || peerId, peerId: peerId }));
-                resolve(this.relaySocket);
-            };
-
-            this.relaySocket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'peer-joined') {
-                    if (this.context.isHost) {
-                        const conn = new RelayConnection(this.relaySocket!, peerId, data.peerId, true);
-                        this.setupConnection(conn);
-                    }
-                } else if (data.type === 'relay') {
-                    const conn = this.connections.get(data.from);
-                    if (conn instanceof RelayConnection) {
-                        conn.handleData(data.payload);
-                    } else if (!this.context.isHost && data.from === this.context.roomId) {
-                        const conn = new RelayConnection(this.relaySocket!, peerId, data.from, false);
-                        this.setupConnection(conn);
-                        conn.handleData(data.payload);
-                    }
-                } else if (data.type === 'peer-left') {
-                    const conn = this.connections.get(data.peerId);
-                    if (conn) conn.close();
-                }
-            };
-            this.relaySocket.onerror = (err) => reject(err);
-        });
-    }
-
     public async initHost(customId: string): Promise<void> {
+        if (this.context.isLocalServer) {
+            this.context.isHost = false; // We are just a guest on the headless server
+            return this.initWebSocketOnly(customId);
+        }
+
         const config = this.getPeerConfig();
         this.peer = customId ? new Peer(customId, config) : new Peer(config);
-
-        if (this.context.isLocalServer) {
-            const initialId = customId || (this.peer.id ? this.peer.id : null);
-            if (initialId) {
-                this.initRelay(initialId, initialId).catch(e => console.error('[NetworkManager] Relay init failed:', e));
-            }
-        }
 
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             this.context.roomId = id;
 
-            if (this.context.isLocalServer && !this.relaySocket) {
-                this.initRelay(id, id).catch(e => console.error('[NetworkManager] Relay init failed:', e));
-            }
             if (this.context.managers.media) {
                 this.context.managers.media.bindPeer(this.peer);
             }
@@ -161,18 +115,12 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public async initGuest(hostId: string): Promise<void> {
+        if (this.context.isLocalServer) {
+            return this.initWebSocketOnly(hostId);
+        }
+
         const config = this.getPeerConfig();
         this.peer = new Peer(config);
-
-        if (this.context.isLocalServer) {
-            const tempId = 'guest-' + Math.random().toString(36).substr(2, 9);
-            this.initRelay(tempId, hostId).then(() => {
-                if (!this.connections.has(hostId)) {
-                    const conn = new RelayConnection(this.relaySocket!, tempId, hostId, false);
-                    this.setupConnection(conn);
-                }
-            }).catch(e => console.warn('[NetworkManager] Local Relay init failed:', e));
-        }
 
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
@@ -180,10 +128,43 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             if (this.context.managers.media) {
                 this.context.managers.media.bindPeer(this.peer);
             }
-            if (this.context.isLocalServer && this.connections.has(hostId)) return;
 
             const conn = this.peer!.connect(hostId, { reliable: true });
             this.setupConnection(conn);
+        });
+    }
+
+    private async initWebSocketOnly(roomId: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            const port = window.location.port;
+            const portPart = (port === '443' || port === '80' || port === '') ? '' : `:${port}`;
+            const url = `${protocol}//${host}${portPart}/relay`;
+
+            this.relaySocket = new WebSocket(url);
+
+            const peerId = this.context.localPlayer?.id || 'guest-' + Math.random().toString(36).substr(2, 9);
+
+            this.relaySocket.onopen = () => {
+                console.log('[NetworkManager] Connected to Headless Server WebSocket');
+                this.relaySocket!.send(JSON.stringify({ type: 'join', roomId: roomId, peerId: peerId }));
+                this.context.roomId = roomId;
+
+                const serverConn = new ServerConnection(this.relaySocket!, peerId);
+                this.setupConnection(serverConn as any);
+
+                eventBus.emit(EVENTS.PEER_CONNECTED, peerId);
+
+                // MediaManager integration hook
+                if (this.context.managers.media && (this.context.managers.media as any).bindWebSocket) {
+                    (this.context.managers.media as any).bindWebSocket(this.relaySocket!);
+                }
+
+                resolve();
+            };
+
+            this.relaySocket.onerror = (err) => reject(err);
         });
     }
 
@@ -198,8 +179,12 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             }
         });
 
-        conn.on('data', (data: unknown) => {
-            this.dispatcher.dispatch(conn.peer, data);
+        conn.on('data', (data: any) => {
+            if (data && data.type === PACKET_TYPES.AUDIO_CHUNK) {
+                eventBus.emit(EVENTS.AUDIO_CHUNK_RECEIVED, data);
+            } else {
+                this.dispatcher.dispatch(conn.peer, data);
+            }
         });
 
         conn.on('close', () => {
@@ -394,5 +379,53 @@ class DrawLineHandler implements IPacketHandler {
         if (this.context.managers.drawing) {
             this.context.managers.drawing.drawLine(payload);
         }
+    }
+}
+
+/**
+ * Maps raw WebSocket connection events into PeerJS-style API
+ */
+class ServerConnection {
+    public peer = 'SERVER';
+    public open = false;
+    private listeners: Record<string, Function[]> = {};
+
+    constructor(private socket: WebSocket, public localId: string) {
+        if (socket.readyState === WebSocket.OPEN) {
+            setTimeout(() => { this.open = true; this.emit('open'); }, 0);
+        } else {
+            socket.addEventListener('open', () => { this.open = true; this.emit('open'); }, { once: true });
+        }
+
+        socket.addEventListener('message', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.type === 'peer-joined' || data.type === 'peer-left') return;
+                this.emit('data', data);
+            } catch (err) {
+                // Ignore parsing errors for non-JSON traffic (like audio arraybuffers later if we move from stringify)
+            }
+        });
+
+        socket.addEventListener('close', () => {
+            this.open = false;
+            this.emit('close');
+        });
+    }
+
+    public on(event: string, callback: Function) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(callback);
+    }
+    public emit(event: string, data?: any) {
+        if (this.listeners[event]) this.listeners[event].forEach(cb => cb(data));
+    }
+    public send(data: any) {
+        if (this.open && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(data));
+        }
+    }
+    public close() {
+        this.socket.close();
     }
 }

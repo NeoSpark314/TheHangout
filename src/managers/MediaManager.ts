@@ -1,7 +1,7 @@
 import { MediaConnection } from 'peerjs';
 import eventBus from '../core/EventBus';
 import { GameContext } from '../core/GameState';
-import { EVENTS } from '../utils/Constants';
+import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 
 export class MediaManager {
     private localStream: MediaStream | null = null;
@@ -10,6 +10,10 @@ export class MediaManager {
     private localSource: MediaStreamAudioSourceNode | null = null;
     private localAnalyser: AnalyserNode | null = null;
     private freqData: Uint8Array | null = null;
+
+    // WebSocket / Local Server properties
+    private websocket: WebSocket | null = null;
+    private mediaRecorder: MediaRecorder | null = null;
 
     constructor(private context: GameContext) {
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
@@ -55,10 +59,14 @@ export class MediaManager {
             }
             this.calls.clear();
 
-            const network = this.context.managers.network;
-            if (network && network.peer) {
-                for (const peerId of network.connections.keys()) {
-                    this.callPeer(peerId);
+            if (this.context.isLocalServer) {
+                this.startRecording();
+            } else {
+                const network = this.context.managers.network;
+                if (network && network.peer) {
+                    for (const peerId of network.connections.keys()) {
+                        this.callPeer(peerId);
+                    }
                 }
             }
 
@@ -78,6 +86,10 @@ export class MediaManager {
                 this.localSource = null;
             }
             this.localAnalyser = null;
+            if (this.mediaRecorder) {
+                this.mediaRecorder.stop();
+                this.mediaRecorder = null;
+            }
             console.log('[MediaManager] Microphone stopped.');
             for (const call of this.calls.values()) {
                 call.close();
@@ -96,6 +108,47 @@ export class MediaManager {
             }
             this.setupCall(call);
         });
+    }
+
+    public bindWebSocket(ws: WebSocket): void {
+        this.websocket = ws;
+        if (this.localStream) {
+            this.startRecording();
+        }
+    }
+
+    private startRecording(): void {
+        if (!this.localStream || !this.websocket || this.mediaRecorder) return;
+
+        let mimeType = 'audio/webm;codecs=opus';
+        if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'audio/webm';
+        }
+
+        try {
+            this.mediaRecorder = new MediaRecorder(this.localStream, { mimeType, bitsPerSecond: 16000 });
+            this.mediaRecorder.ondataavailable = async (e) => {
+                if (e.data.size > 0 && this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                    const buffer = await e.data.arrayBuffer();
+                    // Blobs cannot be natively stringified via JSON. Base64 encode for transport over JSON text frame.
+                    const ui8 = new Uint8Array(buffer);
+                    let binaryStr = '';
+                    for (let i = 0; i < ui8.byteLength; i++) {
+                        binaryStr += String.fromCharCode(ui8[i]);
+                    }
+                    const base64 = btoa(binaryStr);
+
+                    this.websocket.send(JSON.stringify({
+                        type: PACKET_TYPES.AUDIO_CHUNK,
+                        payload: base64
+                    }));
+                }
+            };
+            this.mediaRecorder.start(250); // 250ms chunks
+            console.log(`[MediaManager] Started MediaRecorder via WebSocket chunking at 250ms`);
+        } catch (err) {
+            console.error('[MediaManager] MediaRecorder error:', err);
+        }
     }
 
     public callPeer(targetPeerId: string): void {
