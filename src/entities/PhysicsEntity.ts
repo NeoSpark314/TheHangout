@@ -66,7 +66,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
         const state = this.getNetworkState();
         eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
-            id: this.id,
+            entityId: this.id,
             velocity: state.v,
             position: state.p,
             quaternion: state.q

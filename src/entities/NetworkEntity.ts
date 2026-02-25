@@ -28,7 +28,7 @@ export abstract class NetworkEntity implements IEntity, INetworkable<any> {
         this.isAuthority = true;
 
         if (!this.context.isHost) {
-            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { id: this.id });
+            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { entityId: this.id });
         }
     }
 
