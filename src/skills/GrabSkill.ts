@@ -3,109 +3,134 @@ import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IGrabbable } from '../interfaces/IGrabbable';
-import { IInteractionPointer } from '../interfaces/IPointer';
 import { isGrabbable, isInteractable } from '../utils/TypeGuards';
 import type { IManagers } from '../core/GameState';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
+import { IHandIntentPayload } from '../interfaces/IIntents';
 
 /**
  * Unified skill for picking up and interacting with objects.
- * Works for Desktop (Ray) and VR (Proximity) using the Pointer abstraction.
+ * Works purely on logical handStates (no pointer checks required).
  */
 export class GrabSkill extends Skill {
-    private grabRadius: number = 0.3;
-    private raycastDist: number = 2.0;
+    private grabRadius: number = 0.5;
 
-    // Track held objects per pointer ID
+    // Track held objects per hand ('left' | 'right')
     private heldObjects: Map<string, IGrabbable> = new Map();
     private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();
-    private highlightedEntity: IInteractable | null = null;
+    private highlightedEntities: { left: IInteractable | null, right: IInteractable | null } = { left: null, right: null };
+
+    private _handlers: Array<{ event: string, handler: any }> = [];
 
     constructor() {
-        super('grab', 'Grab', { isAlwaysActive: false });
+        super('grab', 'Grab', { isAlwaysActive: true });
+    }
+
+    public activate(player: LocalPlayer): void {
+        super.activate(player);
+
+        const onGrabStart = (payload: IHandIntentPayload) => {
+            const nearest = this.highlightedEntities[payload.hand];
+            if (isGrabbable(nearest)) {
+                nearest.onGrab(player.id, payload.hand);
+                this.heldObjects.set(payload.hand, nearest);
+                this.history.set(payload.hand, []);
+            }
+        };
+
+        const onGrabEnd = (payload: IHandIntentPayload) => {
+            const held = this.heldObjects.get(payload.hand);
+            if (held) {
+                const velocity = this._computeThrowVelocity(payload.hand);
+                held.onRelease(velocity);
+                this.heldObjects.delete(payload.hand);
+                this.history.delete(payload.hand);
+            }
+        };
+
+        const onInteractStart = (payload: IHandIntentPayload) => {
+            const held = this.heldObjects.get(payload.hand);
+            if (held && isInteractable(held)) {
+                held.onInteraction({
+                    type: 'trigger',
+                    phase: 'start',
+                    value: payload.value || 1.0,
+                    playerId: player.id,
+                    hand: payload.hand
+                });
+            }
+        };
+
+        const onInteractEnd = (payload: IHandIntentPayload) => {
+            const held = this.heldObjects.get(payload.hand);
+            if (held && isInteractable(held)) {
+                held.onInteraction({
+                    type: 'trigger',
+                    phase: 'end',
+                    value: 0.0,
+                    playerId: player.id,
+                    hand: payload.hand
+                });
+            }
+        };
+
+        eventBus.on(EVENTS.INTENT_GRAB_START, onGrabStart);
+        eventBus.on(EVENTS.INTENT_GRAB_END, onGrabEnd);
+        eventBus.on(EVENTS.INTENT_INTERACT_START, onInteractStart);
+        eventBus.on(EVENTS.INTENT_INTERACT_END, onInteractEnd);
+
+        this._handlers.push({ event: EVENTS.INTENT_GRAB_START, handler: onGrabStart });
+        this._handlers.push({ event: EVENTS.INTENT_GRAB_END, handler: onGrabEnd });
+        this._handlers.push({ event: EVENTS.INTENT_INTERACT_START, handler: onInteractStart });
+        this._handlers.push({ event: EVENTS.INTENT_INTERACT_END, handler: onInteractEnd });
+    }
+
+    public deactivate(player: LocalPlayer): void {
+        super.deactivate(player);
+        for (const { event, handler } of this._handlers) {
+            eventBus.off(event, handler);
+        }
+        this._handlers = [];
+        this.heldObjects.clear();
+        this.history.clear();
+        this._updateHighlight(player.id, 'left', null);
+        this._updateHighlight(player.id, 'right', null);
     }
 
     public update(delta: number, player: LocalPlayer, managers: IManagers): void {
-        const pointers = managers.input.getPointers(managers.render, managers.xr);
+        for (const hand of ['left', 'right'] as const) {
+            const handState = player.handStates[hand];
+            const held = this.heldObjects.get(hand);
 
-        let bestHighlight: IInteractable | null = null;
-
-        for (const pointer of pointers) {
-            const interactable = this.processPointer(pointer, player, managers);
-
-            // Only the first pointer that finds something gets the global highlight
-            if (!bestHighlight && interactable) {
-                bestHighlight = interactable;
-            }
-        }
-
-        this._updateHighlight(player.id, bestHighlight);
-    }
-
-    private processPointer(pointer: IInteractionPointer, player: LocalPlayer, managers: IManagers): IInteractable | null {
-        const held = this.heldObjects.get(pointer.id);
-
-        if (held) {
-            if (!pointer.isSqueezing) {
-                // RELEASE
-                const velocity = this._computeThrowVelocity(pointer.id);
-                held.onRelease(velocity);
-                this.heldObjects.delete(pointer.id);
-                this.history.delete(pointer.id);
-                return null;
-            } else {
+            if (held) {
                 // UPDATE HELD POSE
-                const targetPos = new THREE.Vector3(pointer.origin.x, pointer.origin.y, pointer.origin.z);
-                if (!pointer.isProximity) {
-                    // Raycast hold (Desktop): Move 1.2m in front of pointer
-                    targetPos.add(new THREE.Vector3(pointer.direction.x, pointer.direction.y, pointer.direction.z).multiplyScalar(1.2));
-                }
+                const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
 
                 held.updateGrabbedPose(
                     { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                    pointer.quaternion || { x: 0, y: 0, z: 0, w: 1 } // Note: Need quat in IPointer if we want rotation
+                    handState.quaternion
                 );
 
-                this._recordPosition(pointer.id, targetPos);
+                this._recordPosition(hand, targetPos);
 
-                // RICH INTERACTION (Trigger)
-                if (pointer.triggerValue > 0.01 && isInteractable(held)) {
-                    held.onInteraction({
-                        type: 'trigger',
-                        phase: pointer.triggerValue > 0.1 ? 'update' : 'start',
-                        value: pointer.triggerValue,
-                        playerId: player.id,
-                        hand: pointer.hand
-                    });
-                }
-                return isInteractable(held) ? held : null;
+                // Clear highlight if we are holding something
+                this._updateHighlight(player.id, hand, null);
+            } else {
+                // FIND NEW INTERACTABLE
+                const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+                const result = managers.interaction.findNearestInteractable(targetPos, this.grabRadius);
+                this._updateHighlight(player.id, hand, result?.interactable || null);
             }
-        } else {
-            // FIND NEW INTERACTABLE
-            let found: IInteractable | null = null;
-
-            if (pointer.isProximity) {
-                const result = managers.interaction.findNearestInteractable(
-                    new THREE.Vector3(pointer.origin.x, pointer.origin.y, pointer.origin.z),
-                    this.grabRadius
-                );
-                found = result?.interactable || null;
-            }
-
-            if (pointer.isSqueezing && isGrabbable(found)) {
-                found.onGrab(player.id, pointer.hand || 'right');
-                this.heldObjects.set(pointer.id, found);
-                this.history.set(pointer.id, []);
-            }
-
-            return found;
         }
     }
 
-    private _updateHighlight(playerId: string, nearest: IInteractable | null): void {
-        if (this.highlightedEntity !== nearest) {
-            if (this.highlightedEntity) this.highlightedEntity.onHoverExit(playerId);
+    private _updateHighlight(playerId: string, hand: 'left' | 'right', nearest: IInteractable | null): void {
+        const current = this.highlightedEntities[hand];
+        if (current !== nearest) {
+            if (current) current.onHoverExit(playerId);
             if (nearest) nearest.onHoverEnter(playerId);
-            this.highlightedEntity = nearest;
+            this.highlightedEntities[hand] = nearest;
         }
     }
 

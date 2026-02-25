@@ -15,6 +15,7 @@ import { InteractionSystem } from '../systems/InteractionSystem';
 import { XRSystem } from '../systems/XRSystem';
 import { AssetManager } from '../managers/AssetManager';
 import { DrawingManager } from '../managers/DrawingManager';
+import { AnimationSystem } from '../systems/AnimationSystem';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -85,6 +86,7 @@ export class App {
         this.context.setManager('audio', new AudioManager(this.context));
         this.context.setManager('assets', new AssetManager(this.context));
         this.context.setManager('drawing', new DrawingManager(this.context.managers.render.scene, this.context));
+        this.context.setManager('animation', new AnimationSystem());
         this.context.setManager('xr', new XRSystem());
         this.context.setManager('interaction', new InteractionSystem(this.context.managers.entity));
     }
@@ -126,6 +128,7 @@ export class App {
         // Register systems to GameEngine in the exact desired execution order
         if (managers.network) this.engine.addSystem(managers.network as any);
         if (managers.input) this.engine.addSystem(managers.input as any);
+        if (managers.animation) this.engine.addSystem(managers.animation as any);
         if (managers.entity) this.engine.addSystem(managers.entity as any);
 
         // Physics needs a small wrapper because its update method is called 'step' and only takes delta

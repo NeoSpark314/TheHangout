@@ -44,6 +44,7 @@ export class PlayerManager {
             (this.context.localPlayer as any).name = this.context.playerName || 'Player';
         }
 
+        managers.animation.setLocalPlayer(this.context.localPlayer as any, managers);
         managers.entity.addEntity(this.context.localPlayer as any);
         this.isInitialized = true;
     }

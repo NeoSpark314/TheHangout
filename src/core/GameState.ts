@@ -11,6 +11,7 @@ import type { MediaManager } from '../managers/MediaManager';
 import type { AudioManager } from '../managers/AudioManager';
 import type { InteractionSystem } from '../systems/InteractionSystem';
 import type { XRSystem } from '../systems/XRSystem';
+import type { AnimationSystem } from '../systems/AnimationSystem';
 import type { AssetManager } from '../managers/AssetManager';
 import type { DrawingManager } from '../managers/DrawingManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
@@ -42,6 +43,7 @@ export interface IManagers {
     audio: AudioManager;
     interaction: InteractionSystem;
     xr: XRSystem;
+    animation: AnimationSystem;
     assets: AssetManager;
     drawing: DrawingManager;
 }

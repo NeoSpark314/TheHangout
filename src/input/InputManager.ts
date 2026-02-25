@@ -5,6 +5,9 @@ import { IInteractionPointer } from '../interfaces/IPointer';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { RenderManager } from '../managers/RenderManager';
 import { XRSystem } from '../systems/XRSystem';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
+import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IXRHandTrackedPayload, IXRHeadTrackedPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
 
 import { KeyboardManager } from './KeyboardManager';
 import { GamepadManager } from './GamepadManager';
@@ -80,63 +83,110 @@ export class InputManager implements IUpdatable {
         return v;
     }
 
+    private _wasSnapTurnPressed = false;
+    private previousHandStates = {
+        left: { isSqueezing: false, isInteracting: false },
+        right: { isSqueezing: false, isInteracting: false }
+    };
+
     public update(delta: number, frame?: XRFrame): void {
         this.gamepad.poll(delta);
         this.xrInput.poll(frame);
-    }
 
-    // Pass-through accessor for xrTurn so entities can query the exact intent
-    public get xrTurn(): number {
-        return this.xrInput.turn;
-    }
+        // 1. Continuous intents
+        const move = this.getMovementVector();
+        eventBus.emit(EVENTS.INTENT_MOVE, { direction: move } as IMoveIntentPayload);
 
-    public getPointers(render: RenderManager, xr: XRSystem): IInteractionPointer[] {
-        const pointers: IInteractionPointer[] = [];
-
-        if (render.isXRPresenting()) {
-            const session = render.getXRSession();
-            if (!session) return pointers;
-
-            for (let i = 0; i < session.inputSources.length; i++) {
-                const source = session.inputSources[i];
-                if (!source.handedness || (source.handedness !== 'left' && source.handedness !== 'right')) continue;
-
-                const pose = xr.getControllerWorldPose(render, i);
-                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w));
-
-                pointers.push({
-                    id: `xr_${source.handedness} `,
-                    origin: pose.position,
-                    direction: { x: dir.x, y: dir.y, z: dir.z },
-                    quaternion: pose.quaternion,
-                    isProximity: true,
-                    isSqueezing: (source.gamepad?.buttons[1]?.value || 0) > 0.5,
-                    isInteracting: (source.gamepad?.buttons[0]?.value || 0) > 0.5,
-                    triggerValue: source.gamepad?.buttons[0]?.value || 0,
-                    hand: source.handedness
-                });
-            }
-        } else {
-            const camPos = new THREE.Vector3();
-            const camDir = new THREE.Vector3();
-            const camQuat = new THREE.Quaternion();
-            render.camera.getWorldPosition(camPos);
-            render.camera.getWorldDirection(camDir);
-            render.camera.getWorldQuaternion(camQuat);
-
-            pointers.push({
-                id: 'desktop_main',
-                origin: { x: camPos.x, y: camPos.y, z: camPos.z },
-                direction: { x: camDir.x, y: camDir.y, z: camDir.z },
-                quaternion: { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w },
-                isProximity: false,
-                isSqueezing: this.isKeyDown('e'),
-                isInteracting: this.isKeyDown('primary_action'),
-                triggerValue: this.isKeyDown('primary_action') ? 1.0 : 0.0,
-                hand: 'right'
-            });
+        const look = this.getLookVector();
+        if (look.x !== 0 || look.y !== 0) {
+            eventBus.emit(EVENTS.INTENT_LOOK, { delta: look } as ILookIntentPayload);
         }
 
-        return pointers;
+        // 2. VR Snap turning intent
+        const xrTurn = this.xrInput.turn;
+        if (Math.abs(xrTurn) > 0.5) {
+            if (!this._wasSnapTurnPressed) {
+                const sign = Math.sign(xrTurn);
+                eventBus.emit(EVENTS.INTENT_VR_SNAP_TURN, { angle: sign * (-Math.PI / 4) } as IVRSnapTurnPayload);
+                this._wasSnapTurnPressed = true;
+            }
+        } else {
+            this._wasSnapTurnPressed = false;
+        }
+
+        // 3. Process discrete buttons and XR tracking
+        this._processInteractions();
+    }
+
+    private _processInteractions(): void {
+        const render = this.context.managers.render;
+        const xr = this.context.managers.xr;
+
+        const currentStates = {
+            left: { isSqueezing: false, isInteracting: false, triggerValue: 0 },
+            right: { isSqueezing: false, isInteracting: false, triggerValue: 0 }
+        };
+
+        if (render && render.isXRPresenting()) {
+            const session = render.getXRSession();
+            if (session) {
+                // Emit Head Pose
+                const camPos = new THREE.Vector3();
+                const camQuat = new THREE.Quaternion();
+                render.camera.getWorldPosition(camPos);
+                render.camera.getWorldQuaternion(camQuat);
+                eventBus.emit(EVENTS.INTENT_XR_HEAD_TRACKED, {
+                    position: { x: camPos.x, y: camPos.y, z: camPos.z },
+                    quaternion: { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w }
+                } as IXRHeadTrackedPayload);
+
+                // Process Controllers
+                for (let i = 0; i < session.inputSources.length; i++) {
+                    const source = session.inputSources[i];
+                    if (source.handedness !== 'left' && source.handedness !== 'right') continue;
+
+                    const pose = xr.getControllerWorldPose(render, i);
+                    const isSqueezing = (source.gamepad?.buttons[1]?.value || 0) > 0.5;
+                    const triggerValue = source.gamepad?.buttons[0]?.value || 0;
+                    const isInteracting = triggerValue > 0.5;
+
+                    currentStates[source.handedness] = { isSqueezing, isInteracting, triggerValue };
+
+                    eventBus.emit(EVENTS.INTENT_XR_HAND_TRACKED, {
+                        hand: source.handedness,
+                        position: pose.position,
+                        quaternion: pose.quaternion,
+                        isSqueezing,
+                        triggerValue
+                    } as IXRHandTrackedPayload);
+                }
+            }
+        } else {
+            // Desktop/Mobile interactions
+            currentStates.right.isSqueezing = this.isKeyDown('e');
+            currentStates.right.isInteracting = this.isKeyDown('primary_action');
+            currentStates.right.triggerValue = currentStates.right.isInteracting ? 1.0 : 0.0;
+        }
+
+        // Fire edge intent events based on transitions
+        for (const hand of ['left', 'right'] as const) {
+            const curr = currentStates[hand];
+            const prev = this.previousHandStates[hand];
+
+            if (curr.isSqueezing && !prev.isSqueezing) {
+                eventBus.emit(EVENTS.INTENT_GRAB_START, { hand } as IHandIntentPayload);
+            } else if (!curr.isSqueezing && prev.isSqueezing) {
+                eventBus.emit(EVENTS.INTENT_GRAB_END, { hand } as IHandIntentPayload);
+            }
+
+            if (curr.isInteracting && !prev.isInteracting) {
+                eventBus.emit(EVENTS.INTENT_INTERACT_START, { hand, value: curr.triggerValue } as IHandIntentPayload);
+            } else if (!curr.isInteracting && prev.isInteracting) {
+                eventBus.emit(EVENTS.INTENT_INTERACT_END, { hand } as IHandIntentPayload);
+            }
+
+            this.previousHandStates[hand].isSqueezing = curr.isSqueezing;
+            this.previousHandStates[hand].isInteracting = curr.isInteracting;
+        }
     }
 }

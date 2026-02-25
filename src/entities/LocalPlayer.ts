@@ -29,7 +29,7 @@ export class LocalPlayer extends PlayerEntity {
     public _leftControllerIndex: number = 0;
     public _rightControllerIndex: number = 1;
 
-    constructor(protected context: GameContext, id: string, spawnPos: IVector3, spawnYaw: number, view: IView<IPlayerViewState>) {
+    constructor(public context: GameContext, id: string, spawnPos: IVector3, spawnYaw: number, view: IView<IPlayerViewState>) {
         super(context, id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
         this.isAuthority = true;
         this.view = view;

@@ -3,6 +3,9 @@ import { Skill } from './Skill';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { IVector3 } from '../interfaces/IMath';
 import type { IManagers } from '../core/GameState';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
+import { IMoveIntentPayload, ILookIntentPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
 
 export class MovementSkill extends Skill {
     public speed: number = 5.0;
@@ -11,6 +14,10 @@ export class MovementSkill extends Skill {
     public yaw: number = 0;
     private _inputListenersAttached: boolean = false;
     private _wasSnapTurnPressed: boolean = false;
+
+    // Current movement intent state
+    private _currentMove: { x: number, y: number } = { x: 0, y: 0 };
+    private _handlers: Array<{ event: string, handler: any }> = [];
 
     constructor() {
         super('movement', 'Movement', { isAlwaysActive: true });
@@ -22,6 +29,35 @@ export class MovementSkill extends Skill {
 
     public activate(player: LocalPlayer): void {
         super.activate(player);
+
+        const onMove = (payload: IMoveIntentPayload) => {
+            this._currentMove = payload.direction;
+        };
+        const onLook = (payload: ILookIntentPayload) => {
+            this.yaw -= payload.delta.x * this.turnSpeed * 15;
+            this.pitch -= payload.delta.y * this.turnSpeed * 15;
+            this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
+        };
+        const onVRSnapTurn = (payload: IVRSnapTurnPayload) => {
+            this.applyVRTurn(player, payload.angle, player.context.managers);
+        };
+
+        eventBus.on(EVENTS.INTENT_MOVE, onMove);
+        eventBus.on(EVENTS.INTENT_LOOK, onLook);
+        eventBus.on(EVENTS.INTENT_VR_SNAP_TURN, onVRSnapTurn);
+
+        this._handlers.push({ event: EVENTS.INTENT_MOVE, handler: onMove });
+        this._handlers.push({ event: EVENTS.INTENT_LOOK, handler: onLook });
+        this._handlers.push({ event: EVENTS.INTENT_VR_SNAP_TURN, handler: onVRSnapTurn });
+    }
+
+    public deactivate(player: LocalPlayer): void {
+        super.deactivate(player);
+        for (const { event, handler } of this._handlers) {
+            eventBus.off(event, handler);
+        }
+        this._handlers = [];
+        this._currentMove = { x: 0, y: 0 };
     }
 
     private _attachInputListeners(player: LocalPlayer, managers: IManagers): void {
@@ -47,7 +83,6 @@ export class MovementSkill extends Skill {
 
     public update(delta: number, player: LocalPlayer, managers: IManagers): void {
         const render = managers.render;
-        const input = managers.input;
 
         if (!this._inputListenersAttached) {
             this._attachInputListeners(player, managers);
@@ -58,16 +93,7 @@ export class MovementSkill extends Skill {
 
         // 1. Orientation
         if (!isVR) {
-            // Apply look vector (Mobile Joystick / Gamepad)
-            const look = input.getLookVector();
-            if (look.x !== 0 || look.y !== 0) {
-                // Multiplier to match mouse sensitivity feel
-                this.yaw -= look.x * this.turnSpeed * 15;
-                this.pitch -= look.y * this.turnSpeed * 15;
-                this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
-            }
-
-            player.headPose.quaternion = {
+            player.headState.quaternion = {
                 x: Math.sin(this.pitch / 2),
                 y: 0,
                 z: 0,
@@ -79,23 +105,10 @@ export class MovementSkill extends Skill {
                 z: 0,
                 w: Math.cos(this.yaw / 2)
             };
-        } else {
-            // VR Snap Turn
-            if (Math.abs(input.xrTurn) > 0.5) {
-                if (!this._wasSnapTurnPressed) {
-                    const sign = Math.sign(input.xrTurn);
-                    const turnAngle = sign * (-Math.PI / 4);
-                    this.applyVRTurn(player, turnAngle, managers);
-                    this._wasSnapTurnPressed = true;
-                }
-            } else {
-                this._wasSnapTurnPressed = false;
-            }
         }
 
-        // 2. Locomotion
-        const move = input.getMovementVector();
-        const moveVector = new THREE.Vector3(move.x, 0, move.y);
+        // 2. Locomotion based on current intent
+        const moveVector = new THREE.Vector3(this._currentMove.x, 0, this._currentMove.y);
 
         if (moveVector.lengthSq() > 0) {
             moveVector.normalize();
