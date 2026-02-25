@@ -542,34 +542,4 @@ input[type="color"] {
         min-height: 1.2em;
     }
 
-    .version-info {
-        bottom: 5px;
-        font-size: 0.55rem;
-    }
-}
-
-/* --- Administrative Notifications --- */
-.notification-toast {
-    position: fixed;
-    top: -100px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(11, 12, 16, 0.95);
-    border: 2px solid var(--primary-color);
-    box-shadow: var(--neon-glow);
-    color: var(--primary-color);
-    padding: 15px 30px;
-    border-radius: 8px;
-    z-index: 9999;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    text-align: center;
-    pointer-events: none;
-    max-width: 90%;
-}
-
-.notification-toast.show {
-    top: 30px;
 }

@@ -53,6 +53,11 @@ export class HUDManager implements IUpdatable {
             this.showNotification(`${data.name} joined the hangout!`);
         });
 
+        eventBus.on(EVENTS.SYSTEM_NOTIFICATION, (msg: string) => {
+            console.log('[HUDManager] System Notification received:', msg);
+            this.showNotification(`SYSTEM: ${msg}`, 8000);
+        });
+
         setTimeout(() => this.updatePlayerList(), 100);
     }
 
@@ -144,7 +149,7 @@ export class HUDManager implements IUpdatable {
 
         const initialCount = this.notifications.length;
         this.notifications = this.notifications.filter(n => (now - n.startTime) < n.duration);
-        if (this.notifications.length !== initialCount) {
+        if (this.notifications.length !== initialCount || this.notifications.length > 0) {
             this.draw();
         }
 

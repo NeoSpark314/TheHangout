@@ -32,7 +32,7 @@ const { values: args } = parseArgs({
     strict: false
 });
 
-const PORT = parseInt(args.port);
+const PORT = parseInt(args.port as string);
 
 // --- SSL Setup ---
 // Use custom certs via --key/--cert, or auto-generate self-signed
@@ -44,8 +44,8 @@ let sslOptions;
 if (customKey && customCert) {
     console.log(`[Server] Using custom SSL cert: ${customCert}`);
     sslOptions = {
-        key: fs.readFileSync(customKey),
-        cert: fs.readFileSync(customCert)
+        key: fs.readFileSync(customKey as string),
+        cert: fs.readFileSync(customCert as string)
     };
 } else {
     // Auto-generate self-signed cert
@@ -287,7 +287,6 @@ app.use(express.static(distPath));
 const server = https.createServer(sslOptions, app);
 
 const peerServer = ExpressPeerServer(server, {
-    debug: true,
     path: '/',
     allow_discovery: true,
     // Removing 'proxied: true' for now to debug 'Invalid frame header'
@@ -326,7 +325,7 @@ server.removeAllListeners('upgrade');
 
 server.on('upgrade', (request, socket, head) => {
     try {
-        const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`);
+        const url = new URL(request.url || '', `https://${request.headers.host || 'localhost'}`);
         const pathname = url.pathname;
         console.log(`[Server] Upgrade Request: ${pathname}`);
 

@@ -215,6 +215,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         const managers = this.context.managers;
         for (const stateData of entityStates) {
             if ((stateData.type as any) === 'system') {
+                console.log('[NetworkManager] System notification packet received:', (stateData.state as any).message);
                 eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, (stateData.state as any).message);
                 continue;
             }
