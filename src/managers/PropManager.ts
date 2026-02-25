@@ -206,4 +206,23 @@ export class PropManager {
         this.podest = null;
         this.decorations = null;
     }
+
+    public spawnGrabbableCube(position?: { x: number, y: number, z: number }): void {
+        const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
+        const color = colors[Math.floor(this.random() * colors.length)];
+        const pos = position || { x: (this.random() - 0.5) * 2, y: 1.5, z: (this.random() - 0.5) * 2 };
+
+        let mesh = undefined;
+        if (this.scene) {
+            const geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+            const mat = new THREE.MeshStandardMaterial({
+                color: color, emissive: color, emissiveIntensity: 0.3, metalness: 0.6, roughness: 0.3
+            });
+            mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(pos.x, pos.y, pos.z);
+        }
+
+        const entityId = `admin-spawn-${Date.now()}`;
+        EntityFactory.createGrabbable(this.context, entityId, 0.12, pos, mesh as any);
+    }
 }

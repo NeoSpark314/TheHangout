@@ -214,6 +214,10 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
         const managers = this.context.managers;
         for (const stateData of entityStates) {
+            if ((stateData.type as any) === 'system') {
+                eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, (stateData.state as any).message);
+                continue;
+            }
             let entity = managers.entity.getEntity(stateData.id);
             if (!entity) {
                 // Skip if this is actually us (should already be in entities, but be safe)

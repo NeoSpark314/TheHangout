@@ -9,6 +9,7 @@ export class HeadlessRoom {
     public context: GameContext;
     public engine: GameEngine;
     public network: ServerNetworkManager;
+    public startTime: number = Date.now();
 
     constructor(public roomId: string, networkTransport: ServerNetworkManager) {
         this.context = new GameContext();
@@ -59,5 +60,27 @@ export class HeadlessRoom {
     public stop(): void {
         this.engine.stop();
         console.log(`[HeadlessRoom] Stopped ${this.roomId}`);
+    }
+
+    public getStats() {
+        const entityMgr = this.context.managers.entity;
+        const physicsMgr = this.context.managers.physics;
+        const entities = Array.from(entityMgr.entities.values());
+
+        return {
+            id: this.roomId,
+            uptime: Math.floor((Date.now() - this.startTime) / 1000),
+            clients: this.network.connections.size,
+            peerIds: Array.from(this.network.connections.keys()),
+            entityCount: entities.length,
+            entityBreakdown: {
+                players: entities.filter(e => e.type === 'REMOTE_PLAYER').length,
+                props: entities.filter(e => e.type === 'PHYSICS_PROP').length
+            },
+            physics: {
+                bodies: (physicsMgr as any).world?.nbRigidBodies || 0,
+                colliders: (physicsMgr as any).world?.nbColliders || 0
+            }
+        };
     }
 }
