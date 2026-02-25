@@ -93,6 +93,7 @@ export class RemotePlayer extends PlayerEntity {
         if (performance.now() - this.lastNetworkUpdateTime > 5000) {
             console.warn(`[RemotePlayer] Player ${this.peerId} timed out. Destroying.`);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, this.peerId);
+            this.destroy();
             return;
         }
 
