@@ -164,8 +164,8 @@ export class MediaManager {
                     const isHeader = isFirstChunk;
                     isFirstChunk = false;
 
-                    if (Math.random() < 0.01 || isHeader) {
-                        console.log(`[MediaManager] Sending audio chunk (${base64.length} chars)${isHeader ? ' [HEADER]' : ''}`);
+                    if (isHeader) {
+                        console.log(`[MediaManager] Sending audio header chunk (${base64.length} chars)`);
                     }
 
                     this.websocket.send(JSON.stringify({

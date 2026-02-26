@@ -26,8 +26,8 @@ export class RemotePlayer extends PlayerEntity {
         const chunk = typeof payload === 'string' ? payload : payload.chunk;
         const isHeader = !!payload.isHeader;
 
-        if (Math.random() < 0.01 || isHeader) {
-            console.log(`[RemotePlayer] Receiving audio chunk from ${this.peerId} (${chunk?.length} chars)${isHeader ? ' [HEADER]' : ''}`);
+        if (isHeader) {
+            console.log(`[RemotePlayer] Receiving audio header chunk from ${this.peerId} (${chunk?.length} chars)`);
         }
         this.lastNetworkUpdateTime = performance.now(); // Audio activity counts as presence
         this.view.attachAudioChunk({ chunk, isHeader });
