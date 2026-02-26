@@ -37,11 +37,16 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     private onAudioChunk(data: any): void {
-        if (data.senderId === this.peerId) {
-            if (Math.random() < 0.01) { // 1% sample to avoid spam
-                console.log(`[RemotePlayer] Receiving audio chunk from ${this.peerId} (${data.payload.length} chars)`);
+        const senderId = data.senderId || this.peerId; // Server injected senderId or fallback
+        if (senderId === this.peerId) {
+            const payload = data.payload || data; // Handle both wrapped and unwrapped payloads
+            const chunk = typeof payload === 'string' ? payload : payload.chunk;
+            const isHeader = !!payload.isHeader;
+
+            if (Math.random() < 0.01 || isHeader) {
+                console.log(`[RemotePlayer] Receiving audio chunk from ${this.peerId} (${chunk?.length} chars)${isHeader ? ' [HEADER]' : ''}`);
             }
-            this.view.attachAudioChunk(data.payload);
+            this.view.attachAudioChunk({ chunk, isHeader });
         }
     }
 

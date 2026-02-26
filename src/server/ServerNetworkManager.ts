@@ -10,6 +10,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private dispatcher: NetworkDispatcher;
     private synchronizer!: NetworkSynchronizer;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
+    private latestAudioHeaders: Map<string, any> = new Map(); // peerId -> { payload, senderId }
 
     // Traffic metrics
     public bytesReceived: number = 0;
@@ -74,10 +75,19 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
         const snapshot = this.context.managers.entity.getWorldSnapshot();
         this.sendData(peerId, PACKET_TYPES.STATE_UPDATE, snapshot);
+
+        // Send all currently known audio headers so new client can decode existing streams
+        for (const [senderId, headerData] of this.latestAudioHeaders.entries()) {
+            this.sendData(peerId, PACKET_TYPES.AUDIO_CHUNK, {
+                ...headerData.payload,
+                senderId: senderId
+            });
+        }
     }
 
     public removeClient(peerId: string): void {
         this.connections.delete(peerId);
+        this.latestAudioHeaders.delete(peerId);
         this.reclaimOwnership(peerId);
         if (this.context.managers.entity) {
             this.context.managers.entity.removeEntity(peerId);
@@ -87,6 +97,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
     public handleMessage(peerId: string, messageData: any): void {
         if (messageData.type === PACKET_TYPES.AUDIO_CHUNK) {
+            // If this is a header chunk, store it for future joiners
+            if (messageData.payload && messageData.payload.isHeader) {
+                this.latestAudioHeaders.set(peerId, {
+                    payload: messageData.payload,
+                    senderId: peerId
+                });
+            }
             this.relayToOthers(peerId, PACKET_TYPES.AUDIO_CHUNK, messageData.payload);
             return;
         }

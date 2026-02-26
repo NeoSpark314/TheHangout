@@ -118,8 +118,25 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         }
     }
 
-    public attachAudioChunk(base64Chunk: string): void {
+    public attachAudioChunk(data: { chunk: string, isHeader: boolean } | string): void {
         if (!this.positionalAudio) return;
+
+        let base64Chunk: string;
+        let isHeader = false;
+
+        if (typeof data === 'string') {
+            base64Chunk = data;
+        } else {
+            base64Chunk = data.chunk;
+            isHeader = data.isHeader;
+        }
+
+        // If we get a header and we already have a media source, it means the stream was restarted.
+        // We MUST re-create the media source to start fresh with the new header.
+        if (isHeader && this.mediaSource) {
+            console.log('[StickFigureView] New audio header received, resetting MediaSource.');
+            this.cleanupAudioSource();
+        }
 
         if (!this.mediaSource) {
             this.mediaSource = new MediaSource();
@@ -153,6 +170,27 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
                 this.processAudioQueue();
             }
         } catch (e) { /* ignore parse error */ }
+    }
+
+    private cleanupAudioSource(): void {
+        if (this.mediaSource) {
+            if (this.mediaSource.readyState === 'open' && this.sourceBuffer) {
+                try {
+                    this.mediaSource.removeSourceBuffer(this.sourceBuffer);
+                } catch (e) { }
+            }
+            this.mediaSource = null;
+            this.sourceBuffer = null;
+            this.bufferQueue = [];
+        }
+        if (this.audioElement) {
+            this.audioElement.pause();
+            const oldSrc = this.audioElement.src;
+            this.audioElement.src = '';
+            if (oldSrc && oldSrc.startsWith('blob:')) {
+                URL.revokeObjectURL(oldSrc);
+            }
+        }
     }
 
     private processAudioQueue(): void {

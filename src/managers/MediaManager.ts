@@ -132,6 +132,7 @@ export class MediaManager {
         }
 
         try {
+            let isFirstChunk = true;
             this.mediaRecorder = new MediaRecorder(this.localStream, { mimeType, bitsPerSecond: 16000 });
             this.mediaRecorder.ondataavailable = async (e) => {
                 if (e.data.size > 0 && this.websocket && this.websocket.readyState === WebSocket.OPEN) {
@@ -143,12 +144,19 @@ export class MediaManager {
                         binaryStr += String.fromCharCode(ui8[i]);
                     }
                     const base64 = btoa(binaryStr);
+                    const isHeader = isFirstChunk;
+                    isFirstChunk = false;
 
-                    if (Math.random() < 0.01) console.log(`[MediaManager] Sending audio chunk (${base64.length} chars)`);
+                    if (Math.random() < 0.01 || isHeader) {
+                        console.log(`[MediaManager] Sending audio chunk (${base64.length} chars)${isHeader ? ' [HEADER]' : ''}`);
+                    }
 
                     this.websocket.send(JSON.stringify({
                         type: PACKET_TYPES.AUDIO_CHUNK,
-                        payload: base64
+                        payload: {
+                            chunk: base64,
+                            isHeader: isHeader
+                        }
                     }));
                 }
             };
