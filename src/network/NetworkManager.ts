@@ -69,6 +69,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, new OwnershipReleaseHandler(this, this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.DRAW_LINE_SEGMENT, new DrawLineHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.PEER_JOINED, new PeerJoinedHandler(this.context));
     }
 
     private getPeerConfig(): any {
@@ -183,7 +184,11 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         conn.on('data', (data: any) => {
             if (data && data.type === PACKET_TYPES.AUDIO_CHUNK) {
-                eventBus.emit(EVENTS.AUDIO_CHUNK_RECEIVED, data);
+                const senderId = data.senderId || conn.peer;
+                const entity = this.context.managers.entity.getEntity(senderId);
+                if (entity && (entity as any).onAudioChunk) {
+                    (entity as any).onAudioChunk(data.payload);
+                }
             } else {
                 this.dispatcher.dispatch(conn.peer, data);
             }
@@ -404,6 +409,15 @@ class DrawLineHandler implements IPacketHandler {
     handle(senderId: string, payload: IDrawSegmentPayload): void {
         if (this.context.managers.drawing) {
             this.context.managers.drawing.drawLine(payload);
+        }
+    }
+}
+
+class PeerJoinedHandler implements IPacketHandler {
+    constructor(private context: GameContext) { }
+    handle(senderId: string, payload: { peerId: string }): void {
+        if (!this.context.isHost && this.context.isLocalServer) {
+            eventBus.emit(EVENTS.PEER_JOINED_ROOM, payload.peerId);
         }
     }
 }

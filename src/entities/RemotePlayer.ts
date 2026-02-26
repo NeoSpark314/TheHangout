@@ -20,34 +20,17 @@ export class RemotePlayer extends PlayerEntity {
         this.peerId = peerId;
         this.view = view;
         this.name = 'Player'; // Default
-
-        this.onVoiceStream = this.onVoiceStream.bind(this);
-        eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
-
-        this.onAudioChunk = this.onAudioChunk.bind(this);
-        eventBus.on(EVENTS.AUDIO_CHUNK_RECEIVED, this.onAudioChunk);
-
-        console.log(`[RemotePlayer] Created avatar for ${this.peerId}`);
     }
 
-    private onVoiceStream(data: any): void {
-        if (data.peerId === this.peerId) {
-            this.view.attachVoiceStream(data.stream);
-        }
-    }
+    public onAudioChunk(payload: any): void {
+        const chunk = typeof payload === 'string' ? payload : payload.chunk;
+        const isHeader = !!payload.isHeader;
 
-    private onAudioChunk(data: any): void {
-        const senderId = data.senderId || this.peerId; // Server injected senderId or fallback
-        if (senderId === this.peerId) {
-            const payload = data.payload || data; // Handle both wrapped and unwrapped payloads
-            const chunk = typeof payload === 'string' ? payload : payload.chunk;
-            const isHeader = !!payload.isHeader;
-
-            if (Math.random() < 0.01 || isHeader) {
-                console.log(`[RemotePlayer] Receiving audio chunk from ${this.peerId} (${chunk?.length} chars)${isHeader ? ' [HEADER]' : ''}`);
-            }
-            this.view.attachAudioChunk({ chunk, isHeader });
+        if (Math.random() < 0.01 || isHeader) {
+            console.log(`[RemotePlayer] Receiving audio chunk from ${this.peerId} (${chunk?.length} chars)${isHeader ? ' [HEADER]' : ''}`);
         }
+        this.lastNetworkUpdateTime = performance.now(); // Audio activity counts as presence
+        this.view.attachAudioChunk({ chunk, isHeader });
     }
 
     public getNetworkState(): IPlayerEntityState | null {
@@ -98,7 +81,7 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     public update(delta: number, _frame?: XRFrame): void {
-        if (performance.now() - this.lastNetworkUpdateTime > 5000) {
+        if (performance.now() - this.lastNetworkUpdateTime > 10000) {
             console.warn(`[RemotePlayer] Player ${this.peerId} timed out. Destroying.`);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, this.peerId);
             this.destroy();
@@ -123,8 +106,6 @@ export class RemotePlayer extends PlayerEntity {
 
     public destroy(): void {
         super.destroy();
-        eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
-        eventBus.off(EVENTS.AUDIO_CHUNK_RECEIVED, this.onAudioChunk);
 
         const render = this.context.managers.render;
         if (render && this.view) {

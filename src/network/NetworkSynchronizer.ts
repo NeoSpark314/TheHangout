@@ -9,7 +9,9 @@ export interface INetworkTransport {
 export class NetworkSynchronizer {
     private transport: INetworkTransport;
     private syncRate: number = 1 / 20;
+    private heartbeatRate: number = 2.0;
     private timeSinceLastSync: number = 0;
+    private timeSinceLastHeartbeat: number = 0;
 
     constructor(transport: INetworkTransport, private context: GameContext) {
         this.transport = transport;
@@ -17,24 +19,35 @@ export class NetworkSynchronizer {
 
     public update(delta: number): void {
         this.timeSinceLastSync += delta;
-        if (this.timeSinceLastSync >= this.syncRate) {
+        this.timeSinceLastHeartbeat += delta;
+
+        const needsSync = this.timeSinceLastSync >= this.syncRate;
+        const needsHeartbeat = this.timeSinceLastHeartbeat >= this.heartbeatRate;
+
+        if (needsSync || needsHeartbeat) {
+            this.syncState(needsHeartbeat);
             this.timeSinceLastSync = 0;
-            this.syncState();
+            if (needsHeartbeat) this.timeSinceLastHeartbeat = 0;
         }
     }
 
-    private syncState(): void {
+    private syncState(forceAll: boolean = false): void {
         const managers = this.context.managers;
         if (!managers.entity) return;
 
-        const authoritativeStates = managers.entity.getAuthoritativeStates();
-        if (authoritativeStates.length === 0) return;
-
-        if (this.context.isHost) {
+        // If forceAll is true, we send a full snapshot to keep connections alive and names synced
+        if (forceAll || this.context.isHost) {
             const allStates = managers.entity.getWorldSnapshot();
-            this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
-        } else if (this.context.roomId) {
-            this.transport.sendData(this.context.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
+            if (allStates.length > 0) {
+                this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
+            }
+        } else {
+            const authoritativeStates = managers.entity.getAuthoritativeStates();
+            if (authoritativeStates.length > 0) {
+                if (this.context.roomId) {
+                    this.transport.sendData(this.context.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
+                }
+            }
         }
     }
 }

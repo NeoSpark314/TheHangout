@@ -29,6 +29,18 @@ export class MediaManager {
                 this.calls.delete(peerId);
             }
         });
+
+        eventBus.on(EVENTS.PEER_JOINED_ROOM, (peerId: string) => {
+            if (this.context.isLocalServer && this.localStream && this.websocket) {
+                console.log(`[MediaManager] Peer ${peerId} joined. Restarting MediaRecorder to send fresh header.`);
+                if (this.mediaRecorder) {
+                    // Let the old one finish its last chunk then start a new one automatically
+                    this.mediaRecorder.stop();
+                    this.mediaRecorder = null;
+                }
+                this.startRecording();
+            }
+        });
     }
 
     public async toggleMicrophone(): Promise<boolean> {
@@ -119,6 +131,11 @@ export class MediaManager {
     public bindWebSocket(ws: WebSocket): void {
         this.websocket = ws;
         if (this.localStream) {
+            if (this.mediaRecorder) {
+                console.log('[MediaManager] WebSocket rebound, restarting MediaRecorder for fresh header.');
+                this.mediaRecorder.stop();
+                this.mediaRecorder = null;
+            }
             this.startRecording();
         }
     }

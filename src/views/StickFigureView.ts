@@ -143,17 +143,41 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             if (!this.audioElement) {
                 this.audioElement = new Audio();
                 this.audioElement.autoplay = true;
+                this.audioElement.muted = false;
             }
-            this.audioElement.src = URL.createObjectURL(this.mediaSource);
-            this.positionalAudio.setMediaElementSource(this.audioElement as HTMLMediaElement);
-            this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
+
+            const blobUrl = URL.createObjectURL(this.mediaSource);
+            this.audioElement.src = blobUrl;
+            // Removed premature play() call that was causing NotSupportedError
+
+            if (!this.audioAnalyser) {
+                console.log(`[StickFigureView] Connecting AudioElement to PositionalAudio for ${this.isLocal ? 'local' : 'remote'} player`);
+                this.positionalAudio.setMediaElementSource(this.audioElement as HTMLMediaElement);
+                this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
+            }
 
             this.mediaSource.addEventListener('sourceopen', () => {
-                const mimeType = 'audio/webm; codecs=opus';
-                if (MediaSource.isTypeSupported(mimeType)) {
-                    this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeType);
+                const mimeTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/mpeg'
+                ];
+                let selectedMime = '';
+                for (const mime of mimeTypes) {
+                    if (MediaSource.isTypeSupported(mime)) {
+                        selectedMime = mime;
+                        break;
+                    }
+                }
+
+                if (selectedMime) {
+                    console.log(`[StickFigureView] MediaSource opened. Adding SourceBuffer for: ${selectedMime}`);
+                    this.sourceBuffer = this.mediaSource!.addSourceBuffer(selectedMime);
+                    this.sourceBuffer.mode = 'sequence'; // CRITICAL: ignore container timestamps for live relay
                     this.sourceBuffer.addEventListener('updateend', () => this.processAudioQueue());
                     this.processAudioQueue();
+                } else {
+                    console.error('[StickFigureView] No supported MIME type found for MediaSource');
                 }
             });
         }
@@ -176,8 +200,13 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         if (this.mediaSource) {
             if (this.mediaSource.readyState === 'open' && this.sourceBuffer) {
                 try {
+                    if (this.sourceBuffer.updating) {
+                        this.sourceBuffer.abort();
+                    }
                     this.mediaSource.removeSourceBuffer(this.sourceBuffer);
-                } catch (e) { }
+                } catch (e) {
+                    console.warn('[StickFigureView] Error removing SourceBuffer:', e);
+                }
             }
             this.mediaSource = null;
             this.sourceBuffer = null;
@@ -187,6 +216,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             this.audioElement.pause();
             const oldSrc = this.audioElement.src;
             this.audioElement.src = '';
+            this.audioElement.removeAttribute('src');
+            this.audioElement.load();
             if (oldSrc && oldSrc.startsWith('blob:')) {
                 URL.revokeObjectURL(oldSrc);
             }
@@ -194,24 +225,54 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     }
 
     private processAudioQueue(): void {
-        if (!this.sourceBuffer || this.sourceBuffer.updating || this.bufferQueue.length === 0) return;
-        const chunk = this.bufferQueue.shift()!;
+        const canAppend = this.mediaSource &&
+            this.mediaSource.readyState === 'open' &&
+            this.sourceBuffer &&
+            !this.sourceBuffer.updating &&
+            this.bufferQueue.length > 0;
+
+        if (!canAppend) return;
+
+        // Final safety check: is this source buffer still attached?
+        let isAttached = false;
         try {
-            this.sourceBuffer.appendBuffer(chunk as any);
-        } catch (e) {
-            // Usually happens if buffer gets full or corrupted chunk
+            for (let i = 0; i < this.mediaSource!.sourceBuffers.length; i++) {
+                if (this.mediaSource!.sourceBuffers[i] === this.sourceBuffer) {
+                    isAttached = true;
+                    break;
+                }
+            }
+        } catch (e) { isAttached = false; }
+
+        if (!isAttached) {
+            this.sourceBuffer = null;
+            return;
         }
 
-        if (this.audioElement && this.audioElement.buffered.length > 0) {
-            const end = this.audioElement.buffered.end(this.audioElement.buffered.length - 1);
-            // More aggressive catch-up: if we are more than 300ms behind, skip to the edge
-            if (end - this.audioElement.currentTime > 0.3) {
-                this.audioElement.currentTime = end - 0.05;
-            }
+        const chunk = this.bufferQueue.shift()!;
+        try {
+            this.sourceBuffer!.appendBuffer(chunk as any);
+        } catch (e) {
+            console.error('[StickFigureView] Error appending buffer:', e);
+            // If we get an error, it might be an invalid state, clear the queue to avoid spin loops
+            this.bufferQueue = [];
+        }
 
-            // Ensure it's actually playing
-            if (this.audioElement.paused) {
-                this.audioElement.play().catch(() => { });
+        if (this.audioElement) {
+            const buffered = this.audioElement.buffered;
+            if (buffered.length > 0) {
+                const end = buffered.end(buffered.length - 1);
+
+                // Small catch-up threshold to reduce latency while preventing choppy audio
+                if (end - this.audioElement.currentTime > 0.5) {
+                    this.audioElement.currentTime = end - 0.1;
+                }
+
+                if (this.audioElement.paused) {
+                    this.audioElement.play().catch(err => {
+                        console.warn('[StickFigureView] Auto-play failed:', err);
+                    });
+                }
             }
         }
     }
@@ -630,18 +691,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
     public destroy(): void {
         this._cleanupMesh();
-
-        if (this.audioElement) {
-            this.audioElement.pause();
-            const oldSrc = this.audioElement.src;
-            this.audioElement.src = '';
-            this.audioElement.srcObject = null;
-            this.audioElement.load();
-            if (oldSrc && oldSrc.startsWith('blob:')) {
-                URL.revokeObjectURL(oldSrc);
-            }
-            this.audioElement = null;
-        }
+        this.cleanupAudioSource();
+        this.audioElement = null;
 
         if (this.positionalAudio) {
             try {
