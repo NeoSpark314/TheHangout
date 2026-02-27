@@ -5,6 +5,8 @@ import { UITabPanel, UIElement } from '../utils/canvasui';
 import { UITheme, getFont } from '../utils/UITheme';
 import { RemotePlayer } from '../entities/RemotePlayer';
 import { LocalPlayer } from '../entities/LocalPlayer';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 import * as THREE from 'three';
 
 export class VRUIManager implements IUpdatable {
@@ -172,14 +174,12 @@ export class VRUIManager implements IUpdatable {
             roomContainer.addChild(pageLabel);
             roomContainer.addChild(nextBtn);
 
-            // Hook up a refresh event whenever tab opens or frequently update it
-            // For now, attaching a manual Refresh button to the header
-            const refreshBtn = new UIButton("Refresh", 1000, 30, 200, 70, () => {
-                renderList();
-            });
-            refreshBtn.backgroundColor = 'rgba(0,0,0,0)';
-            refreshBtn.borderColor = UITheme.colors.primary;
-            roomContainer.addChild(refreshBtn);
+            // Hook up auto-refresh events. We use setTimeout to defer rendering by one tick
+            // so EntityManager has time to actually add/remove the entity before we query the list.
+            const scheduleRender = () => { setTimeout(renderList, 0); };
+            eventBus.on(EVENTS.PEER_CONNECTED, scheduleRender);
+            eventBus.on(EVENTS.PEER_DISCONNECTED, scheduleRender);
+            eventBus.on(EVENTS.REMOTE_NAME_UPDATED, scheduleRender);
 
             // Initial render
             renderList();

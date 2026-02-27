@@ -30,13 +30,14 @@ export class TabletEntity implements IGrabbable, IInteractable {
     private rightHandle: THREE.Mesh;
 
     private isRecentering: boolean = false;
+    private hasSpawned: boolean = false;
     private frames: number = 0;
 
     constructor(context: GameContext, id: string) {
         this.context = context;
         this.id = id;
 
-        // Initial positions will be overridden by relative tracking in update()
+        // Initial positions will be overridden by relative tracking in update() once localPlayer is initialized
         this.position = new THREE.Vector3();
         this.quaternion = new THREE.Quaternion();
 
@@ -104,6 +105,16 @@ export class TabletEntity implements IGrabbable, IInteractable {
             const head = (this.context.localPlayer as any).headState;
             const tracking = this.context.managers.tracking.getState();
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
+
+            if (!this.hasSpawned) {
+                // **Spawn Polish**: Pre-calculate starting transform instantly so the Tablet doesn't fly from (0,0,0)
+                this.position.copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
+                this.quaternion.copy(yawQuat).multiply(this.relativeQuaternion);
+                this.mesh.position.copy(this.position);
+                this.mesh.quaternion.copy(this.quaternion);
+                this.hasSpawned = true;
+                return; // Skip interpolation this frame
+            }
 
             const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
             const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(this.relativeQuaternion);
