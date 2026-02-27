@@ -115,14 +115,13 @@ export class LocalPlayer extends PlayerEntity {
         const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
 
         // 2. Deep copy tracking data into our own persistent handStates to avoid state pollution
+        // Poses are now in WORLD SPACE
         this.syncHandStates(trackingState.hands);
 
-        xr.transformHandsToAvatarSpace(
-            this.xrOrigin,
-            bodyYaw,
-            worldHeadPos,
-            this.handStates
-        );
+        // Sync head state (World Space)
+        this.headState.position = { ...worldHeadPos };
+        this.headState.quaternion = { ...worldHeadQuat };
+        this.headHeight = trackingState.head.position.y;
 
         this.view.applyState({
             position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },

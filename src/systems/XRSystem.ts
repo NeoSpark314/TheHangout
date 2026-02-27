@@ -7,6 +7,7 @@ import { RenderManager } from '../managers/RenderManager';
  * Architectural Role: Centralized math hub for XR coordinate transformations.
  * Note: Uses THREE.js classes (IVector3, Matrix4) strictly for spatial math. 
  * This system should remain decoupled from THREE.js scene objects (Meshes, Groups).
+ * @deprecated Most logic moved to world-space unification. Use for reference only.
  */
 export class XRSystem {
     private tempVec = new THREE.Vector3();
