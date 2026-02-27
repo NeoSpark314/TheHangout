@@ -53,6 +53,8 @@ export class InteractionSystem {
                 const view = (entity as any).view;
                 if (!view || !view.mesh) continue;
 
+                // Ensure the world matrix is up to date for this frame
+                view.mesh.updateMatrixWorld(true);
                 view.mesh.getWorldPosition(this.tempVec);
                 const dist = point.distanceTo(this.tempVec);
 

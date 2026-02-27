@@ -86,24 +86,25 @@ export class LocalPlayer extends PlayerEntity {
     public update(delta: number, frame?: XRFrame): void {
         const managers = this.context.managers;
         const render = managers.render;
-        const xr = managers.xr;
 
-        for (const skill of this.skills) {
-            if (skill.isAlwaysActive || skill === this.activeSkill) {
-                skill.update(delta, this, managers);
-            }
+        // 1. PHASE 1: Update Movement Only
+        // This ensures the origin (xrOrigin) is at the latest position before we calculate world poses
+        const movementSkill = this.getSkill('movement');
+        if (movementSkill && (movementSkill.isAlwaysActive || movementSkill === this.activeSkill)) {
+            movementSkill.update(delta, this, managers);
         }
 
-        // 1. Ensure camera world matrix is up to date with ANY movement that happened this frame (from Skills).
-        // This is CRITICAL for RenderManager.camera.getWorldPose() and tracking.update() to return
-        // accurate world coordinates relative to the current frame's origin.
+        // 2. PHASE 2: Sync Origin to Render Objects
+        // Critical for RenderManager.camera.getWorldPose() and tracking.update() to return
+        // accurate world coordinates relative to the current frame's position.
         if (render.cameraGroup) {
             render.cameraGroup.position.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             render.cameraGroup.quaternion.set(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
             render.cameraGroup.updateMatrixWorld(true);
         }
 
-        // 2. Poll tracking data NOW, using the fresh matrix.
+        // 3. PHASE 3: Update Tracking
+        // Poll tracking data NOW, using the fresh matrix.
         managers.tracking.update(delta, frame);
 
         const trackingState = managers.tracking.getState();
@@ -115,15 +116,22 @@ export class LocalPlayer extends PlayerEntity {
         const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
         const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
 
-        // 2. Deep copy tracking data into our own persistent handStates to avoid state pollution
-        // Poses are now in WORLD SPACE
+        // Sync hand states (World Space)
         this.syncHandStates(trackingState.hands);
-
-        // Sync head state (World Space)
         this.headState.position = { ...worldHeadPos };
         this.headState.quaternion = { ...worldHeadQuat };
         this.headHeight = trackingState.head.position.y;
 
+        // 4. PHASE 4: Update All Other Skills (Grab, etc.)
+        // These skills now see the latest tracking data and the latest origin within the SAME frame.
+        for (const skill of this.skills) {
+            if (skill.id === 'movement') continue; // Already updated in Phase 1
+            if (skill.isAlwaysActive || skill === this.activeSkill) {
+                skill.update(delta, this, managers);
+            }
+        }
+
+        // 5. PHASE 5: Apply to View
         this.view.applyState({
             position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },
             yaw: bodyYaw,
@@ -137,8 +145,7 @@ export class LocalPlayer extends PlayerEntity {
             lerpFactor: 1.0
         }, delta);
 
-        // Always emit state if this player is the authority, so that head and hand 
-        // movements are synchronized even if locomotion input is zero.
+        // Always emit state if this player is the authority
         eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
     }
 
