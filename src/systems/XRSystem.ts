@@ -70,4 +70,39 @@ export class XRSystem {
         };
     }
 
+    /**
+     * Converts a raw XRPose from the WebXR frame into world space.
+     * Use this when Three.js objects (controllers/grips) are unreliable or out of sync.
+     */
+    public rawPoseToWorldPose(
+        pose: XRPose,
+        cameraGroup: THREE.Group
+    ): { position: IVector3, quaternion: IQuaternion } {
+        const orientation = pose.transform.orientation;
+        const position = pose.transform.position;
+
+        this.tempVec.set(position.x, position.y, position.z);
+        this.tempQuat.set(orientation.x, orientation.y, orientation.z, orientation.w);
+
+        // Transform from reference space to world space using the cameraGroup (XR Origin)
+        this.tempVec.applyMatrix4(cameraGroup.matrixWorld);
+
+        // Debug: Log if origin seems wrong (throotle to ~1 per second)
+        if (Math.random() < 0.01) {
+            console.log('[XRSystem] rawPoseToWorldPose - Local:', position.x.toFixed(2), position.y.toFixed(2), position.z.toFixed(2));
+            console.log('[XRSystem] rawPoseToWorldPose - Origin Pos:', cameraGroup.position.x.toFixed(2), cameraGroup.position.y.toFixed(2), cameraGroup.position.z.toFixed(2));
+            console.log('[XRSystem] rawPoseToWorldPose - Result World:', this.tempVec.x.toFixed(2), this.tempVec.y.toFixed(2), this.tempVec.z.toFixed(2));
+        }
+
+        // Combine rotations: cameraGroup world orientation * pose orientation
+        const groupQuat = new THREE.Quaternion();
+        cameraGroup.getWorldQuaternion(groupQuat);
+        this.tempQuat.premultiply(groupQuat);
+
+        return {
+            position: { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z },
+            quaternion: { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w }
+        };
+    }
+
 }
