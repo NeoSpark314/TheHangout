@@ -441,61 +441,12 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             // Ensure world matrix is up to date since we just potentially moved this.mesh
             this.mesh.updateMatrixWorld(true);
 
-            const leftWorldPos = new THREE.Vector3(state.handStates.left.position.x, state.handStates.left.position.y, state.handStates.left.position.z);
-            const leftWorldQuat = new THREE.Quaternion(state.handStates.left.quaternion.x, state.handStates.left.quaternion.y, state.handStates.left.quaternion.z, state.handStates.left.quaternion.w);
+            this.updateWristMarkers(state.handStates.left, state.handStates.right, lerpFactor);
 
-            const rightWorldPos = new THREE.Vector3(state.handStates.right.position.x, state.handStates.right.position.y, state.handStates.right.position.z);
-            const rightWorldQuat = new THREE.Quaternion(state.handStates.right.quaternion.x, state.handStates.right.quaternion.y, state.handStates.right.quaternion.z, state.handStates.right.quaternion.w);
-
-            const leftLocalPos = this.mesh.worldToLocal(leftWorldPos.clone());
-            const rightLocalPos = this.mesh.worldToLocal(rightWorldPos.clone());
-
-            const parentWorldQuat = new THREE.Quaternion();
-            this.mesh.getWorldQuaternion(parentWorldQuat);
-            const invParentQuat = parentWorldQuat.invert();
-
-            const leftLocalQuat = invParentQuat.clone().multiply(leftWorldQuat);
-            const rightLocalQuat = invParentQuat.clone().multiply(rightWorldQuat);
-
-            // Temporarily store local poses for rendering
-            const localLeftHand: IHandState = {
-                ...state.handStates.left,
-                position: { x: leftLocalPos.x, y: leftLocalPos.y, z: leftLocalPos.z },
-                quaternion: { x: leftLocalQuat.x, y: leftLocalQuat.y, z: leftLocalQuat.z, w: leftLocalQuat.w },
-                joints: state.handStates.left.joints.map(j => {
-                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z);
-                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w);
-                    const jLocalPos = this.mesh.worldToLocal(jWorldPos);
-                    const jLocalQuat = invParentQuat.clone().multiply(jWorldQuat);
-                    return {
-                        position: { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z },
-                        quaternion: { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w }
-                    };
-                })
-            };
-
-            const localRightHand: IHandState = {
-                ...state.handStates.right,
-                position: { x: rightLocalPos.x, y: rightLocalPos.y, z: rightLocalPos.z },
-                quaternion: { x: rightLocalQuat.x, y: rightLocalQuat.y, z: rightLocalQuat.z, w: rightLocalQuat.w },
-                joints: state.handStates.right.joints.map(j => {
-                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z);
-                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w);
-                    const jLocalPos = this.mesh.worldToLocal(jWorldPos);
-                    const jLocalQuat = invParentQuat.clone().multiply(jWorldQuat);
-                    return {
-                        position: { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z },
-                        quaternion: { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w }
-                    };
-                })
-            };
-
-            this.updateWristMarkers(localLeftHand, localRightHand, lerpFactor);
-
-            const leftArmLocalPos = localLeftHand.active && (localLeftHand.hasJoints || this.wristMeshes.left.visible)
+            const leftArmLocalPos = state.handStates.left.active && (state.handStates.left.hasJoints || this.wristMeshes.left.visible)
                 ? this.getLeftWristMarkerPosition()
                 : new THREE.Vector3(-0.25, 0.7, -0.05);
-            const rightArmLocalPos = localRightHand.active && (localRightHand.hasJoints || this.wristMeshes.right.visible)
+            const rightArmLocalPos = state.handStates.right.active && (state.handStates.right.hasJoints || this.wristMeshes.right.visible)
                 ? this.getRightWristMarkerPosition()
                 : new THREE.Vector3(0.25, 0.7, -0.05);
             this.updateArms(leftArmLocalPos, rightArmLocalPos);
@@ -672,24 +623,36 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         const leftHasJoints = leftHandInfo.active && leftHandInfo.hasJoints;
         const rightHasJoints = rightHandInfo.active && rightHandInfo.hasJoints;
 
+        const parentWorldQuat = new THREE.Quaternion();
+        this.mesh.getWorldQuaternion(parentWorldQuat);
+        const invParentQuat = parentWorldQuat.invert();
+
         if (!leftHandInfo.active || leftHasJoints) {
             this.wristMeshes.left.visible = false;
         } else {
             this.wristMeshes.left.visible = true;
-            const pos = new THREE.Vector3(leftHandInfo.position.x, leftHandInfo.position.y, leftHandInfo.position.z);
-            const quat = new THREE.Quaternion(leftHandInfo.quaternion.x, leftHandInfo.quaternion.y, leftHandInfo.quaternion.z, leftHandInfo.quaternion.w);
-            this.wristMeshes.left.position.lerp(pos, lerpFactor);
-            this.wristMeshes.left.quaternion.slerp(quat, lerpFactor);
+            const worldPos = new THREE.Vector3(leftHandInfo.position.x, leftHandInfo.position.y, leftHandInfo.position.z);
+            const worldQuat = new THREE.Quaternion(leftHandInfo.quaternion.x, leftHandInfo.quaternion.y, leftHandInfo.quaternion.z, leftHandInfo.quaternion.w);
+
+            const localPos = this.mesh.worldToLocal(worldPos);
+            const localQuat = invParentQuat.clone().multiply(worldQuat);
+
+            this.wristMeshes.left.position.lerp(localPos, lerpFactor);
+            this.wristMeshes.left.quaternion.slerp(localQuat, lerpFactor);
         }
 
         if (!rightHandInfo.active || rightHasJoints) {
             this.wristMeshes.right.visible = false;
         } else {
             this.wristMeshes.right.visible = true;
-            const pos = new THREE.Vector3(rightHandInfo.position.x, rightHandInfo.position.y, rightHandInfo.position.z);
-            const quat = new THREE.Quaternion(rightHandInfo.quaternion.x, rightHandInfo.quaternion.y, rightHandInfo.quaternion.z, rightHandInfo.quaternion.w);
-            this.wristMeshes.right.position.lerp(pos, lerpFactor);
-            this.wristMeshes.right.quaternion.slerp(quat, lerpFactor);
+            const worldPos = new THREE.Vector3(rightHandInfo.position.x, rightHandInfo.position.y, rightHandInfo.position.z);
+            const worldQuat = new THREE.Quaternion(rightHandInfo.quaternion.x, rightHandInfo.quaternion.y, rightHandInfo.quaternion.z, rightHandInfo.quaternion.w);
+
+            const localPos = this.mesh.worldToLocal(worldPos);
+            const localQuat = invParentQuat.clone().multiply(worldQuat);
+
+            this.wristMeshes.right.position.lerp(localPos, lerpFactor);
+            this.wristMeshes.right.quaternion.slerp(localQuat, lerpFactor);
         }
         this._updateHandJoints(leftHandInfo, rightHandInfo, lerpFactor);
     }

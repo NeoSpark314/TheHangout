@@ -60,6 +60,7 @@ export class RemotePlayer extends PlayerEntity {
         if (data.hands) {
             const deserializeHand = (netHand: any, localHand: any) => {
                 localHand.active = !!netHand.active;
+                localHand.hasJoints = !!netHand.hasJoints;
                 if (netHand.position) localHand.position = { ...netHand.position };
                 if (netHand.quaternion) localHand.quaternion = { ...netHand.quaternion };
 

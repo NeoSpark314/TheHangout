@@ -154,6 +154,7 @@ export class LocalPlayer extends PlayerEntity {
     private syncHandStates(source: { left: IHandState, right: IHandState }): void {
         const copyHand = (src: IHandState, dst: IHandState) => {
             dst.active = src.active;
+            dst.hasJoints = src.hasJoints;
             dst.position.x = src.position.x;
             dst.position.y = src.position.y;
             dst.position.z = src.position.z;
