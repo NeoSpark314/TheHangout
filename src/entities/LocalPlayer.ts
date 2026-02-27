@@ -112,10 +112,6 @@ export class LocalPlayer extends PlayerEntity {
         const worldHeadQuat = trackingState.head.quaternion;
         const bodyYaw = trackingState.head.yaw;
 
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
-        const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
-        const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
-
         // Sync hand states (World Space)
         this.syncHandStates(trackingState.hands);
         this.headState.position = { ...worldHeadPos };
@@ -136,7 +132,7 @@ export class LocalPlayer extends PlayerEntity {
             position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },
             yaw: bodyYaw,
             headHeight: worldHeadPos.y,
-            headQuaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w },
+            headQuaternion: worldHeadQuat,
             handStates: this.handStates,
             name: this.name || 'You',
             color: this.context.avatarConfig.color,
@@ -148,8 +144,6 @@ export class LocalPlayer extends PlayerEntity {
         // Always emit state if this player is the authority
         eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
     }
-
-    // Removed updateVRHands — handled by TrackingManager and its Providers
 
     private syncHandStates(source: { left: IHandState, right: IHandState }): void {
         const copyHand = (src: IHandState, dst: IHandState) => {
@@ -163,8 +157,6 @@ export class LocalPlayer extends PlayerEntity {
             dst.quaternion.z = src.quaternion.z;
             dst.quaternion.w = src.quaternion.w;
 
-            // Critical: Always sync joints if source has them, otherwise reset
-            // This prevents the "stale joint" jitter if hand tracking is toggled
             for (let i = 0; i < 25; i++) {
                 const sJ = src.joints[i];
                 const dJ = dst.joints[i];
@@ -183,16 +175,10 @@ export class LocalPlayer extends PlayerEntity {
 
     public getNetworkState(): IPlayerEntityState {
         const managers = this.context.managers;
-        const render = managers.render;
-
         const trackingState = managers.tracking.getState();
         const worldHeadPos = trackingState.head.position;
         const worldHeadQuat = trackingState.head.quaternion;
         const bodyYaw = trackingState.head.yaw;
-
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
-        const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
-        const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
 
         return {
             id: this.id,
@@ -201,7 +187,7 @@ export class LocalPlayer extends PlayerEntity {
             p: [worldHeadPos.x, 0, worldHeadPos.z],
             y: bodyYaw,
             h: worldHeadPos.y,
-            hq: [localHeadQuat.x, localHeadQuat.y, localHeadQuat.z, localHeadQuat.w],
+            hq: [worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w],
             hands: JSON.parse(JSON.stringify(this.handStates)),
             conf: {
                 color: this.context.avatarConfig.color
@@ -212,7 +198,6 @@ export class LocalPlayer extends PlayerEntity {
 
     public applyNetworkState(state: IPlayerEntityState): void {
         // LocalPlayer state is driven by input, not network updates.
-        this.syncNetworkState(state);
     }
 
     public destroy(): void {
