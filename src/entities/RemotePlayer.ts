@@ -14,12 +14,21 @@ export class RemotePlayer extends PlayerEntity {
     public targetYaw: number = 0;
     public avatarColor: string | number | undefined;
     private lastNetworkUpdateTime: number = performance.now();
+    private _onVoiceStream: (data: any) => void;
 
     constructor(protected context: GameContext, peerId: string, view: IView<IPlayerViewState>) {
         super(context, peerId, EntityType.REMOTE_PLAYER, false);
         this.peerId = peerId;
         this.view = view;
         this.name = 'Player'; // Default
+
+        this._onVoiceStream = (data: any) => {
+            if (data.peerId === this.peerId && data.stream && (this.view as any).attachVoiceStream) {
+                console.log(`[RemotePlayer] Attaching voice stream for ${this.peerId}`);
+                (this.view as any).attachVoiceStream(data.stream);
+            }
+        };
+        eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this._onVoiceStream);
     }
 
     public onAudioChunk(payload: any): void {
@@ -107,6 +116,7 @@ export class RemotePlayer extends PlayerEntity {
 
     public destroy(): void {
         super.destroy();
+        eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this._onVoiceStream);
 
         const render = this.context.managers.render;
         if (render && this.view) {
