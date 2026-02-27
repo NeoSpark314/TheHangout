@@ -28,6 +28,7 @@ export class TabletEntity implements IGrabbable, IInteractable {
     private leftHandle: THREE.Mesh;
     private rightHandle: THREE.Mesh;
 
+    private isRecentering: boolean = false;
     private frames: number = 0;
 
     constructor(context: GameContext, id: string) {
@@ -103,10 +104,30 @@ export class TabletEntity implements IGrabbable, IInteractable {
             const tracking = this.context.managers.tracking.getState();
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
 
-            this.position.copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
-
+            const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
             const tiltQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.15, 0, 0));
-            this.quaternion.copy(yawQuat).multiply(tiltQuat);
+            const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(tiltQuat);
+
+            if (!this.isRecentering) {
+                const dist = this.position.distanceTo(idealPos);
+                const angleDist = this.quaternion.angleTo(idealQuat);
+                const deadzoneDist = 0.5; // 0.5 meters
+                const deadzoneAngle = Math.PI / 4; // 45 degrees
+
+                if (dist > deadzoneDist || angleDist > deadzoneAngle) {
+                    this.isRecentering = true;
+                }
+            }
+
+            if (this.isRecentering) {
+                const lerpFactor = 1.0 - Math.exp(-delta * 6.0);
+                this.position.lerp(idealPos, lerpFactor);
+                this.quaternion.slerp(idealQuat, lerpFactor);
+
+                if (this.position.distanceTo(idealPos) < 0.02 && this.quaternion.angleTo(idealQuat) < 0.05) {
+                    this.isRecentering = false;
+                }
+            }
 
             this.mesh.position.copy(this.position);
             this.mesh.quaternion.copy(this.quaternion);
@@ -129,18 +150,6 @@ export class TabletEntity implements IGrabbable, IInteractable {
     public onRelease(velocity?: IVector3): void {
         this.heldBy = null;
         this.isRelative = true;
-
-        if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
-            const head = (this.context.localPlayer as any).headState;
-            const tracking = this.context.managers.tracking.getState();
-
-            // Reconstruct the exact head Yaw + Tilt from the head tracking the same way `update` applies it 
-            // to ensure no visual pop occurs when giving ownership of transform back to the head
-            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
-            const invYawQuat = yawQuat.clone().invert();
-
-            this.relativePosition.copy(this.position).sub({ x: head.position.x, y: head.position.y, z: head.position.z }).applyQuaternion(invYawQuat);
-        }
     }
 
     public getGrabRoots(): THREE.Object3D[] {
