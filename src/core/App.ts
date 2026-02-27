@@ -153,7 +153,6 @@ export class App {
         // Register systems to GameEngine in the exact desired execution order
         if (managers.network) this.engine.addSystem(managers.network as any);
         if (managers.input) this.engine.addSystem(managers.input as any);
-        if (managers.animation) this.engine.addSystem(managers.animation as any);
         if (managers.entity) this.engine.addSystem(managers.entity as any);
 
         // Physics needs a small wrapper because its update method is called 'step' and only takes delta

@@ -74,18 +74,23 @@ export class AnimationSystem implements IUpdatable {
         // Desktop / Mobile Procedural Animation
         this._bobTime += this._isMoving ? delta * 15 : 0;
 
-        // Calculate local head pose for hand math (Local relative to xrOrigin)
+        // Local orientations
+        const headLocalRot = render.camera.quaternion.clone();
+        const originPos = new THREE.Vector3(this.localPlayer.xrOrigin.position.x, this.localPlayer.xrOrigin.position.y, this.localPlayer.xrOrigin.position.z);
+        const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
+
+        // 1. Update Head State (World Space)
         const headBobY = this._isMoving ? Math.sin(this._bobTime) * 0.05 : 0;
         const headLocalPos = new THREE.Vector3(0, (this.localPlayer as any).headHeight + headBobY, 0);
-        // We use camera's local rotation directly. Since camera is parented to cameraGroup (which is at xrOrigin),
-        // camera.quaternion is our local Look Rotation.
-        const headLocalRot = render.camera.quaternion.clone();
+        const worldHeadPos = headLocalPos.clone().applyQuaternion(originQuat).add(originPos);
 
+        this.localPlayer.headState.position = { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z };
+        // Note: Head quaternion is already synced to camera by RenderManager/TrackingProvider on Desktop
+
+        // 2. Update Hand States (World Space)
         for (const hand of ['left', 'right'] as const) {
             const state = this.localPlayer.handStates[hand];
             state.active = true;
-            // Align the hand's visual rotation with the camera's looking direction
-            state.quaternion = { x: headLocalRot.x, y: headLocalRot.y, z: headLocalRot.z, w: headLocalRot.w };
 
             // Update interaction animation timer
             if (this._interactState[hand]) {
@@ -119,15 +124,12 @@ export class AnimationSystem implements IUpdatable {
             // Lerp based on interact time to get Local Position
             const finalLocalPos = new THREE.Vector3().lerpVectors(restPos, targetPos, t);
 
-            // Convert to WORLD Space because GrabSkill and XRSystem expect world-space during this phase
-            const originPos = new THREE.Vector3(this.localPlayer.xrOrigin.position.x, this.localPlayer.xrOrigin.position.y, this.localPlayer.xrOrigin.position.z);
-            const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
+            // Convert to WORLD Space
+            const worldHandPos = finalLocalPos.clone().applyQuaternion(originQuat).add(originPos);
+            const worldHandQuat = new THREE.Quaternion(headLocalRot.x, headLocalRot.y, headLocalRot.z, headLocalRot.w).premultiply(originQuat);
 
-            const worldPos = finalLocalPos.clone().applyQuaternion(originQuat).add(originPos);
-            const worldQuat = new THREE.Quaternion(headLocalRot.x, headLocalRot.y, headLocalRot.z, headLocalRot.w).premultiply(originQuat);
-
-            state.position = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
-            state.quaternion = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
+            state.position = { x: worldHandPos.x, y: worldHandPos.y, z: worldHandPos.z };
+            state.quaternion = { x: worldHandQuat.x, y: worldHandQuat.y, z: worldHandQuat.z, w: worldHandQuat.w };
         }
     }
 }

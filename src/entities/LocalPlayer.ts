@@ -122,6 +122,11 @@ export class LocalPlayer extends PlayerEntity {
         this.headState.quaternion = { ...worldHeadQuat };
         this.headHeight = trackingState.head.position.y;
 
+        // NEW: Refine state with procedural animations (Desktop)
+        if (managers.animation) {
+            managers.animation.update(delta);
+        }
+
         // 4. PHASE 4: Update All Other Skills (Grab, etc.)
         // These skills now see the latest tracking data and the latest origin within the SAME frame.
         for (const skill of this.skills) {
@@ -133,10 +138,10 @@ export class LocalPlayer extends PlayerEntity {
 
         // 5. PHASE 5: Apply to View
         this.view.applyState({
-            position: { x: worldHeadPos.x, y: 0, z: worldHeadPos.z },
+            position: { x: this.headState.position.x, y: 0, z: this.headState.position.z },
             yaw: bodyYaw,
-            headHeight: worldHeadPos.y,
-            headQuaternion: worldHeadQuat,
+            headHeight: this.headState.position.y,
+            headQuaternion: this.headState.quaternion,
             handStates: this.handStates,
             name: this.name || 'You',
             color: this.context.avatarConfig.color,
@@ -180,18 +185,16 @@ export class LocalPlayer extends PlayerEntity {
     public getNetworkState(): IPlayerEntityState {
         const managers = this.context.managers;
         const trackingState = managers.tracking.getState();
-        const worldHeadPos = trackingState.head.position;
-        const worldHeadQuat = trackingState.head.quaternion;
         const bodyYaw = trackingState.head.yaw;
 
         return {
             id: this.id,
             type: EntityType.LOCAL_PLAYER,
             n: this.name,
-            p: [worldHeadPos.x, 0, worldHeadPos.z],
+            p: [this.headState.position.x, 0, this.headState.position.z],
             y: bodyYaw,
-            h: worldHeadPos.y,
-            hq: [worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w],
+            h: this.headState.position.y,
+            hq: [this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w],
             hands: JSON.parse(JSON.stringify(this.handStates)),
             conf: {
                 color: this.context.avatarConfig.color
