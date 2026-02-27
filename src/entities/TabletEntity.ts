@@ -36,8 +36,8 @@ export class TabletEntity implements IGrabbable, IInteractable {
         this.quaternion = new THREE.Quaternion();
 
         // Create Canvas UI
-        // Resolution 1024x1024, physical size 0.4x0.4 meters
-        this.ui = new CanvasUI(1024, 1024);
+        // Resolution 1280x800, physical size 0.48x0.30 meters
+        this.ui = new CanvasUI(1280, 800);
 
         // Set root background
         this.ui.root.backgroundColor = 'rgba(15, 15, 20, 0.95)';
@@ -45,7 +45,7 @@ export class TabletEntity implements IGrabbable, IInteractable {
         this.ui.root.borderWidth = 5;
         this.ui.root.borderColor = '#333';
 
-        const geometry = new THREE.PlaneGeometry(0.4, 0.4);
+        const geometry = new THREE.PlaneGeometry(0.480, 0.300);
         const material = new THREE.MeshBasicMaterial({
             map: this.ui.texture,
             transparent: true,

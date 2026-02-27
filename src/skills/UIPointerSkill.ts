@@ -18,6 +18,8 @@ export class UIPointerSkill extends Skill {
     // Drag state
     private draggingHand: 'left' | 'right' | 'desktop' | null = null;
     private dragDistance: number = 0.5;
+    private dragOffsetPos: THREE.Vector3 = new THREE.Vector3();
+    private dragOffsetQuat: THREE.Quaternion = new THREE.Quaternion();
 
     private _handlers: Array<{ event: string, handler: any }> = [];
 
@@ -138,14 +140,16 @@ export class UIPointerSkill extends Skill {
                     this.raycaster.set(origin, direction);
 
                     if (this.draggingHand === hand) {
-                        // Move tablet with hand
-                        const targetPos = origin.clone().add(direction.multiplyScalar(this.dragDistance));
-                        vrUi.tablet.updateGrabbedPose(targetPos, vrUi.tablet.mesh.quaternion);
+                        // Move tablet with hand preserving offset
+                        const targetPos = new THREE.Vector3().copy(this.dragOffsetPos).applyQuaternion(quat).add(origin);
+                        const targetQuat = new THREE.Quaternion().copy(quat).multiply(this.dragOffsetQuat);
+
+                        vrUi.tablet.updateGrabbedPose(targetPos, targetQuat);
                         line.visible = true;
                         dot.visible = false;
                         line.position.copy(origin);
                         line.quaternion.copy(quat);
-                        line.scale.set(1, 1, this.dragDistance);
+                        line.scale.set(1, 1, this.dragDistance); // Keep visual line length static while grabbed
                         continue;
                     }
 
@@ -196,10 +200,14 @@ export class UIPointerSkill extends Skill {
             this.raycaster.set(origin, direction);
 
             if (this.draggingHand === 'desktop') {
-                const targetPos = origin.clone().add(direction.multiplyScalar(this.dragDistance));
-                vrUi.tablet.updateGrabbedPose(targetPos, vrUi.tablet.mesh.quaternion);
-                this.mouseDot.visible = true;
-                this.mouseDot.position.copy(targetPos);
+                const camQuat = new THREE.Quaternion();
+                render.camera.getWorldQuaternion(camQuat);
+
+                const targetPos = new THREE.Vector3().copy(this.dragOffsetPos).applyQuaternion(camQuat).add(origin);
+                const targetQuat = new THREE.Quaternion().copy(camQuat).multiply(this.dragOffsetQuat);
+
+                vrUi.tablet.updateGrabbedPose(targetPos, targetQuat);
+                this.mouseDot.visible = false;
                 return;
             }
 
@@ -289,6 +297,30 @@ export class UIPointerSkill extends Skill {
         if (hits.length > 0) {
             this.draggingHand = h;
             this.dragDistance = hits[0].distance;
+
+            // Calculate rotational and positional offsets
+            const origin = this.raycaster.ray.origin;
+            const quat = isXR ?
+                new THREE.Quaternion(player.handStates[hand].quaternion.x, player.handStates[hand].quaternion.y, player.handStates[hand].quaternion.z, player.handStates[hand].quaternion.w) :
+                new THREE.Quaternion().copy(render.camera.quaternion); // Simplified for desktop tracking
+
+            if (!isXR) {
+                render.camera.getWorldQuaternion(quat);
+            }
+
+            const handTransform = new THREE.Matrix4().compose(origin, quat, new THREE.Vector3(1, 1, 1));
+
+            tabletMesh.updateMatrixWorld(true);
+            const objPos = new THREE.Vector3();
+            const objQuat = new THREE.Quaternion();
+            tabletMesh.getWorldPosition(objPos);
+            tabletMesh.getWorldQuaternion(objQuat);
+
+            const objTransform = new THREE.Matrix4().compose(objPos, objQuat, new THREE.Vector3(1, 1, 1));
+            const offsetTransform = handTransform.invert().multiply(objTransform);
+
+            offsetTransform.decompose(this.dragOffsetPos, this.dragOffsetQuat, new THREE.Vector3());
+
             vrUi.tablet.onGrab(player.id, hand);
         }
     }

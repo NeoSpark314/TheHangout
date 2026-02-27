@@ -25,8 +25,8 @@ export class VRUIManager implements IUpdatable {
             this.context.managers.entity.addEntity(this.tablet as any);
         }
 
-        // Setup the Main Layout
-        this.tabPanel = new UITabPanel(0, 0, 1024, 1024);
+        // Setup the Main Layout (1280x800 landscape)
+        this.tabPanel = new UITabPanel(0, 0, 1280, 800);
         this.tablet.ui.root.addChild(this.tabPanel);
 
         // Add default System Tab immediately
@@ -40,12 +40,12 @@ export class VRUIManager implements IUpdatable {
 
         // Can inject basic buttons for toggling voice or leaving
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
-            const title = new UILabel("System Control", 50, 50, 924, 60);
+            const title = new UILabel("System Control", 50, 50, 1180, 60);
             title.font = "bold 48px Inter, Arial, sans-serif";
             title.textAlign = 'center';
             systemContainer.addChild(title);
 
-            const voiceBtn = new UIButton("Toggle Voice", 50, 150, 400, 80, () => {
+            const voiceBtn = new UIButton("Toggle Voice", 220, 150, 400, 80, () => {
                 this.context.voiceEnabled = !this.context.voiceEnabled;
                 console.log("Voice toggled from VR UI:", this.context.voiceEnabled);
                 voiceBtn.text = this.context.voiceEnabled ? "Voice: ON" : "Voice: OFF";
@@ -54,7 +54,7 @@ export class VRUIManager implements IUpdatable {
             });
             systemContainer.addChild(voiceBtn);
 
-            const leaveBtn = new UIButton("Leave Room", 574, 150, 400, 80, () => {
+            const leaveBtn = new UIButton("Leave Room", 660, 150, 400, 80, () => {
                 const render = this.context.managers.render;
                 if (render && render.isXRPresenting()) {
                     render.getXRSession()?.end().then(() => {

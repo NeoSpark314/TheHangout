@@ -16,8 +16,7 @@ import { IHandIntentPayload } from '../interfaces/IIntents';
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.5;
 
-    // Track held objects per hand ('left' | 'right')
-    private heldObjects: Map<string, IGrabbable> = new Map();
+    private heldObjects: Map<string, { entity: IGrabbable, offsetPos: THREE.Vector3, offsetQuat: THREE.Quaternion }> = new Map();
     private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();
     private highlightedEntities: { left: IInteractable | null, right: IInteractable | null } = { left: null, right: null };
 
@@ -33,8 +32,34 @@ export class GrabSkill extends Skill {
         const onGrabStart = (payload: IHandIntentPayload) => {
             const nearest = this.highlightedEntities[payload.hand];
             if (isGrabbable(nearest)) {
+
+                // Calculate grab offset to prevent jumping
+                const handState = player.handStates[payload.hand];
+                const handPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+                const handQuat = new THREE.Quaternion(handState.quaternion.x, handState.quaternion.y, handState.quaternion.z, handState.quaternion.w);
+                const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
+
+                let mesh = (nearest as any).view?.mesh;
+                if (!mesh && (nearest as any).mesh) mesh = (nearest as any).mesh;
+
+                const offsetPos = new THREE.Vector3();
+                const offsetQuat = new THREE.Quaternion();
+
+                if (mesh) {
+                    mesh.updateMatrixWorld(true);
+                    const objPos = new THREE.Vector3();
+                    const objQuat = new THREE.Quaternion();
+                    mesh.getWorldPosition(objPos);
+                    mesh.getWorldQuaternion(objQuat);
+
+                    const objTransform = new THREE.Matrix4().compose(objPos, objQuat, new THREE.Vector3(1, 1, 1));
+                    const offsetTransform = handTransform.clone().invert().multiply(objTransform);
+
+                    offsetTransform.decompose(offsetPos, offsetQuat, new THREE.Vector3());
+                }
+
                 nearest.onGrab(player.id, payload.hand);
-                this.heldObjects.set(payload.hand, nearest);
+                this.heldObjects.set(payload.hand, { entity: nearest, offsetPos, offsetQuat });
                 this.history.set(payload.hand, []);
             }
         };
@@ -43,7 +68,7 @@ export class GrabSkill extends Skill {
             const held = this.heldObjects.get(payload.hand);
             if (held) {
                 const velocity = this._computeThrowVelocity(payload.hand);
-                held.onRelease(velocity);
+                held.entity.onRelease(velocity);
                 this.heldObjects.delete(payload.hand);
                 this.history.delete(payload.hand);
             }
@@ -51,8 +76,8 @@ export class GrabSkill extends Skill {
 
         const onInteractStart = (payload: IHandIntentPayload) => {
             const held = this.heldObjects.get(payload.hand);
-            if (held && isInteractable(held)) {
-                held.onInteraction({
+            if (held && isInteractable(held.entity)) {
+                held.entity.onInteraction({
                     type: 'trigger',
                     phase: 'start',
                     value: payload.value || 1.0,
@@ -64,8 +89,8 @@ export class GrabSkill extends Skill {
 
         const onInteractEnd = (payload: IHandIntentPayload) => {
             const held = this.heldObjects.get(payload.hand);
-            if (held && isInteractable(held)) {
-                held.onInteraction({
+            if (held && isInteractable(held.entity)) {
+                held.entity.onInteraction({
                     type: 'trigger',
                     phase: 'end',
                     value: 0.0,
@@ -105,14 +130,19 @@ export class GrabSkill extends Skill {
 
             if (held) {
                 // UPDATE HELD POSE
-                const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+                const handPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+                const handQuat = new THREE.Quaternion(handState.quaternion.x, handState.quaternion.y, handState.quaternion.z, handState.quaternion.w);
 
-                held.updateGrabbedPose(
+                // apply offset calculation
+                const targetPos = new THREE.Vector3().copy(held.offsetPos).applyQuaternion(handQuat).add(handPos);
+                const targetQuat = new THREE.Quaternion().copy(handQuat).multiply(held.offsetQuat);
+
+                held.entity.updateGrabbedPose(
                     { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                    handState.quaternion
+                    targetQuat
                 );
 
-                this._recordPosition(hand, targetPos);
+                this._recordPosition(hand, handPos);
 
                 // Clear highlight if we are holding something
                 this._updateHighlight(player.id, hand, null);
