@@ -19,7 +19,8 @@ export class TabletEntity implements IGrabbable, IInteractable {
     public ui: CanvasUI;
 
     public isRelative: boolean = true;
-    public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.2, -0.4);
+    public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.35, -0.5);
+    public relativeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.15, 0, 0));
 
     private context: GameContext;
     private position: THREE.Vector3;
@@ -105,8 +106,7 @@ export class TabletEntity implements IGrabbable, IInteractable {
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
 
             const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
-            const tiltQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.15, 0, 0));
-            const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(tiltQuat);
+            const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(this.relativeQuaternion);
 
             if (!this.isRecentering) {
                 const dist = this.position.distanceTo(idealPos);
@@ -150,6 +150,24 @@ export class TabletEntity implements IGrabbable, IInteractable {
     public onRelease(velocity?: IVector3): void {
         this.heldBy = null;
         this.isRelative = true;
+
+        if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
+            const head = (this.context.localPlayer as any).headState;
+            const tracking = this.context.managers.tracking.getState();
+
+            // Store the dropped transform relative to the user's current head yaw
+            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
+            const invYawQuat = yawQuat.clone().invert();
+
+            this.relativePosition.copy(this.position)
+                .sub({ x: head.position.x, y: head.position.y, z: head.position.z })
+                .applyQuaternion(invYawQuat);
+
+            this.relativeQuaternion.copy(invYawQuat).multiply(this.quaternion);
+
+            // Prevent immediate snapback, user just placed it here
+            this.isRecentering = false;
+        }
     }
 
     public getGrabRoots(): THREE.Object3D[] {
