@@ -36,7 +36,7 @@ export class TabletEntity implements IGrabbable, IInteractable {
         this.quaternion = new THREE.Quaternion();
 
         // Create Canvas UI
-        // Resolution 1280x800, physical size 0.48x0.30 meters
+        // Resolution 1280x800, physical size 0.384x0.240 meters (scaled down but keeping 16:10 ratio)
         this.ui = new CanvasUI(1280, 800);
 
         // Set root background
@@ -45,7 +45,7 @@ export class TabletEntity implements IGrabbable, IInteractable {
         this.ui.root.borderWidth = 5;
         this.ui.root.borderColor = '#333';
 
-        const geometry = new THREE.PlaneGeometry(0.480, 0.300);
+        const geometry = new THREE.PlaneGeometry(0.384, 0.240);
         const material = new THREE.MeshBasicMaterial({
             map: this.ui.texture,
             transparent: true,
@@ -105,6 +105,9 @@ export class TabletEntity implements IGrabbable, IInteractable {
         if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
             const head = (this.context.localPlayer as any).headState;
             const tracking = this.context.managers.tracking.getState();
+
+            // Reconstruct the exact head Yaw + Tilt from the head tracking the same way `update` applies it 
+            // to ensure no visual pop occurs when giving ownership of transform back to the head
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
             const invYawQuat = yawQuat.clone().invert();
 

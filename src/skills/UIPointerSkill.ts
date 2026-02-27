@@ -199,33 +199,31 @@ export class UIPointerSkill extends Skill {
 
             this.raycaster.set(origin, direction);
 
-            if (this.draggingHand === 'desktop') {
-                const camQuat = new THREE.Quaternion();
-                render.camera.getWorldQuaternion(camQuat);
+            const camQuat = new THREE.Quaternion();
+            render.camera.getWorldQuaternion(camQuat);
 
-                const targetPos = new THREE.Vector3().copy(this.dragOffsetPos).applyQuaternion(camQuat).add(origin);
-                const targetQuat = new THREE.Quaternion().copy(camQuat).multiply(this.dragOffsetQuat);
+            const targetPos = new THREE.Vector3().copy(this.dragOffsetPos).applyQuaternion(camQuat).add(origin);
+            const targetQuat = new THREE.Quaternion().copy(camQuat).multiply(this.dragOffsetQuat);
 
-                vrUi.tablet.updateGrabbedPose(targetPos, targetQuat);
-                this.mouseDot.visible = false;
-                return;
+            vrUi.tablet.updateGrabbedPose(targetPos, targetQuat);
+            this.mouseDot.visible = false;
+            return;
+        }
+
+        const hits = this.raycaster.intersectObject(tabletMesh);
+
+        if (hits.length > 0) {
+            const hit = hits[0];
+            this.mouseDot.visible = true;
+            this.mouseDot.position.copy(hit.point);
+            this.mouseDot.quaternion.copy(tabletMesh.quaternion);
+
+            if (hit.uv) {
+                vrUi.tablet.ui.onPointerMove(hit.uv);
             }
-
-            const hits = this.raycaster.intersectObject(tabletMesh);
-
-            if (hits.length > 0) {
-                const hit = hits[0];
-                this.mouseDot.visible = true;
-                this.mouseDot.position.copy(hit.point);
-                this.mouseDot.quaternion.copy(tabletMesh.quaternion);
-
-                if (hit.uv) {
-                    vrUi.tablet.ui.onPointerMove(hit.uv);
-                }
-            } else {
-                this.mouseDot.visible = false;
-                vrUi.tablet.ui.onPointerOut();
-            }
+        } else {
+            this.mouseDot.visible = false;
+            vrUi.tablet.ui.onPointerOut();
         }
     }
 
@@ -302,7 +300,7 @@ export class UIPointerSkill extends Skill {
             const origin = this.raycaster.ray.origin;
             const quat = isXR ?
                 new THREE.Quaternion(player.handStates[hand].quaternion.x, player.handStates[hand].quaternion.y, player.handStates[hand].quaternion.z, player.handStates[hand].quaternion.w) :
-                new THREE.Quaternion().copy(render.camera.quaternion); // Simplified for desktop tracking
+                new THREE.Quaternion();
 
             if (!isXR) {
                 render.camera.getWorldQuaternion(quat);
