@@ -53,6 +53,7 @@ export class TrackingManager {
     private createEmptyHandState(offsetX: number): IHandState {
         const state: IHandState = {
             active: false,
+            hasJoints: false,
             position: { x: offsetX, y: 0.8, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
             joints: []
