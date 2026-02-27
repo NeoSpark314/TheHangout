@@ -15,6 +15,7 @@ import * as THREE from 'three';
  */
 export class PenEntity extends NetworkEntity implements IGrabbable, IInteractable {
     public isGrabbable = true;
+    public snapToHand = true;
     public heldBy: string | null = null;
     public view: IView<any> | null = null;
 

@@ -45,7 +45,7 @@ export class GrabSkill extends Skill {
                 const offsetPos = new THREE.Vector3();
                 const offsetQuat = new THREE.Quaternion();
 
-                if (mesh) {
+                if (!nearest.snapToHand && mesh) {
                     mesh.updateMatrixWorld(true);
                     const objPos = new THREE.Vector3();
                     const objQuat = new THREE.Quaternion();
