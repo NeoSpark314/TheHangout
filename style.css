@@ -1,26 +1,32 @@
 :root {
-    --primary-color: #0ff;
+    --primary-color: #00ffff;
     /* Neon Cyan */
     --primary-hover: #00cccc;
-    --secondary-color: #f0f;
+    --secondary-color: #ff00ff;
     /* Neon Magenta */
-    --bg-color: #0b0c10;
-    /* Deep Space */
-    --panel-bg: rgba(11, 12, 16, 0.85);
+    --secondary-hover: #cc00cc;
+    --accent-color: #ffaa00;
+    /* Neon Orange/Gold */
+    --bg-color: #0a041c;
+    /* Deep Space Violet */
+    --panel-bg: rgba(10, 4, 28, 0.85);
+    /* Translucent Violet */
+    --panel-bg-hover: rgba(20, 10, 50, 0.95);
     --text-color: #f8fafc;
-    --border-radius: 4px;
+    --muted-text: #64748b;
+    --border-radius: 8px;
+    --border-width: 3px;
     /* Sharper edges for retro feel */
     --neon-glow: 0 0 10px rgba(0, 255, 255, 0.7), 0 0 20px rgba(0, 255, 255, 0.5);
     --neon-glow-magenta: 0 0 10px rgba(255, 0, 255, 0.7), 0 0 20px rgba(255, 0, 255, 0.5);
-    --muted-text: #64748b;
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Courier New', Courier, monospace;
-    /* Retro font */
+    font-family: 'Inter', 'Courier New', Courier, monospace;
+    /* Modern sleek retro */
 }
 
 html,
@@ -75,7 +81,7 @@ body {
     background: var(--panel-bg);
     padding: 2rem;
     border-radius: var(--border-radius);
-    border: 2px solid var(--secondary-color);
+    border: var(--border-width) solid var(--secondary-color);
     box-shadow: var(--neon-glow-magenta);
     width: 90%;
     max-width: 480px;
@@ -135,7 +141,7 @@ body {
     width: 100%;
     padding: 0.75rem;
     background: transparent;
-    border: 2px solid var(--primary-color);
+    border: var(--border-width) solid var(--primary-color);
     border-radius: var(--border-radius);
     color: var(--primary-color);
     font-size: 1.1rem;
@@ -391,7 +397,7 @@ input[type="color"] {
 }
 
 #face-canvas {
-    background: #0a041c;
+    background: var(--bg-color);
     border: 1px solid rgba(0, 255, 255, 0.3);
     cursor: crosshair;
     touch-action: none;

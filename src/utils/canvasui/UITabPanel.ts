@@ -1,10 +1,11 @@
 import { UIElement } from './UIElement';
+import { UITheme, getFont } from '../UITheme';
 
 export class UITabPanel extends UIElement {
     private tabs: { name: string, container: UIElement }[] = [];
     private activeTabIndex: number = 0;
 
-    private tabBarHeight: number = 50;
+    private tabBarHeight: number = 80;
 
     // UI elements for rendering
     private tabBar: UIElement;
@@ -12,13 +13,15 @@ export class UITabPanel extends UIElement {
 
     constructor(x: number = 0, y: number = 0, width: number = 500, height: number = 400) {
         super(x, y, width, height);
-        this.backgroundColor = 'rgba(20, 20, 25, 0.9)';
-        this.borderWidth = 2;
-        this.borderColor = '#444';
+        this.backgroundColor = UITheme.colors.background;
+        this.borderWidth = 0;
+        this.borderColor = 'transparent';
 
         this.tabBar = new UIElement(0, 0, width, this.tabBarHeight);
-        this.tabBar.backgroundColor = 'rgba(10, 10, 15, 0.95)';
+        this.tabBar.backgroundColor = UITheme.colors.panelBg;
         this.tabBar.borderWidth = 0;
+        this.tabBar.borderColor = UITheme.colors.primary;
+        this.tabBar.borderWidth = 0; // The bottom border will be on the active tab
         this.tabBar.cornerRadius = 0;
         super.addChild(this.tabBar);
 
@@ -62,10 +65,10 @@ export class UITabPanel extends UIElement {
 
             // Override handle click directly on the element
             const isSelfActive = (i === this.activeTabIndex);
-            tabBtn.backgroundColor = isSelfActive ? 'rgba(40, 40, 50, 1.0)' : 'rgba(20, 20, 25, 1.0)';
-            tabBtn.hoverColor = isSelfActive ? 'rgba(50, 50, 60, 1.0)' : 'rgba(30, 30, 35, 1.0)';
-            tabBtn.borderWidth = isSelfActive ? 2 : 1;
-            tabBtn.borderColor = isSelfActive ? '#00ffff' : '#333';
+            tabBtn.backgroundColor = isSelfActive ? UITheme.colors.panelBgHover : 'transparent';
+            tabBtn.hoverColor = isSelfActive ? UITheme.colors.panelBgHover : 'rgba(255,255,255,0.05)';
+            tabBtn.borderWidth = isSelfActive ? UITheme.styling.borderWidth : 0;
+            tabBtn.borderColor = isSelfActive ? UITheme.colors.primary : 'transparent';
             tabBtn.cornerRadius = 0;
 
             // Add a drawSelf override to the instance to draw the text
@@ -73,8 +76,8 @@ export class UITabPanel extends UIElement {
             const originalDraw = tabBtn['drawSelf'].bind(tabBtn);
             tabBtn['drawSelf'] = (ctx: CanvasRenderingContext2D) => {
                 originalDraw(ctx);
-                ctx.fillStyle = isSelfActive ? '#ffffff' : '#aaaaaa';
-                ctx.font = isSelfActive ? 'bold 20px Inter, Arial, sans-serif' : '20px Inter, Arial, sans-serif';
+                ctx.fillStyle = isSelfActive ? UITheme.colors.text : UITheme.colors.textMuted;
+                ctx.font = getFont(UITheme.typography.sizes.body, isSelfActive ? 'bold' : 'normal');
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(tabName, tabWidth / 2, this.tabBarHeight / 2, tabWidth - 10);

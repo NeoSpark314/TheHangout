@@ -1,12 +1,13 @@
 import { UIElement } from './UIElement';
+import { UITheme, getFont } from '../UITheme';
 
 export class UIToggle extends UIElement {
     public text: string = '';
-    public font: string = '24px Inter, Arial, sans-serif';
-    public textColor: string = '#ffffff';
+    public font: string = getFont(UITheme.typography.sizes.body);
+    public textColor: string = UITheme.colors.text;
     public isChecked: boolean = false;
 
-    public checkColor: string = '#00ffff';
+    public checkColor: string = UITheme.colors.primary;
 
     private onToggleCallback: ((checked: boolean) => void) | null = null;
 
@@ -22,9 +23,9 @@ export class UIToggle extends UIElement {
         this.isChecked = checked;
         this.onToggleCallback = onToggle || null;
         this.backgroundColor = 'transparent';
-        this.hoverColor = 'rgba(255, 255, 255, 0.1)';
+        this.hoverColor = 'rgba(255, 255, 255, 0.05)';
         this.borderWidth = 0;
-        this.cornerRadius = 4;
+        this.cornerRadius = UITheme.styling.cornerRadius;
     }
 
     public onToggle(cb: (checked: boolean) => void): void {
@@ -43,12 +44,12 @@ export class UIToggle extends UIElement {
         super.drawSelf(ctx);
 
         // Draw checkbox box
-        const boxSize = Math.min(24, this.height * 0.6);
+        const boxSize = Math.min(UITheme.typography.sizes.body, this.height * 0.6);
         const boxY = (this.height - boxSize) / 2;
         const boxX = 5;
 
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = UITheme.colors.text;
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.roundRect(boxX, boxY, boxSize, boxSize, 4);
         ctx.stroke();

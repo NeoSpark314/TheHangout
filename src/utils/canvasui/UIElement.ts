@@ -1,3 +1,5 @@
+import { UITheme } from '../UITheme';
+
 export class UIElement {
     public x: number = 0;
     public y: number = 0;
@@ -10,11 +12,11 @@ export class UIElement {
     public parent: UIElement | null = null;
 
     // Optional style overrides
-    public backgroundColor: string = 'rgba(30, 30, 35, 0.8)';
-    public hoverColor: string = 'rgba(50, 50, 60, 0.9)';
-    public borderColor: string = '#00ffff';
-    public borderWidth: number = 2;
-    public cornerRadius: number = 10;
+    public backgroundColor: string = UITheme.colors.panelBg;
+    public hoverColor: string = UITheme.colors.panelBgHover;
+    public borderColor: string = UITheme.colors.primary;
+    public borderWidth: number = UITheme.styling.borderWidth;
+    public cornerRadius: number = UITheme.styling.cornerRadius;
     public layoutConfig: any = {}; // Used by parent layouts
 
     constructor(

@@ -1,9 +1,10 @@
 import { UIElement } from './UIElement';
+import { UITheme, getFont } from '../UITheme';
 
 export class UIButton extends UIElement {
     public text: string = '';
-    public font: string = 'bolt 24px Inter, Arial, sans-serif';
-    public textColor: string = '#ffffff';
+    public font: string = getFont(UITheme.typography.sizes.body, 'bold');
+    public textColor: string = UITheme.colors.text;
 
     private onClickCallback: (() => void) | null = null;
 
@@ -16,11 +17,11 @@ export class UIButton extends UIElement {
         super(x, y, width, height);
         this.text = text;
         this.onClickCallback = onClick || null;
-        this.backgroundColor = 'rgba(40, 40, 50, 0.8)';
-        this.hoverColor = 'rgba(60, 60, 80, 0.9)';
-        this.borderColor = '#00ffff';
-        this.borderWidth = 2;
-        this.cornerRadius = 8;
+        this.backgroundColor = UITheme.colors.panelBg;
+        this.hoverColor = UITheme.colors.panelBgHover;
+        this.borderColor = UITheme.colors.primary;
+        this.borderWidth = UITheme.styling.borderWidth;
+        this.cornerRadius = UITheme.styling.cornerRadius;
     }
 
     public onClick(cb: () => void): void {

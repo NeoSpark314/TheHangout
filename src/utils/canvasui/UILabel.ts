@@ -1,9 +1,10 @@
 import { UIElement } from './UIElement';
+import { UITheme, getFont } from '../UITheme';
 
 export class UILabel extends UIElement {
     public text: string = '';
-    public font: string = '24px Inter, Arial, sans-serif';
-    public textColor: string = '#ffffff';
+    public font: string = getFont(UITheme.typography.sizes.body);
+    public textColor: string = UITheme.colors.text;
     public textAlign: CanvasTextAlign = 'left';
     public textBaseline: CanvasTextBaseline = 'middle';
 
