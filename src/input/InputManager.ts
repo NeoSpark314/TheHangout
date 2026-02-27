@@ -160,9 +160,26 @@ export class InputManager implements IUpdatable {
             }
         } else {
             // Desktop/Mobile interactions
-            currentStates.right.isSqueezing = this.isKeyDown('e');
-            currentStates.right.isInteracting = this.isKeyDown('primary_action');
-            currentStates.right.triggerValue = currentStates.right.isInteracting ? 1.0 : 0.0;
+            const tracking = this.context.managers.tracking;
+            const trackingState = tracking.getState();
+            const leftActive = trackingState.hands.left.active;
+            const rightActive = trackingState.hands.right.active;
+
+            const isEPressed = this.isKeyDown('e');
+            const isClickPressed = this.isKeyDown('primary_action');
+
+            if (leftActive) {
+                currentStates.left.isSqueezing = isEPressed;
+                currentStates.left.isInteracting = isClickPressed;
+                currentStates.left.triggerValue = isClickPressed ? 1.0 : 0.0;
+            }
+
+            if (rightActive || (!leftActive && !rightActive)) {
+                // Default to right hand if both are inactive or right is active
+                currentStates.right.isSqueezing = isEPressed;
+                currentStates.right.isInteracting = isClickPressed;
+                currentStates.right.triggerValue = isClickPressed ? 1.0 : 0.0;
+            }
         }
 
         // Fire edge intent events based on transitions
