@@ -95,6 +95,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         const config = this.getPeerConfig();
         this.peer = customId ? new Peer(customId, config) : new Peer(config);
 
+        this.peer.on('error', (err) => this.handlePeerError(err));
+
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
             this.context.roomId = id;
@@ -123,6 +125,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         const config = this.getPeerConfig();
         this.peer = new Peer(config);
+
+        this.peer.on('error', (err) => this.handlePeerError(err));
 
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
@@ -325,6 +329,36 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         }
         this.connections.clear();
         this.context.roomId = null;
+    }
+
+    private handlePeerError(err: any): void {
+        console.error('[NetworkManager] PeerJS Error:', err);
+        let userMessage = 'Network connection error.';
+
+        switch (err.type) {
+            case 'unavailable-id':
+                userMessage = 'Room name already taken. Please choose another.';
+                break;
+            case 'peer-unavailable':
+                userMessage = 'Room not found. Please check the name.';
+                break;
+            case 'network':
+                userMessage = 'Connection lost. Check your internet.';
+                break;
+            case 'server-error':
+                userMessage = 'Signaling server unavailable.';
+                break;
+            case 'browser-incompatible':
+                userMessage = 'Your browser does not support WebRTC.';
+                break;
+        }
+
+        eventBus.emit(EVENTS.NETWORK_ERROR, userMessage);
+
+        // If we haven't successfully opened yet, cleanup
+        if (this.peer && !this.peer.open) {
+            this.disconnect();
+        }
     }
 }
 
