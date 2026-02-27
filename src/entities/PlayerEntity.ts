@@ -16,8 +16,9 @@ export interface IHandState {
 }
 
 export abstract class PlayerEntity extends NetworkEntity {
+    public static readonly DEFAULT_HEAD_HEIGHT = 1.7;
     public name: string = '';
-    public headHeight: number = 1.7;
+    public headHeight: number = PlayerEntity.DEFAULT_HEAD_HEIGHT;
     public headState: { position: IVector3, quaternion: IQuaternion };
     public handStates: { left: IHandState, right: IHandState };
 
@@ -25,7 +26,7 @@ export abstract class PlayerEntity extends NetworkEntity {
         super(context, id, type, isAuthority);
 
         this.headState = {
-            position: { x: 0, y: this.headHeight, z: 0 },
+            position: { x: 0, y: PlayerEntity.DEFAULT_HEAD_HEIGHT, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 }
         };
         const createHandState = (offsetX: number): IHandState => {
