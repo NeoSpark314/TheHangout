@@ -67,6 +67,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private mediaSource: MediaSource | null = null;
     private sourceBuffer: SourceBuffer | null = null;
     private bufferQueue: Uint8Array[] = [];
+    private manuallyMuted: boolean = false;
 
     constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -103,7 +104,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             try {
                 if (!this.audioElement) {
                     this.audioElement = new Audio();
-                    this.audioElement.muted = true;
+                    this.audioElement.muted = this.manuallyMuted || true; // Native stream starts muted unless explicitly allowed
                 }
                 this.audioElement.srcObject = stream;
                 this.audioElement.play().catch(e => console.warn('[StickFigureView] Auto-play blocked for hidden audio:', e));
@@ -143,7 +144,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             if (!this.audioElement) {
                 this.audioElement = new Audio();
                 this.audioElement.autoplay = true;
-                this.audioElement.muted = false;
+                this.audioElement.muted = this.manuallyMuted;
             }
 
             const blobUrl = URL.createObjectURL(this.mediaSource);
@@ -274,6 +275,13 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
                     });
                 }
             }
+        }
+    }
+
+    public setMuted(muted: boolean): void {
+        this.manuallyMuted = muted;
+        if (this.audioElement) {
+            this.audioElement.muted = muted;
         }
     }
 

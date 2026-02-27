@@ -204,6 +204,25 @@ export class LocalPlayer extends PlayerEntity {
         // LocalPlayer state is driven by input, not network updates.
     }
 
+    public teleportTo(position: THREE.Vector3, yaw: number): void {
+        const managers = this.context.managers;
+
+        // 1. Move the xrOrigin base
+        this.xrOrigin.position.x = position.x;
+        this.xrOrigin.position.y = position.y;
+        this.xrOrigin.position.z = position.z;
+
+        this.xrOrigin.quaternion = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+
+        // 2. Alert the movement skill to flush momentum and sync its internal orientation
+        const movement = this.getSkill('movement') as MovementSkill;
+        if (movement) {
+            movement.setYaw(yaw);
+            // In MovementSkill, locomotion intent is computed on-the-fly from _currentMove.
+            // There is no persistent physics velocity vector to clear.
+        }
+    }
+
     public destroy(): void {
         super.destroy();
         for (const skill of this.skills) {

@@ -3,6 +3,9 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 import { TabletEntity } from '../entities/TabletEntity';
 import { UITabPanel, UIElement } from '../utils/canvasui';
 import { UITheme, getFont } from '../utils/UITheme';
+import { RemotePlayer } from '../entities/RemotePlayer';
+import { LocalPlayer } from '../entities/LocalPlayer';
+import * as THREE from 'three';
 
 export class VRUIManager implements IUpdatable {
     public tablet: TabletEntity | null = null;
@@ -31,17 +34,166 @@ export class VRUIManager implements IUpdatable {
         this.tablet.ui.root.addChild(this.tabPanel);
 
         // Add default System Tab immediately
+        this.addRoomTab();
         this.addSystemTab();
+    }
+
+    private addRoomTab() {
+        if (!this.tabPanel) return;
+
+        const roomContainer = this.tabPanel.addTab('Room');
+        let currentPage = 0;
+        const playersPerPage = 4;
+
+        import('../utils/canvasui').then(({ UIButton, UILabel }) => {
+            const title = new UILabel("Participants", 50, 40, 1180, 60);
+            title.font = getFont(UITheme.typography.sizes.title, 'bold');
+            title.textColor = UITheme.colors.primary;
+            title.textAlign = 'center';
+            roomContainer.addChild(title);
+
+            // Container to hold dynamic rows so we can clear them on pagination
+            const listContainer = new UIElement(0, 120, 1280, 500);
+            roomContainer.addChild(listContainer);
+
+            const pageLabel = new UILabel("Page 1/1", 540, 640, 200, 60);
+            pageLabel.font = getFont(UITheme.typography.sizes.small);
+            pageLabel.textColor = UITheme.colors.textMuted;
+            pageLabel.textAlign = 'center';
+
+            const renderList = () => {
+                listContainer.children = []; // Clear current list
+
+                // Gather all remote players
+                const remotePlayers: RemotePlayer[] = [];
+                for (const entity of this.context.managers.entity.entities.values()) {
+                    if (entity.type === 'REMOTE_PLAYER') {
+                        remotePlayers.push(entity as RemotePlayer);
+                    }
+                }
+
+                const totalPages = Math.max(1, Math.ceil(remotePlayers.length / playersPerPage));
+                if (currentPage >= totalPages) currentPage = totalPages - 1;
+
+                pageLabel.text = `Page ${currentPage + 1}/${totalPages}`;
+
+                const startIndex = currentPage * playersPerPage;
+                const pagePlayers = remotePlayers.slice(startIndex, startIndex + playersPerPage);
+
+                if (remotePlayers.length === 0) {
+                    const emptyLabel = new UILabel("You are the only one here.", 0, 200, 1280, 60);
+                    emptyLabel.font = getFont(UITheme.typography.sizes.body, 'italic');
+                    emptyLabel.textColor = UITheme.colors.textMuted;
+                    emptyLabel.textAlign = 'center';
+                    listContainer.addChild(emptyLabel);
+                } else {
+                    pagePlayers.forEach((player, index) => {
+                        const rowY = index * 120;
+
+                        // Avatar Color Block
+                        const colorBlock = new UIElement(50, rowY + 20, 60, 60);
+                        const c = player.avatarColor;
+                        colorBlock.backgroundColor = typeof c === 'string' ? c : '#' + (c as number).toString(16).padStart(6, '0');
+                        colorBlock.cornerRadius = 8;
+                        listContainer.addChild(colorBlock);
+
+                        // Name
+                        const nameLabel = new UILabel(player.name || 'Unknown', 140, rowY + 20, 500, 60);
+                        nameLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                        nameLabel.textColor = UITheme.colors.text;
+                        nameLabel.textAlign = 'left';
+                        listContainer.addChild(nameLabel);
+
+                        // Mute Button
+                        const muteBtn = new UIButton(player.isMuted ? "Unmute" : "Mute", 700, rowY + 15, 200, 70, () => {
+                            player.isMuted = !player.isMuted;
+                            if (player.view && (player.view as any).setMuted) {
+                                (player.view as any).setMuted(player.isMuted);
+                            }
+                            renderList(); // Re-render to update button text
+                        });
+                        muteBtn.backgroundColor = player.isMuted ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                        muteBtn.borderColor = player.isMuted ? UITheme.colors.secondary : UITheme.colors.primary;
+                        muteBtn.textColor = player.isMuted ? UITheme.colors.secondary : UITheme.colors.text;
+                        listContainer.addChild(muteBtn);
+
+                        // Go To Button
+                        const gotoBtn = new UIButton("Go To", 930, rowY + 15, 200, 70, () => {
+                            const localPlayer = this.context.localPlayer as LocalPlayer;
+                            if (localPlayer && localPlayer.teleportTo) {
+                                // Calculate position 1 meter backward from their face
+                                const targetPos = new THREE.Vector3(player.targetPosition.x, player.targetPosition.y, player.targetPosition.z);
+                                const targetYaw = player.targetYaw;
+
+                                const offset = new THREE.Vector3(0, 0, 1.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), targetYaw);
+                                const finalPos = targetPos.clone().add(offset);
+                                // Set our yaw to face them perfectly (their yaw + 180 degrees)
+                                const finalYaw = targetYaw + Math.PI;
+
+                                localPlayer.teleportTo(finalPos, finalYaw);
+
+                                // Optional: Flash UI or provide feedback
+                                gotoBtn.backgroundColor = UITheme.colors.primary;
+                                setTimeout(() => {
+                                    gotoBtn.backgroundColor = UITheme.colors.panelBgHover;
+                                    this.tablet?.ui.markDirty();
+                                }, 200);
+                            }
+                        });
+                        gotoBtn.borderColor = UITheme.colors.accent;
+                        listContainer.addChild(gotoBtn);
+                    });
+                }
+
+                this.tablet?.ui.markDirty();
+            };
+
+            // Pagination Controls
+            const prevBtn = new UIButton("< Prev", 200, 630, 200, 80, () => {
+                if (currentPage > 0) {
+                    currentPage--;
+                    renderList();
+                }
+            });
+            const nextBtn = new UIButton("Next >", 880, 630, 200, 80, () => {
+                // Determine max pages again
+                let remoteCount = 0;
+                for (const entity of this.context.managers.entity.entities.values()) {
+                    if (entity.type === 'REMOTE_PLAYER') remoteCount++;
+                }
+                const totalPages = Math.max(1, Math.ceil(remoteCount / playersPerPage));
+                if (currentPage < totalPages - 1) {
+                    currentPage++;
+                    renderList();
+                }
+            });
+
+            roomContainer.addChild(prevBtn);
+            roomContainer.addChild(pageLabel);
+            roomContainer.addChild(nextBtn);
+
+            // Hook up a refresh event whenever tab opens or frequently update it
+            // For now, attaching a manual Refresh button to the header
+            const refreshBtn = new UIButton("Refresh", 1000, 30, 200, 70, () => {
+                renderList();
+            });
+            refreshBtn.backgroundColor = 'rgba(0,0,0,0)';
+            refreshBtn.borderColor = UITheme.colors.primary;
+            roomContainer.addChild(refreshBtn);
+
+            // Initial render
+            renderList();
+        });
     }
 
     private addSystemTab() {
         if (!this.tabPanel) return;
 
-        const systemContainer = this.tabPanel.addTab('System Menu');
+        const systemContainer = this.tabPanel.addTab('Settings');
 
         // Can inject basic buttons for toggling voice or leaving
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
-            const title = new UILabel("System Control", 50, 50, 1180, 80);
+            const title = new UILabel("Settings", 50, 50, 1180, 80);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
             title.textAlign = 'center';

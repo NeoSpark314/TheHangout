@@ -13,6 +13,7 @@ export class RemotePlayer extends PlayerEntity {
     public targetPosition: IVector3 = { x: 0, y: 5, z: 0 };
     public targetYaw: number = 0;
     public avatarColor: string | number | undefined;
+    public isMuted: boolean = false;
     private lastNetworkUpdateTime: number = performance.now();
     private _onVoiceStream: (data: any) => void;
 
@@ -107,7 +108,7 @@ export class RemotePlayer extends PlayerEntity {
             headHeight: this.headHeight,
             headQuaternion: this.headState.quaternion,
             handStates: this.handStates,
-            name: this.name || 'Player',
+            name: this.isMuted ? `${this.name || 'Player'} (MUTED)` : (this.name || 'Player'),
             color: this.avatarColor,
             audioLevel: audioLevel,
             lerpFactor: lerpFactor
