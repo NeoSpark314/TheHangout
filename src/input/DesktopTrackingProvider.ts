@@ -55,38 +55,44 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     public deactivate(): void {
         eventBus.off(EVENTS.INTENT_LOOK, this._lookHandler);
 
-        // Reset all hand states and stretches
+        // Reset all hand stretches
         this.prioritizedHand = null;
         this.targetLeftStretch.set(0, 0, 0);
         this.targetRightStretch.set(0, 0, 0);
         this.leftStretch.set(0, 0, 0);
         this.rightStretch.set(0, 0, 0);
+
+        // Note: In desktop mode, we typically keep them active if the provider is active
+        // for proximity interaction logic (GrabSkill).
         this.state.hands.left.active = false;
         this.state.hands.right.active = false;
     }
 
+    private manualStatus = { left: false, right: false };
+
     public setHandActive(hand: 'left' | 'right', active: boolean): void {
         const handState = this.state.hands[hand];
-        if (active) {
-            if (!handState.active) {
-                // Newly activated hand becomes the prioritized one for scrolling
-                this.prioritizedHand = hand;
-                handState.active = true;
-                this.updateHandTarget(hand);
-            }
-        } else {
-            if (handState.active) {
-                handState.active = false;
-                if (hand === 'left') this.targetLeftStretch.set(0, 0, 0);
-                else this.targetRightStretch.set(0, 0, 0);
+        this.manualStatus[hand] = active;
 
-                // If we released the prioritized hand, fall back to the other active hand if it exists
-                if (this.prioritizedHand === hand) {
-                    const otherHand = hand === 'left' ? 'right' : 'left';
-                    this.prioritizedHand = this.state.hands[otherHand].active ? otherHand : null;
-                }
+        if (active) {
+            // Newly activated hand (manually) becomes the prioritized one for scrolling
+            this.prioritizedHand = hand;
+            this.updateHandTarget(hand);
+        } else {
+            // Stop stretching if manually deactivated
+            if (hand === 'left') this.targetLeftStretch.set(0, 0, 0);
+            else this.targetRightStretch.set(0, 0, 0);
+
+            // If we released the prioritized hand, fall back to the other MANUALLY active hand if it exists
+            if (this.prioritizedHand === hand) {
+                const otherHand = hand === 'left' ? 'right' : 'left';
+                this.prioritizedHand = this.manualStatus[otherHand] ? otherHand : null;
             }
         }
+
+        // On desktop, we keep the hand's logical MUST be active for Interaction proximity checks
+        // to work even if not currently "manually extended".
+        handState.active = true;
     }
 
     private updateHandTarget(hand: 'left' | 'right'): void {
@@ -124,7 +130,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
     private createEmptyHandState(offsetX: number): IHandState {
         const state: IHandState = {
-            active: false,
+            active: true, // Always active on desktop for Interaction proximity
             hasJoints: false,
             position: { x: offsetX, y: 0.8, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },

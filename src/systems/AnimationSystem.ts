@@ -90,46 +90,36 @@ export class AnimationSystem implements IUpdatable {
         // 2. Update Hand States (World Space)
         for (const hand of ['left', 'right'] as const) {
             const state = this.localPlayer.handStates[hand];
-            state.active = true;
 
-            // Update interaction animation timer
+            // On desktop, the DesktopTrackingProvider is now the source of truth for 
+            // the hand's base pose and reach. We no longer force state.active = true 
+            // here, nor do we procedurally lerp them forward on interaction.
+            // This prevents conflicts with the manual scroll reach adjustment.
+
+            // HOWEVER, we still need to update the interaction animation timer 
+            // so that hand visuals (fingers) can react to Click/E.
             if (this._interactState[hand]) {
-                this._interactTime[hand] = Math.min(1.0, this._interactTime[hand] + delta * 10);
+                this._interactTime[hand] = Math.min(1.0, this._interactTime[hand] + delta * 15);
             } else {
-                this._interactTime[hand] = Math.max(0.0, this._interactTime[hand] - delta * 5);
+                this._interactTime[hand] = Math.max(0.0, this._interactTime[hand] - delta * 8);
             }
 
+            // ADDITIVE INTERACTION FEEDBACK:
+            // Apply a small forward "twitch" based on interaction time 
+            // This provides visual feedback for Click/E without snapping the arm distance.
             const t = this._interactTime[hand];
+            if (t > 0) {
+                const headLocalRot = render.camera.quaternion.clone();
+                const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(headLocalRot);
+                const punchOffset = forwardVector.multiplyScalar(t * 0.1); // Max 10cm punch
 
-            // Calculate Rest Position (Hips area) locally
-            const sideOffset = hand === 'left' ? -0.3 : 0.3;
-            const rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(headLocalRot);
-            const downVector = new THREE.Vector3(0, -1, 0).applyQuaternion(headLocalRot);
-            const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(headLocalRot);
+                const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
+                const worldPunch = punchOffset.applyQuaternion(originQuat);
 
-            // Bobbing offset
-            const bobY = this._isMoving ? Math.sin(this._bobTime + (hand === 'left' ? 0 : Math.PI)) * 0.1 : 0;
-            const bobZ = this._isMoving ? Math.cos(this._bobTime + (hand === 'left' ? 0 : Math.PI)) * 0.1 : 0;
-
-            const restPos = headLocalPos.clone()
-                .add(downVector.clone().multiplyScalar(0.5)) // down from head
-                .add(rightVector.clone().multiplyScalar(sideOffset)) // out to side
-                .add(forwardVector.clone().multiplyScalar(0.2 + bobZ)); // slightly forward
-
-            restPos.y += bobY;
-
-            // Calculate Target Position (Reaching out 1.0m from local head)
-            const targetPos = headLocalPos.clone().add(forwardVector.clone().multiplyScalar(1.0));
-
-            // Lerp based on interact time to get Local Position
-            const finalLocalPos = new THREE.Vector3().lerpVectors(restPos, targetPos, t);
-
-            // Convert to WORLD Space
-            const worldHandPos = finalLocalPos.clone().applyQuaternion(originQuat).add(originPos);
-            const worldHandQuat = new THREE.Quaternion(headLocalRot.x, headLocalRot.y, headLocalRot.z, headLocalRot.w).premultiply(originQuat);
-
-            state.position = { x: worldHandPos.x, y: worldHandPos.y, z: worldHandPos.z };
-            state.quaternion = { x: worldHandQuat.x, y: worldHandQuat.y, z: worldHandQuat.z, w: worldHandQuat.w };
+                state.position.x += worldPunch.x;
+                state.position.y += worldPunch.y;
+                state.position.z += worldPunch.z;
+            }
         }
     }
 }
