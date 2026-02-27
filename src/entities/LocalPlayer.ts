@@ -88,13 +88,13 @@ export class LocalPlayer extends PlayerEntity {
         const render = managers.render;
         const xr = managers.xr;
 
+        managers.tracking.update(delta, frame);
+
         for (const skill of this.skills) {
             if (skill.isAlwaysActive || skill === this.activeSkill) {
                 skill.update(delta, this, managers);
             }
         }
-
-        managers.tracking.update(delta, frame);
 
         // Calculate world pose from our own state (Source of Truth)
         // 1. Ensure camera world matrix is up to date with ANY movement that happened this frame (from Skills).

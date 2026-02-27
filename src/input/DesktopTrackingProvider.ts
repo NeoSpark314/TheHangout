@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
 import { IHandState } from '../entities/PlayerEntity';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 
 export class DesktopTrackingProvider implements ITrackingProvider {
     public id = 'desktop';
@@ -17,6 +19,18 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private rightReach = 1.0;
     private activeHand: 'left' | 'right' | null = null;
 
+    private pitch = 0;
+    private turnSpeed = 0.002;
+    private headHeight = 1.7;
+
+    private _lookHandler = (payload: any) => {
+        // We only care about Y (pitch) here. 
+        // Horizontal look (yaw) is handled by MovementSkill rotating the origin.
+        if (this.context.managers.render.isXRPresenting()) return;
+        this.pitch -= payload.delta.y * this.turnSpeed * 15;
+        this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
+    };
+
     constructor(private context: GameContext) {
         this.state = this.createInitialState();
     }
@@ -25,6 +39,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         window.addEventListener('keydown', this.onKeyDown.bind(this));
         window.addEventListener('keyup', this.onKeyUp.bind(this));
         window.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+
+        eventBus.on(EVENTS.INTENT_LOOK, this._lookHandler);
     }
 
     private onWheel(e: WheelEvent): void {
@@ -103,18 +119,26 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         if (render.isXRPresenting()) return;
 
-        // 1. Update Head (from origin and local head state if available, but usually driven by Skill)
-        // For DesktopTrackingProvider, we assume the camera pose is the source of truth for the head.
-        const camPos = new THREE.Vector3();
-        const camQuat = new THREE.Quaternion();
-        render.camera.getWorldPosition(camPos);
-        render.camera.getWorldQuaternion(camQuat);
-        const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+        const rawLp = this.context.localPlayer;
+        if (!rawLp || rawLp.type !== 'LOCAL_PLAYER') return;
+        const lp = rawLp as any; // Cast to access LocalPlayer properties (xrOrigin)
+
+        // 1. Source of Truth: Origin and Orientation
+        const originPos = new THREE.Vector3(lp.xrOrigin.position.x, lp.xrOrigin.position.y, lp.xrOrigin.position.z);
+        const originQuat = new THREE.Quaternion(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
+
+        // Calculate Head-Local Pose (height + pitch)
+        const localHeadPos = new THREE.Vector3(0, this.headHeight, 0);
+        const localHeadQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
+
+        // Combine to World Space
+        const worldHeadPos = localHeadPos.clone().applyQuaternion(originQuat).add(originPos);
+        const worldHeadQuat = originQuat.clone().multiply(localHeadQuat);
 
         this.state.head = {
-            position: { x: camPos.x, y: camPos.y, z: camPos.z },
-            quaternion: { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w },
-            yaw: euler.y
+            position: { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z },
+            quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w },
+            yaw: new THREE.Euler().setFromQuaternion(worldHeadQuat, 'YXZ').y
         };
 
         // 2. Update Arm Stretching (Lerp for smoothness)
@@ -122,23 +146,32 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.leftStretch.lerp(this.targetLeftStretch, delta * lerpSpeed);
         this.rightStretch.lerp(this.targetRightStretch, delta * lerpSpeed);
 
-        // 3. Update Hand Poses relative to head/body
-        const bodyYaw = euler.y;
-        const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
+        // 3. Update Hand Poses relative to physical body (Origin)
+        // Base hand positions (Lowered Y relative to head-local)
+        // Note: we apply origin rotation to these offsets
+        const leftBaseOffset = new THREE.Vector3(-0.2, this.headHeight - 0.5, -0.2);
+        const rightBaseOffset = new THREE.Vector3(0.2, this.headHeight - 0.5, -0.2);
 
-        // Base hand positions (Lowered Y from 1.2 to -0.4 relative to camera)
-        const leftBase = new THREE.Vector3(-0.2, -0.4, -0.2).applyQuaternion(bodyQuat).add(camPos);
-        const rightBase = new THREE.Vector3(0.2, -0.4, -0.2).applyQuaternion(bodyQuat).add(camPos);
+        const leftBaseWorld = leftBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
+        const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
 
-        // Apply stretch in look direction (using camQuat for aiming)
-        const leftTarget = leftBase.clone().add(this.leftStretch.clone().applyQuaternion(camQuat));
-        const rightTarget = rightBase.clone().add(this.rightStretch.clone().applyQuaternion(camQuat));
+        // Apply stretch in the direction the HEAD is looking (worldHeadQuat)
+        const leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
+        const rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
 
-        this.state.hands.left.position = { x: leftTarget.x, y: leftTarget.y, z: leftTarget.z };
-        this.state.hands.left.quaternion = { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w };
+        this.state.hands.left.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };
+        this.state.hands.left.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.left.joints.forEach(j => {
+            j.position = { ...this.state.hands.left.position };
+            j.quaternion = { ...this.state.hands.left.quaternion };
+        });
 
-        this.state.hands.right.position = { x: rightTarget.x, y: rightTarget.y, z: rightTarget.z };
-        this.state.hands.right.quaternion = { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w };
+        this.state.hands.right.position = { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z };
+        this.state.hands.right.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.right.joints.forEach(j => {
+            j.position = { ...this.state.hands.right.position };
+            j.quaternion = { ...this.state.hands.right.quaternion };
+        });
     }
 
     public getState(): ITrackingState {
@@ -149,5 +182,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         window.removeEventListener('keydown', this.onKeyDown.bind(this));
         window.removeEventListener('keyup', this.onKeyUp.bind(this));
         window.removeEventListener('wheel', this.onWheel.bind(this));
+
+        eventBus.off(EVENTS.INTENT_LOOK, this._lookHandler);
     }
 }

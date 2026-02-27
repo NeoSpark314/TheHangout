@@ -128,8 +128,16 @@ export class RenderManager {
             this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
 
             if (!this.isXRPresenting()) {
-                this.camera.position.set(lp.headState.position.x, lp.headState.position.y, lp.headState.position.z);
-                this.camera.quaternion.set(lp.headState.quaternion.x, lp.headState.quaternion.y, lp.headState.quaternion.z, lp.headState.quaternion.w);
+                const worldPos = new THREE.Vector3(lp.headState.position.x, lp.headState.position.y, lp.headState.position.z);
+                const worldQuat = new THREE.Quaternion(lp.headState.quaternion.x, lp.headState.quaternion.y, lp.headState.quaternion.z, lp.headState.quaternion.w);
+
+                // Convert world pose to be local to cameraGroup
+                this.camera.position.copy(this.cameraGroup.worldToLocal(worldPos));
+
+                // For rotation, we need to handle the world-to-local quat as well
+                const groupWorldQuat = new THREE.Quaternion();
+                this.cameraGroup.getWorldQuaternion(groupWorldQuat);
+                this.camera.quaternion.copy(groupWorldQuat.invert().multiply(worldQuat));
             }
         } else if (possessedPlayer.type === 'SPECTATOR') {
             const sp = possessedPlayer;

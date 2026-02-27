@@ -15,33 +15,56 @@ export class XRSystem {
     private tempMatrix = new THREE.Matrix4();
     private avatarTransform = new THREE.Object3D();
 
-    public updateHandPosesFromControllers(
+    public updateHandPosesFromXRFrame(
         render: RenderManager,
-        handStates: { left: IHandState, right: IHandState },
-        leftControllerIndex: number,
-        rightControllerIndex: number
-    ): void {
-        const process = (state: IHandState, index: number) => {
-            if (!state.active) return;
-            const controller = render.getXRController(index);
-            controller.getWorldPosition(this.tempVec);
-            controller.getWorldQuaternion(this.tempQuat);
-
-            state.position = { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z };
-            state.quaternion = { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w };
-        };
-
-        process(handStates.left, leftControllerIndex);
-        process(handStates.right, rightControllerIndex);
-    }
-
-    public updateJointsFromXRFrame(
         xrFrame: XRFrame,
         referenceSpace: XRReferenceSpace,
         session: XRSession,
         handStates: { left: IHandState, right: IHandState }
     ): void {
-        // Reset joint activity flags
+        const dollyMatrix = render.cameraGroup.matrixWorld;
+
+        for (const source of session.inputSources) {
+            const handedness = source.handedness as 'left' | 'right';
+            if (handedness !== 'left' && handedness !== 'right') continue;
+
+            const state = handStates[handedness];
+            const space = source.gripSpace || source.targetRaySpace;
+            if (!space) continue;
+
+            const pose = xrFrame.getPose(space, referenceSpace);
+            if (pose) {
+                // Transform local XR pose to World Space by multiplying with Dolly world matrix
+                const localPos = this.tempVec.set(
+                    pose.transform.position.x,
+                    pose.transform.position.y,
+                    pose.transform.position.z
+                );
+                const localQuat = this.tempQuat.set(
+                    pose.transform.orientation.x,
+                    pose.transform.orientation.y,
+                    pose.transform.orientation.z,
+                    pose.transform.orientation.w
+                );
+
+                const worldPos = localPos.applyMatrix4(dollyMatrix);
+                const worldQuat = localQuat.premultiply(render.cameraGroup.quaternion);
+
+                state.position = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+                state.quaternion = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
+            }
+        }
+    }
+
+    public updateJointsFromXRFrame(
+        render: RenderManager,
+        xrFrame: XRFrame,
+        referenceSpace: XRReferenceSpace,
+        session: XRSession,
+        handStates: { left: IHandState, right: IHandState }
+    ): void {
+        const dollyMatrix = render.cameraGroup.matrixWorld;
+        const dollyQuat = render.cameraGroup.quaternion;
         const hasHand = { left: false, right: false };
 
         for (const source of session.inputSources) {
@@ -49,15 +72,21 @@ export class XRSystem {
             if (handedness !== 'left' && handedness !== 'right') continue;
 
             const state = handStates[handedness];
-            if (source.hand && state.active && xrFrame.getJointPose) {
+            if (source.hand && state.active && (xrFrame as any).getJointPose) {
                 hasHand[handedness] = true;
                 let i = 0;
-                for (const joint of source.hand.values()) {
+                for (const joint of (source.hand as any).values()) {
                     if (i >= 25) break;
-                    const jointPose = xrFrame.getJointPose(joint, referenceSpace);
+                    const jointPose = (xrFrame as any).getJointPose(joint, referenceSpace);
                     if (jointPose) {
-                        state.joints[i].position = { x: jointPose.transform.position.x, y: jointPose.transform.position.y, z: jointPose.transform.position.z };
-                        state.joints[i].quaternion = { x: jointPose.transform.orientation.x, y: jointPose.transform.orientation.y, z: jointPose.transform.orientation.z, w: jointPose.transform.orientation.w };
+                        const localPos = this.tempVec.set(jointPose.transform.position.x, jointPose.transform.position.y, jointPose.transform.position.z);
+                        const localQuat = this.tempQuat.set(jointPose.transform.orientation.x, jointPose.transform.orientation.y, jointPose.transform.orientation.z, jointPose.transform.orientation.w);
+
+                        const worldPos = localPos.applyMatrix4(dollyMatrix);
+                        const worldQuat = localQuat.premultiply(dollyQuat);
+
+                        state.joints[i].position = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+                        state.joints[i].quaternion = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
                     }
                     i++;
                 }
@@ -74,9 +103,32 @@ export class XRSystem {
         }
     }
 
-    public getCameraWorldPose(camera: THREE.Camera): { position: IVector3, quaternion: IQuaternion, yaw: number } {
-        camera.getWorldPosition(this.tempVec);
-        camera.getWorldQuaternion(this.tempQuat);
+    public getViewerWorldPose(
+        render: RenderManager,
+        xrFrame: XRFrame,
+        referenceSpace: XRReferenceSpace
+    ): { position: IVector3, quaternion: IQuaternion, yaw: number } {
+        const viewerPose = xrFrame.getViewerPose(referenceSpace);
+        if (viewerPose) {
+            const transform = viewerPose.transform;
+            const localPos = this.tempVec.set(transform.position.x, transform.position.y, transform.position.z);
+            const localQuat = this.tempQuat.set(transform.orientation.x, transform.orientation.y, transform.orientation.z, transform.orientation.w);
+
+            const dollyMatrix = render.cameraGroup.matrixWorld;
+            const worldPos = localPos.applyMatrix4(dollyMatrix);
+            const worldQuat = localQuat.premultiply(render.cameraGroup.quaternion);
+            const euler = new THREE.Euler().setFromQuaternion(worldQuat, 'YXZ');
+
+            return {
+                position: { x: worldPos.x, y: worldPos.y, z: worldPos.z },
+                quaternion: { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w },
+                yaw: euler.y
+            };
+        }
+
+        // Fallback to THREE camera if pose not available
+        render.camera.getWorldPosition(this.tempVec);
+        render.camera.getWorldQuaternion(this.tempQuat);
         const euler = new THREE.Euler().setFromQuaternion(this.tempQuat, 'YXZ');
 
         return {
@@ -86,58 +138,4 @@ export class XRSystem {
         };
     }
 
-    public getControllerWorldPose(render: RenderManager, index: number): { position: IVector3, quaternion: IQuaternion } {
-        const controller = render.getXRController(index);
-        controller.getWorldPosition(this.tempVec);
-        controller.getWorldQuaternion(this.tempQuat);
-
-        return {
-            position: { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z },
-            quaternion: { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w }
-        };
-    }
-
-    public transformHandsToAvatarSpace(
-        xrOrigin: { position: IVector3, quaternion: IQuaternion },
-        bodyYaw: number,
-        headWorldPos: IVector3,
-        handStates: { left: IHandState, right: IHandState }
-    ): void {
-        this.avatarTransform.position.set(headWorldPos.x, 0, headWorldPos.z);
-        this.avatarTransform.rotation.y = bodyYaw;
-        this.avatarTransform.updateMatrixWorld(true);
-
-        const xrOriginQuat = new THREE.Quaternion(xrOrigin.quaternion.x, xrOrigin.quaternion.y, xrOrigin.quaternion.z, xrOrigin.quaternion.w);
-        const xrOriginMatrix = this.tempMatrix.makeRotationFromQuaternion(xrOriginQuat)
-            .setPosition(xrOrigin.position.x, xrOrigin.position.y, xrOrigin.position.z);
-
-        const processHand = (state: IHandState) => {
-            if (!state.active) return;
-
-            // Poses are already in world space from updateHandPosesFromControllers
-            this.tempVec.set(state.position.x, state.position.y, state.position.z);
-            this.tempQuat.set(state.quaternion.x, state.quaternion.y, state.quaternion.z, state.quaternion.w);
-
-            const localPos = this.avatarTransform.worldToLocal(this.tempVec.clone());
-            const localQuat = this.tempQuat.clone().premultiply(this.avatarTransform.quaternion.clone().invert());
-
-            state.position = { x: localPos.x, y: localPos.y, z: localPos.z };
-            state.quaternion = { x: localQuat.x, y: localQuat.y, z: localQuat.z, w: localQuat.w };
-
-            for (let i = 0; i < 25; i++) {
-                const j = state.joints[i];
-                if (j.position.x !== 0 || j.position.y !== 0 || j.position.z !== 0) {
-                    const jWorldPos = new THREE.Vector3(j.position.x, j.position.y, j.position.z).applyMatrix4(xrOriginMatrix);
-                    const jWorldQuat = new THREE.Quaternion(j.quaternion.x, j.quaternion.y, j.quaternion.z, j.quaternion.w).premultiply(xrOriginQuat);
-                    const jLocalPos = this.avatarTransform.worldToLocal(jWorldPos);
-                    const jLocalQuat = jWorldQuat.premultiply(this.avatarTransform.quaternion.clone().invert());
-                    j.position = { x: jLocalPos.x, y: jLocalPos.y, z: jLocalPos.z };
-                    j.quaternion = { x: jLocalQuat.x, y: jLocalQuat.y, z: jLocalQuat.z, w: jLocalQuat.w };
-                }
-            }
-        };
-
-        processHand(handStates.left);
-        processHand(handStates.right);
-    }
 }

@@ -34,9 +34,8 @@ export class MovementSkill extends Skill {
             this._currentMove = payload.direction;
         };
         const onLook = (payload: ILookIntentPayload) => {
+            // Horizontal look turns the body (origin)
             this.yaw -= payload.delta.x * this.turnSpeed * 15;
-            this.pitch -= payload.delta.y * this.turnSpeed * 15;
-            this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
         };
         const onVRSnapTurn = (payload: IVRSnapTurnPayload) => {
             this.applyVRTurn(player, payload.angle, player.context.managers);
@@ -84,12 +83,6 @@ export class MovementSkill extends Skill {
 
         // 1. Orientation
         if (!isVR) {
-            player.headState.quaternion = {
-                x: Math.sin(this.pitch / 2),
-                y: 0,
-                z: 0,
-                w: Math.cos(this.pitch / 2)
-            };
             player.xrOrigin.quaternion = {
                 x: 0,
                 y: Math.sin(this.yaw / 2),

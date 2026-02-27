@@ -57,41 +57,37 @@ export class XRTrackingProvider implements ITrackingProvider {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !xrFrame || !referenceSpace) return;
 
-        // 1. Head Tracking
-        const headPose = xr.getCameraWorldPose(render.camera);
-        this.state.head = headPose;
+        // 1. Head Tracking (Viewer Pose)
+        this.state.head = xr.getViewerWorldPose(render, xrFrame, referenceSpace);
 
-        // 2. Poll Input Sources for Controllers
+        // 2. Poll Input Sources for Controllers/Hands
         this.state.hands.left.active = false;
         this.state.hands.right.active = false;
 
-        let controllerIndex = 0;
         for (const source of session.inputSources) {
-            // We only care about sources with handedness (controllers or hands)
             if (source.handedness === 'left') {
-                this.leftControllerIndex = controllerIndex;
                 this.state.hands.left.active = true;
             } else if (source.handedness === 'right') {
-                this.rightControllerIndex = controllerIndex;
                 this.state.hands.right.active = true;
-            }
-
-            // Only increment controllerIndex for sources that Three.js treats as "controllers" 
-            // (typically anything with a grip space or target ray space that isn't the viewer)
-            if (source.targetRayMode === 'tracked-pointer' || source.targetRayMode === 'screen' || source.hand) {
-                controllerIndex++;
             }
         }
 
-        // 3. Update Poses and Joints via XRSystem
-        xr.updateHandPosesFromControllers(
+        // 3. Update Poses and Joints via XRSystem (Directly from XRFrame)
+        xr.updateHandPosesFromXRFrame(
             render,
-            this.state.hands,
-            this.leftControllerIndex,
-            this.rightControllerIndex
+            xrFrame,
+            referenceSpace,
+            session,
+            this.state.hands
         );
 
-        xr.updateJointsFromXRFrame(xrFrame, referenceSpace, session, this.state.hands);
+        xr.updateJointsFromXRFrame(
+            render,
+            xrFrame,
+            referenceSpace,
+            session,
+            this.state.hands
+        );
     }
 
     public getState(): ITrackingState {

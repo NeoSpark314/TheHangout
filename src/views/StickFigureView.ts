@@ -438,6 +438,9 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
         if (state.handStates) {
             // Logic works in WORLD SPACE, but rendering needs LOCAL SPACE relative to this.mesh (the avatar origin)
+            // Ensure world matrix is up to date since we just potentially moved this.mesh
+            this.mesh.updateMatrixWorld(true);
+
             const leftWorldPos = new THREE.Vector3(state.handStates.left.position.x, state.handStates.left.position.y, state.handStates.left.position.z);
             const leftWorldQuat = new THREE.Quaternion(state.handStates.left.quaternion.x, state.handStates.left.quaternion.y, state.handStates.left.quaternion.z, state.handStates.left.quaternion.w);
 
