@@ -49,19 +49,36 @@ export class InteractionSystem {
         for (const entity of this.context.managers.entity.entities.values()) {
             // Check if it's grabbable, interactable and NOT currently held
             if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
-                // Get world position from view or direct mesh
-                let mesh = (entity as any).view?.mesh;
-                if (!mesh && (entity as any).mesh) mesh = (entity as any).mesh;
-                if (!mesh) continue;
+                // Check if the entity provides specific grab handles
+                const grabRoots = (entity.getGrabRoots && typeof entity.getGrabRoots === 'function')
+                    ? entity.getGrabRoots() : null;
 
-                // Ensure the world matrix is up to date for this frame
-                mesh.updateMatrixWorld(true);
-                mesh.getWorldPosition(this.tempVec);
-                const dist = point.distanceTo(this.tempVec);
+                if (grabRoots && grabRoots.length > 0) {
+                    for (const grabRoot of grabRoots) {
+                        grabRoot.updateMatrixWorld(true);
+                        grabRoot.getWorldPosition(this.tempVec);
+                        const dist = point.distanceTo(this.tempVec);
 
-                if (dist < minDist) {
-                    minDist = dist;
-                    nearest = entity;
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearest = entity;
+                        }
+                    }
+                } else {
+                    // Fallback to standard mesh calculation
+                    let mesh = (entity as any).view?.mesh;
+                    if (!mesh && (entity as any).mesh) mesh = (entity as any).mesh;
+                    if (!mesh) continue;
+
+                    // Ensure the world matrix is up to date for this frame
+                    mesh.updateMatrixWorld(true);
+                    mesh.getWorldPosition(this.tempVec);
+                    const dist = point.distanceTo(this.tempVec);
+
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = entity;
+                    }
                 }
             }
         }

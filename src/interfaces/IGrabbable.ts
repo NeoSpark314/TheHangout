@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { IVector3, IQuaternion } from './IMath';
 
 /**
@@ -9,7 +10,13 @@ export interface IGrabbable {
 
     onGrab(playerId: string, hand: 'left' | 'right'): void;
     onRelease(velocity?: IVector3): void;
-    
+
+    /**
+     * Optional method returning specific sub-meshes that act as physical grab zones or 'handles'.
+     * If defined, the InteractionSystem will compute distance against these meshes instead of the root.
+     */
+    getGrabRoots?(): THREE.Object3D[];
+
     /**
      * Called every frame by the holder to sync the object's pose.
      */

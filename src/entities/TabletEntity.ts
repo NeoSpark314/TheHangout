@@ -25,6 +25,9 @@ export class TabletEntity implements IGrabbable, IInteractable {
     private position: THREE.Vector3;
     private quaternion: THREE.Quaternion;
 
+    private leftHandle: THREE.Mesh;
+    private rightHandle: THREE.Mesh;
+
     private frames: number = 0;
 
     constructor(context: GameContext, id: string) {
@@ -55,6 +58,31 @@ export class TabletEntity implements IGrabbable, IInteractable {
         this.mesh = new THREE.Mesh(geometry, material);
         // Link mesh to entity for raycasting
         this.mesh.userData = { entityId: this.id };
+
+        // --- Create physical grab handles ---
+        const handleWidth = 0.02;
+        const handleHeight = 0.28;
+        const handleDepth = 0.02;
+
+        const handleGeo = new THREE.BoxGeometry(handleWidth, handleHeight, handleDepth);
+        // Synthwave Cyan handle material
+        const handleMat = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            roughness: 0.2,
+            metalness: 0.8
+        });
+
+        this.leftHandle = new THREE.Mesh(handleGeo, handleMat);
+        // Position handle on the left edge
+        this.leftHandle.position.set(-0.384 / 2 - handleWidth / 2, 0, 0);
+        this.leftHandle.userData = { entityId: this.id };
+        this.mesh.add(this.leftHandle);
+
+        this.rightHandle = new THREE.Mesh(handleGeo, handleMat);
+        // Position handle on the right edge
+        this.rightHandle.position.set(0.384 / 2 + handleWidth / 2, 0, 0);
+        this.rightHandle.userData = { entityId: this.id };
+        this.mesh.add(this.rightHandle);
 
         this.mesh.position.copy(this.position);
         this.mesh.quaternion.copy(this.quaternion);
@@ -113,6 +141,10 @@ export class TabletEntity implements IGrabbable, IInteractable {
 
             this.relativePosition.copy(this.position).sub({ x: head.position.x, y: head.position.y, z: head.position.z }).applyQuaternion(invYawQuat);
         }
+    }
+
+    public getGrabRoots(): THREE.Object3D[] {
+        return [this.leftHandle, this.rightHandle];
     }
 
     public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
