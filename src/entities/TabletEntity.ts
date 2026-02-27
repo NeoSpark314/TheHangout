@@ -19,8 +19,8 @@ export class TabletEntity implements IGrabbable, IInteractable {
     public ui: CanvasUI;
 
     public isRelative: boolean = true;
-    public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.35, -0.5);
-    public relativeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.15, 0, 0));
+    public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.3, -0.5);
+    public relativeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.1, 0, 0));
 
     private context: GameContext;
     private position: THREE.Vector3;
@@ -31,7 +31,6 @@ export class TabletEntity implements IGrabbable, IInteractable {
 
     private isRecentering: boolean = false;
     private hasSpawned: boolean = false;
-    private frames: number = 0;
 
     constructor(context: GameContext, id: string) {
         this.context = context;
@@ -96,24 +95,23 @@ export class TabletEntity implements IGrabbable, IInteractable {
     }
 
     public update(delta: number): void {
-        this.frames++;
-        if (this.frames < 5) {
-            this.ui.markDirty();
-        }
-
         if (this.isRelative && this.context.localPlayer && 'headState' in this.context.localPlayer) {
             const head = (this.context.localPlayer as any).headState;
             const tracking = this.context.managers.tracking.getState();
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
 
             if (!this.hasSpawned) {
-                // **Spawn Polish**: Pre-calculate starting transform instantly so the Tablet doesn't fly from (0,0,0)
+                // **Deterministic Spawn**: No more heuristics or "waiting for movement".
+                // We lock the world position based on the player's head state immediately.
                 this.position.copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
                 this.quaternion.copy(yawQuat).multiply(this.relativeQuaternion);
+
                 this.mesh.position.copy(this.position);
                 this.mesh.quaternion.copy(this.quaternion);
+                this.mesh.updateMatrixWorld(true);
+
                 this.hasSpawned = true;
-                return; // Skip interpolation this frame
+                return; // Skip interpolation until spawned
             }
 
             const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
