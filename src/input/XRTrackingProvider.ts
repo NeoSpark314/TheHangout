@@ -84,14 +84,6 @@ export class XRTrackingProvider implements ITrackingProvider {
                     const worldPose = xr.rawPoseToWorldPose(pose, render.cameraGroup);
                     handState.position = worldPose.position;
                     handState.quaternion = worldPose.quaternion;
-
-                    // Debug Log: Log pose every 60 frames (~once per second)
-                    if (Math.random() < 0.01) {
-                        console.log(`[XRTrackingProvider] ${handedness} controller world pos:`,
-                            handState.position.x.toFixed(2),
-                            handState.position.y.toFixed(2),
-                            handState.position.z.toFixed(2));
-                    }
                 } else {
                     // Fallback to Three.js object if frame pose is unavailable
                     const fallbackObj = source.gripSpace ? render.getXRControllerGrip(i) : render.getXRController(i);

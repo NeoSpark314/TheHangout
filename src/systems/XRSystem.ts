@@ -87,13 +87,6 @@ export class XRSystem {
         // Transform from reference space to world space using the cameraGroup (XR Origin)
         this.tempVec.applyMatrix4(cameraGroup.matrixWorld);
 
-        // Debug: Log if origin seems wrong (throotle to ~1 per second)
-        if (Math.random() < 0.01) {
-            console.log('[XRSystem] rawPoseToWorldPose - Local:', position.x.toFixed(2), position.y.toFixed(2), position.z.toFixed(2));
-            console.log('[XRSystem] rawPoseToWorldPose - Origin Pos:', cameraGroup.position.x.toFixed(2), cameraGroup.position.y.toFixed(2), cameraGroup.position.z.toFixed(2));
-            console.log('[XRSystem] rawPoseToWorldPose - Result World:', this.tempVec.x.toFixed(2), this.tempVec.y.toFixed(2), this.tempVec.z.toFixed(2));
-        }
-
         // Combine rotations: cameraGroup world orientation * pose orientation
         const groupQuat = new THREE.Quaternion();
         cameraGroup.getWorldQuaternion(groupQuat);
