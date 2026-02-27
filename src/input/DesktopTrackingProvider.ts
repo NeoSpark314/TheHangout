@@ -31,10 +31,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
 
-    private _boundKeyDown = this.onKeyDown.bind(this);
-    private _boundKeyUp = this.onKeyUp.bind(this);
-    private _boundWheel = this.onWheel.bind(this);
-
     constructor(private context: GameContext) {
         this.state = this.createInitialState();
     }
@@ -42,18 +38,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     public init(): void { }
 
     public activate(): void {
-        window.addEventListener('keydown', this._boundKeyDown);
-        window.addEventListener('keyup', this._boundKeyUp);
-        window.addEventListener('wheel', this._boundWheel, { passive: false });
-
         eventBus.on(EVENTS.INTENT_LOOK, this._lookHandler);
     }
 
     public deactivate(): void {
-        window.removeEventListener('keydown', this._boundKeyDown);
-        window.removeEventListener('keyup', this._boundKeyUp);
-        window.removeEventListener('wheel', this._boundWheel);
-
         eventBus.off(EVENTS.INTENT_LOOK, this._lookHandler);
 
         // Reset all hand states and stretches
@@ -66,16 +54,36 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.state.hands.right.active = false;
     }
 
-    private onWheel(e: WheelEvent): void {
+    public setHandActive(hand: 'left' | 'right', active: boolean): void {
+        if (active) {
+            this.activeHand = hand;
+            if (hand === 'left') {
+                this.targetLeftStretch.set(0, 0, -this.leftReach);
+                this.state.hands.left.active = true;
+            } else {
+                this.targetRightStretch.set(0, 0, -this.rightReach);
+                this.state.hands.right.active = true;
+            }
+        } else {
+            if (hand === 'left') {
+                this.targetLeftStretch.set(0, 0, 0);
+                this.state.hands.left.active = false;
+            } else {
+                this.targetRightStretch.set(0, 0, 0);
+                this.state.hands.right.active = false;
+            }
+            if (this.activeHand === hand) this.activeHand = null;
+        }
+    }
+
+    public adjustReach(delta: number): void {
         if (!this.activeHand) return;
 
-        e.preventDefault();
-        const scrollDelta = -e.deltaY * 0.001;
         if (this.activeHand === 'left') {
-            this.leftReach = Math.max(0.2, Math.min(4.0, this.leftReach + scrollDelta));
+            this.leftReach = Math.max(0.2, Math.min(4.0, this.leftReach + delta));
             this.targetLeftStretch.set(0, 0, -this.leftReach);
         } else {
-            this.rightReach = Math.max(0.2, Math.min(4.0, this.rightReach + scrollDelta));
+            this.rightReach = Math.max(0.2, Math.min(4.0, this.rightReach + delta));
             this.targetRightStretch.set(0, 0, -this.rightReach);
         }
     }
@@ -109,32 +117,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
             });
         }
         return state;
-    }
-
-    private onKeyDown(e: KeyboardEvent): void {
-        if (e.key === '1') {
-            this.activeHand = 'left';
-            this.targetLeftStretch.set(0, 0, -this.leftReach); // Reach forward
-            this.state.hands.left.active = true;
-        }
-        if (e.key === '2') {
-            this.activeHand = 'right';
-            this.targetRightStretch.set(0, 0, -this.rightReach); // Reach forward
-            this.state.hands.right.active = true;
-        }
-    }
-
-    private onKeyUp(e: KeyboardEvent): void {
-        if (e.key === '1') {
-            this.targetLeftStretch.set(0, 0, 0);
-            this.state.hands.left.active = false;
-            if (this.activeHand === 'left') this.activeHand = null;
-        }
-        if (e.key === '2') {
-            this.targetRightStretch.set(0, 0, 0);
-            this.state.hands.right.active = false;
-            if (this.activeHand === 'right') this.activeHand = null;
-        }
     }
 
     public update(delta: number): void {

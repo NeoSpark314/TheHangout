@@ -23,6 +23,7 @@ export class InputManager implements IUpdatable {
     public gamepad: GamepadManager;
     public mobileJoystick: MobileJoystickManager;
     public xrInput: XRInputManager;
+    private _wheelDelta = 0;
 
     constructor(private context: GameContext) {
         this.keyboard = new KeyboardManager();
@@ -31,6 +32,18 @@ export class InputManager implements IUpdatable {
         this.xrInput = new XRInputManager(context);
 
         this._initMouseLook();
+        this._initWheel();
+    }
+
+    private _initWheel(): void {
+        window.addEventListener('wheel', (e) => {
+            const render = this.context.managers.render;
+            if (render && !render.isXRPresenting()) {
+                // We don't preventDefault() here to allow browser zooming/scrolling if needed,
+                // but we capture the delta for reach adjustment.
+                this._wheelDelta += -e.deltaY * 0.001;
+            }
+        }, { passive: true });
     }
 
     private _initMouseLook(): void {
@@ -108,6 +121,21 @@ export class InputManager implements IUpdatable {
     public update(delta: number, frame?: XRFrame): void {
         this.gamepad.poll(delta);
         this.xrInput.poll(frame);
+
+        const managers = this.context.managers;
+        const render = managers.render;
+        const tracking = managers.tracking;
+
+        // 0. Desktop Hand Activation (Centralized Logic)
+        if (render && !render.isXRPresenting() && tracking) {
+            tracking.setHandActive('left', this.isKeyDown('1'));
+            tracking.setHandActive('right', this.isKeyDown('2'));
+
+            if (this._wheelDelta !== 0) {
+                tracking.adjustReach(this._wheelDelta);
+                this._wheelDelta = 0;
+            }
+        }
 
         // 1. Continuous intents
         const move = this.getMovementVector();

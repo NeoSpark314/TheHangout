@@ -33,4 +33,8 @@ export interface ITrackingProvider {
     update(delta: number, frame?: XRFrame): void;
     getState(): ITrackingState;
     destroy(): void;
+
+    // Optional desktop-specific control methods
+    setHandActive?(hand: 'left' | 'right', active: boolean): void;
+    adjustReach?(delta: number): void;
 }

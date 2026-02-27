@@ -50,6 +50,18 @@ export class TrackingManager {
         };
     }
 
+    public setHandActive(hand: 'left' | 'right', active: boolean): void {
+        if (this.activeProvider && this.activeProvider.setHandActive) {
+            this.activeProvider.setHandActive(hand, active);
+        }
+    }
+
+    public adjustReach(delta: number): void {
+        if (this.activeProvider && this.activeProvider.adjustReach) {
+            this.activeProvider.adjustReach(delta);
+        }
+    }
+
     private createEmptyHandState(offsetX: number): IHandState {
         const state: IHandState = {
             active: false,
