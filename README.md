@@ -34,11 +34,10 @@ The project follows a **Clean Object-Oriented (OOP) Architecture** pattern based
 
 1.  **Dependency Injection (DI)**: Core context (`GameContext`) is explicitly passed via constructors. No hidden global singletons, making dependencies obvious and easily testable.
 2.  **Open/Closed Game Loop**: The `GameEngine` iterates over an array of dynamically injected `IUpdatable` systems. New managers or mechanics can be slotted into the frame loop without altering the engine code.
-3.  **Single Source of Truth**: Entities (like `LocalPlayer` or `PhysicsEntity`) drive the mechanics. The Rendering layer only *follows* or *interpolates* this state via distinct `EntityView` instances.
-4.  **Domain-Driven Synchronization**: Networking is a pure transport. Entities handle their own specialized events to encapsulate internal state changes.
-5.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems safely query these capabilities at runtime.
-6.  **Strictly Typed Network Contract**: All traffic utilizes explicitly typed packet payloads (`INetworkPacket.ts`) and Discriminated Unions (`IEntityState.ts`). We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
-7.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
+3.  **World-Space Uniformity**: All spatial data (Joints, Head, Hands) is processed and synchronized in **World Space**. Coordinates are only transformed into local space at the final rendering step within the `View` layer. This "Standardized World" approach eliminates double-transformation bugs, simplifies network synchronization, and ensures frame-perfect parity between local and remote representations.
+4.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems safely query these capabilities at runtime.
+5.  **Strictly Typed Network Contract**: All traffic utilizes explicitly typed packet payloads (`INetworkPacket.ts`) and Discriminated Unions (`IEntityState.ts`). We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
+6.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
 
 ## Core Systems
 
