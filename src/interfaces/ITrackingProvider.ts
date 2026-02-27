@@ -7,6 +7,7 @@ export interface IHandJointState {
 
 export interface IHandState {
     active: boolean;
+    hasJoints: boolean;
     position: IVector3;
     quaternion: IQuaternion;
     joints: IHandJointState[];
@@ -27,6 +28,8 @@ export interface ITrackingState {
 export interface ITrackingProvider {
     id: string;
     init(): void;
+    activate(): void;
+    deactivate(): void;
     update(delta: number, frame?: XRFrame): void;
     getState(): ITrackingState;
     destroy(): void;

@@ -16,7 +16,11 @@ export class TrackingManager {
     public setProvider(id: string): void {
         const provider = this.providers.get(id);
         if (provider) {
+            if (this.activeProvider && this.activeProvider !== provider) {
+                this.activeProvider.deactivate();
+            }
             this.activeProvider = provider;
+            this.activeProvider.activate();
             console.log(`[TrackingManager] Switched to provider: ${id}`);
         }
     }

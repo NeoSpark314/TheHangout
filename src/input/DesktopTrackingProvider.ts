@@ -31,16 +31,39 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
 
+    private _boundKeyDown = this.onKeyDown.bind(this);
+    private _boundKeyUp = this.onKeyUp.bind(this);
+    private _boundWheel = this.onWheel.bind(this);
+
     constructor(private context: GameContext) {
         this.state = this.createInitialState();
     }
 
-    public init(): void {
-        window.addEventListener('keydown', this.onKeyDown.bind(this));
-        window.addEventListener('keyup', this.onKeyUp.bind(this));
-        window.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    public init(): void { }
+
+    public activate(): void {
+        window.addEventListener('keydown', this._boundKeyDown);
+        window.addEventListener('keyup', this._boundKeyUp);
+        window.addEventListener('wheel', this._boundWheel, { passive: false });
 
         eventBus.on(EVENTS.INTENT_LOOK, this._lookHandler);
+    }
+
+    public deactivate(): void {
+        window.removeEventListener('keydown', this._boundKeyDown);
+        window.removeEventListener('keyup', this._boundKeyUp);
+        window.removeEventListener('wheel', this._boundWheel);
+
+        eventBus.off(EVENTS.INTENT_LOOK, this._lookHandler);
+
+        // Reset all hand states and stretches
+        this.activeHand = null;
+        this.targetLeftStretch.set(0, 0, 0);
+        this.targetRightStretch.set(0, 0, 0);
+        this.leftStretch.set(0, 0, 0);
+        this.rightStretch.set(0, 0, 0);
+        this.state.hands.left.active = false;
+        this.state.hands.right.active = false;
     }
 
     private onWheel(e: WheelEvent): void {
@@ -74,6 +97,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private createEmptyHandState(offsetX: number): IHandState {
         const state: IHandState = {
             active: false,
+            hasJoints: false,
             position: { x: offsetX, y: 0.8, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
             joints: []
@@ -179,10 +203,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     }
 
     public destroy(): void {
-        window.removeEventListener('keydown', this.onKeyDown.bind(this));
-        window.removeEventListener('keyup', this.onKeyUp.bind(this));
-        window.removeEventListener('wheel', this.onWheel.bind(this));
-
-        eventBus.off(EVENTS.INTENT_LOOK, this._lookHandler);
+        this.deactivate();
     }
 }

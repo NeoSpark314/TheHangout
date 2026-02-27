@@ -9,6 +9,7 @@ export interface IHandJointState {
 
 export interface IHandState {
     active: boolean;
+    hasJoints: boolean;
     position: IVector3;
     quaternion: IQuaternion;
     joints: IHandJointState[];
@@ -30,6 +31,7 @@ export abstract class PlayerEntity extends NetworkEntity {
         const createHandState = (offsetX: number): IHandState => {
             const state: IHandState = {
                 active: false,
+                hasJoints: false,
                 position: { x: offsetX, y: 0.8, z: 0 },
                 quaternion: { x: 0, y: 0, z: 0, w: 1 },
                 joints: []
