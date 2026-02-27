@@ -15,6 +15,10 @@ export class UIPointerSkill extends Skill {
     private mouseLine: THREE.Line;
     private mouseDot: THREE.Mesh;
 
+    // Drag state
+    private draggingHand: 'left' | 'right' | 'desktop' | null = null;
+    private dragDistance: number = 0.5;
+
     private _handlers: Array<{ event: string, handler: any }> = [];
 
     constructor() {
@@ -74,8 +78,21 @@ export class UIPointerSkill extends Skill {
             this.handlePointerClick(player, payload.hand);
         };
 
+        const onGrabStart = (payload: IHandIntentPayload) => {
+            this.handleGrabStart(player, payload.hand);
+        };
+
+        const onGrabEnd = (payload: IHandIntentPayload) => {
+            this.handleGrabEnd(player, payload.hand);
+        };
+
         eventBus.on(EVENTS.INTENT_INTERACT_START, onInteractStart);
+        eventBus.on(EVENTS.INTENT_GRAB_START, onGrabStart);
+        eventBus.on(EVENTS.INTENT_GRAB_END, onGrabEnd);
+
         this._handlers.push({ event: EVENTS.INTENT_INTERACT_START, handler: onInteractStart });
+        this._handlers.push({ event: EVENTS.INTENT_GRAB_START, handler: onGrabStart });
+        this._handlers.push({ event: EVENTS.INTENT_GRAB_END, handler: onGrabEnd });
     }
 
     public deactivate(player: LocalPlayer): void {
@@ -119,6 +136,19 @@ export class UIPointerSkill extends Skill {
                     const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
 
                     this.raycaster.set(origin, direction);
+
+                    if (this.draggingHand === hand) {
+                        // Move tablet with hand
+                        const targetPos = origin.clone().add(direction.multiplyScalar(this.dragDistance));
+                        vrUi.tablet.updateGrabbedPose(targetPos, vrUi.tablet.mesh.quaternion);
+                        line.visible = true;
+                        dot.visible = false;
+                        line.position.copy(origin);
+                        line.quaternion.copy(quat);
+                        line.scale.set(1, 1, this.dragDistance);
+                        continue;
+                    }
+
                     const hits = this.raycaster.intersectObject(tabletMesh);
 
                     if (hits.length > 0) {
@@ -164,6 +194,15 @@ export class UIPointerSkill extends Skill {
             render.camera.getWorldDirection(direction);
 
             this.raycaster.set(origin, direction);
+
+            if (this.draggingHand === 'desktop') {
+                const targetPos = origin.clone().add(direction.multiplyScalar(this.dragDistance));
+                vrUi.tablet.updateGrabbedPose(targetPos, vrUi.tablet.mesh.quaternion);
+                this.mouseDot.visible = true;
+                this.mouseDot.position.copy(targetPos);
+                return;
+            }
+
             const hits = this.raycaster.intersectObject(tabletMesh);
 
             if (hits.length > 0) {
@@ -212,6 +251,58 @@ export class UIPointerSkill extends Skill {
             const hit = hits[0];
             if (hit.uv) {
                 vrUi.tablet.ui.onPointerClick(hit.uv);
+            }
+        }
+    }
+
+    private handleGrabStart(player: LocalPlayer, hand: 'left' | 'right'): void {
+        if (this.draggingHand) return; // already dragging
+
+        const render = player.context.managers.render;
+        const vrUi = player.context.managers.vrUi;
+        if (!render || !vrUi || !vrUi.tablet) return;
+
+        const isXR = render.isXRPresenting();
+        const tabletMesh = vrUi.tablet.mesh;
+
+        let h: 'left' | 'right' | 'desktop' = 'desktop';
+
+        if (isXR) {
+            const handState = player.handStates[hand];
+            if (!handState.active) return;
+            h = hand;
+
+            const origin = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+            const quat = new THREE.Quaternion(handState.quaternion.x, handState.quaternion.y, handState.quaternion.z, handState.quaternion.w);
+            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+
+            this.raycaster.set(origin, direction);
+        } else {
+            const origin = new THREE.Vector3();
+            const direction = new THREE.Vector3(0, 0, -1);
+            render.camera.getWorldPosition(origin);
+            render.camera.getWorldDirection(direction);
+            this.raycaster.set(origin, direction);
+        }
+
+        const hits = this.raycaster.intersectObject(tabletMesh);
+        if (hits.length > 0) {
+            this.draggingHand = h;
+            this.dragDistance = hits[0].distance;
+            vrUi.tablet.onGrab(player.id, hand);
+        }
+    }
+
+    private handleGrabEnd(player: LocalPlayer, hand: 'left' | 'right'): void {
+        const render = player.context.managers.render;
+        const vrUi = player.context.managers.vrUi;
+        const isXR = render?.isXRPresenting();
+
+        const h = isXR ? hand : 'desktop';
+        if (this.draggingHand === h) {
+            this.draggingHand = null;
+            if (vrUi && vrUi.tablet) {
+                vrUi.tablet.onRelease();
             }
         }
     }

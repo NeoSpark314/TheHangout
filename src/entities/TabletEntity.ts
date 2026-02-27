@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { IGrabbable } from '../interfaces/IGrabbable';
+import { IInteractable } from '../interfaces/IInteractable';
+import { IInteractionEvent } from '../interfaces/IInteractionEvent';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { CanvasUI } from '../utils/canvasui';
 
-export class TabletEntity implements IGrabbable {
+export class TabletEntity implements IGrabbable, IInteractable {
     public id: string;
     public type: string = 'TABLET';
     public isAuthority: boolean = true;
@@ -16,20 +18,22 @@ export class TabletEntity implements IGrabbable {
     public mesh: THREE.Mesh;
     public ui: CanvasUI;
 
+    public isRelative: boolean = true;
+    public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.2, -0.4);
+
     private context: GameContext;
     private position: THREE.Vector3;
     private quaternion: THREE.Quaternion;
+
+    private frames: number = 0;
 
     constructor(context: GameContext, id: string) {
         this.context = context;
         this.id = id;
 
-        // Spawn slightly in front of the center
-        this.position = new THREE.Vector3(0, 1.2, -0.6);
+        // Initial positions will be overridden by relative tracking in update()
+        this.position = new THREE.Vector3();
         this.quaternion = new THREE.Quaternion();
-
-        // Tilt slightly upwards
-        this.quaternion.setFromEuler(new THREE.Euler(-Math.PI * 0.15, 0, 0));
 
         // Create Canvas UI
         // Resolution 1024x1024, physical size 0.4x0.4 meters
@@ -61,16 +65,51 @@ export class TabletEntity implements IGrabbable {
     }
 
     public update(delta: number): void {
+        this.frames++;
+        if (this.frames < 5) {
+            this.ui.markDirty();
+        }
+
+        if (this.isRelative && this.context.localPlayer && 'headState' in this.context.localPlayer) {
+            const head = (this.context.localPlayer as any).headState;
+            const tracking = this.context.managers.tracking.getState();
+            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
+
+            this.position.copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
+
+            const tiltQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.15, 0, 0));
+            this.quaternion.copy(yawQuat).multiply(tiltQuat);
+
+            this.mesh.position.copy(this.position);
+            this.mesh.quaternion.copy(this.quaternion);
+        }
+
         this.ui.update();
     }
+
+    // --- IInteractable ---
+    public onHoverEnter(playerId: string): void { }
+    public onHoverExit(playerId: string): void { }
+    public onInteraction(event: IInteractionEvent): void { }
 
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         this.heldBy = playerId;
+        this.isRelative = false;
     }
 
     public onRelease(velocity?: IVector3): void {
         this.heldBy = null;
+        this.isRelative = true;
+
+        if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
+            const head = (this.context.localPlayer as any).headState;
+            const tracking = this.context.managers.tracking.getState();
+            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
+            const invYawQuat = yawQuat.clone().invert();
+
+            this.relativePosition.copy(this.position).sub({ x: head.position.x, y: head.position.y, z: head.position.z }).applyQuaternion(invYawQuat);
+        }
     }
 
     public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {

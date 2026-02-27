@@ -55,7 +55,16 @@ export class VRUIManager implements IUpdatable {
             systemContainer.addChild(voiceBtn);
 
             const leaveBtn = new UIButton("Leave Room", 574, 150, 400, 80, () => {
-                location.reload(); // Simple approach for now
+                const render = this.context.managers.render;
+                if (render && render.isXRPresenting()) {
+                    render.getXRSession()?.end().then(() => {
+                        location.reload();
+                    }).catch(() => {
+                        location.reload();
+                    });
+                } else {
+                    location.reload(); // Simple approach for now
+                }
             });
             leaveBtn.backgroundColor = 'rgba(200, 40, 40, 0.8)';
             leaveBtn.hoverColor = 'rgba(255, 60, 60, 0.9)';

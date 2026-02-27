@@ -49,13 +49,14 @@ export class InteractionSystem {
         for (const entity of this.context.managers.entity.entities.values()) {
             // Check if it's grabbable, interactable and NOT currently held
             if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
-                // Get world position from view if possible
-                const view = (entity as any).view;
-                if (!view || !view.mesh) continue;
+                // Get world position from view or direct mesh
+                let mesh = (entity as any).view?.mesh;
+                if (!mesh && (entity as any).mesh) mesh = (entity as any).mesh;
+                if (!mesh) continue;
 
                 // Ensure the world matrix is up to date for this frame
-                view.mesh.updateMatrixWorld(true);
-                view.mesh.getWorldPosition(this.tempVec);
+                mesh.updateMatrixWorld(true);
+                mesh.getWorldPosition(this.tempVec);
                 const dist = point.distanceTo(this.tempVec);
 
                 if (dist < minDist) {
