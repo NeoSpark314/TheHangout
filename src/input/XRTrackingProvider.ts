@@ -64,21 +64,28 @@ export class XRTrackingProvider implements ITrackingProvider {
         this.state.hands.left.active = false;
         this.state.hands.right.active = false;
 
+        let controllerIndex = 0;
         for (const source of session.inputSources) {
             if (source.handedness === 'left') {
+                this.leftControllerIndex = controllerIndex;
                 this.state.hands.left.active = true;
             } else if (source.handedness === 'right') {
+                this.rightControllerIndex = controllerIndex;
                 this.state.hands.right.active = true;
+            }
+
+            // Only increment controllerIndex for sources that Three.js treats as "controllers" 
+            if (source.targetRayMode === 'tracked-pointer' || source.targetRayMode === 'screen' || source.hand) {
+                controllerIndex++;
             }
         }
 
-        // 3. Update Poses and Joints via XRSystem (Directly from XRFrame)
-        xr.updateHandPosesFromXRFrame(
+        // 3. Update Poses and Joints via XRSystem
+        xr.updateHandPosesFromControllers(
             render,
-            xrFrame,
-            referenceSpace,
-            session,
-            this.state.hands
+            this.state.hands,
+            this.leftControllerIndex,
+            this.rightControllerIndex
         );
 
         xr.updateJointsFromXRFrame(
