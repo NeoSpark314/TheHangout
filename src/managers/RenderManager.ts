@@ -16,6 +16,8 @@ export class RenderManager {
     public isMenuMode: boolean = true;
     private menuRotation: number = 0;
     public controllers: THREE.Group[] = [];
+    public controllerGrips: THREE.Group[] = [];
+    public hands: THREE.Group[] = [];
     private raycaster: THREE.Raycaster = new THREE.Raycaster();
 
     constructor(private context: GameContext) {
@@ -151,10 +153,25 @@ export class RenderManager {
 
     public setupControllers(): void {
         this.controllers = [];
-        for (let i = 0; i < 2; i++) {
+        this.controllerGrips = [];
+        this.hands = [];
+
+        // Support up to 4 input sources (typical for VR: HandL, HandR, ControllerL, ControllerR)
+        for (let i = 0; i < 4; i++) {
+            // 1. Target Ray (for pointers)
             const controller = this.renderer.xr.getController(i);
             this.cameraGroup.add(controller);
             this.controllers.push(controller);
+
+            // 2. Grip (for grab/carry)
+            const grip = this.renderer.xr.getControllerGrip(i);
+            this.cameraGroup.add(grip);
+            this.controllerGrips.push(grip);
+
+            // 3. Hand (for skeletal tracking)
+            const hand = this.renderer.xr.getHand(i);
+            this.cameraGroup.add(hand);
+            this.hands.push(hand);
 
             controller.addEventListener('selectstart', () => {
                 console.log(`Controller ${i} triggered selectstart`);
@@ -187,7 +204,15 @@ export class RenderManager {
     }
 
     public getXRController(index: number): THREE.Group {
-        return this.renderer.xr.getController(index);
+        return this.controllers[index];
+    }
+
+    public getXRControllerGrip(index: number): THREE.Group {
+        return this.controllerGrips[index];
+    }
+
+    public getXRHand(index: number): THREE.Group {
+        return this.hands[index];
     }
 
     public onWindowResize(): void {

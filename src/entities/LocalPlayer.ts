@@ -88,22 +88,23 @@ export class LocalPlayer extends PlayerEntity {
         const render = managers.render;
         const xr = managers.xr;
 
-        managers.tracking.update(delta, frame);
-
         for (const skill of this.skills) {
             if (skill.isAlwaysActive || skill === this.activeSkill) {
                 skill.update(delta, this, managers);
             }
         }
 
-        // Calculate world pose from our own state (Source of Truth)
         // 1. Ensure camera world matrix is up to date with ANY movement that happened this frame (from Skills).
-        // This prevents the "stale frame" jitter where poses are relative to the previous origin.
+        // This is CRITICAL for RenderManager.camera.getWorldPose() and tracking.update() to return
+        // accurate world coordinates relative to the current frame's origin.
         if (render.cameraGroup) {
             render.cameraGroup.position.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             render.cameraGroup.quaternion.set(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
             render.cameraGroup.updateMatrixWorld(true);
         }
+
+        // 2. Poll tracking data NOW, using the fresh matrix.
+        managers.tracking.update(delta, frame);
 
         const trackingState = managers.tracking.getState();
         const worldHeadPos = trackingState.head.position;

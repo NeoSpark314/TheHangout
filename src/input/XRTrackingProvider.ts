@@ -6,9 +6,6 @@ import { IHandState } from '../entities/PlayerEntity';
 export class XRTrackingProvider implements ITrackingProvider {
     public id = 'xr';
     private state: ITrackingState;
-    private leftControllerIndex: number = 0;
-    private rightControllerIndex: number = 1;
-
     constructor(private context: GameContext) {
         this.state = this.createInitialState();
     }
@@ -57,44 +54,55 @@ export class XRTrackingProvider implements ITrackingProvider {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !xrFrame || !referenceSpace) return;
 
-        // 1. Head Tracking (Viewer Pose)
+        // 1. Head Tracking (Viewer Pose) - delegating to XRSystem which uses RenderManager.camera
         this.state.head = xr.getViewerWorldPose(render, xrFrame, referenceSpace);
 
-        // 2. Poll Input Sources for Controllers/Hands
+        // 2. Clear previous active states
         this.state.hands.left.active = false;
         this.state.hands.right.active = false;
 
-        let controllerIndex = 0;
-        for (const source of session.inputSources) {
-            if (source.handedness === 'left') {
-                this.leftControllerIndex = controllerIndex;
-                this.state.hands.left.active = true;
-            } else if (source.handedness === 'right') {
-                this.rightControllerIndex = controllerIndex;
-                this.state.hands.right.active = true;
-            }
+        // 3. Poll Input Sources and map them to Three.js XR objects
+        for (let i = 0; i < session.inputSources.length; i++) {
+            const source = session.inputSources[i];
+            const handedness = source.handedness;
+            if (handedness !== 'left' && handedness !== 'right') continue;
 
-            // Only increment controllerIndex for sources that Three.js treats as "controllers" 
-            if (source.targetRayMode === 'tracked-pointer' || source.targetRayMode === 'screen' || source.hand) {
-                controllerIndex++;
+            const handState = this.state.hands[handedness];
+            handState.active = true;
+
+            // Source of Truth for base pose: Three.js Hand, Grip or Controller object
+            // These objects are automatically synced by Three.js to the correct space.
+            const grip = render.getXRControllerGrip(i);
+            const targetRay = render.getXRController(i);
+            const handObj = render.getXRHand(i);
+
+            // Accuracy Fix: Prefer hand object (wrist) if skeletal tracking is active
+            const baseObject = source.hand ? handObj : (source.gripSpace ? grip : targetRay);
+
+            const basePose = xr.getWorldPose(baseObject);
+            handState.position = basePose.position;
+            handState.quaternion = basePose.quaternion;
+
+            // 4. Update Hand Joints if hand tracking is available
+            if (source.hand && handObj.children.length > 0) {
+                // Three.js Hand object contains 25 joints as children
+                // We map them directly to our simplified joint array
+                for (let j = 0; j < 25; j++) {
+                    const jointObj = handObj.children[j];
+                    if (jointObj) {
+                        const jointPose = xr.getWorldPose(jointObj);
+                        handState.joints[j].position = jointPose.position;
+                        handState.joints[j].quaternion = jointPose.quaternion;
+                    }
+                }
+            } else {
+                // Reset joints if no skeletal data to prevent floating bones
+                for (let j = 0; j < 25; j++) {
+                    handState.joints[j].position = { x: 0, y: 0, z: 0 };
+                    handState.joints[j].quaternion = { x: 0, y: 0, z: 0, w: 1 };
+                }
             }
         }
-
-        // 3. Update Poses and Joints via XRSystem
-        xr.updateHandPosesFromControllers(
-            render,
-            this.state.hands,
-            this.leftControllerIndex,
-            this.rightControllerIndex
-        );
-
-        xr.updateJointsFromXRFrame(
-            render,
-            xrFrame,
-            referenceSpace,
-            session,
-            this.state.hands
-        );
     }
 
     public getState(): ITrackingState {
