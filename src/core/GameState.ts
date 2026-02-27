@@ -15,6 +15,7 @@ import type { AnimationSystem } from '../systems/AnimationSystem';
 import type { AssetManager } from '../managers/AssetManager';
 import type { DrawingManager } from '../managers/DrawingManager';
 import type { TrackingManager } from '../managers/TrackingManager';
+import type { VRUIManager } from '../managers/VRUIManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
 import type { SpectatorEntity } from '../entities/SpectatorEntity';
 
@@ -48,6 +49,7 @@ export interface IManagers {
     assets: AssetManager;
     drawing: DrawingManager;
     tracking: TrackingManager;
+    vrUi: VRUIManager;
 }
 
 /**

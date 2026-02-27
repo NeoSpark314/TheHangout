@@ -6,6 +6,7 @@ import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
+import { UIPointerSkill } from '../skills/UIPointerSkill';
 import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import eventBus from '../core/EventBus';
@@ -58,6 +59,9 @@ export class LocalPlayer extends PlayerEntity {
         const grab = new GrabSkill();
         this.addSkill(grab);
         this.setActiveSkill('grab');
+
+        const uiPointer = new UIPointerSkill();
+        this.addSkill(uiPointer);
     }
 
     public addSkill(skill: Skill): void {
