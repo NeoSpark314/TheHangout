@@ -45,7 +45,7 @@ export class GrabSkill extends Skill {
                 const offsetPos = new THREE.Vector3();
                 const offsetQuat = new THREE.Quaternion();
 
-                if (!nearest.snapToHand && mesh) {
+                if (mesh) {
                     mesh.updateMatrixWorld(true);
                     const objPos = new THREE.Vector3();
                     const objQuat = new THREE.Quaternion();
@@ -139,7 +139,7 @@ export class GrabSkill extends Skill {
 
                 held.entity.updateGrabbedPose(
                     { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                    targetQuat
+                    { x: targetQuat.x, y: targetQuat.y, z: targetQuat.z, w: targetQuat.w }
                 );
 
                 this._recordPosition(hand, handPos);

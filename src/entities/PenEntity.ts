@@ -15,7 +15,6 @@ import * as THREE from 'three';
  */
 export class PenEntity extends NetworkEntity implements IGrabbable, IInteractable {
     public isGrabbable = true;
-    public snapToHand = true;
     public heldBy: string | null = null;
     public view: IView<any> | null = null;
 
@@ -38,7 +37,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
 
         // Use the player's avatar color for drawing
         if (this.context.localPlayer && playerId === this.context.localPlayer.id) {
-            this.color = this.context.avatarConfig.color;
+            this.color = this.context.avatarConfig?.color || 0x00ffff;
         }
     }
 
@@ -49,8 +48,8 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
     }
 
     public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
-        this.position = { ...position };
-        this.quaternion = { ...quaternion };
+        this.position = { x: position.x, y: position.y, z: position.z };
+        this.quaternion = { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w };
     }
 
     // --- IInteractable ---

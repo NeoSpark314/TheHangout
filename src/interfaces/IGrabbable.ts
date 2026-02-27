@@ -8,12 +8,6 @@ export interface IGrabbable {
     readonly isGrabbable: boolean;
     readonly heldBy: string | null;
 
-    /**
-     * If true, grabbing the object ignores relative grip offsets and perfectly snaps 
-     * the object's origin to the hand's tracking origin. (Useful for tools like Pens)
-     */
-    readonly snapToHand?: boolean;
-
     onGrab(playerId: string, hand: 'left' | 'right'): void;
     onRelease(velocity?: IVector3): void;
 
