@@ -120,19 +120,9 @@ export class GrabSkill extends Skill {
                 let result: { interactable: IInteractable, distance: number } | null = null;
                 const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
 
-                // Logic: If hand is active (VR or Desktop Stretch), always use proximity
+                // Unified logic: only use proximity check if the hand is active (extended/tracked)
                 if (handState.active) {
                     result = managers.interaction.findNearestInteractable(targetPos, this.grabRadius);
-                }
-                // Fallback: If on Desktop and right hand is NOT active, use camera raycast
-                else if (!managers.render.isXRPresenting() && hand === 'right') {
-                    const origin = new THREE.Vector3();
-                    const direction = new THREE.Vector3();
-                    managers.render.camera.getWorldPosition(origin);
-                    managers.render.camera.getWorldDirection(direction);
-
-                    const hit = managers.interaction.findInteractableUnderRay({ origin, direction }, 4.0);
-                    if (hit) result = { interactable: hit, distance: 0 };
                 }
 
                 this._updateHighlight(player.id, hand, result?.interactable || null);

@@ -41,5 +41,16 @@ export default defineConfig({
                 ws: true // Important for Relay websockets
             }
         }
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    three: ['three'],
+                    peerjs: ['peerjs'],
+                    rapier: ['@dimforge/rapier3d-compat']
+                }
+            }
+        }
     }
 })
