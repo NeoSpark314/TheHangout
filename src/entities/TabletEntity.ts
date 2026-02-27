@@ -95,27 +95,32 @@ export class TabletEntity implements IGrabbable, IInteractable {
     }
 
     public update(delta: number): void {
-        if (this.isRelative && this.context.localPlayer && 'headState' in this.context.localPlayer) {
-            const head = (this.context.localPlayer as any).headState;
+        const lp = this.context.localPlayer as any;
+        if (this.isRelative && lp && lp.headState) {
+            const head = lp.headState;
             const tracking = this.context.managers.tracking.getState();
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
 
+            const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
+            const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(this.relativeQuaternion);
+
             if (!this.hasSpawned) {
-                // **Deterministic Spawn**: No more heuristics or "waiting for movement".
-                // We lock the world position based on the player's head state immediately.
-                this.position.copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
-                this.quaternion.copy(yawQuat).multiply(this.relativeQuaternion);
+                // **Deterministic Spawn**: No hacks, no heuristics. 
+                // We lock to the player's reported world transform on the very first frame they exist.
+                this.position.copy(idealPos);
+                this.quaternion.copy(idealQuat);
 
                 this.mesh.position.copy(this.position);
                 this.mesh.quaternion.copy(this.quaternion);
                 this.mesh.updateMatrixWorld(true);
 
                 this.hasSpawned = true;
-                return; // Skip interpolation until spawned
-            }
 
-            const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
-            const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(this.relativeQuaternion);
+                console.log(`[TabletEntity] Deterministic Spawn:`);
+                console.log(` - Head: [${head.position.x.toFixed(2)}, ${head.position.y.toFixed(2)}, ${head.position.z.toFixed(2)}]`);
+                console.log(` - Tablet: [${this.position.x.toFixed(2)}, ${this.position.y.toFixed(2)}, ${this.position.z.toFixed(2)}]`);
+                return;
+            }
 
             if (!this.isRecentering) {
                 const dist = this.position.distanceTo(idealPos);
@@ -125,6 +130,8 @@ export class TabletEntity implements IGrabbable, IInteractable {
 
                 if (dist > deadzoneDist || angleDist > deadzoneAngle) {
                     this.isRecentering = true;
+                    // Log once when we start moving to follow
+                    console.log(`[TabletEntity] Moving to follow player...`);
                 }
             }
 

@@ -74,12 +74,9 @@ export class AnimationSystem implements IUpdatable {
         // Desktop / Mobile Procedural Animation
         this._bobTime += this._isMoving ? delta * 15 : 0;
 
-        // Update head to local space (RenderManager translates camera relative to xrOrigin)
+        // Calculate local head pose for hand math (Local relative to xrOrigin)
         const headBobY = this._isMoving ? Math.sin(this._bobTime) * 0.05 : 0;
-        this.localPlayer.headState.position = { x: 0, y: this.localPlayer.headHeight + headBobY, z: 0 };
-
-        // Local head information (relative to xrOrigin)
-        const headLocalPos = new THREE.Vector3(0, this.localPlayer.headHeight + headBobY, 0);
+        const headLocalPos = new THREE.Vector3(0, (this.localPlayer as any).headHeight + headBobY, 0);
         // We use camera's local rotation directly. Since camera is parented to cameraGroup (which is at xrOrigin),
         // camera.quaternion is our local Look Rotation.
         const headLocalRot = render.camera.quaternion.clone();
