@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { isTrueHMD } from '../utils/DeviceUtils.js';
 import { GameContext } from '../core/GameState';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
 
 export class RenderManager {
     public container: HTMLElement;
@@ -58,6 +60,14 @@ export class RenderManager {
 
         // WebXR Enable
         this.renderer.xr.enabled = true;
+        this.renderer.xr.addEventListener('sessionstart', () => {
+            console.log('[RenderManager] XR Session Started');
+            eventBus.emit(EVENTS.XR_SESSION_STARTED);
+        });
+        this.renderer.xr.addEventListener('sessionend', () => {
+            console.log('[RenderManager] XR Session Ended');
+            eventBus.emit(EVENTS.XR_SESSION_ENDED);
+        });
 
         this.renderer.domElement.style.display = 'block';
         this.container.appendChild(this.renderer.domElement);

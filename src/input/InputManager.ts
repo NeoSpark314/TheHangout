@@ -146,35 +146,16 @@ export class InputManager implements IUpdatable {
         if (render && render.isXRPresenting()) {
             const session = render.getXRSession();
             if (session) {
-                // Emit Head Pose
-                const camPos = new THREE.Vector3();
-                const camQuat = new THREE.Quaternion();
-                render.camera.getWorldPosition(camPos);
-                render.camera.getWorldQuaternion(camQuat);
-                eventBus.emit(EVENTS.INTENT_XR_HEAD_TRACKED, {
-                    position: { x: camPos.x, y: camPos.y, z: camPos.z },
-                    quaternion: { x: camQuat.x, y: camQuat.y, z: camQuat.z, w: camQuat.w }
-                } as IXRHeadTrackedPayload);
-
-                // Process Controllers
+                // Process Controllers for triggers/buttons only
                 for (let i = 0; i < session.inputSources.length; i++) {
                     const source = session.inputSources[i];
                     if (source.handedness !== 'left' && source.handedness !== 'right') continue;
 
-                    const pose = xr.getControllerWorldPose(render, i);
                     const isSqueezing = (source.gamepad?.buttons[1]?.value || 0) > 0.5;
                     const triggerValue = source.gamepad?.buttons[0]?.value || 0;
                     const isInteracting = triggerValue > 0.5;
 
                     currentStates[source.handedness] = { isSqueezing, isInteracting, triggerValue };
-
-                    eventBus.emit(EVENTS.INTENT_XR_HAND_TRACKED, {
-                        hand: source.handedness,
-                        position: pose.position,
-                        quaternion: pose.quaternion,
-                        isSqueezing,
-                        triggerValue
-                    } as IXRHandTrackedPayload);
                 }
             }
         } else {

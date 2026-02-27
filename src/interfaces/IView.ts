@@ -8,7 +8,7 @@ export interface IView<TState> {
     setColor(color: string | number): void;
     setName(name: string): void;
     attachVoiceStream(stream: MediaStream): void;
-    attachAudioChunk(base64Chunk: string): void;
+    attachAudioChunk(data: { chunk: string, isHeader: boolean } | string): void;
     getAudioLevel(): number;
     addToScene(scene: THREE.Scene): void;
     addToInteractionGroup(group: THREE.Group): void;

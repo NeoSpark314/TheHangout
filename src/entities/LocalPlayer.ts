@@ -94,40 +94,28 @@ export class LocalPlayer extends PlayerEntity {
             }
         }
 
-        this.updateVRHands(frame);
+        managers.tracking.update(delta, frame);
 
         // Calculate world pose from our own state (Source of Truth)
-        let worldHeadPos: IVector3;
-        let worldHeadQuat: IQuaternion;
-        let bodyYaw: number;
-
-        if (render.isXRPresenting()) {
-            // In VR, the camera world pose IS the reference for our head
-            const headPose = xr.getCameraWorldPose(render.camera);
-            worldHeadPos = headPose.position;
-            worldHeadQuat = headPose.quaternion;
-            bodyYaw = headPose.yaw;
-        } else {
-            // In Desktop, our internal state drives the world pose
-            const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
-            const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
-
-            const localHeadPos = new THREE.Vector3(this.headState.position.x, this.headState.position.y, this.headState.position.z);
-            const localHeadQuat = new THREE.Quaternion(this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w);
-
-            const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
-            const worldQuat = originQuat.clone().multiply(localHeadQuat);
-
-            worldHeadPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
-            worldHeadQuat = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
-
-            const euler = new THREE.Euler().setFromQuaternion(originQuat, 'YXZ');
-            bodyYaw = euler.y;
+        // 1. Ensure camera world matrix is up to date with ANY movement that happened this frame (from Skills).
+        // This prevents the "stale frame" jitter where poses are relative to the previous origin.
+        if (render.cameraGroup) {
+            render.cameraGroup.position.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+            render.cameraGroup.quaternion.set(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
+            render.cameraGroup.updateMatrixWorld(true);
         }
+
+        const trackingState = managers.tracking.getState();
+        const worldHeadPos = trackingState.head.position;
+        const worldHeadQuat = trackingState.head.quaternion;
+        const bodyYaw = trackingState.head.yaw;
 
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);
         const localHeadQuat = bodyQuat.clone().invert().multiply(headQuatObj);
+
+        // 2. Deep copy tracking data into our own persistent handStates to avoid state pollution
+        this.syncHandStates(trackingState.hands);
 
         xr.transformHandsToAvatarSpace(
             this.xrOrigin,
@@ -154,72 +142,45 @@ export class LocalPlayer extends PlayerEntity {
         eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
     }
 
-    private updateVRHands(frame?: XRFrame): void {
-        const managers = this.context.managers;
-        const render = managers.render;
-        const xr = managers.xr;
+    // Removed updateVRHands — handled by TrackingManager and its Providers
 
-        if (!render.isXRPresenting()) {
-            return; // AnimationSystem drives desktop hands
-        }
+    private syncHandStates(source: { left: IHandState, right: IHandState }): void {
+        const copyHand = (src: IHandState, dst: IHandState) => {
+            dst.active = src.active;
+            dst.position.x = src.position.x;
+            dst.position.y = src.position.y;
+            dst.position.z = src.position.z;
+            dst.quaternion.x = src.quaternion.x;
+            dst.quaternion.y = src.quaternion.y;
+            dst.quaternion.z = src.quaternion.z;
+            dst.quaternion.w = src.quaternion.w;
 
-        const session = render.getXRSession();
-        const xrFrame = frame || render.getXRFrame();
-        const referenceSpace = render.getXRReferenceSpace();
-        if (!session || !xrFrame || !referenceSpace) return;
-
-        // Reset active state then poll
-        this.handStates.left.active = false;
-        this.handStates.right.active = false;
-
-        let sourceIndex = 0;
-        for (const source of session.inputSources) {
-            if (source.handedness === 'left') {
-                this._leftControllerIndex = sourceIndex;
-                this.handStates.left.active = true;
+            // Critical: Always sync joints if source has them, otherwise reset
+            // This prevents the "stale joint" jitter if hand tracking is toggled
+            for (let i = 0; i < 25; i++) {
+                const sJ = src.joints[i];
+                const dJ = dst.joints[i];
+                dJ.position.x = sJ.position.x;
+                dJ.position.y = sJ.position.y;
+                dJ.position.z = sJ.position.z;
+                dJ.quaternion.x = sJ.quaternion.x;
+                dJ.quaternion.y = sJ.quaternion.y;
+                dJ.quaternion.z = sJ.quaternion.z;
+                dJ.quaternion.w = sJ.quaternion.w;
             }
-            if (source.handedness === 'right') {
-                this._rightControllerIndex = sourceIndex;
-                this.handStates.right.active = true;
-            }
-            sourceIndex++;
-        }
-
-        xr.updateHandPosesFromControllers(
-            render,
-            this.handStates,
-            this._leftControllerIndex,
-            this._rightControllerIndex
-        );
-
-        xr.updateJointsFromXRFrame(xrFrame, referenceSpace, session, this.handStates);
+        };
+        copyHand(source.left, this.handStates.left);
+        copyHand(source.right, this.handStates.right);
     }
 
     public getNetworkState(): IPlayerEntityState {
         const managers = this.context.managers;
         const render = managers.render;
 
-        let worldHeadPos: IVector3;
-        let worldHeadQuat: IQuaternion;
-        let bodyYaw: number;
-
-        if (render.isXRPresenting()) {
-            const headPose = managers.xr.getCameraWorldPose(render.camera);
-            worldHeadPos = headPose.position;
-            worldHeadQuat = headPose.quaternion;
-            bodyYaw = headPose.yaw;
-        } else {
-            const originPos = new THREE.Vector3(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
-            const originQuat = new THREE.Quaternion(this.xrOrigin.quaternion.x, this.xrOrigin.quaternion.y, this.xrOrigin.quaternion.z, this.xrOrigin.quaternion.w);
-            const localHeadPos = new THREE.Vector3(this.headState.position.x, this.headState.position.y, this.headState.position.z);
-            const localHeadQuat = new THREE.Quaternion(this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w);
-            const worldPos = localHeadPos.applyQuaternion(originQuat).add(originPos);
-            const worldQuat = originQuat.clone().multiply(localHeadQuat);
-            worldHeadPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
-            worldHeadQuat = { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w };
-            const euler = new THREE.Euler().setFromQuaternion(originQuat, 'YXZ');
-            bodyYaw = euler.y;
-        }
+        const trackingState = managers.tracking.getState();
+        const worldHeadPos = trackingState.head.position;
+        const worldHeadQuat = trackingState.head.quaternion;
+        const bodyYaw = trackingState.head.yaw;
 
         const bodyQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, bodyYaw, 0, 'YXZ'));
         const headQuatObj = new THREE.Quaternion(worldHeadQuat.x, worldHeadQuat.y, worldHeadQuat.z, worldHeadQuat.w);

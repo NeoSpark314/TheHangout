@@ -15,6 +15,9 @@ import { InteractionSystem } from '../systems/InteractionSystem';
 import { XRSystem } from '../systems/XRSystem';
 import { AssetManager } from '../managers/AssetManager';
 import { DrawingManager } from '../managers/DrawingManager';
+import { TrackingManager } from '../managers/TrackingManager';
+import { XRTrackingProvider } from '../input/XRTrackingProvider';
+import { DesktopTrackingProvider } from '../input/DesktopTrackingProvider';
 import { AnimationSystem } from '../systems/AnimationSystem';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -89,6 +92,13 @@ export class App {
         this.context.setManager('animation', new AnimationSystem());
         this.context.setManager('xr', new XRSystem());
         this.context.setManager('interaction', new InteractionSystem(this.context));
+
+        // Tracking Initialization
+        const tracking = new TrackingManager(this.context);
+        tracking.registerProvider(new XRTrackingProvider(this.context));
+        tracking.registerProvider(new DesktopTrackingProvider(this.context));
+        tracking.setProvider('desktop'); // Default
+        this.context.setManager('tracking', tracking);
     }
 
     private setupGlobalEventListeners(): void {
@@ -102,6 +112,14 @@ export class App {
         };
         window.addEventListener('pointerdown', resumeAudio);
         window.addEventListener('keydown', resumeAudio);
+
+        // Tracking Provider Switching
+        eventBus.on(EVENTS.XR_SESSION_STARTED, () => {
+            managers.tracking.setProvider('xr');
+        });
+        eventBus.on(EVENTS.XR_SESSION_ENDED, () => {
+            managers.tracking.setProvider('desktop');
+        });
 
         // HUD/Camera integration
         if (managers.render && managers.hud) {
