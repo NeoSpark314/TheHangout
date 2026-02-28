@@ -246,19 +246,20 @@ export class InputManager implements IUpdatable {
         if (source.hand && handState && (source.handedness === 'left' || source.handedness === 'right')) {
             const hand = source.handedness;
             const latch = this.gestureLatch[hand];
+            const g = INPUT_CONFIG.GESTURE;
 
             const pinchDist = GestureUtils.getPinchDistance(handState);
-            const pinchOn = pinchDist !== null && pinchDist < 0.035;
-            const pinchOff = pinchDist === null || pinchDist > 0.05;
+            const pinchOn = pinchDist !== null && pinchDist < g.PINCH_ON_DISTANCE;
+            const pinchOff = pinchDist === null || pinchDist > g.PINCH_OFF_DISTANCE;
             if (latch.pinch) {
                 if (pinchOff) latch.pinch = false;
             } else if (pinchOn) {
                 latch.pinch = true;
             }
 
-            const curlCount = GestureUtils.getFistCurlCount(handState, 0.095);
-            const fistOn = curlCount >= 3;
-            const fistOff = curlCount <= 1;
+            const curlCount = GestureUtils.getFistCurlCount(handState, g.FIST_CURL_THRESHOLD);
+            const fistOn = curlCount >= g.FIST_ON_CURL_COUNT;
+            const fistOff = curlCount <= g.FIST_OFF_CURL_COUNT;
             if (latch.fist) {
                 if (fistOff) latch.fist = false;
             } else if (fistOn) {

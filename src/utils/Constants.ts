@@ -59,5 +59,12 @@ export const PACKET_TYPES = {
 export const INPUT_CONFIG = {
     GAMEPAD_LOOK_SENSITIVITY: 1.5,
     MOBILE_LOOK_SENSITIVITY: 0.6,
-    DEADZONE: 0.15
+    DEADZONE: 0.15,
+    GESTURE: {
+        PINCH_ON_DISTANCE: 0.035,   // meters
+        PINCH_OFF_DISTANCE: 0.05,   // meters
+        FIST_CURL_THRESHOLD: 0.095, // meters (tip-to-wrist)
+        FIST_ON_CURL_COUNT: 3,
+        FIST_OFF_CURL_COUNT: 1
+    }
 };
