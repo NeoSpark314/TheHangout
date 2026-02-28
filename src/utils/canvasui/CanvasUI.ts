@@ -20,6 +20,7 @@ export class CanvasUI {
         this.texture.minFilter = THREE.LinearFilter;
         this.texture.magFilter = THREE.LinearFilter;
         this.texture.generateMipmaps = false;
+        this.texture.colorSpace = THREE.SRGBColorSpace;
 
         this.root = new UIElement(0, 0, width, height);
         this.root.backgroundColor = 'transparent'; // Let children draw

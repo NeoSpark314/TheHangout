@@ -54,7 +54,8 @@ export class TabletEntity implements IGrabbable, IInteractable {
         const material = new THREE.MeshBasicMaterial({
             map: this.ui.texture,
             transparent: true,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            fog: false
         });
 
         this.mesh = new THREE.Mesh(geometry, material);
