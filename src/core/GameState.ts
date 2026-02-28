@@ -76,6 +76,7 @@ export class GameContext {
     };
 
     public localPlayer: LocalPlayer | SpectatorEntity | null = null;
+    public isMenuOpen: boolean = false;
 
     private _managers: Partial<IManagers> = {};
 

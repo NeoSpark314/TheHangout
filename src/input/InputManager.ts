@@ -138,10 +138,11 @@ export class InputManager implements IUpdatable {
         }
 
         // 1. Continuous intents
-        const move = this.getMovementVector();
+        const isMenuOpen = this.context.isMenuOpen;
+        const move = isMenuOpen ? { x: 0, y: 0 } : this.getMovementVector();
         eventBus.emit(EVENTS.INTENT_MOVE, { direction: move } as IMoveIntentPayload);
 
-        const look = this.getLookVector();
+        const look = isMenuOpen ? { x: 0, y: 0 } : this.getLookVector();
         if (look.x !== 0 || look.y !== 0) {
             eventBus.emit(EVENTS.INTENT_LOOK, { delta: look } as ILookIntentPayload);
         }

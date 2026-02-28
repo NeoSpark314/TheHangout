@@ -12,7 +12,6 @@ import * as THREE from 'three';
 export class VRUIManager implements IUpdatable {
     public tablet: TabletEntity | null = null;
     private tabPanel: UITabPanel | null = null;
-    private isMenuOpen: boolean = false;
     private overlayContainer: HTMLDivElement | null = null;
 
     constructor(private context: GameContext) { }
@@ -56,8 +55,8 @@ export class VRUIManager implements IUpdatable {
     }
 
     private toggle2DMenu(): void {
-        this.isMenuOpen = !this.isMenuOpen;
-        if (this.isMenuOpen) {
+        this.context.isMenuOpen = !this.context.isMenuOpen;
+        if (this.context.isMenuOpen) {
             this.show2DMenu();
         } else {
             this.hide2DMenu();
@@ -71,24 +70,8 @@ export class VRUIManager implements IUpdatable {
         if (!this.overlayContainer) {
             this.overlayContainer = document.createElement('div');
             this.overlayContainer.id = 'menu-2d-overlay';
-            this.overlayContainer.style.position = 'fixed';
-            this.overlayContainer.style.top = '0';
-            this.overlayContainer.style.left = '0';
-            this.overlayContainer.style.width = '100vw';
-            this.overlayContainer.style.height = '100vh';
-            this.overlayContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-            this.overlayContainer.style.display = 'flex';
-            this.overlayContainer.style.justifyContent = 'center';
-            this.overlayContainer.style.alignItems = 'center';
-            this.overlayContainer.style.zIndex = '2000';
 
             const canvas = this.tablet.ui.canvas;
-            canvas.style.maxWidth = '90%';
-            canvas.style.maxHeight = '90%';
-            canvas.style.boxShadow = '0 0 50px rgba(0, 255, 255, 0.3)';
-            canvas.style.borderRadius = '20px';
-            canvas.style.cursor = 'default';
-
             this.overlayContainer.appendChild(canvas);
 
             // Add events
@@ -334,7 +317,7 @@ export class VRUIManager implements IUpdatable {
             const isVR = this.context.managers.render?.isXRPresenting();
             if (isVR) {
                 this.tablet.setVisible(true);
-            } else if (!this.isMenuOpen) {
+            } else if (!this.context.isMenuOpen) {
                 this.tablet.setVisible(false);
             }
 
