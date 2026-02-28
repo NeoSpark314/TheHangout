@@ -12,6 +12,8 @@ import * as THREE from 'three';
 export class VRUIManager implements IUpdatable {
     public tablet: TabletEntity | null = null;
     private tabPanel: UITabPanel | null = null;
+    private isMenuOpen: boolean = false;
+    private overlayContainer: HTMLDivElement | null = null;
 
     constructor(private context: GameContext) { }
 
@@ -38,6 +40,91 @@ export class VRUIManager implements IUpdatable {
         // Add default System Tab immediately
         this.addRoomTab();
         this.addSystemTab();
+
+        this.setupKeyboardListeners();
+    }
+
+    private setupKeyboardListeners(): void {
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'm') {
+                const render = this.context.managers.render;
+                if (render && !render.isXRPresenting()) {
+                    this.toggle2DMenu();
+                }
+            }
+        });
+    }
+
+    private toggle2DMenu(): void {
+        this.isMenuOpen = !this.isMenuOpen;
+        if (this.isMenuOpen) {
+            this.show2DMenu();
+        } else {
+            this.hide2DMenu();
+        }
+    }
+
+    private show2DMenu(): void {
+        if (!this.tablet) return;
+
+        // Create container if it doesn't exist
+        if (!this.overlayContainer) {
+            this.overlayContainer = document.createElement('div');
+            this.overlayContainer.id = 'menu-2d-overlay';
+            this.overlayContainer.style.position = 'fixed';
+            this.overlayContainer.style.top = '0';
+            this.overlayContainer.style.left = '0';
+            this.overlayContainer.style.width = '100vw';
+            this.overlayContainer.style.height = '100vh';
+            this.overlayContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            this.overlayContainer.style.display = 'flex';
+            this.overlayContainer.style.justifyContent = 'center';
+            this.overlayContainer.style.alignItems = 'center';
+            this.overlayContainer.style.zIndex = '2000';
+
+            const canvas = this.tablet.ui.canvas;
+            canvas.style.maxWidth = '90%';
+            canvas.style.maxHeight = '90%';
+            canvas.style.boxShadow = '0 0 50px rgba(0, 255, 255, 0.3)';
+            canvas.style.borderRadius = '20px';
+            canvas.style.cursor = 'default';
+
+            this.overlayContainer.appendChild(canvas);
+
+            // Add events
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (this.tablet!.ui.width / rect.width);
+                const y = (e.clientY - rect.top) * (this.tablet!.ui.height / rect.height);
+                this.tablet!.ui.onMouseMove(x, y);
+            });
+
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (this.tablet!.ui.width / rect.width);
+                const y = (e.clientY - rect.top) * (this.tablet!.ui.height / rect.height);
+                this.tablet!.ui.onMouseClick(x, y);
+            });
+        }
+
+        document.body.appendChild(this.overlayContainer);
+        document.exitPointerLock?.();
+
+        // Hide 3D tablet
+        this.tablet.setVisible(false);
+    }
+
+    private hide2DMenu(): void {
+        if (this.overlayContainer && this.overlayContainer.parentElement) {
+            this.overlayContainer.parentElement.removeChild(this.overlayContainer);
+        }
+
+        // Resume 3D tablet visibility if appropriate (will be handled by update() check potentially, but let's be explicit)
+        // Actually, we want it hidden in Desktop mode normally anyway based on user request "showing the 3D tablet only in VR"
+        if (this.tablet) {
+            const isVR = this.context.managers.render?.isXRPresenting();
+            this.tablet.setVisible(!!isVR);
+        }
     }
 
     private addRoomTab() {
@@ -243,6 +330,14 @@ export class VRUIManager implements IUpdatable {
 
     public update(delta: number): void {
         if (this.tablet) {
+            // Update 3D visibility based on VR state vs Desktop Menu
+            const isVR = this.context.managers.render?.isXRPresenting();
+            if (isVR) {
+                this.tablet.setVisible(true);
+            } else if (!this.isMenuOpen) {
+                this.tablet.setVisible(false);
+            }
+
             this.tablet.update(delta);
         }
     }

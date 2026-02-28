@@ -88,4 +88,24 @@ export class CanvasUI {
         }
         return handled;
     }
+
+    /**
+     * Handles direct pixel mouse move (for 2D overlay)
+     */
+    public onMouseMove(x: number, y: number): void {
+        if (this.root.onPointerMove(x, y)) {
+            this.markDirty();
+        }
+    }
+
+    /**
+     * Handles direct pixel mouse click (for 2D overlay)
+     */
+    public onMouseClick(x: number, y: number): boolean {
+        const handled = this.root.onPointerClick(x, y);
+        if (handled) {
+            this.markDirty();
+        }
+        return handled;
+    }
 }

@@ -197,4 +197,11 @@ export class TabletEntity implements IGrabbable, IInteractable {
         this.mesh.position.copy(this.position);
         this.mesh.quaternion.copy(this.quaternion);
     }
+
+    public setVisible(visible: boolean): void {
+        this.mesh.visible = visible;
+        // Also hide handles
+        this.leftHandle.visible = visible;
+        this.rightHandle.visible = visible;
+    }
 }
