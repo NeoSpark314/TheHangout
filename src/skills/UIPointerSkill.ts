@@ -80,21 +80,9 @@ export class UIPointerSkill extends Skill {
             this.handlePointerClick(player, payload.hand);
         };
 
-        const onGrabStart = (payload: IHandIntentPayload) => {
-            this.handleGrabStart(player, payload.hand);
-        };
-
-        const onGrabEnd = (payload: IHandIntentPayload) => {
-            this.handleGrabEnd(player, payload.hand);
-        };
-
         eventBus.on(EVENTS.INTENT_INTERACT_START, onInteractStart);
-        eventBus.on(EVENTS.INTENT_GRAB_START, onGrabStart);
-        eventBus.on(EVENTS.INTENT_GRAB_END, onGrabEnd);
 
         this._handlers.push({ event: EVENTS.INTENT_INTERACT_START, handler: onInteractStart });
-        this._handlers.push({ event: EVENTS.INTENT_GRAB_START, handler: onGrabStart });
-        this._handlers.push({ event: EVENTS.INTENT_GRAB_END, handler: onGrabEnd });
     }
 
     public deactivate(player: LocalPlayer): void {
@@ -144,16 +132,9 @@ export class UIPointerSkill extends Skill {
                     this.raycaster.set(origin, direction);
 
                     if (this.draggingHand === hand) {
-                        // Move tablet with hand preserving offset
-                        const targetPos = new THREE.Vector3().copy(this.dragOffsetPos).applyQuaternion(quat).add(origin);
-                        const targetQuat = new THREE.Quaternion().copy(quat).multiply(this.dragOffsetQuat);
-
-                        vrUi.tablet.updateGrabbedPose(targetPos, targetQuat);
+                        // Desktop/Legacy drag fallback (rarely used now)
                         line.visible = true;
                         dot.visible = false;
-                        line.position.copy(origin);
-                        line.quaternion.copy(quat);
-                        line.scale.set(1, 1, this.dragDistance); // Keep visual line length static while grabbed
                         continue;
                     }
 
@@ -206,10 +187,6 @@ export class UIPointerSkill extends Skill {
             const camQuat = new THREE.Quaternion();
             render.camera.getWorldQuaternion(camQuat);
 
-            const targetPos = new THREE.Vector3().copy(this.dragOffsetPos).applyQuaternion(camQuat).add(origin);
-            const targetQuat = new THREE.Quaternion().copy(camQuat).multiply(this.dragOffsetQuat);
-
-            vrUi.tablet.updateGrabbedPose(targetPos, targetQuat);
             this.mouseDot.visible = false;
             return;
         }
@@ -264,85 +241,6 @@ export class UIPointerSkill extends Skill {
             const hit = hits[0];
             if (hit.uv) {
                 vrUi.tablet.ui.onPointerClick(hit.uv);
-            }
-        }
-    }
-
-    private handleGrabStart(player: LocalPlayer, hand: 'left' | 'right'): void {
-        if (this.draggingHand) return; // already dragging
-
-        const render = player.context.managers.render;
-        const vrUi = player.context.managers.vrUi;
-        if (!render || !vrUi || !vrUi.tablet) return;
-
-        const isXR = render.isXRPresenting();
-        const tabletMesh = vrUi.tablet.mesh;
-
-        let h: 'left' | 'right' | 'desktop' = 'desktop';
-
-        if (isXR) {
-            const handState = player.handStates[hand];
-            if (!handState.active) return;
-            h = hand;
-
-            const pos = handState.pointerPosition || handState.position;
-            const rot = handState.pointerQuaternion || handState.quaternion;
-
-            const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
-            const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
-            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
-
-            this.raycaster.set(origin, direction);
-        } else {
-            const origin = new THREE.Vector3();
-            const direction = new THREE.Vector3(0, 0, -1);
-            render.camera.getWorldPosition(origin);
-            render.camera.getWorldDirection(direction);
-            this.raycaster.set(origin, direction);
-        }
-
-        const hits = this.raycaster.intersectObject(tabletMesh);
-        if (hits.length > 0) {
-            this.draggingHand = h;
-            this.dragDistance = hits[0].distance;
-
-            // Calculate rotational and positional offsets
-            const origin = this.raycaster.ray.origin;
-            const quat = isXR ?
-                new THREE.Quaternion(player.handStates[hand].quaternion.x, player.handStates[hand].quaternion.y, player.handStates[hand].quaternion.z, player.handStates[hand].quaternion.w) :
-                new THREE.Quaternion();
-
-            if (!isXR) {
-                render.camera.getWorldQuaternion(quat);
-            }
-
-            const handTransform = new THREE.Matrix4().compose(origin, quat, new THREE.Vector3(1, 1, 1));
-
-            tabletMesh.updateMatrixWorld(true);
-            const objPos = new THREE.Vector3();
-            const objQuat = new THREE.Quaternion();
-            tabletMesh.getWorldPosition(objPos);
-            tabletMesh.getWorldQuaternion(objQuat);
-
-            const objTransform = new THREE.Matrix4().compose(objPos, objQuat, new THREE.Vector3(1, 1, 1));
-            const offsetTransform = handTransform.invert().multiply(objTransform);
-
-            offsetTransform.decompose(this.dragOffsetPos, this.dragOffsetQuat, new THREE.Vector3());
-
-            vrUi.tablet.onGrab(player.id, hand);
-        }
-    }
-
-    private handleGrabEnd(player: LocalPlayer, hand: 'left' | 'right'): void {
-        const render = player.context.managers.render;
-        const vrUi = player.context.managers.vrUi;
-        const isXR = render?.isXRPresenting();
-
-        const h = isXR ? hand : 'desktop';
-        if (this.draggingHand === h) {
-            this.draggingHand = null;
-            if (vrUi && vrUi.tablet) {
-                vrUi.tablet.onRelease();
             }
         }
     }

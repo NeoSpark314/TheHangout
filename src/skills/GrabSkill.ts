@@ -14,7 +14,7 @@ import { IHandIntentPayload } from '../interfaces/IIntents';
  * Works purely on logical handStates (no pointer checks required).
  */
 export class GrabSkill extends Skill {
-    private grabRadius: number = 0.5;
+    private grabRadius: number = 0.1;
 
     private heldObjects: Map<string, { entity: IGrabbable, offsetPos: THREE.Vector3, offsetQuat: THREE.Quaternion }> = new Map();
     private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();
@@ -35,8 +35,11 @@ export class GrabSkill extends Skill {
 
                 // Calculate grab offset to prevent jumping
                 const handState = player.handStates[payload.hand];
-                const handPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
-                const handQuat = new THREE.Quaternion(handState.quaternion.x, handState.quaternion.y, handState.quaternion.z, handState.quaternion.w);
+                const pos = handState.pointerPosition || handState.position;
+                const rot = handState.pointerQuaternion || handState.quaternion;
+
+                const handPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+                const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
                 const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
 
                 let mesh = (nearest as any).view?.mesh;
@@ -130,8 +133,11 @@ export class GrabSkill extends Skill {
 
             if (held) {
                 // UPDATE HELD POSE
-                const handPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
-                const handQuat = new THREE.Quaternion(handState.quaternion.x, handState.quaternion.y, handState.quaternion.z, handState.quaternion.w);
+                const pos = handState.pointerPosition || handState.position;
+                const rot = handState.pointerQuaternion || handState.quaternion;
+
+                const handPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+                const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
 
                 // apply offset calculation
                 const targetPos = new THREE.Vector3().copy(held.offsetPos).applyQuaternion(handQuat).add(handPos);
@@ -152,7 +158,9 @@ export class GrabSkill extends Skill {
 
                 // Unified logic: only use proximity check if the hand is active (extended/tracked)
                 if (handState.active) {
-                    result = managers.interaction.findNearestInteractable(targetPos, this.grabRadius);
+                    const pos = handState.pointerPosition || handState.position;
+                    const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+                    result = managers.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 }
 
                 this._updateHighlight(player.id, hand, result?.interactable || null);
