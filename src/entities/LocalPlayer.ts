@@ -12,6 +12,7 @@ import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { IHandState } from '../interfaces/ITrackingProvider';
+import { HandState } from '../models/HandState';
 
 /**
  * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).
@@ -159,39 +160,12 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     private syncHandStates(source: { left: IHandState, right: IHandState }): void {
-        const copyHand = (src: IHandState, dst: IHandState) => {
-            dst.active = src.active;
-            dst.hasJoints = src.hasJoints;
-            dst.position.x = src.position.x;
-            dst.position.y = src.position.y;
-            dst.position.z = src.position.z;
-            dst.quaternion.x = src.quaternion.x;
-            dst.quaternion.y = src.quaternion.y;
-            dst.quaternion.z = src.quaternion.z;
-            dst.quaternion.w = src.quaternion.w;
-
-            dst.pointerPosition.x = src.pointerPosition.x;
-            dst.pointerPosition.y = src.pointerPosition.y;
-            dst.pointerPosition.z = src.pointerPosition.z;
-            dst.pointerQuaternion.x = src.pointerQuaternion.x;
-            dst.pointerQuaternion.y = src.pointerQuaternion.y;
-            dst.pointerQuaternion.z = src.pointerQuaternion.z;
-            dst.pointerQuaternion.w = src.pointerQuaternion.w;
-
-            for (let i = 0; i < 25; i++) {
-                const sJ = src.joints[i];
-                const dJ = dst.joints[i];
-                dJ.position.x = sJ.position.x;
-                dJ.position.y = sJ.position.y;
-                dJ.position.z = sJ.position.z;
-                dJ.quaternion.x = sJ.quaternion.x;
-                dJ.quaternion.y = sJ.quaternion.y;
-                dJ.quaternion.z = sJ.quaternion.z;
-                dJ.quaternion.w = sJ.quaternion.w;
-            }
-        };
-        copyHand(source.left, this.handStates.left);
-        copyHand(source.right, this.handStates.right);
+        if (this.handStates.left instanceof HandState && this.handStates.right instanceof HandState) {
+            this.handStates.left.copyFrom(source.left);
+            this.handStates.right.copyFrom(source.right);
+        } else {
+            console.warn('[LocalPlayer] handStates are not HandState instances');
+        }
     }
 
     public getNetworkState(): IPlayerEntityState {

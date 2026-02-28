@@ -1,5 +1,6 @@
 import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState, IHandState } from '../interfaces/ITrackingProvider';
+import { HandState } from '../models/HandState';
 
 export class TrackingManager {
     private activeProvider: ITrackingProvider | null = null;
@@ -43,8 +44,8 @@ export class TrackingManager {
                 yaw: 0
             },
             hands: {
-                left: this.createEmptyHandState(-0.4),
-                right: this.createEmptyHandState(0.4)
+                left: new HandState(-0.4),
+                right: new HandState(0.4)
             }
         };
     }
@@ -61,22 +62,4 @@ export class TrackingManager {
         }
     }
 
-    private createEmptyHandState(offsetX: number): IHandState {
-        const state: IHandState = {
-            active: false,
-            hasJoints: false,
-            position: { x: offsetX, y: 0.8, z: 0 },
-            quaternion: { x: 0, y: 0, z: 0, w: 1 },
-            pointerPosition: { x: offsetX, y: 0.8, z: 0 },
-            pointerQuaternion: { x: 0, y: 0, z: 0, w: 1 },
-            joints: []
-        };
-        for (let i = 0; i < 25; i++) {
-            state.joints.push({
-                position: { x: 0, y: 0, z: 0 },
-                quaternion: { x: 0, y: 0, z: 0, w: 1 }
-            });
-        }
-        return state;
-    }
 }
