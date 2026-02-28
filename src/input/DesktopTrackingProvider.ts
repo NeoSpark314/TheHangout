@@ -62,11 +62,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.targetRightStretch.set(0, 0, 0);
         this.leftStretch.set(0, 0, 0);
         this.rightStretch.set(0, 0, 0);
-
-        // Note: In desktop mode, we typically keep them active if the provider is active
-        // for proximity interaction logic (GrabSkill).
-        this.state.hands.left.active = false;
-        this.state.hands.right.active = false;
     }
 
     private manualStatus = { left: false, right: false };
@@ -177,6 +172,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         this.state.hands.left.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };
         this.state.hands.left.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.left.pointerPosition = { ...this.state.hands.left.position };
+        this.state.hands.left.pointerQuaternion = { ...this.state.hands.left.quaternion };
         this.state.hands.left.joints.forEach(j => {
             j.position = { ...this.state.hands.left.position };
             j.quaternion = { ...this.state.hands.left.quaternion };
@@ -184,6 +181,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         this.state.hands.right.position = { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z };
         this.state.hands.right.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.right.pointerPosition = { ...this.state.hands.right.position };
+        this.state.hands.right.pointerQuaternion = { ...this.state.hands.right.quaternion };
         this.state.hands.right.joints.forEach(j => {
             j.position = { ...this.state.hands.right.position };
             j.quaternion = { ...this.state.hands.right.quaternion };
