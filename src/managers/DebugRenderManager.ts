@@ -20,9 +20,10 @@ export interface IDebugRenderSettings {
 }
 
 const BODY_COLOR = {
-    fixed: new THREE.Color(0x6b7280),
-    dynamic: new THREE.Color(0x00ffff),
-    kinematic: new THREE.Color(0xffaa00)
+    fixed: new THREE.Color(0xff2d95),
+    dynamic: new THREE.Color(0x39ff14),
+    kinematic: new THREE.Color(0xff6a00),
+    sleepingTint: new THREE.Color(0x6b7280)
 };
 
 export class DebugRenderManager implements IUpdatable {
@@ -121,7 +122,7 @@ export class DebugRenderManager implements IUpdatable {
 
         const colliderLines: THREE.LineSegments[] = [];
         for (let i = 0; i < body.colliders.length; i++) {
-            const material = new THREE.LineBasicMaterial({ color: BODY_COLOR.fixed });
+            const material = new THREE.LineBasicMaterial({ color: BODY_COLOR.fixed, transparent: true, opacity: 1.0 });
             const collider = body.colliders[i];
             const lines = new THREE.LineSegments(this.createColliderEdges(collider), material);
             lines.name = `ColliderBounds:${i}`;
@@ -150,12 +151,15 @@ export class DebugRenderManager implements IUpdatable {
     }
 
     private updateVisual(body: IPhysicsDebugBody, visual: IDebugVisual): void {
-        const bodyColor = this.getBodyColor(body.rigidBody.bodyType());
+        const isSleeping = body.rigidBody.isSleeping();
+        const bodyColor = this.getBodyColor(body.rigidBody.bodyType(), isSleeping);
 
         for (let i = 0; i < visual.colliderLines.length; i++) {
             const line = visual.colliderLines[i];
             line.visible = this.settings.showColliders;
-            (line.material as THREE.LineBasicMaterial).color.copy(bodyColor);
+            const lineMaterial = line.material as THREE.LineBasicMaterial;
+            lineMaterial.color.copy(bodyColor);
+            lineMaterial.opacity = isSleeping ? 0.35 : 1.0;
 
             const collider = body.colliders[i];
             if (!collider) continue;
@@ -178,7 +182,8 @@ export class DebugRenderManager implements IUpdatable {
         if (visual.label) {
             const owner = body.ownerId || 'host';
             const authority = body.isAuthority ? 'local' : 'remote';
-            const labelText = `${body.id}\nowner: ${owner}\nauth: ${authority}`;
+            const sleepState = isSleeping ? 'sleeping' : 'awake';
+            const labelText = `${body.id}\nowner: ${owner}\nauth: ${authority}\nstate: ${sleepState}`;
             visual.label.visible = this.settings.showAuthorityLabels;
 
             if (labelText !== visual.labelText) {
@@ -247,12 +252,16 @@ export class DebugRenderManager implements IUpdatable {
         return canvas;
     }
 
-    private getBodyColor(bodyType: RAPIER.RigidBodyType): THREE.Color {
-        if (bodyType === RAPIER.RigidBodyType.Fixed) return BODY_COLOR.fixed;
-        if (bodyType === RAPIER.RigidBodyType.KinematicPositionBased || bodyType === RAPIER.RigidBodyType.KinematicVelocityBased) {
-            return BODY_COLOR.kinematic;
+    private getBodyColor(bodyType: RAPIER.RigidBodyType, isSleeping: boolean): THREE.Color {
+        let base = BODY_COLOR.dynamic;
+        if (bodyType === RAPIER.RigidBodyType.Fixed) {
+            base = BODY_COLOR.fixed;
+        } else if (bodyType === RAPIER.RigidBodyType.KinematicPositionBased || bodyType === RAPIER.RigidBodyType.KinematicVelocityBased) {
+            base = BODY_COLOR.kinematic;
         }
-        return BODY_COLOR.dynamic;
+
+        if (!isSleeping) return base;
+        return base.clone().lerp(BODY_COLOR.sleepingTint, 0.65);
     }
 
     private createColliderEdges(collider: RAPIER.Collider): THREE.EdgesGeometry {
