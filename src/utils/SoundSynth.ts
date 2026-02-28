@@ -151,4 +151,56 @@ export class SoundSynth {
         click.start(now);
         click.stop(now + 0.05);
     }
+
+    public static playHighFive(
+        ctx: AudioContext,
+        intensity: number = 0.6,
+        options?: { pan?: number; distance?: number }
+    ): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const pan = Math.max(-1, Math.min(1, options?.pan ?? 0));
+        const distance = Math.max(0, options?.distance ?? 0);
+        const distanceAtten = Math.max(0.35, 1 / (1 + distance * 0.16));
+        const drive = Math.min(1.0, Math.max(0.2, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(distanceAtten, now);
+
+        const stereo = (typeof (ctx as any).createStereoPanner === 'function')
+            ? (ctx as any).createStereoPanner() as StereoPannerNode
+            : null;
+        if (stereo) {
+            stereo.pan.setValueAtTime(pan, now);
+            out.connect(stereo);
+            stereo.connect(ctx.destination);
+        } else {
+            out.connect(ctx.destination);
+        }
+
+        const click = ctx.createOscillator();
+        click.type = 'triangle';
+        click.frequency.setValueAtTime(1700 + (drive * 700), now);
+        click.frequency.exponentialRampToValueAtTime(340, now + 0.045);
+        const clickGain = ctx.createGain();
+        clickGain.gain.setValueAtTime(0.12 * drive, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+        click.connect(clickGain);
+        clickGain.connect(out);
+        click.start(now);
+        click.stop(now + 0.06);
+
+        const body = ctx.createOscillator();
+        body.type = 'square';
+        body.frequency.setValueAtTime(420 + (drive * 160), now);
+        body.frequency.exponentialRampToValueAtTime(170, now + 0.12);
+        const bodyGain = ctx.createGain();
+        bodyGain.gain.setValueAtTime(0.0001, now);
+        bodyGain.gain.linearRampToValueAtTime(0.08 * drive, now + 0.006);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+        body.connect(bodyGain);
+        bodyGain.connect(out);
+        body.start(now);
+        body.stop(now + 0.15);
+    }
 }

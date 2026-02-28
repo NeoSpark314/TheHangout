@@ -72,6 +72,23 @@ export class AudioManager {
                 SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { pan, distance });
             }
         });
+
+        eventBus.on(EVENTS.SOCIAL_HIGH_FIVE, (data: { position?: IVector3; intensity: number }) => {
+            if (this.isInitialized && this.ctx) {
+                const headPos = this.context.managers.tracking.getState().head.pose.position;
+                const hitPos = data.position;
+                let distance = 0;
+                let pan = 0;
+                if (hitPos) {
+                    const dx = hitPos.x - headPos.x;
+                    const dy = hitPos.y - headPos.y;
+                    const dz = hitPos.z - headPos.z;
+                    distance = Math.hypot(dx, dy, dz);
+                    pan = Math.max(-1, Math.min(1, dx / 5));
+                }
+                SoundSynth.playHighFive(this.ctx, data.intensity, { pan, distance });
+            }
+        });
     }
 
     public update(delta: number): void {

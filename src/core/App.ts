@@ -22,6 +22,8 @@ import { PhysicsPresentationSystem } from '../systems/PhysicsPresentationSystem'
 import { VRUIManager } from '../managers/VRUIManager';
 import { DebugRenderManager } from '../managers/DebugRenderManager';
 import { ReplicationManager } from '../managers/ReplicationManager';
+import { ParticleSystemManager } from '../managers/ParticleSystemManager';
+import { SocialEffectsManager } from '../managers/SocialEffectsManager';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -97,6 +99,8 @@ export class App {
         this.context.setManager('interaction', new InteractionSystem(this.context));
         this.context.setManager('vrUi', new VRUIManager(this.context));
         this.context.setManager('debugRender', new DebugRenderManager(this.context));
+        this.context.setManager('particles', new ParticleSystemManager(this.context.managers.render.scene));
+        this.context.setManager('social', new SocialEffectsManager(this.context, this.context.managers.particles));
 
         // Tracking Initialization
         const tracking = new TrackingManager(this.context);
@@ -170,6 +174,8 @@ export class App {
         this.engine.addSystem(new PhysicsPresentationSystem(this.context));
 
         if (managers.room) this.engine.addSystem(managers.room as any);
+        if (managers.social) this.engine.addSystem(managers.social as any);
+        if (managers.particles) this.engine.addSystem(managers.particles as any);
         if (managers.ui) this.engine.addSystem(managers.ui as any);
         if (managers.hud) this.engine.addSystem(managers.hud as any);
         if (managers.vrUi) this.engine.addSystem(managers.vrUi as any);
