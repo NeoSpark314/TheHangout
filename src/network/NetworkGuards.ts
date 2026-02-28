@@ -16,17 +16,25 @@ function isStateUpdatePacketArray(payload: unknown): boolean {
 }
 
 function isOwnershipRequestPayload(payload: unknown): boolean {
-    return isObject(payload) && typeof payload.entityId === 'string';
+    return isObject(payload) &&
+        typeof payload.entityId === 'string' &&
+        (payload.seq === undefined || typeof payload.seq === 'number') &&
+        (payload.sentAt === undefined || typeof payload.sentAt === 'number');
 }
 
 function isOwnershipReleasePayload(payload: unknown): boolean {
-    return isObject(payload) && typeof payload.entityId === 'string';
+    return isObject(payload) &&
+        typeof payload.entityId === 'string' &&
+        (payload.seq === undefined || typeof payload.seq === 'number') &&
+        (payload.sentAt === undefined || typeof payload.sentAt === 'number');
 }
 
 function isOwnershipTransferPayload(payload: unknown): boolean {
     return isObject(payload) &&
         typeof payload.entityId === 'string' &&
-        (typeof payload.newOwnerId === 'string' || payload.newOwnerId === null);
+        (typeof payload.newOwnerId === 'string' || payload.newOwnerId === null) &&
+        (payload.seq === undefined || typeof payload.seq === 'number') &&
+        (payload.sentAt === undefined || typeof payload.sentAt === 'number');
 }
 
 function isRoomConfigPayload(payload: unknown): boolean {

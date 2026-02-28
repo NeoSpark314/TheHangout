@@ -5,13 +5,17 @@ import { NetworkDispatcher } from '../network/NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from '../network/NetworkSynchronizer';
 import { IStateUpdatePacket, EntityType } from '../interfaces/IEntityState';
 import { PacketPayloadMap } from '../network/NetworkTypes';
-import { IOwnershipReleasePayload } from '../interfaces/INetworkPacket';
+import {
+    IOwnershipReleasePayload,
+    IOwnershipRequestPayload
+} from '../interfaces/INetworkPacket';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private context!: GameContext;
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer!: NetworkSynchronizer;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
+    private ownershipSeqByEntity: Map<string, number> = new Map();
 
     // Traffic metrics
     public bytesReceived: number = 0;
@@ -44,7 +48,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         });
 
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, {
-            handle: (senderId: string, payload: { entityId: string }) => {
+            handle: (senderId: string, payload: IOwnershipRequestPayload) => {
                 this.handleOwnershipRequest(senderId, payload);
             }
         });
@@ -156,23 +160,25 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                 logicEntity.ownerId = null;
                 if (logicEntity.heldBy !== undefined) logicEntity.heldBy = null;
                 entity.isAuthority = true;
-                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
+                const seq = this.nextOwnershipSeq(entity.id);
+                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
             }
         }
     }
 
-    public handleOwnershipRequest(senderId: string, payload: { entityId: string }): void {
+    public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {
         const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
             logicEntity.ownerId = senderId;
             entity.isAuthority = false; // Server gives up authority
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId });
+            const seq = this.nextOwnershipSeq(entity.id);
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() });
         }
     }
 
-    public handleOwnershipRelease(senderId: string, payload: { entityId: string }): void {
+    public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
         const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
@@ -185,7 +191,8 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
         }
 
-        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
+        const seq = this.nextOwnershipSeq(entity.id);
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
     }
 
     // --- Administrative Commands ---
@@ -224,5 +231,17 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         // Re-init the room props
         this.context.managers.room.init(null as any);
         this.broadcast(PACKET_TYPES.STATE_UPDATE, entityMgr.getWorldSnapshot());
+    }
+
+    private nextOwnershipSeq(entityId: string): number {
+        const next = (this.ownershipSeqByEntity.get(entityId) ?? 0) + 1;
+        this.ownershipSeqByEntity.set(entityId, next);
+        return next;
+    }
+
+    private nowMs(): number {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
     }
 }

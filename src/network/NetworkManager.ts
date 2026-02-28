@@ -4,7 +4,13 @@ import { GameContext } from '../core/GameState';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
 import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
-import { IRoomConfigUpdatePayload, IDrawSegmentPayload, IOwnershipReleasePayload } from '../interfaces/INetworkPacket';
+import {
+    IRoomConfigUpdatePayload,
+    IDrawSegmentPayload,
+    IOwnershipReleasePayload,
+    IOwnershipRequestPayload,
+    IOwnershipTransferPayload
+} from '../interfaces/INetworkPacket';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
@@ -27,6 +33,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer: NetworkSynchronizer;
+    private ownershipSeqByEntity: Map<string, number> = new Map();
+    private lastAppliedOwnershipSeqByEntity: Map<string, number> = new Map();
 
     constructor(private context: GameContext) {
         this.dispatcher = new NetworkDispatcher<PacketPayloadMap>();
@@ -39,13 +47,21 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         eventBus.on(EVENTS.REQUEST_OWNERSHIP, (payload: unknown) => {
             if (!this.context.isHost && this.context.roomId) {
-                this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_REQUEST, payload);
+                const base = (payload && typeof payload === 'object') ? payload as Record<string, unknown> : {};
+                this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_REQUEST, {
+                    ...base,
+                    sentAt: this.nowMs()
+                });
             }
         });
 
         eventBus.on(EVENTS.RELEASE_OWNERSHIP, (payload: unknown) => {
             if (!this.context.isHost && this.context.roomId) {
-                this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, payload);
+                const base = (payload && typeof payload === 'object') ? payload as Record<string, unknown> : {};
+                this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, {
+                    ...base,
+                    sentAt: this.nowMs()
+                });
             }
         });
 
@@ -255,14 +271,25 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 logicEntity.ownerId = null;
                 if (logicEntity.heldBy !== undefined) logicEntity.heldBy = null;
                 entity.isAuthority = true;
-                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
+                const seq = this.nextOwnershipSeq(entity.id);
+                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
             }
         }
     }
 
-    public applyOwnershipTransfer(payload: { entityId: string, newOwnerId: string | null }): void {
+    public applyOwnershipTransfer(payload: IOwnershipTransferPayload): void {
+        const incomingSeq = payload.seq ?? 0;
+        const lastAppliedSeq = this.lastAppliedOwnershipSeqByEntity.get(payload.entityId) ?? 0;
+        if (incomingSeq !== 0 && incomingSeq <= lastAppliedSeq) {
+            return;
+        }
+
         const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
+        if (incomingSeq !== 0) {
+            this.lastAppliedOwnershipSeqByEntity.set(payload.entityId, incomingSeq);
+        }
+
         const isLocalOwner = payload.newOwnerId === (this.context.localPlayer?.id || 'local');
         (entity as { ownerId?: string | null }).ownerId = payload.newOwnerId;
         entity.isAuthority = isLocalOwner;
@@ -272,18 +299,19 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         networkable.onNetworkEvent?.('OWNERSHIP_TRANSFER', payload);
     }
 
-    public handleOwnershipRequest(senderId: string, payload: { entityId: string }): void {
+    public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {
         const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
             logicEntity.ownerId = senderId;
             entity.isAuthority = (senderId === (this.context.localPlayer?.id || 'local'));
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId });
+            const seq = this.nextOwnershipSeq(entity.id);
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() });
         }
     }
 
-    public handleOwnershipRelease(senderId: string, payload: { entityId: string }): void {
+    public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
         const entity = this.context.managers.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
@@ -297,7 +325,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
         }
 
-        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null });
+        const seq = this.nextOwnershipSeq(entity.id);
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
     }
 
     public sendData(targetId: string, type: number, payload: unknown): void {
@@ -323,6 +352,18 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         }
         this.connections.clear();
         this.context.roomId = null;
+    }
+
+    private nextOwnershipSeq(entityId: string): number {
+        const next = (this.ownershipSeqByEntity.get(entityId) ?? 0) + 1;
+        this.ownershipSeqByEntity.set(entityId, next);
+        return next;
+    }
+
+    private nowMs(): number {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
     }
 
     private handlePeerError(err: any): void {
@@ -413,7 +454,7 @@ class RoomConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET
 
 class OwnershipRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_REQUEST]> {
     constructor(private network: NetworkManager, private context: GameContext) { }
-    handle(senderId: string, payload: { entityId: string }): void {
+    handle(senderId: string, payload: IOwnershipRequestPayload): void {
         if (this.context.isHost) this.network.handleOwnershipRequest(senderId, payload);
     }
 }
@@ -427,7 +468,7 @@ class OwnershipReleaseHandler implements IPacketHandler<PacketPayloadMap[typeof 
 
 class OwnershipTransferHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_TRANSFER]> {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: { entityId: string, newOwnerId: string | null }): void {
+    handle(senderId: string, payload: IOwnershipTransferPayload): void {
         if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
     }
 }

@@ -28,6 +28,14 @@ export enum PhysicsSimMode {
     ProxyKinematic = 'ProxyKinematic'
 }
 
+interface INetworkSnapshot {
+    receivedAtMs: number;
+    position: IVector3;
+    quaternion: IQuaternion;
+    velocity: IVector3;
+    heldBy: string | null;
+}
+
 export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
     public view: IView<IPhysicsPropState> | null;
@@ -47,6 +55,12 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
     private presentPos: IVector3 = { x: 0, y: 0, z: 0 };
     private presentRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+    private snapshotBuffer: INetworkSnapshot[] = [];
+    private interpolationDelayMs: number = 120;
+    private maxExtrapolationMs: number = 80;
+    private maxSnapshotAgeMs: number = 1500;
+    private maxSnapshots: number = 64;
+    private lastOwnershipTransferSeq: number = 0;
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
@@ -171,6 +185,10 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         if (type === 'OWNERSHIP_TRANSFER') {
             const newOwnerId = payload?.newOwnerId ?? null;
             const localId = this.context.localPlayer?.id || 'local';
+            const seq = typeof payload?.seq === 'number' ? payload.seq : 0;
+
+            if (seq > 0 && seq <= this.lastOwnershipTransferSeq) return;
+            if (seq > 0) this.lastOwnershipTransferSeq = seq;
 
             // Host ACK ended pending release.
             if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && newOwnerId !== localId) {
@@ -221,6 +239,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 break;
             }
             case PhysicsSimMode.ProxyKinematic: {
+                this.updateProxyTargetFromBuffer();
                 this.rigidBody.setNextKinematicTranslation({ x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z });
                 this.rigidBody.setNextKinematicRotation({ x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w });
 
@@ -272,20 +291,29 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
         if (this.isAuthority) return;
 
-        const wasHeld = this.heldBy;
-        this.heldBy = state.b || null;
+        const snapshot: INetworkSnapshot = {
+            receivedAtMs: this.nowMs(),
+            position: state.p ? { x: state.p[0], y: state.p[1], z: state.p[2] } : { ...this.targetPos },
+            quaternion: state.q ? { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] } : { ...this.targetRot },
+            velocity: state.v ? { x: state.v[0], y: state.v[1], z: state.v[2] } : { x: 0, y: 0, z: 0 },
+            heldBy: state.b || null
+        };
+        this.snapshotBuffer.push(snapshot);
 
-        const oldTargetPos = { ...this.targetPos };
+        if (this.snapshotBuffer.length > this.maxSnapshots) {
+            this.snapshotBuffer.splice(0, this.snapshotBuffer.length - this.maxSnapshots);
+        }
 
-        if (state.p) this.targetPos = { x: state.p[0], y: state.p[1], z: state.p[2] };
-        if (state.q) this.targetRot = { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] };
+        const cutoff = snapshot.receivedAtMs - this.maxSnapshotAgeMs;
+        while (this.snapshotBuffer.length > 1 && this.snapshotBuffer[0].receivedAtMs < cutoff) {
+            this.snapshotBuffer.shift();
+        }
 
-        const stateTransition = (this.heldBy !== wasHeld);
-        const hugeJump = Math.pow(this.targetPos.x - oldTargetPos.x, 2) +
-            Math.pow(this.targetPos.y - oldTargetPos.y, 2) +
-            Math.pow(this.targetPos.z - oldTargetPos.z, 2) > 1.0;
+        this.heldBy = snapshot.heldBy;
+        this.targetPos = { ...snapshot.position };
+        this.targetRot = { ...snapshot.quaternion };
 
-        if (stateTransition || hugeJump) {
+        if (!this.proxyInitialized) {
             this.proxyRenderPos = { ...this.targetPos };
             this.proxyRenderRot = { ...this.targetRot };
             this.presentPos = this.proxyRenderPos;
@@ -324,6 +352,11 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
                 this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
                 this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+                if (nextMode === PhysicsSimMode.ProxyKinematic && !this.proxyInitialized) {
+                    this.proxyRenderPos = { ...this.targetPos };
+                    this.proxyRenderRot = { ...this.targetRot };
+                    this.proxyInitialized = true;
+                }
                 break;
             case PhysicsSimMode.AuthoritativeDynamic:
             case PhysicsSimMode.PendingReleaseDynamic:
@@ -331,6 +364,64 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 this.rigidBody.wakeUp();
                 break;
         }
+    }
+
+    private updateProxyTargetFromBuffer(): void {
+        if (this.snapshotBuffer.length === 0) return;
+
+        const now = this.nowMs();
+        const sampleTime = now - this.interpolationDelayMs;
+        const sampled = this.sampleSnapshotAt(sampleTime);
+        if (!sampled) return;
+
+        this.targetPos = sampled.position;
+        this.targetRot = sampled.quaternion;
+        this.heldBy = sampled.heldBy;
+    }
+
+    private sampleSnapshotAt(targetTimeMs: number): INetworkSnapshot | null {
+        const snapshots = this.snapshotBuffer;
+        if (snapshots.length === 0) return null;
+        if (snapshots.length === 1) return snapshots[0];
+
+        for (let i = 0; i < snapshots.length - 1; i++) {
+            const a = snapshots[i];
+            const b = snapshots[i + 1];
+            if (targetTimeMs >= a.receivedAtMs && targetTimeMs <= b.receivedAtMs) {
+                const span = Math.max(1, b.receivedAtMs - a.receivedAtMs);
+                const t = (targetTimeMs - a.receivedAtMs) / span;
+                return {
+                    receivedAtMs: targetTimeMs,
+                    position: {
+                        x: a.position.x + (b.position.x - a.position.x) * t,
+                        y: a.position.y + (b.position.y - a.position.y) * t,
+                        z: a.position.z + (b.position.z - a.position.z) * t
+                    },
+                    quaternion: this.nlerpQuaternionNew(a.quaternion, b.quaternion, t),
+                    velocity: {
+                        x: a.velocity.x + (b.velocity.x - a.velocity.x) * t,
+                        y: a.velocity.y + (b.velocity.y - a.velocity.y) * t,
+                        z: a.velocity.z + (b.velocity.z - a.velocity.z) * t
+                    },
+                    heldBy: b.heldBy
+                };
+            }
+        }
+
+        const last = snapshots[snapshots.length - 1];
+        const dtMs = Math.min(this.maxExtrapolationMs, Math.max(0, targetTimeMs - last.receivedAtMs));
+        const dt = dtMs / 1000;
+        return {
+            receivedAtMs: targetTimeMs,
+            position: {
+                x: last.position.x + last.velocity.x * dt,
+                y: last.position.y + last.velocity.y * dt,
+                z: last.position.z + last.velocity.z * dt
+            },
+            quaternion: { ...last.quaternion },
+            velocity: { ...last.velocity },
+            heldBy: last.heldBy
+        };
     }
 
     private nlerpQuaternion(current: IQuaternion, target: IQuaternion, t: number): void {
@@ -360,6 +451,18 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         current.w /= len;
     }
 
+    private nlerpQuaternionNew(a: IQuaternion, b: IQuaternion, t: number): IQuaternion {
+        const out: IQuaternion = { x: a.x, y: a.y, z: a.z, w: a.w };
+        this.nlerpQuaternion(out, b, t);
+        return out;
+    }
+
+    private nowMs(): number {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
+    }
+
     public destroy(): void {
         super.destroy();
         const render = this.context.managers.render;
@@ -369,4 +472,3 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
     }
 }
-

@@ -4,10 +4,14 @@ import { IRoomConfig } from '../core/GameState';
 export interface IOwnershipTransferPayload {
     entityId: string;
     newOwnerId: string | null;
+    seq?: number;
+    sentAt?: number;
 }
 
 export interface IOwnershipRequestPayload {
     entityId: string;
+    seq?: number;
+    sentAt?: number;
 }
 
 export interface IOwnershipReleasePayload {
@@ -15,6 +19,8 @@ export interface IOwnershipReleasePayload {
     velocity?: [number, number, number];
     position?: [number, number, number];
     quaternion?: [number, number, number, number];
+    seq?: number;
+    sentAt?: number;
 }
 
 export interface IDrawSegmentPayload {
