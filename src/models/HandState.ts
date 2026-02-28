@@ -60,6 +60,11 @@ export class HandState implements IHandState {
         }
     }
 
+    /**
+     * Safely merges a partial network payload into this strict local state.
+     * IF statements are required here because `INetworkHandState` properties are optional 
+     * in order to save bandwidth. We only update properties that actually arrived in the packet.
+     */
     public applyData(data: INetworkHandState): void {
         if (!data) return;
         this.active = !!data.active;
