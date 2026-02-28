@@ -42,21 +42,6 @@ The `App` class manages the startup sequence, ensuring all managers are register
 - **Dispatcher**: Routes incoming packets to specific `PacketHandlers`.
 - **Synchronizer**: A 20Hz loop that broadcasts authoritative entity states using standardized, bandwidth-efficient interfaces.
 
-## Controls
-
-### VR Mode
-- **Movement**: Left Thumbstick
-- **Rotation**: Right Thumbstick (Snap Turn)
-- **Grab**: Grip button (Proximity-based)
-- **Interact**: Index Trigger
-- **Voice**: Microphone active by default
-
-### Desktop Mode
-- **Movement**: WASD
-- **Look**: Mouse (Pointer Lock)
-- **Grab/Interact**: *[Experimental]* Raycast interaction is currently disabled. Proximity interaction only.
-- **Voice**: Microphone toggle via UI button
-
 ## Project Structure
 
 ```
