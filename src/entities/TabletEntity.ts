@@ -4,13 +4,15 @@ import { IGrabbable } from '../interfaces/IGrabbable';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IInteractionEvent } from '../interfaces/IInteractionEvent';
 import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
+import { IEntity } from '../interfaces/IEntity';
 import { CanvasUI } from '../utils/canvasui';
 
-export class TabletEntity implements IGrabbable, IInteractable {
+export class TabletEntity implements IEntity, IGrabbable, IInteractable {
     public id: string;
     public type: string = 'TABLET';
     public isAuthority: boolean = true;
-    public ownerId: string | undefined;
+    public isDestroyed: boolean = false;
+    public ownerId: string | null = null;
 
     public isGrabbable: boolean = true;
     public heldBy: string | null = null;
@@ -21,7 +23,6 @@ export class TabletEntity implements IGrabbable, IInteractable {
     public isRelative: boolean = true;
     public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.3, -0.5);
     public relativeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.1, 0, 0));
-
     private context: GameContext;
     private position: THREE.Vector3;
     private quaternion: THREE.Quaternion;
@@ -204,5 +205,25 @@ export class TabletEntity implements IGrabbable, IInteractable {
         // Also hide handles
         this.leftHandle.visible = visible;
         this.rightHandle.visible = visible;
+    }
+
+    public destroy(): void {
+        if (this.isDestroyed) return;
+        this.isDestroyed = true;
+
+        // Cleanup meshes
+        this.mesh.geometry.dispose();
+        (this.mesh.material as THREE.Material).dispose();
+
+        this.leftHandle.geometry.dispose();
+        (this.leftHandle.material as THREE.Material).dispose();
+
+        this.rightHandle.geometry.dispose();
+        (this.rightHandle.material as THREE.Material).dispose();
+
+        // Cleanup UI elements explicitly
+        if (this.ui) {
+            // Need to cleanup canvas texture etc.
+        }
     }
 }
