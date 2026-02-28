@@ -1,0 +1,69 @@
+# Overview of The Hangout
+This overview is intended to give a high-level overview of the project architecture and design decisions mostly for coding agents to get a quick grasp of where everything is and how it works.
+
+## Architecture
+
+The project follows a **Clean Object-Oriented (OOP) Architecture** pattern based on a robust Entity Class Hierarchy. It is designed for high-performance spatial synchronization and modular gameplay features while remaining approachable and easy to maintain without the complexity of an ECS.
+
+| Layer | Tech | Role |
+|-------|------|------|
+| **Core** | TypeScript | App Orchestration (`App`), Game loop (`GameEngine`), Event Bus, Type-safe Global State. |
+| **Logic Entities** | Custom | "Source of Truth" for state. They own logic, physics modes, and poses. |
+| **Managers** | Custom | Lifecycle and orchestration (Network, Render, Physics, Assets). |
+| **Systems** | Custom | Logic Hubs (XR Math, Interaction, Drawing). |
+| **Views** | Three.js | Purely visual representation of entities. No business logic here. |
+
+### Engineering Principles
+
+1.  **Dependency Injection (DI)**: Core context (`GameContext`) is explicitly passed via constructors. No hidden global singletons, making dependencies obvious and easily testable.
+2.  **Open/Closed Game Loop**: The `GameEngine` iterates over an array of dynamically injected `IUpdatable` systems. New managers or mechanics can be slotted into the frame loop without altering the engine code.
+3.  **World-Space Uniformity**: All spatial data (Joints, Head, Hands) is processed and synchronized in **World Space**. Coordinates are only transformed into local space at the final rendering step within the `View` layer. This "Standardized World" approach eliminates double-transformation bugs, simplifies network synchronization, and ensures frame-perfect parity between local and remote representations.
+4.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems safely query these capabilities at runtime.
+5.  **Strictly Typed Network Contract**: All traffic utilizes explicitly typed packet payloads (`INetworkPacket.ts`) and Discriminated Unions (`IEntityState.ts`). We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
+6.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
+
+## Core Systems
+
+### App Orchestrator
+The `App` class manages the startup sequence, ensuring all managers are registered and systems are initialized in the correct order to prevent race conditions.
+
+### Entity & View System
+- **Entities**: Logic-only state owners.
+- **Views**: Visual-only representations with a managed Three.js lifecycle.
+- **EntityFactory**: Data-driven spawning using the `EntityType` registry.
+
+### Modular Networking
+- **Transport**: Raw communication via PeerJS/Sockets or local WebSocket Relay.
+- **Dispatcher**: Routes incoming packets to specific `PacketHandlers`.
+- **Synchronizer**: A 20Hz loop that broadcasts authoritative entity states using standardized, bandwidth-efficient interfaces.
+
+## Controls
+
+### VR Mode
+- **Movement**: Left Thumbstick
+- **Rotation**: Right Thumbstick (Snap Turn)
+- **Grab**: Grip button (Proximity-based)
+- **Interact**: Index Trigger
+- **Voice**: Microphone active by default
+
+### Desktop Mode
+- **Movement**: WASD
+- **Look**: Mouse (Pointer Lock)
+- **Grab/Interact**: *[Experimental]* Raycast interaction is currently disabled. Proximity interaction only.
+- **Voice**: Microphone toggle via UI button
+
+## Project Structure
+
+```
+├── src/
+│   ├── core/           # App, GameEngine, EventBus, GameContext
+│   ├── entities/       # State Owners: LocalPlayer, PhysicsEntity, PenEntity
+│   ├── interfaces/     # Strict Contracts: IUpdatable, IEntity, IView, IEntityState, INetworkPacket
+│   ├── managers/       # Orchestrators: Render, Network, Physics, Assets, Drawing
+│   ├── network/        # Messaging: Dispatcher, Synchronizer, PacketHandlers
+│   ├── input/          # Hardware Input Layers: Keyboard, Gamepad, XR, Joystick
+│   ├── systems/        # Logic Hubs: XRSystem, InteractionSystem
+│   ├── views/          # Visuals: StickFigureView, PhysicsPropView, PenView
+│   └── utils/          # Math, Constants, HostKeepalive
+└── vite.config.js
+```
