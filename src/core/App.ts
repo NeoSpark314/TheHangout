@@ -1,6 +1,6 @@
 import { GameContext } from './GameState';
 import { GameEngine } from './GameEngine';
-import { UIManager } from '../managers/UIManager';
+import { FlatUIManager } from '../managers/FlatUIManager';
 import { NetworkManager } from '../network/NetworkManager';
 import { PhysicsManager } from '../managers/PhysicsManager';
 import { RenderManager } from '../managers/RenderManager';
@@ -78,7 +78,7 @@ export class App {
 
     private initializeManagers(): void {
         this.context.setManager('entity', new EntityManager(this.context));
-        this.context.setManager('ui', new UIManager(this.context));
+        this.context.setManager('ui', new FlatUIManager(this.context));
         this.context.setManager('network', new NetworkManager(this.context));
         this.context.setManager('media', new MediaManager(this.context));
         this.context.setManager('render', new RenderManager(this.context));

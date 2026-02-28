@@ -4,7 +4,7 @@ import { EVENTS } from '../utils/Constants';
 import { isMobile } from '../utils/DeviceUtils';
 import { IUpdatable } from '../interfaces/IUpdatable';
 
-export class UIManager implements IUpdatable {
+export class FlatUIManager implements IUpdatable {
     private overlay: HTMLElement;
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;

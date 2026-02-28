@@ -5,7 +5,7 @@ import type { InputManager } from '../input/InputManager';
 import type { RenderManager } from '../managers/RenderManager';
 import type { PlayerManager } from '../managers/PlayerManager';
 import type { RoomManager } from '../managers/RoomManager';
-import type { UIManager } from '../managers/UIManager';
+import type { FlatUIManager } from '../managers/FlatUIManager';
 import type { HUDManager } from '../managers/HUDManager';
 import type { MediaManager } from '../managers/MediaManager';
 import type { AudioManager } from '../managers/AudioManager';
@@ -33,7 +33,7 @@ export interface IRoomConfig {
 
 export interface IManagers {
     entity: EntityManager;
-    ui: UIManager;
+    ui: FlatUIManager;
     network: NetworkManager;
     media: MediaManager;
     render: RenderManager;
