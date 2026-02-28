@@ -6,7 +6,7 @@ import { IUpdatable } from '../interfaces/IUpdatable';
 import { RenderManager } from '../managers/RenderManager';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
-import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IXRHandTrackedPayload, IXRHeadTrackedPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
+import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
 
 import { KeyboardManager } from './KeyboardManager';
 import { GamepadManager } from './GamepadManager';

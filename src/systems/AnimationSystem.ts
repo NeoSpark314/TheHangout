@@ -3,7 +3,7 @@ import { LocalPlayer } from '../entities/LocalPlayer';
 import type { IManagers } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
-import { IMoveIntentPayload, IXRHeadTrackedPayload } from '../interfaces/IIntents';
+import { IMoveIntentPayload } from '../interfaces/IIntents';
 import { IUpdatable } from '../interfaces/IUpdatable';
 
 /**
@@ -15,25 +15,16 @@ export class AnimationSystem implements IUpdatable {
     private localPlayer: LocalPlayer | null = null;
     private managers: IManagers | null = null;
 
-    private _isVR: boolean = false;
     private _isMoving: boolean = false;
     private _bobTime: number = 0;
 
     constructor() {
-        eventBus.on(EVENTS.INTENT_XR_HEAD_TRACKED, this._onXRHead.bind(this));
         eventBus.on(EVENTS.INTENT_MOVE, this._onMove.bind(this));
     }
 
     public setLocalPlayer(player: LocalPlayer, managers: IManagers): void {
         this.localPlayer = player;
         this.managers = managers;
-    }
-
-    private _onXRHead(payload: IXRHeadTrackedPayload): void {
-        this._isVR = true;
-        if (!this.localPlayer) return;
-        this.localPlayer.headState.position = { x: payload.position.x, y: payload.position.y, z: payload.position.z };
-        this.localPlayer.headState.quaternion = { x: payload.quaternion.x, y: payload.quaternion.y, z: payload.quaternion.z, w: payload.quaternion.w };
     }
 
     private _onMove(payload: IMoveIntentPayload): void {
@@ -46,11 +37,8 @@ export class AnimationSystem implements IUpdatable {
 
         // If VR is active, XR tracking provider already owns hand state updates.
         if (render.isXRPresenting()) {
-            this._isVR = true;
             return;
         }
-
-        this._isVR = false;
 
         // Desktop / Mobile Procedural Animation
         this._bobTime += this._isMoving ? delta * 15 : 0;
