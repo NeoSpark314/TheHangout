@@ -1,7 +1,7 @@
 import { GameContext } from '../core/GameState';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { TabletEntity } from '../entities/TabletEntity';
-import { UITabPanel, UIElement } from '../utils/canvasui';
+import { UITabPanel, UIElement, UIButton, UILabel } from '../utils/canvasui';
 import { UITheme, getFont } from '../utils/UITheme';
 import { RemotePlayer } from '../entities/RemotePlayer';
 import { LocalPlayer } from '../entities/LocalPlayer';
@@ -43,6 +43,7 @@ export class VRUIManager implements IUpdatable {
         // Add default System Tab immediately
         this.addPeersTab();
         this.addSystemTab();
+        this.addHelpTab();
 
         this.setupKeyboardListeners();
     }
@@ -417,6 +418,97 @@ export class VRUIManager implements IUpdatable {
             leaveBtn.cornerRadius = 10;
             systemContainer.addChild(leaveBtn);
         });
+    }
+
+    private addHelpTab() {
+        if (!this.tabPanel) return;
+
+        const helpTab = this.tabPanel.addTab('Help');
+        const container = helpTab.container;
+        let currentMode: 'VR' | 'Desktop' | 'Touch' = 'VR';
+
+        import('../utils/canvasui').then(() => {
+            const contentArea = new UIElement(50, 150, 1180, 600);
+            container.addChild(contentArea);
+
+            const navButtons: UIButton[] = [];
+
+            const renderHelp = () => {
+                contentArea.children = [];
+
+                const title = new UILabel(`${currentMode} CONTROLS`, 0, 0, 1180, 80);
+                title.font = getFont(UITheme.typography.sizes.title, 'bold');
+                title.textColor = UITheme.colors.primary;
+                title.textAlign = 'center';
+                contentArea.addChild(title);
+
+                const controls = this.getControlsForMode(currentMode);
+                controls.forEach((text, i) => {
+                    const isHeader = !text.startsWith('•') && text.trim() !== '';
+                    const line = new UILabel(text, 50, 100 + i * 45, 1080, 40);
+                    line.font = getFont(isHeader ? UITheme.typography.sizes.body : UITheme.typography.sizes.small, isHeader ? 'bold' : 'normal');
+                    line.textColor = isHeader ? UITheme.colors.accent : UITheme.colors.text;
+                    contentArea.addChild(line);
+                });
+
+                navButtons.forEach(btn => {
+                    const isSelected = btn.text === currentMode;
+                    btn.backgroundColor = isSelected ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                    btn.borderColor = isSelected ? UITheme.colors.primary : UITheme.colors.textMuted;
+                });
+
+                this.tablet?.ui.markDirty();
+            };
+
+            const modes: ('VR' | 'Desktop' | 'Touch')[] = ['VR', 'Desktop', 'Touch'];
+            modes.forEach((mode, i) => {
+                const btn = new UIButton(mode, 50 + i * 390, 40, 360, 80, () => {
+                    currentMode = mode;
+                    renderHelp();
+                });
+                btn.cornerRadius = 10;
+                btn.font = getFont(UITheme.typography.sizes.body, 'bold');
+                container.addChild(btn);
+                navButtons.push(btn);
+            });
+
+            renderHelp();
+        });
+    }
+
+    private getControlsForMode(mode: 'VR' | 'Desktop' | 'Touch'): string[] {
+        switch (mode) {
+            case 'VR':
+                return [
+                    "• Move: Left Thumbstick",
+                    "• Turn: Right Thumbstick (Snap)",
+                    "• Grab/Hold: Left or Right Grip",
+                    "• Use/Select: Left or Right Trigger",
+                    "• Menu: Menu Button (Left Hand)",
+                    "",
+                    "Hand Tracking Gestures:",
+                    "• Select/Click: Pinch index and thumb",
+                    "• Grab/Hold: Close fist (Grasp)",
+                    "• Menu: Look at left palm then flip up"
+                ];
+            case 'Desktop':
+                return [
+                    "• Move: W, A, S, D keys",
+                    "• Look: Move Mouse (Click to Lock)",
+                    "• Menu: M key",
+                    "• Grab: E key or Left Click",
+                    "• Hand Active: 1 (Left), 2 (Right)",
+                    "• Reach Distance: Mouse Wheel"
+                ];
+            case 'Touch':
+                return [
+                    "• Move: Left virtual joystick",
+                    "• Look: Right virtual joystick",
+                    "• Menu: HUD Toggle button",
+                    "• Interaction: Tap on objects",
+                    "• Multi-Touch: Supports dual joystick control"
+                ];
+        }
     }
 
     /**
