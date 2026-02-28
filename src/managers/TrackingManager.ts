@@ -13,6 +13,10 @@ export class TrackingManager {
         provider.init();
     }
 
+    public getActiveProviderId(): string | null {
+        return this.activeProvider ? this.activeProvider.id : null;
+    }
+
     public setProvider(id: string): void {
         const provider = this.providers.get(id);
         if (provider) {

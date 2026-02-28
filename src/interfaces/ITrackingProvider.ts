@@ -21,6 +21,7 @@ export interface ITrackingState {
         left: IHandState;
         right: IHandState;
     };
+    humanoidDelta?: import('../models/HumanoidState').NetworkHumanoidDelta;
 }
 
 /**

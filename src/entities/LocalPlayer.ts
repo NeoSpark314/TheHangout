@@ -12,7 +12,8 @@ import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { IHandState } from '../interfaces/ITrackingProvider';
-import { HandState } from '../models/HandState';
+import { HumanoidState } from '../models/HumanoidState';
+import { NetworkHumanoidDelta } from '../models/HumanoidState';
 
 /**
  * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).
@@ -23,11 +24,13 @@ export class LocalPlayer extends PlayerEntity {
     public skills: Skill[] = [];
     public activeSkill: Skill | null = null;
 
+    public humanoid = new HumanoidState();
     public xrOrigin: IPose;
 
     public _lastMoveVector: IVector3 = { x: 0, y: 0, z: 0 };
     public _leftControllerIndex: number = 0;
     public _rightControllerIndex: number = 1;
+    private _lastProviderId: string | null = null;
 
     constructor(public context: GameContext, id: string, spawnPos: IVector3, spawnYaw: number, view: IView<IPlayerViewState>) {
         super(context, id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
@@ -111,6 +114,12 @@ export class LocalPlayer extends PlayerEntity {
 
         // 3. PHASE 3: Update Tracking
         // Poll tracking data NOW, using the fresh matrix.
+        const providerId = managers.tracking.getActiveProviderId();
+        if (this._lastProviderId !== providerId) {
+            this._lastProviderId = providerId;
+            this.humanoid.clearAll();
+        }
+
         managers.tracking.update(delta, frame);
 
         const trackingState = managers.tracking.getState();
@@ -118,8 +127,17 @@ export class LocalPlayer extends PlayerEntity {
         const worldHeadQuat = trackingState.head.pose.quaternion;
         const bodyYaw = trackingState.head.yaw;
 
-        // Sync hand states (World Space)
-        this.syncHandStates(trackingState.hands);
+        // Sync Humanoid state (XR Provider will populate the trackingState.humanoid buffer)
+        if (trackingState.humanoidDelta) {
+            this.humanoid.applyNetworkDelta(trackingState.humanoidDelta);
+        }
+
+        // We also sync the active/pointer legacy states for tools/skills (pointers)
+        this.handStates.left.active = trackingState.hands.left.active;
+        this.handStates.right.active = trackingState.hands.right.active;
+        this.handStates.left.pose = trackingState.hands.left.pose;
+        this.handStates.right.pose = trackingState.hands.right.pose;
+
         this.headState.position = { ...worldHeadPos };
         this.headState.quaternion = { ...worldHeadQuat };
         this.headHeight = trackingState.head.pose.position.y;
@@ -147,7 +165,7 @@ export class LocalPlayer extends PlayerEntity {
             yaw: bodyYaw,
             headHeight: this.headState.position.y,
             headQuaternion: this.headState.quaternion,
-            handStates: this.handStates,
+            humanoid: this.humanoid, // Pass the Humanoid state to StickFigureView
             name: this.name || 'You',
             color: this.context.avatarConfig.color,
             isLocal: true,
@@ -159,13 +177,9 @@ export class LocalPlayer extends PlayerEntity {
         eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
     }
 
+    // Legacies synced locally, no longer used for full syncs
     private syncHandStates(source: { left: IHandState, right: IHandState }): void {
-        if (this.handStates.left instanceof HandState && this.handStates.right instanceof HandState) {
-            this.handStates.left.copyFrom(source.left);
-            this.handStates.right.copyFrom(source.right);
-        } else {
-            console.warn('[LocalPlayer] handStates are not HandState instances');
-        }
+        // Obsolete
     }
 
     public getNetworkState(): IPlayerEntityState {
@@ -181,7 +195,7 @@ export class LocalPlayer extends PlayerEntity {
             y: bodyYaw,
             h: this.headState.position.y,
             hq: [this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w],
-            hands: JSON.parse(JSON.stringify(this.handStates)),
+            hmd: this.humanoid.consumeNetworkDelta() || undefined,
             conf: {
                 color: this.context.avatarConfig.color
             },

@@ -1,4 +1,5 @@
 import { IHandState } from '../interfaces/ITrackingProvider';
+import { NetworkHumanoidDelta } from '../models/HumanoidState';
 
 /**
  * High-performance spatial types using flat arrays to minimize 
@@ -33,7 +34,8 @@ export interface IPlayerEntityState extends IBaseEntityState {
     y: number; // body yaw
     h: number; // head height
     hq: QuatArr; // local head quaternion
-    hands: {
+    hmd?: NetworkHumanoidDelta; // humanoid delta payload
+    hands?: {  // Keeping legacy for now in case of partial rollback, but will be removed
         left: IHandState;
         right: IHandState;
     };

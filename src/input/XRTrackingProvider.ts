@@ -3,6 +3,8 @@ import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
 import { IHandState } from '../interfaces/ITrackingProvider';
 import { HandState } from '../models/HandState';
+import { HumanoidState } from '../models/HumanoidState';
+import { HumanoidJointName } from '../interfaces/IHumanoid';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { RenderManager } from '../managers/RenderManager';
 
@@ -15,13 +17,34 @@ const JOINT_NAMES: XRHandJoint[] = [
     "pinky-finger-metacarpal", "pinky-finger-phalanx-proximal", "pinky-finger-phalanx-intermediate", "pinky-finger-phalanx-distal", "pinky-finger-tip"
 ];
 
+const HUMAN_JOINT_MAP: Record<string, Record<XRHandJoint, HumanoidJointName>> = {
+    'left': {
+        "wrist": "leftHand",
+        "thumb-metacarpal": "leftThumbMetacarpal", "thumb-phalanx-proximal": "leftThumbProximal", "thumb-phalanx-distal": "leftThumbDistal", "thumb-tip": "leftThumbTip",
+        "index-finger-metacarpal": "leftIndexMetacarpal", "index-finger-phalanx-proximal": "leftIndexProximal", "index-finger-phalanx-intermediate": "leftIndexIntermediate", "index-finger-phalanx-distal": "leftIndexDistal", "index-finger-tip": "leftIndexTip",
+        "middle-finger-metacarpal": "leftMiddleMetacarpal", "middle-finger-phalanx-proximal": "leftMiddleProximal", "middle-finger-phalanx-intermediate": "leftMiddleIntermediate", "middle-finger-phalanx-distal": "leftMiddleDistal", "middle-finger-tip": "leftMiddleTip",
+        "ring-finger-metacarpal": "leftRingMetacarpal", "ring-finger-phalanx-proximal": "leftRingProximal", "ring-finger-phalanx-intermediate": "leftRingIntermediate", "ring-finger-phalanx-distal": "leftRingDistal", "ring-finger-tip": "leftRingTip",
+        "pinky-finger-metacarpal": "leftLittleMetacarpal", "pinky-finger-phalanx-proximal": "leftLittleProximal", "pinky-finger-phalanx-intermediate": "leftLittleIntermediate", "pinky-finger-phalanx-distal": "leftLittleDistal", "pinky-finger-tip": "leftLittleTip"
+    },
+    'right': {
+        "wrist": "rightHand",
+        "thumb-metacarpal": "rightThumbMetacarpal", "thumb-phalanx-proximal": "rightThumbProximal", "thumb-phalanx-distal": "rightThumbDistal", "thumb-tip": "rightThumbTip",
+        "index-finger-metacarpal": "rightIndexMetacarpal", "index-finger-phalanx-proximal": "rightIndexProximal", "index-finger-phalanx-intermediate": "rightIndexIntermediate", "index-finger-phalanx-distal": "rightIndexDistal", "index-finger-tip": "rightIndexTip",
+        "middle-finger-metacarpal": "rightMiddleMetacarpal", "middle-finger-phalanx-proximal": "rightMiddleProximal", "middle-finger-phalanx-intermediate": "rightMiddleIntermediate", "middle-finger-phalanx-distal": "rightMiddleDistal", "middle-finger-tip": "rightMiddleTip",
+        "ring-finger-metacarpal": "rightRingMetacarpal", "ring-finger-phalanx-proximal": "rightRingProximal", "ring-finger-phalanx-intermediate": "rightRingIntermediate", "ring-finger-phalanx-distal": "rightRingDistal", "ring-finger-tip": "rightRingTip",
+        "pinky-finger-metacarpal": "rightLittleMetacarpal", "pinky-finger-phalanx-proximal": "rightLittleProximal", "pinky-finger-phalanx-intermediate": "rightLittleIntermediate", "pinky-finger-phalanx-distal": "rightLittleDistal", "pinky-finger-tip": "rightLittleTip"
+    }
+};
+
 export class XRTrackingProvider implements ITrackingProvider {
     public id = 'xr';
     private state: ITrackingState;
+    private humanoid: HumanoidState;
     private tempVec = new THREE.Vector3();
     private tempQuat = new THREE.Quaternion();
 
     constructor(private context: GameContext) {
+        this.humanoid = new HumanoidState();
         this.state = this.createInitialState();
     }
 
@@ -36,6 +59,22 @@ export class XRTrackingProvider implements ITrackingProvider {
         // Reset active states
         this.state.hands.left.active = false;
         this.state.hands.right.active = false;
+        this.state.humanoidDelta = this.humanoid.consumeNetworkDelta() || undefined;
+    }
+
+    private clearHand(handedness: 'left' | 'right'): void {
+        const map = HUMAN_JOINT_MAP[handedness];
+        for (const xrJointName in map) {
+            this.humanoid.clearJoint(map[xrJointName as XRHandJoint]);
+        }
+    }
+
+    private clearFingers(handedness: 'left' | 'right'): void {
+        const map = HUMAN_JOINT_MAP[handedness];
+        // Skip index 0 (wrist)
+        for (let i = 1; i < 25; i++) {
+            this.humanoid.clearJoint(map[JOINT_NAMES[i]]);
+        }
     }
 
     private createInitialState(): ITrackingState {
@@ -80,12 +119,17 @@ export class XRTrackingProvider implements ITrackingProvider {
         // 2. Clear previous active states
         this.state.hands.left.active = false;
         this.state.hands.right.active = false;
+        this.state.humanoidDelta = undefined;
+
+        const updatedHands = new Set<'left' | 'right'>();
 
         // 3. Poll Input Sources and map them to Three.js XR objects
         for (let i = 0; i < session.inputSources.length; i++) {
             const source = session.inputSources[i];
             const handedness = source.handedness;
             if (handedness !== 'left' && handedness !== 'right') continue;
+
+            updatedHands.add(handedness);
 
             const handState = this.state.hands[handedness];
             handState.hasJoints = !!source.hand;
@@ -97,14 +141,16 @@ export class XRTrackingProvider implements ITrackingProvider {
                 let validJoints = 0;
 
                 for (let j = 0; j < 25; j++) {
-                    const jointName = JOINT_NAMES[j];
-                    const joint = source.hand.get(jointName);
+                    const xrJointName = JOINT_NAMES[j];
+                    const humanoidJointName = HUMAN_JOINT_MAP[handedness][xrJointName];
+                    const joint = source.hand.get(xrJointName);
                     const pose = joint ? xrFrame.getJointPose(joint, referenceSpace) : null;
 
                     if (pose) {
                         const worldPose = this.rawPoseToWorldPose(pose, render.cameraGroup);
-                        handState.joints[j].pose.position = worldPose.position;
-                        handState.joints[j].pose.quaternion = worldPose.quaternion;
+
+                        // Feed into dirty-sync Humanoid map
+                        this.humanoid.setJointPose(humanoidJointName, worldPose.position, worldPose.quaternion);
 
                         if (j === 0) wristPose = worldPose;
                         validJoints++;
@@ -125,6 +171,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                     }
                 } else {
                     handState.active = false;
+                    this.clearHand(handedness);
                 }
             } else {
                 // Controller-based tracking
@@ -137,6 +184,13 @@ export class XRTrackingProvider implements ITrackingProvider {
                     handState.active = true;
                     handState.pose.position = worldPose.position;
                     handState.pose.quaternion = worldPose.quaternion;
+
+                    // Fallback: If no finger tracking, at least put the wrist at the controller so arms stay attached
+                    const wristName = HUMAN_JOINT_MAP[handedness]['wrist'];
+                    this.humanoid.setJointPose(wristName, worldPose.position, worldPose.quaternion);
+
+                    // Drop fingers since we are holding controllers
+                    this.clearFingers(handedness);
 
                     // Pointer Pose for Controllers: Prefer targetRaySpace
                     // targetRaySpace is the legal "pointing" direction for controllers
@@ -154,6 +208,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                     }
                 } else {
                     handState.active = false;
+                    this.clearHand(handedness);
                 }
 
                 // Reset joints for controller mode
@@ -163,6 +218,13 @@ export class XRTrackingProvider implements ITrackingProvider {
                 }
             }
         }
+
+        // 4. Any hands that disappeared from the inputSources array completely need to be cleared
+        if (!updatedHands.has('left')) this.clearHand('left');
+        if (!updatedHands.has('right')) this.clearHand('right');
+
+        // Emit the aggregated delta chunk for this frame to State and LocalPlayer
+        this.state.humanoidDelta = this.humanoid.consumeNetworkDelta() || undefined;
     }
 
     public getState(): ITrackingState {

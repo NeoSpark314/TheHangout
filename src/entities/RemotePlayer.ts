@@ -4,6 +4,7 @@ import { IView } from '../interfaces/IView';
 import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import { HandState } from '../models/HandState';
+import { HumanoidState } from '../models/HumanoidState';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -14,6 +15,7 @@ export class RemotePlayer extends PlayerEntity {
     public targetPosition: IVector3 = { x: 0, y: 5, z: 0 };
     public targetYaw: number = 0;
     public avatarColor: string | number | undefined;
+    public humanoid = new HumanoidState();
     private lastNetworkUpdateTime: number = performance.now();
     private _onVoiceStream: (data: any) => void;
 
@@ -80,6 +82,10 @@ export class RemotePlayer extends PlayerEntity {
             this.headState.quaternion = { x: data.hq[0], y: data.hq[1], z: data.hq[2], w: data.hq[3] };
         }
 
+        if (data.hmd) {
+            this.humanoid.applyNetworkDelta(data.hmd);
+        }
+
         if (data.hands) {
             if (data.hands.left && this.handStates.left instanceof HandState) {
                 this.handStates.left.applyData(data.hands.left);
@@ -106,7 +112,7 @@ export class RemotePlayer extends PlayerEntity {
             yaw: this.targetYaw,
             headHeight: this.headHeight,
             headQuaternion: this.headState.quaternion,
-            handStates: this.handStates,
+            humanoid: this.humanoid,
             name: !this.micEnabled ? `${this.name || 'Player'} [Muted]` : (this.isMuted ? `${this.name || 'Player'} (MUTED)` : (this.name || 'Player')),
             color: this.avatarColor,
             audioLevel: this.audioLevel,

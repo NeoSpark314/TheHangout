@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState, IHandState } from '../interfaces/ITrackingProvider';
 import { HandState } from '../models/HandState';
+import { HumanoidState } from '../models/HumanoidState';
 import { PlayerEntity } from '../entities/PlayerEntity';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import eventBus from '../core/EventBus';
@@ -18,6 +19,7 @@ const HAND_X_SPACING = 0.2;
 export class DesktopTrackingProvider implements ITrackingProvider {
     public id = 'desktop';
     private state: ITrackingState;
+    private humanoid: HumanoidState;
 
     // Arm stretching state
     private leftStretch = new THREE.Vector3(0, 0, 0);
@@ -44,6 +46,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     };
 
     constructor(private context: GameContext) {
+        this.humanoid = new HumanoidState();
         this.state = this.createInitialState();
     }
 
@@ -191,6 +194,13 @@ export class DesktopTrackingProvider implements ITrackingProvider {
             j.pose.position = { ...this.state.hands.right.pose.position };
             j.pose.quaternion = { ...this.state.hands.right.pose.quaternion };
         });
+
+        // Map base hand targets directly to the Humanoid sync state
+        // Desktop hands are always 'active' effectively for networking
+        this.humanoid.setJointPose('leftHand', leftTargetWorld, worldHeadQuat);
+        this.humanoid.setJointPose('rightHand', rightTargetWorld, worldHeadQuat);
+
+        this.state.humanoidDelta = this.humanoid.consumeNetworkDelta() || undefined;
     }
 
     public getState(): ITrackingState {

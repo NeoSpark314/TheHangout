@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
-import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
 import { IHandState } from '../interfaces/ITrackingProvider';
 import { GameContext } from '../core/GameState';
+import { HumanoidState } from '../models/HumanoidState';
+import { HumanoidJointName } from '../interfaces/IHumanoid';
 
 export interface IPlayerViewState {
     position: IVector3;
     yaw: number;
     headHeight: number;
-    headQuaternion: IQuaternion;
-    handStates: { left: IHandState, right: IHandState };
-    name?: string;
+    headQuaternion: IPose['quaternion'];
+    humanoid?: HumanoidState;
+    name: string;
     color?: string | number;
     isLocal?: boolean;
     audioLevel?: number;
@@ -566,22 +568,40 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             }
         }
 
-        if (state.handStates) {
-            // Logic works in WORLD SPACE, but rendering needs LOCAL SPACE relative to this.mesh (the avatar origin)
-            // Ensure world matrix is up to date since we just potentially moved this.mesh
-            this.mesh.updateMatrixWorld(true);
+        // Logic works in WORLD SPACE, but rendering needs LOCAL SPACE relative to this.mesh (the avatar origin)
+        // Ensure world matrix is up to date since we just potentially moved this.mesh
+        // --- Update Arms & Hands using the HumanoidState ---
+        if (state.humanoid && state.humanoid.joints) {
+            const leftWrist = state.humanoid.joints['leftHand'];
+            const rightWrist = state.humanoid.joints['rightHand'];
 
-            this.updateWristMarkers(state.handStates.left, state.handStates.right, lerpFactor);
+            const leftTargetLocal = leftWrist ?
+                new THREE.Vector3(leftWrist.position.x, leftWrist.position.y, leftWrist.position.z) :
+                new THREE.Vector3(-0.3, 1.2, 0.4);
 
-            const leftArmLocalPos = state.handStates.left.active && (state.handStates.left.hasJoints || this.wristMeshes.left.visible)
-                ? this.getLeftWristMarkerPosition()
-                : new THREE.Vector3(-0.25, 0.7, -0.05);
-            const rightArmLocalPos = state.handStates.right.active && (state.handStates.right.hasJoints || this.wristMeshes.right.visible)
-                ? this.getRightWristMarkerPosition()
-                : new THREE.Vector3(0.25, 0.7, -0.05);
-            this.updateArms(leftArmLocalPos, rightArmLocalPos);
+            const rightTargetLocal = rightWrist ?
+                new THREE.Vector3(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z) :
+                new THREE.Vector3(0.3, 1.2, 0.4);
+
+            // Transform hand targets to local offset from avatar body
+            const m = new THREE.Matrix4().makeTranslation(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
+            const mRot = new THREE.Matrix4().makeRotationY(this.mesh.rotation.y);
+            m.multiply(mRot);
+            m.invert();
+            leftTargetLocal.applyMatrix4(m);
+            rightTargetLocal.applyMatrix4(m);
+
+            this.updateArms(leftTargetLocal, rightTargetLocal);
+
+            // Update Fingers & Wrist Markers
+            this._updateHumanoidHand('left', state.humanoid, lerpFactor);
+            this._updateHumanoidHand('right', state.humanoid, lerpFactor);
+        } else {
+            // Default rest pose
+            this.updateArms(new THREE.Vector3(-0.3, 0.9, 0), new THREE.Vector3(0.3, 0.9, 0));
+            this._updateHumanoidHand('left', undefined, lerpFactor);
+            this._updateHumanoidHand('right', undefined, lerpFactor);
         }
-
         if (state.audioLevel !== undefined) {
             const targetMouthScale = 1.0 + (state.audioLevel * 10.0);
             const animLerp = 0.5;
@@ -771,55 +791,63 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             const handWorldTarget = handLocalTarget.clone();
             this.mesh.localToWorld(handWorldTarget);
 
-            // Get local target relative to the shoulder bone
-            shoulderBone.updateMatrixWorld(true);
-            const invShoulderMat = new THREE.Matrix4().copy(shoulderBone.matrixWorld).invert();
-            const targetLocal = handWorldTarget.clone().applyMatrix4(invShoulderMat);
+            // Get local target relative to the shoulder bone's parent (chest)
+            // This is crucial because bone.quaternion is relative to its parent!
+            const parentBone = shoulderBone.parent;
+            let targetLocal = handWorldTarget.clone();
+            if (parentBone) {
+                parentBone.updateMatrixWorld(true);
+                const invParentMat = new THREE.Matrix4().copy(parentBone.matrixWorld).invert();
+                targetLocal.applyMatrix4(invParentMat);
+            }
 
-            const targetDist = targetLocal.length();
-            const armDir = targetLocal.clone().normalize();
+            const shoulderToTarget = new THREE.Vector3().subVectors(targetLocal, shoulderBone.position);
+            const targetDist = Math.max(0.001, shoulderToTarget.length());
+            const armDir = shoulderToTarget.clone().normalize();
 
-            // Setup stretchy arms: if target is further than reach, stretch the lengths
+            // Segment lengths
             let upperArmLen = 0.32;
             let lowerArmLen = 0.32;
             const maxReach = upperArmLen + lowerArmLen;
+            const minReach = Math.abs(upperArmLen - lowerArmLen) + 0.001;
 
+            // Setup stretchy arms
             if (targetDist > maxReach - 0.001) {
-                // Scale bones equally to reach the target exactly
                 const stretchFactor = targetDist / maxReach;
                 upperArmLen *= stretchFactor;
                 lowerArmLen *= stretchFactor;
             }
 
-            // Basic CCD / Triangle IK math to find the elbow bend angle
-            // Law of Cosines to find the angle at the shoulder
-            let cosAngle = (upperArmLen * upperArmLen + targetDist * targetDist - lowerArmLen * lowerArmLen) / (2 * upperArmLen * targetDist);
+            const effectiveDist = Math.max(minReach, Math.min(maxReach, targetDist));
+
+            // Law of Cosines
+            let cosAngle = (upperArmLen * upperArmLen + effectiveDist * effectiveDist - lowerArmLen * lowerArmLen) / (2 * upperArmLen * effectiveDist);
             cosAngle = Math.max(-1, Math.min(1, cosAngle));
             const shoulderAngle = Math.acos(cosAngle);
 
+            // Our bones are pointed DOWNWARDS (0, -1, 0) by default in their local space.
             // Pole vector (hint for elbow direction: slightly outward and back)
             const side = isLeft ? 1 : -1;
             const poleLocal = new THREE.Vector3(side * 0.5, -0.5, 0.2).normalize();
 
             // Find an axis perpendicular to the arm direction and pole to bend around
             const bendAxis = new THREE.Vector3().crossVectors(poleLocal, armDir).normalize();
-
-            // If the arm is stretched out straight, the cross product is zero
             if (bendAxis.lengthSq() < 0.001) { bendAxis.set(1, 0, 0); }
 
-            // Apply rotation from straight-down (0,-1,0) towards the target
+            // 1. Point the shoulder directly at the target
             const baseQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), armDir);
 
-            // Add the bend angle
+            // 2. Bend the shoulder OUTWARDS by the shoulder angle
             const bendQuat = new THREE.Quaternion().setFromAxisAngle(bendAxis, shoulderAngle);
             const upperQuat = baseQuat.multiply(bendQuat);
 
             // Now solve the elbow (lower arm)
-            let lowerCosAngle = (upperArmLen * upperArmLen + lowerArmLen * lowerArmLen - targetDist * targetDist) / (2 * upperArmLen * lowerArmLen);
+            let lowerCosAngle = (upperArmLen * upperArmLen + lowerArmLen * lowerArmLen - effectiveDist * effectiveDist) / (2 * upperArmLen * lowerArmLen);
             lowerCosAngle = Math.max(-1, Math.min(1, lowerCosAngle));
             const elbowAngle = Math.PI - Math.acos(lowerCosAngle);
 
-            // To map the bend local to the lower arm, we reverse the upper arm rotation applied to the bendAxis
+            // The elbow bends along the exact same plane as the shoulder, so its axis 
+            // relative to the upper arm is just the bendAxis transformed by the upper arm's rotation
             const lowerBendAxis = bendAxis.clone().applyQuaternion(upperQuat.clone().invert());
             const lowerQuat = new THREE.Quaternion().setFromAxisAngle(lowerBendAxis, elbowAngle);
 
@@ -849,52 +877,80 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         this.rightForearm.position.set(0, -rightIk.wristDist * 0.5, 0);
     }
 
-    public updateWristMarkers(leftHandInfo: IHandState, rightHandInfo: IHandState, lerpFactor: number = 1.0): void {
+    // Ordered list of humanoid joint names matching standard WebXR 25-joint arrays
+    private static HUM_JOINTS = {
+        left: [
+            "leftHand",
+            "leftThumbMetacarpal", "leftThumbProximal", "leftThumbDistal", "leftThumbTip",
+            "leftIndexMetacarpal", "leftIndexProximal", "leftIndexIntermediate", "leftIndexDistal", "leftIndexTip",
+            "leftMiddleMetacarpal", "leftMiddleProximal", "leftMiddleIntermediate", "leftMiddleDistal", "leftMiddleTip",
+            "leftRingMetacarpal", "leftRingProximal", "leftRingIntermediate", "leftRingDistal", "leftRingTip",
+            "leftLittleMetacarpal", "leftLittleProximal", "leftLittleIntermediate", "leftLittleDistal", "leftLittleTip"
+        ] as HumanoidJointName[],
+        right: [
+            "rightHand",
+            "rightThumbMetacarpal", "rightThumbProximal", "rightThumbDistal", "rightThumbTip",
+            "rightIndexMetacarpal", "rightIndexProximal", "rightIndexIntermediate", "rightIndexDistal", "rightIndexTip",
+            "rightMiddleMetacarpal", "rightMiddleProximal", "rightMiddleIntermediate", "rightMiddleDistal", "rightMiddleTip",
+            "rightRingMetacarpal", "rightRingProximal", "rightRingIntermediate", "rightRingDistal", "rightRingTip",
+            "rightLittleMetacarpal", "rightLittleProximal", "rightLittleIntermediate", "rightLittleDistal", "rightLittleTip"
+        ] as HumanoidJointName[]
+    };
+
+    private _updateHumanoidHand(hand: 'left' | 'right', humanoidInfo: HumanoidState | undefined, lerpFactor: number): void {
         const inverseWorldQuat = new THREE.Quaternion();
         this.mesh.getWorldQuaternion(inverseWorldQuat).invert();
 
-        this._updateHand('left', leftHandInfo, inverseWorldQuat, lerpFactor);
-        this._updateHand('right', rightHandInfo, inverseWorldQuat, lerpFactor);
-    }
+        const jointNames = StickFigureView.HUM_JOINTS[hand];
+        let hasActiveFingers = false;
 
-    private _updateHand(hand: 'left' | 'right', handInfo: IHandState, inverseWorldQuat: THREE.Quaternion, lerpFactor: number): void {
-        const hasJoints = handInfo.active && handInfo.hasJoints;
+        if (humanoidInfo && humanoidInfo.joints) {
+            // Check if we have tracking for the index tip (indicates full hand tracking active)
+            const indexTip = jointNames[9];
+            hasActiveFingers = !!humanoidInfo.joints[indexTip];
 
-        // 1. Update Wrist Marker (Cube)
-        if (!handInfo.active || hasJoints) {
-            this.wristMeshes[hand].visible = false;
-        } else {
-            this.wristMeshes[hand].visible = true;
-            const worldPos = new THREE.Vector3(handInfo.pose.position.x, handInfo.pose.position.y, handInfo.pose.position.z);
-            const worldQuat = new THREE.Quaternion(handInfo.pose.quaternion.x, handInfo.pose.quaternion.y, handInfo.pose.quaternion.z, handInfo.pose.quaternion.w);
+            const wristPose = humanoidInfo.joints[jointNames[0]];
 
-            const localPos = this.mesh.worldToLocal(worldPos);
-            const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
-
-            this.wristMeshes[hand].position.lerp(localPos, lerpFactor);
-            this.wristMeshes[hand].quaternion.slerp(localQuat, lerpFactor);
-        }
-
-        // 2. Update Hand Joints
-        for (let i = 0; i < 25; i++) {
-            if (hasJoints) {
-                this.handMeshes[hand][i].visible = true;
-                const jointPose = handInfo.joints[i].pose;
-                const worldPos = new THREE.Vector3(jointPose.position.x, jointPose.position.y, jointPose.position.z);
-                const worldQuat = new THREE.Quaternion(jointPose.quaternion.x, jointPose.quaternion.y, jointPose.quaternion.z, jointPose.quaternion.w);
-
+            // 1. Update Wrist Marker (Cube)
+            if (!wristPose || hasActiveFingers) {
+                this.wristMeshes[hand].visible = false;
+            } else {
+                this.wristMeshes[hand].visible = true;
+                const worldPos = new THREE.Vector3(wristPose.position.x, wristPose.position.y, wristPose.position.z);
+                const worldQuat = new THREE.Quaternion(wristPose.quaternion.x, wristPose.quaternion.y, wristPose.quaternion.z, wristPose.quaternion.w);
                 const localPos = this.mesh.worldToLocal(worldPos);
                 const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
 
-                this.handMeshes[hand][i].position.lerp(localPos, lerpFactor);
-                this.handMeshes[hand][i].quaternion.slerp(localQuat, lerpFactor);
-            } else {
+                this.wristMeshes[hand].position.lerp(localPos, lerpFactor);
+                this.wristMeshes[hand].quaternion.slerp(localQuat, lerpFactor);
+            }
+
+            // 2. Update Finger Spheres
+            for (let i = 0; i < 25; i++) {
+                const p = humanoidInfo.joints[jointNames[i]];
+
+                if (hasActiveFingers && p) {
+                    this.handMeshes[hand][i].visible = true;
+                    const worldPos = new THREE.Vector3(p.position.x, p.position.y, p.position.z);
+                    const worldQuat = new THREE.Quaternion(p.quaternion.x, p.quaternion.y, p.quaternion.z, p.quaternion.w);
+                    const localPos = this.mesh.worldToLocal(worldPos);
+                    const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
+
+                    this.handMeshes[hand][i].position.lerp(localPos, lerpFactor);
+                    this.handMeshes[hand][i].quaternion.slerp(localQuat, lerpFactor);
+                } else {
+                    this.handMeshes[hand][i].visible = false;
+                }
+            }
+        } else {
+            this.wristMeshes[hand].visible = false;
+            for (let i = 0; i < 25; i++) {
                 this.handMeshes[hand][i].visible = false;
             }
         }
 
-        // 3. Update Hand Skeleton
-        this._updateHandSkeleton(hand, hasJoints);
+        // 3. Update Connecting Cylinders
+        this._updateHandSkeleton(hand, hasActiveFingers);
     }
 
     private _updateHandSkeleton(hand: 'left' | 'right', hasJoints: boolean): void {
