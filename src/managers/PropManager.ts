@@ -294,7 +294,7 @@ export class PropManager {
         const notes = [220, 247, 277, 294, 330, 370, 415, 440];
         const padCount = notes.length;
         const radius = 1.85;
-        const center = new THREE.Vector3(0, 0.08, -3.0);
+        const center = new THREE.Vector3(0, 1.05, -3.0);
 
         for (let i = 0; i < padCount; i++) {
             const t = (i / (padCount - 1));

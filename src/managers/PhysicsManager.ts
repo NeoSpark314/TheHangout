@@ -60,6 +60,8 @@ export class PhysicsManager {
     private touchQueryAvgHitsPerFrame: number = 0;
     private touchQueryHitsByEntityAccum: Map<string, number> = new Map();
     private touchQueryHitsByEntityWindow: Map<string, number> = new Map();
+    private collisionSoundCooldownMs: number = 100;
+    private lastCollisionSoundAtByPair: Map<string, number> = new Map();
 
     constructor(private context: GameContext) { }
 
@@ -360,6 +362,36 @@ export class PhysicsManager {
                 entityAId: a?.id || null,
                 entityBId: b?.id || null
             });
+
+            const hasPhysicsPropEntity =
+                a?.type === EntityType.PHYSICS_PROP ||
+                b?.type === EntityType.PHYSICS_PROP;
+            if (!hasPhysicsPropEntity || !this.world) return;
+
+            const nowMs = this.nowMs();
+            const pairKey = this.contactKey(handle1, handle2);
+            const lastAt = this.lastCollisionSoundAtByPair.get(pairKey) ?? 0;
+            if ((nowMs - lastAt) < this.collisionSoundCooldownMs) return;
+            this.lastCollisionSoundAtByPair.set(pairKey, nowMs);
+
+            const colliderA = this.world.getCollider(handle1);
+            const colliderB = this.world.getCollider(handle2);
+            if (!colliderA && !colliderB) return;
+
+            const bodyA = colliderA?.parent();
+            const bodyB = colliderB?.parent();
+            const velA = bodyA?.linvel();
+            const velB = bodyB?.linvel();
+            const speedA = velA ? Math.hypot(velA.x, velA.y, velA.z) : 0;
+            const speedB = velB ? Math.hypot(velB.x, velB.y, velB.z) : 0;
+            const relSpeed = Math.abs(speedA - speedB);
+            const impactSpeed = Math.max(relSpeed, speedA, speedB);
+
+            // Keep collision SFX subtle: low floor, capped ceiling.
+            const intensity = Math.min(0.35, Math.max(0.05, impactSpeed * 0.09));
+            if (intensity <= 0.05) return;
+
+            eventBus.emit(EVENTS.ENTITY_COLLIDED, { intensity });
         });
     }
 
