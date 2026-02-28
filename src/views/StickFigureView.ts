@@ -575,21 +575,13 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             const leftWrist = state.humanoid.joints['leftHand'];
             const rightWrist = state.humanoid.joints['rightHand'];
 
-            const leftTargetLocal = leftWrist ?
-                new THREE.Vector3(leftWrist.position.x, leftWrist.position.y, leftWrist.position.z) :
-                new THREE.Vector3(-0.3, 1.2, 0.4);
+            const leftTargetLocal = leftWrist
+                ? this.mesh.worldToLocal(new THREE.Vector3(leftWrist.position.x, leftWrist.position.y, leftWrist.position.z))
+                : new THREE.Vector3(-0.35, 0.95, 0.1);
 
-            const rightTargetLocal = rightWrist ?
-                new THREE.Vector3(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z) :
-                new THREE.Vector3(0.3, 1.2, 0.4);
-
-            // Transform hand targets to local offset from avatar body
-            const m = new THREE.Matrix4().makeTranslation(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
-            const mRot = new THREE.Matrix4().makeRotationY(this.mesh.rotation.y);
-            m.multiply(mRot);
-            m.invert();
-            leftTargetLocal.applyMatrix4(m);
-            rightTargetLocal.applyMatrix4(m);
+            const rightTargetLocal = rightWrist
+                ? this.mesh.worldToLocal(new THREE.Vector3(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z))
+                : new THREE.Vector3(0.35, 0.95, 0.1);
 
             this.updateArms(leftTargetLocal, rightTargetLocal);
 
@@ -723,7 +715,9 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         const neckHeight = Math.max(0.4, headHeight - 0.2);
         this.headMesh.position.y = neckHeight;
 
-        const waistHeight = neckHeight * 0.55;
+        // Slightly higher waist keeps shoulders from sitting too low,
+        // reducing the "long neck" look.
+        const waistHeight = neckHeight * 0.6;
         this.bones.hips.position.set(0, waistHeight, 0);
 
         // Scale visual limbs (their centers are 0,0,0, stretching from -0.5 to 0.5)
@@ -732,8 +726,9 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
         const spineLength = neckHeight - waistHeight;
         this.bones.spine.position.set(0, 0, 0);
-        this.bones.chest.position.set(0, spineLength * 0.5, 0);
-        this.bones.neck.position.set(0, spineLength * 0.5, 0);
+        const chestRatio = 0.62;
+        this.bones.chest.position.set(0, spineLength * chestRatio, 0);
+        this.bones.neck.position.set(0, spineLength * (1 - chestRatio), 0);
 
         this._setupLocalCylinder(this.torso, spineLength);
         this.torso.position.set(0, spineLength * 0.5, 0); // shift mesh up relative to hip
@@ -785,71 +780,65 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     }
 
     public updateArms(leftHandLocalPos: THREE.Vector3, rightHandLocalPos: THREE.Vector3): void {
-        const calculateIK = (shoulderBone: THREE.Bone, handLocalTarget: THREE.Vector3, isLeft: boolean): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
-
-            // The input target is in `this.mesh` space (the avatar root). Convert it to true World Space.
-            const handWorldTarget = handLocalTarget.clone();
-            this.mesh.localToWorld(handWorldTarget);
-
-            // Get local target relative to the shoulder bone's parent (chest)
-            // This is crucial because bone.quaternion is relative to its parent!
+        const calculateIK = (
+            shoulderBone: THREE.Bone,
+            handLocalTarget: THREE.Vector3,
+            isLeft: boolean
+        ): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
             const parentBone = shoulderBone.parent;
-            let targetLocal = handWorldTarget.clone();
+            const targetInParent = handLocalTarget.clone();
+
             if (parentBone) {
+                // Convert mesh-local target to world and then into shoulder parent space.
+                this.mesh.updateMatrixWorld(true);
                 parentBone.updateMatrixWorld(true);
-                const invParentMat = new THREE.Matrix4().copy(parentBone.matrixWorld).invert();
-                targetLocal.applyMatrix4(invParentMat);
+                targetInParent.applyMatrix4(this.mesh.matrixWorld);
+                targetInParent.applyMatrix4(new THREE.Matrix4().copy(parentBone.matrixWorld).invert());
             }
 
-            const shoulderToTarget = new THREE.Vector3().subVectors(targetLocal, shoulderBone.position);
-            const targetDist = Math.max(0.001, shoulderToTarget.length());
-            const armDir = shoulderToTarget.clone().normalize();
-
-            // Segment lengths
             let upperArmLen = 0.32;
             let lowerArmLen = 0.32;
-            const maxReach = upperArmLen + lowerArmLen;
-            const minReach = Math.abs(upperArmLen - lowerArmLen) + 0.001;
+            const shoulderPos = shoulderBone.position.clone();
+            const toTarget = new THREE.Vector3().subVectors(targetInParent, shoulderPos);
+            const rawDist = Math.max(0.0001, toTarget.length());
 
-            // Setup stretchy arms
-            if (targetDist > maxReach - 0.001) {
-                const stretchFactor = targetDist / maxReach;
-                upperArmLen *= stretchFactor;
-                lowerArmLen *= stretchFactor;
+            // Stretch both segments proportionally so the arm stays visually connected
+            // when hands/controllers are beyond nominal reach.
+            const nominalReach = upperArmLen + lowerArmLen;
+            if (rawDist > nominalReach) {
+                const stretch = rawDist / nominalReach;
+                upperArmLen *= stretch;
+                lowerArmLen *= stretch;
             }
 
-            const effectiveDist = Math.max(minReach, Math.min(maxReach, targetDist));
+            const maxReach = upperArmLen + lowerArmLen - 0.0001;
+            const dist = Math.min(rawDist, maxReach);
+            const dir = toTarget.multiplyScalar(1 / rawDist);
 
-            // Law of Cosines
-            let cosAngle = (upperArmLen * upperArmLen + effectiveDist * effectiveDist - lowerArmLen * lowerArmLen) / (2 * upperArmLen * effectiveDist);
-            cosAngle = Math.max(-1, Math.min(1, cosAngle));
-            const shoulderAngle = Math.acos(cosAngle);
+            // Stable elbow bend plane: outward + a little forward.
+            const side = isLeft ? -1 : 1;
+            const pole = new THREE.Vector3(side, 0, 0.35).normalize();
+            const planeNormal = new THREE.Vector3().crossVectors(dir, pole);
+            if (planeNormal.lengthSq() < 1e-6) planeNormal.set(0, 0, 1);
+            planeNormal.normalize();
+            const bendDir = new THREE.Vector3().crossVectors(planeNormal, dir).normalize();
 
-            // Our bones are pointed DOWNWARDS (0, -1, 0) by default in their local space.
-            // Pole vector (hint for elbow direction: slightly outward and back)
-            const side = isLeft ? 1 : -1;
-            const poleLocal = new THREE.Vector3(side * 0.5, -0.5, 0.2).normalize();
+            // Analytic two-bone solve
+            const a = (upperArmLen * upperArmLen - lowerArmLen * lowerArmLen + dist * dist) / (2 * dist);
+            const hSq = Math.max(0, upperArmLen * upperArmLen - a * a);
+            const h = Math.sqrt(hSq);
+            const elbow = shoulderPos
+                .clone()
+                .addScaledVector(dir, a)
+                .addScaledVector(bendDir, h);
 
-            // Find an axis perpendicular to the arm direction and pole to bend around
-            const bendAxis = new THREE.Vector3().crossVectors(poleLocal, armDir).normalize();
-            if (bendAxis.lengthSq() < 0.001) { bendAxis.set(1, 0, 0); }
+            const upperDir = elbow.clone().sub(shoulderPos).normalize();
+            const lowerDir = targetInParent.clone().sub(elbow).normalize();
+            const baseDir = new THREE.Vector3(0, -1, 0);
 
-            // 1. Point the shoulder directly at the target
-            const baseQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), armDir);
-
-            // 2. Bend the shoulder OUTWARDS by the shoulder angle
-            const bendQuat = new THREE.Quaternion().setFromAxisAngle(bendAxis, shoulderAngle);
-            const upperQuat = baseQuat.multiply(bendQuat);
-
-            // Now solve the elbow (lower arm)
-            let lowerCosAngle = (upperArmLen * upperArmLen + lowerArmLen * lowerArmLen - effectiveDist * effectiveDist) / (2 * upperArmLen * lowerArmLen);
-            lowerCosAngle = Math.max(-1, Math.min(1, lowerCosAngle));
-            const elbowAngle = Math.PI - Math.acos(lowerCosAngle);
-
-            // The elbow bends along the exact same plane as the shoulder, so its axis 
-            // relative to the upper arm is just the bendAxis transformed by the upper arm's rotation
-            const lowerBendAxis = bendAxis.clone().applyQuaternion(upperQuat.clone().invert());
-            const lowerQuat = new THREE.Quaternion().setFromAxisAngle(lowerBendAxis, elbowAngle);
+            const upperQuat = new THREE.Quaternion().setFromUnitVectors(baseDir, upperDir);
+            const lowerLocalDir = lowerDir.clone().applyQuaternion(upperQuat.clone().invert());
+            const lowerQuat = new THREE.Quaternion().setFromUnitVectors(baseDir, lowerLocalDir);
 
             return { upperQuat, lowerQuat, elbowDist: upperArmLen, wristDist: lowerArmLen };
         };
