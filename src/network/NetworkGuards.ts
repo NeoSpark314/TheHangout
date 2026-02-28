@@ -60,6 +60,32 @@ function isPeerDisconnectPayload(payload: unknown): boolean {
     return typeof payload === 'string' || (isObject(payload) && typeof payload.peerId === 'string');
 }
 
+function isFeatureEventPayload(payload: unknown): boolean {
+    return isObject(payload)
+        && typeof payload.featureId === 'string'
+        && typeof payload.eventType === 'string'
+        && typeof payload.eventId === 'string'
+        && typeof payload.originPeerId === 'string'
+        && typeof payload.sentAt === 'number'
+        && ('data' in payload);
+}
+
+function isFeatureSnapshotPayload(payload: unknown): boolean {
+    if (!isObject(payload) || !Array.isArray(payload.features)) return false;
+    for (const feature of payload.features) {
+        if (!isObject(feature)) return false;
+        if (typeof feature.featureId !== 'string') return false;
+        if (!('snapshot' in feature)) return false;
+    }
+    return true;
+}
+
+function isFeatureSnapshotRequestPayload(payload: unknown): boolean {
+    if (!isObject(payload)) return false;
+    if ('request' in payload && typeof payload.request !== 'boolean') return false;
+    return true;
+}
+
 export function isValidPayloadForType(type: number, payload: unknown): boolean {
     switch (type) {
         case PACKET_TYPES.STATE_UPDATE:
@@ -79,6 +105,12 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isPeerJoinedPayload(payload);
         case PACKET_TYPES.PEER_DISCONNECT:
             return isPeerDisconnectPayload(payload);
+        case PACKET_TYPES.FEATURE_EVENT:
+            return isFeatureEventPayload(payload);
+        case PACKET_TYPES.FEATURE_SNAPSHOT:
+            return isFeatureSnapshotPayload(payload);
+        case PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST:
+            return isFeatureSnapshotRequestPayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

@@ -4,6 +4,8 @@ import { EntityManager } from '../managers/EntityManager';
 import { PhysicsManager } from '../managers/PhysicsManager';
 import { RoomManager } from '../managers/RoomManager';
 import { ServerNetworkManager } from './ServerNetworkManager';
+import { ReplicationManager } from '../managers/ReplicationManager';
+import { DrawingManager } from '../managers/DrawingManager';
 
 export class HeadlessRoom {
     public context: GameContext;
@@ -25,12 +27,14 @@ export class HeadlessRoom {
 
         const entityMgr = new EntityManager(this.context);
         this.context.setManager('entity', entityMgr);
+        this.context.setManager('replication', new ReplicationManager(this.context));
 
         const physicsMgr = new PhysicsManager(this.context);
         this.context.setManager('physics', physicsMgr);
 
         const roomMgr = new RoomManager(this.context);
         this.context.setManager('room', roomMgr);
+        this.context.setManager('drawing', new DrawingManager(null, this.context));
 
         this.context.setManager('network', this.network as any);
 

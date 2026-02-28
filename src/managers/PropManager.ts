@@ -4,8 +4,17 @@ import { GameContext, IRoomConfig } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
+import { IReplicatedFeature } from './ReplicationManager';
 
-export class PropManager {
+interface IDrumPadHitPayload {
+    padId: string;
+    frequency: number;
+    intensity: number;
+    position?: { x: number; y: number; z: number };
+}
+
+export class PropManager implements IReplicatedFeature {
+    public readonly featureId: string = 'feature:drumPads';
     private scene: THREE.Scene;
     private random: () => number;
 
@@ -37,6 +46,7 @@ export class PropManager {
             }
         };
         eventBus.on(EVENTS.DRUM_PAD_HIT, this.onDrumPadHitHandler);
+        this.context.managers.replication.registerFeature(this);
 
         this.onPhysicsCollisionStartedHandler = (data) => {
             const padA = this.drumPadFreqByHandle.get(data.handleA);
@@ -53,7 +63,7 @@ export class PropManager {
             const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
             const intensity = Math.max(0.08, Math.min(1.0, speed * 0.22));
             const padInfo = this.drumPadById.get(hit.padId);
-            eventBus.emit(EVENTS.DRUM_PAD_HIT, {
+            this.emitDrumHit({
                 padId: hit.padId,
                 frequency: hit.frequency,
                 intensity,
@@ -393,7 +403,7 @@ export class PropManager {
                 const strikeSpeed = Math.max(0, -vy) + speed * 0.22;
                 const intensity = Math.min(1.0, Math.max(0.12, strikeSpeed * 0.12));
                 const freq = this.drumPadById.get(`pad-${i}`)?.frequency ?? 220;
-                eventBus.emit(EVENTS.DRUM_PAD_HIT, {
+                this.emitDrumHit({
                     padId: `pad-${i}`,
                     frequency: freq,
                     intensity,
@@ -426,6 +436,18 @@ export class PropManager {
         }
 
         return null;
+    }
+
+    public onEvent(eventType: string, data: unknown): void {
+        if (eventType !== 'hit') return;
+        const hit = data as IDrumPadHitPayload;
+        if (!hit || typeof hit.padId !== 'string') return;
+        if (typeof hit.frequency !== 'number' || typeof hit.intensity !== 'number') return;
+        eventBus.emit(EVENTS.DRUM_PAD_HIT, hit);
+    }
+
+    private emitDrumHit(hit: IDrumPadHitPayload): void {
+        this.context.managers.replication.emitFeatureEvent(this.featureId, 'hit', hit);
     }
 
     public clearProcedural(): void {

@@ -1,5 +1,6 @@
 import { IStateUpdatePacket } from '../interfaces/IEntityState';
 import {
+    IFeatureSnapshotRequestPayload,
     IDrawSegmentPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
@@ -7,6 +8,7 @@ import {
     IPeerDisconnectPayload,
     IRoomConfigUpdatePayload
 } from '../interfaces/INetworkPacket';
+import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 import { PACKET_TYPES } from '../utils/Constants';
 
 export interface PacketPayloadMap {
@@ -20,6 +22,9 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.DRAW_LINE_SEGMENT]: IDrawSegmentPayload;
     [PACKET_TYPES.AUDIO_CHUNK]: unknown;
     [PACKET_TYPES.PEER_JOINED]: { peerId: string };
+    [PACKET_TYPES.FEATURE_EVENT]: IReplicatedFeatureEventPayload;
+    [PACKET_TYPES.FEATURE_SNAPSHOT]: IReplicatedFeatureSnapshotPayload;
+    [PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST]: IFeatureSnapshotRequestPayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {

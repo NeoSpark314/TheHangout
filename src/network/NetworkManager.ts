@@ -5,6 +5,7 @@ import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
 import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
 import {
+    IFeatureSnapshotRequestPayload,
     IRoomConfigUpdatePayload,
     IDrawSegmentPayload,
     IOwnershipReleasePayload,
@@ -17,6 +18,7 @@ import { NetworkDispatcher } from './NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from './NetworkSynchronizer';
 import { IPacketHandler } from './PacketHandler';
 import { PacketPayloadMap } from './NetworkTypes';
+import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 
 /**
  * Architectural Role: Responsible for establishing and managing peer-to-peer WebRTC connections.
@@ -82,6 +84,9 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.DRAW_LINE_SEGMENT, new DrawLineHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.PEER_JOINED, new PeerJoinedHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, new FeatureEventHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, new FeatureSnapshotHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, new FeatureSnapshotRequestHandler(this.context));
     }
 
     private getPeerConfig(): any {
@@ -190,6 +195,9 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, welcomeConfig);
                 const snapshot = this.context.managers.entity.getWorldSnapshot();
                 this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
+                this.context.managers.replication.sendSnapshotToPeer(conn.peer);
+            } else {
+                this.context.managers.replication.requestSnapshotFromHost();
             }
         });
 
@@ -488,6 +496,28 @@ class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET
         if (!this.context.isHost && this.context.isLocalServer) {
             eventBus.emit(EVENTS.PEER_JOINED_ROOM, payload.peerId);
         }
+    }
+}
+
+class FeatureEventHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_EVENT]> {
+    constructor(private context: GameContext) { }
+    handle(senderId: string, payload: IReplicatedFeatureEventPayload): void {
+        this.context.managers.replication.handleIncomingFeatureEvent(senderId, payload);
+    }
+}
+
+class FeatureSnapshotHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT]> {
+    constructor(private context: GameContext) { }
+    handle(senderId: string, payload: IReplicatedFeatureSnapshotPayload): void {
+        this.context.managers.replication.applySnapshotPayload(payload);
+    }
+}
+
+class FeatureSnapshotRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST]> {
+    constructor(private context: GameContext) { }
+    handle(senderId: string, payload: IFeatureSnapshotRequestPayload): void {
+        if (!this.context.isHost) return;
+        this.context.managers.replication.sendSnapshotToPeer(senderId);
     }
 }
 

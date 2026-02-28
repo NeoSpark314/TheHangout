@@ -6,9 +6,11 @@ import { NetworkSynchronizer, INetworkTransport } from '../network/NetworkSynchr
 import { IStateUpdatePacket, EntityType } from '../interfaces/IEntityState';
 import { PacketPayloadMap } from '../network/NetworkTypes';
 import {
+    IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload
 } from '../interfaces/INetworkPacket';
+import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private context!: GameContext;
@@ -64,6 +66,24 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                 this.relayToOthers(senderId, PACKET_TYPES.DRAW_LINE_SEGMENT, payload);
             }
         });
+
+        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, {
+            handle: (senderId: string, payload: IReplicatedFeatureEventPayload) => {
+                this.context.managers.replication.handleIncomingFeatureEvent(senderId, payload);
+            }
+        });
+
+        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {
+            handle: (senderId: string, payload: IFeatureSnapshotRequestPayload) => {
+                this.context.managers.replication.sendSnapshotToPeer(senderId);
+            }
+        });
+
+        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, {
+            handle: (_senderId: string, _payload: IReplicatedFeatureSnapshotPayload) => {
+                // Host-owned source of truth; clients should not push snapshots upstream.
+            }
+        });
     }
 
     public update(delta: number): void {
@@ -80,6 +100,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
         const snapshot = this.context.managers.entity.getWorldSnapshot();
         this.sendData(peerId, PACKET_TYPES.STATE_UPDATE, snapshot);
+        this.context.managers.replication.sendSnapshotToPeer(peerId);
 
         // Broadcast to everyone else that a new peer joined, so they can restart their media recorders to generate a fresh audio header
         this.relayToOthers(peerId, PACKET_TYPES.PEER_JOINED, { peerId });

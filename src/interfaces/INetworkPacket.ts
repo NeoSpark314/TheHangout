@@ -1,5 +1,6 @@
 import { IEntityState } from './IEntityState';
 import { IRoomConfig } from '../core/GameState';
+import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 
 export interface IOwnershipTransferPayload {
     entityId: string;
@@ -37,6 +38,10 @@ export interface IRoomConfigUpdatePayload extends Partial<IRoomConfig> {
     assignedSpawnIndex?: number;
 }
 
+export interface IFeatureSnapshotRequestPayload {
+    request?: boolean;
+}
+
 // A discriminated union of all possible packet payloads
 export type NetworkPayload =
     | IOwnershipTransferPayload
@@ -45,4 +50,7 @@ export type NetworkPayload =
     | IDrawSegmentPayload
     | IPeerDisconnectPayload
     | IRoomConfigUpdatePayload
+    | IReplicatedFeatureEventPayload
+    | IReplicatedFeatureSnapshotPayload
+    | IFeatureSnapshotRequestPayload
     | any; // Fallback for unsupported packets

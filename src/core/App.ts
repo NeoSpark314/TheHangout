@@ -21,6 +21,7 @@ import { AnimationSystem } from '../systems/AnimationSystem';
 import { PhysicsPresentationSystem } from '../systems/PhysicsPresentationSystem';
 import { VRUIManager } from '../managers/VRUIManager';
 import { DebugRenderManager } from '../managers/DebugRenderManager';
+import { ReplicationManager } from '../managers/ReplicationManager';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -79,6 +80,7 @@ export class App {
 
     private initializeManagers(): void {
         this.context.setManager('entity', new EntityManager(this.context));
+        this.context.setManager('replication', new ReplicationManager(this.context));
         this.context.setManager('ui', new FlatUIManager(this.context));
         this.context.setManager('network', new NetworkManager(this.context));
         this.context.setManager('media', new MediaManager(this.context));
