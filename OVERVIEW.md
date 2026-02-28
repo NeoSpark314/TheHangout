@@ -51,6 +51,10 @@ The `App` class manages the startup sequence, ensuring all managers are register
 
 ## Project Structure
 
+`views/` is now split by avatar concern:
+- `src/views/avatar/components/` contains generic avatar features reusable across future avatar types (name tag and voice audio).
+- `src/views/avatar/stickfigure/` contains `StickFigureView` and stick-figure specific rig/hand modules.
+
 ```
 ├── src/
 │   ├── core/           # App, GameEngine, EventBus, GameContext
@@ -64,7 +68,7 @@ The `App` class manages the startup sequence, ensuring all managers are register
 │   ├── server/         # Tiny local Node/Bun relay server scripts
 │   ├── skills/         # Action logic modules: MovementSkill, GrabSkill, UIPointerSkill
 │   ├── systems/        # Logic Hubs: InteractionSystem, AnimationSystem
-│   ├── views/          # Three.js Visuals: StickFigureView, PhysicsPropView, CanvasUI
+│   ├── views/          # Three.js Visuals (EntityView, PhysicsPropView, PenView, avatar/*)
 │   └── utils/          # Math, Constants, GestureUtils
 └── vite.config.ts
 ```

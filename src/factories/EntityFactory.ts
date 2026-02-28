@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { StickFigureView } from '../views/StickFigureView';
+import { StickFigureView } from '../views/avatar/stickfigure/StickFigureView';
 import { PhysicsPropView } from '../views/PhysicsPropView';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { PenEntity } from '../entities/PenEntity';

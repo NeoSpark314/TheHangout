@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { EntityView } from './EntityView';
-import { IVector3, IPose } from '../interfaces/IMath';
-import { GameContext } from '../core/GameState';
-import { HumanoidState } from '../models/HumanoidState';
-import { NameTagComponent } from './avatar/components/NameTagComponent';
-import { VoiceAudioComponent } from './avatar/components/VoiceAudioComponent';
-import { StickFigureRig, StickFigureBones, StickFigureRigVisuals } from './avatar/stickfigure/StickFigureRig';
-import { StickFigureHands } from './avatar/stickfigure/StickFigureHands';
+import { EntityView } from '../../EntityView';
+import { IVector3, IPose } from '../../../interfaces/IMath';
+import { GameContext } from '../../../core/GameState';
+import { HumanoidState } from '../../../models/HumanoidState';
+import { NameTagComponent } from '../components/NameTagComponent';
+import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
+import { StickFigureRig, StickFigureBones, StickFigureRigVisuals } from './StickFigureRig';
+import { StickFigureHands } from './StickFigureHands';
 
 export interface IPlayerViewState {
     position: IVector3;

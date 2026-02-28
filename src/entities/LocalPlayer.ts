@@ -7,7 +7,7 @@ import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
 import { UIPointerSkill } from '../skills/UIPointerSkill';
-import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
+import { StickFigureView, IPlayerViewState } from '../views/avatar/stickfigure/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';

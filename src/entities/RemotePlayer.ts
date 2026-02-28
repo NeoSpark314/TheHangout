@@ -1,7 +1,7 @@
 import { PlayerEntity } from './PlayerEntity';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
-import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
+import { StickFigureView, IPlayerViewState } from '../views/avatar/stickfigure/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import { HumanoidState } from '../models/HumanoidState';
 import { HumanoidJointName } from '../interfaces/IHumanoid';
