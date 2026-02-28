@@ -1,4 +1,4 @@
-import { IHandState, IHandJointState } from '../interfaces/ITrackingProvider';
+import { IHandState, IHandJointState, INetworkHandState } from '../interfaces/ITrackingProvider';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
 
 export class HandState implements IHandState {
@@ -57,6 +57,64 @@ export class HandState implements IHandState {
             dJ.quaternion.y = sJ.quaternion.y;
             dJ.quaternion.z = sJ.quaternion.z;
             dJ.quaternion.w = sJ.quaternion.w;
+        }
+    }
+
+    public applyData(data: INetworkHandState): void {
+        if (!data) return;
+        this.active = !!data.active;
+        this.hasJoints = !!data.hasJoints;
+
+        if (data.position) {
+            this.position.x = data.position.x;
+            this.position.y = data.position.y;
+            this.position.z = data.position.z;
+        }
+        if (data.quaternion) {
+            this.quaternion.x = data.quaternion.x;
+            this.quaternion.y = data.quaternion.y;
+            this.quaternion.z = data.quaternion.z;
+            this.quaternion.w = data.quaternion.w;
+        }
+        if (data.pointerPosition) {
+            this.pointerPosition.x = data.pointerPosition.x;
+            this.pointerPosition.y = data.pointerPosition.y;
+            this.pointerPosition.z = data.pointerPosition.z;
+        }
+        if (data.pointerQuaternion) {
+            this.pointerQuaternion.x = data.pointerQuaternion.x;
+            this.pointerQuaternion.y = data.pointerQuaternion.y;
+            this.pointerQuaternion.z = data.pointerQuaternion.z;
+            this.pointerQuaternion.w = data.pointerQuaternion.w;
+        }
+
+        if (data.joints && Array.isArray(data.joints)) {
+            for (let i = 0; i < 25; i++) {
+                const jData = data.joints[i];
+                if (!jData || !this.joints[i]) continue;
+
+                if (jData.position) {
+                    this.joints[i].position.x = jData.position.x;
+                    this.joints[i].position.y = jData.position.y;
+                    this.joints[i].position.z = jData.position.z;
+                } else if (jData.p) {
+                    this.joints[i].position.x = jData.p.x;
+                    this.joints[i].position.y = jData.p.y;
+                    this.joints[i].position.z = jData.p.z;
+                }
+
+                if (jData.quaternion) {
+                    this.joints[i].quaternion.x = jData.quaternion.x;
+                    this.joints[i].quaternion.y = jData.quaternion.y;
+                    this.joints[i].quaternion.z = jData.quaternion.z;
+                    this.joints[i].quaternion.w = jData.quaternion.w;
+                } else if (jData.q) {
+                    this.joints[i].quaternion.x = jData.q.x;
+                    this.joints[i].quaternion.y = jData.q.y;
+                    this.joints[i].quaternion.z = jData.q.z;
+                    this.joints[i].quaternion.w = jData.q.w;
+                }
+            }
         }
     }
 }

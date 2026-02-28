@@ -27,6 +27,23 @@ export interface ITrackingState {
     };
 }
 
+export interface INetworkHandJointState {
+    position?: IVector3;
+    p?: IVector3;
+    quaternion?: IQuaternion;
+    q?: IQuaternion;
+}
+
+export interface INetworkHandState {
+    active?: boolean;
+    hasJoints?: boolean;
+    position?: IVector3;
+    quaternion?: IQuaternion;
+    pointerPosition?: IVector3;
+    pointerQuaternion?: IQuaternion;
+    joints?: INetworkHandJointState[];
+}
+
 export interface ITrackingProvider {
     id: string;
     init(): void;

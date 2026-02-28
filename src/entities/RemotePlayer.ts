@@ -3,6 +3,7 @@ import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
+import { HandState } from '../models/HandState';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -80,26 +81,12 @@ export class RemotePlayer extends PlayerEntity {
         }
 
         if (data.hands) {
-            const deserializeHand = (netHand: any, localHand: any) => {
-                localHand.active = !!netHand.active;
-                localHand.hasJoints = !!netHand.hasJoints;
-                if (netHand.position) localHand.position = { ...netHand.position };
-                if (netHand.quaternion) localHand.quaternion = { ...netHand.quaternion };
-
-                if (netHand.joints && netHand.joints.length === 25) {
-                    for (let i = 0; i < 25; i++) {
-                        const jData = netHand.joints[i];
-                        if (jData.position) localHand.joints[i].position = { ...jData.position };
-                        else if (jData.p) localHand.joints[i].position = { ...jData.p };
-
-                        if (jData.quaternion) localHand.joints[i].quaternion = { ...jData.quaternion };
-                        else if (jData.q) localHand.joints[i].quaternion = { ...jData.q };
-                    }
-                }
-            };
-
-            if (data.hands.left) deserializeHand(data.hands.left, this.handStates.left);
-            if (data.hands.right) deserializeHand(data.hands.right, this.handStates.right);
+            if (data.hands.left && this.handStates.left instanceof HandState) {
+                this.handStates.left.applyData(data.hands.left);
+            }
+            if (data.hands.right && this.handStates.right instanceof HandState) {
+                this.handStates.right.applyData(data.hands.right);
+            }
         }
     }
 
