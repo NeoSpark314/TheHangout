@@ -42,7 +42,8 @@ export class NetworkSynchronizer {
                 this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
             }
         } else {
-            const authoritativeStates = managers.entity.getAuthoritativeStates();
+            // For guests, heartbeat sends a fuller snapshot to recover from missed deltas.
+            const authoritativeStates = managers.entity.getAuthoritativeStates(forceAll);
             if (authoritativeStates.length > 0) {
                 if (this.context.roomId) {
                     this.transport.sendData(this.context.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);

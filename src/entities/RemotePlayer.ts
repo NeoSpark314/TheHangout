@@ -5,11 +5,28 @@ import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import { HandState } from '../models/HandState';
 import { HumanoidState } from '../models/HumanoidState';
+import { HumanoidJointName } from '../interfaces/IHumanoid';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
 export class RemotePlayer extends PlayerEntity {
+    private static readonly HAND_FINGER_JOINTS: Record<'left' | 'right', HumanoidJointName[]> = {
+        left: [
+            'leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip',
+            'leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip',
+            'leftMiddleMetacarpal', 'leftMiddleProximal', 'leftMiddleIntermediate', 'leftMiddleDistal', 'leftMiddleTip',
+            'leftRingMetacarpal', 'leftRingProximal', 'leftRingIntermediate', 'leftRingDistal', 'leftRingTip',
+            'leftLittleMetacarpal', 'leftLittleProximal', 'leftLittleIntermediate', 'leftLittleDistal', 'leftLittleTip'
+        ],
+        right: [
+            'rightThumbMetacarpal', 'rightThumbProximal', 'rightThumbDistal', 'rightThumbTip',
+            'rightIndexMetacarpal', 'rightIndexProximal', 'rightIndexIntermediate', 'rightIndexDistal', 'rightIndexTip',
+            'rightMiddleMetacarpal', 'rightMiddleProximal', 'rightMiddleIntermediate', 'rightMiddleDistal', 'rightMiddleTip',
+            'rightRingMetacarpal', 'rightRingProximal', 'rightRingIntermediate', 'rightRingDistal', 'rightRingTip',
+            'rightLittleMetacarpal', 'rightLittleProximal', 'rightLittleIntermediate', 'rightLittleDistal', 'rightLittleTip'
+        ]
+    };
     public peerId: string;
     public view: IView<IPlayerViewState>;
     public targetPosition: IVector3 = { x: 0, y: 5, z: 0 };
@@ -82,7 +99,12 @@ export class RemotePlayer extends PlayerEntity {
             this.headState.quaternion = { x: data.hq[0], y: data.hq[1], z: data.hq[2], w: data.hq[3] };
         }
 
-        if (data.hmd) {
+        if (data.hm) {
+            if (data.hm[0] === 0) this.clearFingerJoints('left');
+            if (data.hm[1] === 0) this.clearFingerJoints('right');
+        }
+
+        if (data.hmd !== undefined) {
             this.humanoid.applyNetworkDelta(data.hmd);
         }
 
@@ -93,6 +115,13 @@ export class RemotePlayer extends PlayerEntity {
             if (data.hands.right && this.handStates.right instanceof HandState) {
                 this.handStates.right.applyData(data.hands.right);
             }
+        }
+    }
+
+    private clearFingerJoints(hand: 'left' | 'right'): void {
+        const joints = RemotePlayer.HAND_FINGER_JOINTS[hand];
+        for (let i = 0; i < joints.length; i++) {
+            this.humanoid.clearJoint(joints[i]);
         }
     }
 

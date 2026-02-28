@@ -82,12 +82,12 @@ export class EntityManager implements IUpdatable {
         }
     }
 
-    public getAuthoritativeStates(): any[] {
+    public getAuthoritativeStates(fullSync: boolean = false): any[] {
         const states: any[] = [];
         for (const entity of this.entities.values()) {
             const networkable = entity as unknown as INetworkable<any>;
             if (entity.isAuthority && !entity.isDestroyed && networkable.getNetworkState) {
-                const state = networkable.getNetworkState();
+                const state = networkable.getNetworkState(fullSync);
                 if (state) {
                     states.push({
                         id: entity.id,

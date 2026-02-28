@@ -7,6 +7,9 @@ export type NetworkHumanoidDelta = Record<string, { p?: Vec3Arr, q?: QuatArr } |
 export class HumanoidState implements IHumanoidState {
     public joints: Partial<Record<HumanoidJointName, IPose>> = {};
     private dirtyJoints: Set<HumanoidJointName> = new Set();
+    // Tracks joints we have ever published so full-sync can send tombstones
+    // for joints that were removed (e.g. hand-tracking -> controller switch).
+    private knownJoints: Set<HumanoidJointName> = new Set();
 
     // Configurable tolerance for when a joint is considered "moved" enough to sync
     private posTolerance: number = 0.001;
@@ -27,9 +30,11 @@ export class HumanoidState implements IHumanoidState {
                 position: { ...position },
                 quaternion: { ...quaternion }
             };
+            this.knownJoints.add(name);
             this.dirtyJoints.add(name);
             return;
         }
+        this.knownJoints.add(name);
 
         // Check if position changed
         if (Math.abs(joint.position.x - position.x) > this.posTolerance ||
@@ -83,7 +88,12 @@ export class HumanoidState implements IHumanoidState {
         if (!fullSync && this.dirtyJoints.size === 0) return null;
 
         const delta: NetworkHumanoidDelta = {};
-        const jointsToSerialize = fullSync ? Object.keys(this.joints) : Array.from(this.dirtyJoints);
+        const jointsToSerialize = fullSync
+            ? Array.from(new Set<HumanoidJointName>([
+                ...(Object.keys(this.joints) as HumanoidJointName[]),
+                ...Array.from(this.knownJoints)
+            ]))
+            : Array.from(this.dirtyJoints);
         let hasData = false;
 
         for (const jointName of jointsToSerialize) {
@@ -128,6 +138,7 @@ export class HumanoidState implements IHumanoidState {
                     quaternion: { x: 0, y: 0, z: 0, w: 1 }
                 };
             }
+            this.knownJoints.add(name);
 
             const joint = this.joints[name]!;
 

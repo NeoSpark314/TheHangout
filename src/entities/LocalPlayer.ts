@@ -189,6 +189,7 @@ export class LocalPlayer extends PlayerEntity {
             h: this.headState.position.y,
             hq: [this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w],
             hmd: this.humanoid.consumeNetworkDelta(fullSync) || undefined,
+            hm: [trackingState.hands.left.hasJoints ? 1 : 0, trackingState.hands.right.hasJoints ? 1 : 0],
             conf: {
                 color: this.context.avatarConfig.color
             },

@@ -121,13 +121,33 @@ export class XRTrackingProvider implements ITrackingProvider {
         this.state.hands.right.active = false;
         this.state.humanoidDelta = undefined;
 
-        const updatedHands = new Set<'left' | 'right'>();
-
-        // 3. Poll Input Sources and map them to Three.js XR objects
+        // 3. Choose exactly one source per hand.
+        // Prefer controllers over hand-tracking when both are present during transition.
+        const selectedSources: Partial<Record<'left' | 'right', XRInputSource>> = {};
         for (let i = 0; i < session.inputSources.length; i++) {
             const source = session.inputSources[i];
             const handedness = source.handedness;
             if (handedness !== 'left' && handedness !== 'right') continue;
+
+            const current = selectedSources[handedness];
+            if (!current) {
+                selectedSources[handedness] = source;
+                continue;
+            }
+
+            // Prefer non-hand source (controller) over hand source.
+            if (current.hand && !source.hand) {
+                selectedSources[handedness] = source;
+            }
+        }
+
+        const updatedHands = new Set<'left' | 'right'>();
+        for (const handedness of ['left', 'right'] as const) {
+            const source = selectedSources[handedness];
+            if (!source) {
+                this.clearHand(handedness);
+                continue;
+            }
 
             updatedHands.add(handedness);
 
@@ -154,6 +174,10 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                         if (j === 0) wristPose = worldPose;
                         validJoints++;
+                    } else {
+                        // Critical: if a joint is not currently tracked, clear stale state so
+                        // remote peers don't keep rendering old finger joints.
+                        this.humanoid.clearJoint(humanoidJointName);
                     }
                 }
 
@@ -219,7 +243,7 @@ export class XRTrackingProvider implements ITrackingProvider {
             }
         }
 
-        // 4. Any hands that disappeared from the inputSources array completely need to be cleared
+        // 4. Any hands that disappeared from the selected sources need to be cleared
         if (!updatedHands.has('left')) this.clearHand('left');
         if (!updatedHands.has('right')) this.clearHand('right');
 

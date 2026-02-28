@@ -35,6 +35,7 @@ export interface IPlayerEntityState extends IBaseEntityState {
     h: number; // head height
     hq: QuatArr; // local head quaternion
     hmd?: NetworkHumanoidDelta; // humanoid delta payload
+    hm?: [number, number]; // hand mode flags [leftHasJoints, rightHasJoints]
     hands?: {  // Keeping legacy for now in case of partial rollback, but will be removed
         left: IHandState;
         right: IHandState;
