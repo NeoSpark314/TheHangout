@@ -267,6 +267,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         (entity as { ownerId?: string | null }).ownerId = payload.newOwnerId;
         entity.isAuthority = isLocalOwner;
 
+        // Notify entity-level state machines (e.g. PhysicsEntity pending-release handoff).
         const networkable = entity as unknown as { onNetworkEvent?: (type: string, data: unknown) => void };
         networkable.onNetworkEvent?.('OWNERSHIP_TRANSFER', payload);
     }

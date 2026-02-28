@@ -14,6 +14,18 @@ import { EVENTS } from '../utils/Constants';
 /**
  * Source of Truth: This entity owns the logic and physical state of a prop.
  * Visuals (PhysicsPropView) follow this state via interpolation.
+ *
+ * Ownership / simulation model:
+ * - Authoritative instance simulates real dynamics (Dynamic body when free, Kinematic when held).
+ * - Non-authoritative instance acts as a kinematic network proxy (no local dynamics) and
+ *   only interpolates visuals to remote snapshots.
+ * - On guest release we keep temporary local authority (`pendingRelease`) until host ACK
+ *   (`OWNERSHIP_TRANSFER`) to avoid throw discontinuities at handoff time.
+ *
+ * Why this exists:
+ * - Immediate guest authority drop causes "throw dies on release" artifacts.
+ * - Teleport-correcting non-authoritative dynamic bodies causes jitter and sleep churn.
+ * - Explicit proxy mode keeps behavior deterministic across host/guest roles.
  */
 export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
@@ -25,7 +37,9 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lerpFactor: number = 0.2;
+    // True after a guest release until host transfer ACK confirms authority handoff.
     private pendingRelease: boolean = false;
+    // Visual-only smoothing state for non-authoritative proxy rendering.
     private proxyRenderPos: IVector3 = { x: 0, y: 0, z: 0 };
     private proxyRenderRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private proxyInitialized: boolean = false;
@@ -67,7 +81,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             }
         }
 
-        // Keep client-side authority until host transfer ACK arrives so throws stay locally simulated.
+        // Keep guest-side authority until host transfer ACK arrives so release/throw remains continuous.
         const localId = this.context.localPlayer?.id || 'local';
         if (this.context.isHost) {
             this.ownerId = null;
@@ -148,6 +162,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             const newOwnerId = payload?.newOwnerId ?? null;
             const localId = this.context.localPlayer?.id || 'local';
 
+            // Host ACK finished release handoff; we can now safely stop local authoritative sim.
             if (this.pendingRelease && newOwnerId !== localId) {
                 this.pendingRelease = false;
             }
@@ -204,7 +219,8 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 this.rigidBody.wakeUp();
             }
         } else {
-            // Non-authoritative: this acts as a kinematic network proxy; view interpolation is visual-only.
+            // Non-authoritative: strict kinematic proxy mode.
+            // We follow network targets in physics-space for collision coherence, but smooth only visually.
             if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.KinematicPositionBased) {
                 this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
                 this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -270,7 +286,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             Math.pow(this.targetPos.y - oldTargetPos.y, 2) +
             Math.pow(this.targetPos.z - oldTargetPos.z, 2) > 1.0;
 
-        // Snap the visual proxy on major discontinuities to avoid long trailing lerps.
+        // Snap visual proxy on major discontinuities to avoid long trailing lerps after teleports/ownership flips.
         if (stateTransition || hugeJump) {
             this.proxyRenderPos = { ...this.targetPos };
             this.proxyRenderRot = { ...this.targetRot };
