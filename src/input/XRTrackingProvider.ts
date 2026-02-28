@@ -171,6 +171,9 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                         // Feed into dirty-sync Humanoid map
                         this.humanoid.setJointPose(humanoidJointName, worldPose.position, worldPose.quaternion);
+                        // Keep per-hand joint array in sync for gesture detection (pinch/fist).
+                        handState.joints[j].pose.position = worldPose.position;
+                        handState.joints[j].pose.quaternion = worldPose.quaternion;
 
                         if (j === 0) wristPose = worldPose;
                         validJoints++;
@@ -178,6 +181,8 @@ export class XRTrackingProvider implements ITrackingProvider {
                         // Critical: if a joint is not currently tracked, clear stale state so
                         // remote peers don't keep rendering old finger joints.
                         this.humanoid.clearJoint(humanoidJointName);
+                        handState.joints[j].pose.position = { x: 0, y: 0, z: 0 };
+                        handState.joints[j].pose.quaternion = { x: 0, y: 0, z: 0, w: 1 };
                     }
                 }
 

@@ -135,8 +135,14 @@ export class LocalPlayer extends PlayerEntity {
         // We also sync the active/pointer legacy states for tools/skills (pointers)
         this.handStates.left.active = trackingState.hands.left.active;
         this.handStates.right.active = trackingState.hands.right.active;
+        this.handStates.left.hasJoints = trackingState.hands.left.hasJoints;
+        this.handStates.right.hasJoints = trackingState.hands.right.hasJoints;
         this.handStates.left.pose = trackingState.hands.left.pose;
         this.handStates.right.pose = trackingState.hands.right.pose;
+        this.handStates.left.pointerPose = trackingState.hands.left.pointerPose;
+        this.handStates.right.pointerPose = trackingState.hands.right.pointerPose;
+        this.handStates.left.joints = trackingState.hands.left.joints;
+        this.handStates.right.joints = trackingState.hands.right.joints;
 
         this.headState.position = { ...worldHeadPos };
         this.headState.quaternion = { ...worldHeadQuat };

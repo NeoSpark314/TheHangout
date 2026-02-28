@@ -117,6 +117,10 @@ export class InputManager implements IUpdatable {
         left: { isSqueezing: false, isInteracting: false },
         right: { isSqueezing: false, isInteracting: false }
     };
+    private gestureLatch = {
+        left: { pinch: false, fist: false },
+        right: { pinch: false, fist: false }
+    };
 
     public update(delta: number, frame?: XRFrame): void {
         this.gamepad.poll(delta);
@@ -175,13 +179,14 @@ export class InputManager implements IUpdatable {
             const session = render.getXRSession();
             if (session) {
                 const tracking = this.context.managers.tracking;
-                const localPlayer = this.context.localPlayer as any;
+                const trackingState = tracking.getState();
 
                 for (let i = 0; i < session.inputSources.length; i++) {
                     const source = session.inputSources[i];
                     if (source.handedness !== 'left' && source.handedness !== 'right') continue;
 
-                    const handState = localPlayer?.handStates?.[source.handedness];
+                    // Use the freshest tracked hand data from the provider directly.
+                    const handState = trackingState.hands[source.handedness];
                     const state = this._getInteractionState(source, handState);
                     currentStates[source.handedness] = state;
                 }
@@ -238,15 +243,38 @@ export class InputManager implements IUpdatable {
      */
     private _getInteractionState(source: XRInputSource, handState?: any): { isSqueezing: boolean, isInteracting: boolean, triggerValue: number } {
         // 1. Check for skeletal hand tracking first
-        if (source.hand && handState) {
-            const isPinching = GestureUtils.isPinching(handState);
-            const isFist = GestureUtils.isFist(handState);
+        if (source.hand && handState && (source.handedness === 'left' || source.handedness === 'right')) {
+            const hand = source.handedness;
+            const latch = this.gestureLatch[hand];
+
+            const pinchDist = GestureUtils.getPinchDistance(handState);
+            const pinchOn = pinchDist !== null && pinchDist < 0.035;
+            const pinchOff = pinchDist === null || pinchDist > 0.05;
+            if (latch.pinch) {
+                if (pinchOff) latch.pinch = false;
+            } else if (pinchOn) {
+                latch.pinch = true;
+            }
+
+            const curlCount = GestureUtils.getFistCurlCount(handState, 0.095);
+            const fistOn = curlCount >= 3;
+            const fistOff = curlCount <= 1;
+            if (latch.fist) {
+                if (fistOff) latch.fist = false;
+            } else if (fistOn) {
+                latch.fist = true;
+            }
 
             return {
-                isSqueezing: isFist,
-                isInteracting: isPinching,
-                triggerValue: isPinching ? 1.0 : 0.0
+                isSqueezing: latch.fist,
+                isInteracting: latch.pinch,
+                triggerValue: latch.pinch ? 1.0 : 0.0
             };
+        }
+
+        if (source.handedness === 'left' || source.handedness === 'right') {
+            this.gestureLatch[source.handedness].pinch = false;
+            this.gestureLatch[source.handedness].fist = false;
         }
 
         // 2. Fallback to physical controller buttons
