@@ -243,8 +243,11 @@ export class UIPointerSkill extends Skill {
             const handState = player.handStates[hand];
             if (!handState.active) return;
 
-            const origin = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
-            const quat = new THREE.Quaternion(handState.quaternion.x, handState.quaternion.y, handState.quaternion.z, handState.quaternion.w);
+            const pos = handState.pointerPosition || handState.position;
+            const rot = handState.pointerQuaternion || handState.quaternion;
+
+            const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
+            const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
             const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
 
             this.raycaster.set(origin, direction);

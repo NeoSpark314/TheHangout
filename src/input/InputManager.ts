@@ -13,6 +13,7 @@ import { KeyboardManager } from './KeyboardManager';
 import { GamepadManager } from './GamepadManager';
 import { MobileJoystickManager } from './MobileJoystickManager';
 import { XRInputManager } from './XRInputManager';
+import { GestureUtils } from '../utils/GestureUtils';
 
 /**
  * Aggregates user input from multiple distinct hardware sources (Keyboard, Gamepad, Mobile Joysticks, XR).
@@ -175,16 +176,16 @@ export class InputManager implements IUpdatable {
         if (render && render.isXRPresenting()) {
             const session = render.getXRSession();
             if (session) {
-                // Process Controllers for triggers/buttons only
+                const tracking = this.context.managers.tracking;
+                const localPlayer = this.context.localPlayer as any;
+
                 for (let i = 0; i < session.inputSources.length; i++) {
                     const source = session.inputSources[i];
                     if (source.handedness !== 'left' && source.handedness !== 'right') continue;
 
-                    const isSqueezing = (source.gamepad?.buttons[1]?.value || 0) > 0.5;
-                    const triggerValue = source.gamepad?.buttons[0]?.value || 0;
-                    const isInteracting = triggerValue > 0.5;
-
-                    currentStates[source.handedness] = { isSqueezing, isInteracting, triggerValue };
+                    const handState = localPlayer?.handStates?.[source.handedness];
+                    const state = this._getInteractionState(source, handState);
+                    currentStates[source.handedness] = state;
                 }
             }
         } else {
@@ -231,5 +232,34 @@ export class InputManager implements IUpdatable {
             this.previousHandStates[hand].isSqueezing = curr.isSqueezing;
             this.previousHandStates[hand].isInteracting = curr.isInteracting;
         }
+    }
+
+    /**
+     * Unified logic to determine interaction intent from an XR input source.
+     * Maps physical buttons (Controllers) or skeletal gestures (Hands) to intents.
+     */
+    private _getInteractionState(source: XRInputSource, handState?: any): { isSqueezing: boolean, isInteracting: boolean, triggerValue: number } {
+        // 1. Check for skeletal hand tracking first
+        if (source.hand && handState) {
+            const isPinching = GestureUtils.isPinching(handState);
+            const isFist = GestureUtils.isFist(handState);
+
+            return {
+                isSqueezing: isFist,
+                isInteracting: isPinching,
+                triggerValue: isPinching ? 1.0 : 0.0
+            };
+        }
+
+        // 2. Fallback to physical controller buttons
+        const triggerValue = source.gamepad?.buttons[0]?.value || 0;
+        const isInteracting = triggerValue > 0.5;
+        const isSqueezing = (source.gamepad?.buttons[1]?.value || 0) > 0.5;
+
+        return {
+            isSqueezing,
+            isInteracting,
+            triggerValue
+        };
     }
 }
