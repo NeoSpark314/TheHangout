@@ -61,6 +61,10 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private maxSnapshotAgeMs: number = 1500;
     private maxSnapshots: number = 64;
     private lastOwnershipTransferSeq: number = 0;
+    private pendingReleaseArmed: boolean = false;
+    private pendingReleaseStartedAtMs: number = 0;
+    private pendingReleaseMinHoldMs: number = 220;
+    private pendingReleaseMaxHoldMs: number = 900;
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
@@ -117,20 +121,15 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             this.ownerId = null;
             this.syncAuthority();
             this.refreshSimMode();
+            this.emitOwnershipReleaseNow();
         } else {
-            // Keep local simulation alive until host sends OWNERSHIP_TRANSFER.
+            // Keep local simulation alive briefly after release to avoid throw-start freeze.
             this.ownerId = localId;
             this.isAuthority = true;
             this.setSimMode(PhysicsSimMode.PendingReleaseDynamic);
+            this.pendingReleaseArmed = true;
+            this.pendingReleaseStartedAtMs = this.nowMs();
         }
-
-        const state = this.getNetworkState();
-        eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
-            entityId: this.id,
-            velocity: state.v,
-            position: state.p,
-            quaternion: state.q
-        });
     }
 
     // --- IInteractable ---
@@ -151,6 +150,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         if (!this.rigidBody) return;
         this.requestOwnership();
 
+        this.pendingReleaseArmed = false;
         this.heldBy = playerId;
         this.refreshSimMode();
     }
@@ -200,6 +200,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
             // Host ACK ended pending release.
             if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && newOwnerId !== localId) {
+                this.pendingReleaseArmed = false;
                 this.refreshSimMode();
             }
         }
@@ -225,6 +226,17 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 const rotation = this.rigidBody.rotation();
                 this.presentPos = { x: position.x, y: position.y, z: position.z };
                 this.presentRot = { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w };
+
+                if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && this.pendingReleaseArmed) {
+                    const now = this.nowMs();
+                    const dt = now - this.pendingReleaseStartedAtMs;
+                    const reachedMin = dt >= this.pendingReleaseMinHoldMs;
+                    const reachedMax = dt >= this.pendingReleaseMaxHoldMs;
+                    if (reachedMin && (this.rigidBody.isSleeping() || reachedMax)) {
+                        this.pendingReleaseArmed = false;
+                        this.emitOwnershipReleaseNow();
+                    }
+                }
 
                 if (
                     this.simMode === PhysicsSimMode.AuthoritativeDynamic &&
@@ -479,6 +491,16 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private emitOwnershipReleaseNow(): void {
+        const state = this.getNetworkState();
+        eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
+            entityId: this.id,
+            velocity: state.v,
+            position: state.p,
+            quaternion: state.q
+        });
     }
 
     private clearSnapshotBuffer(): void {
