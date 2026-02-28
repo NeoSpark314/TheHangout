@@ -188,11 +188,7 @@ export class App {
         this.playerInitialized = true;
 
         const managers = this.context.managers;
-        if (this.context.isDedicatedHost) {
-            managers.render.switchToSpectatorView();
-        } else {
-            managers.render.switchToPlayerView();
-        }
+        managers.render.switchToPlayerView();
 
         managers.player.init(id);
     }

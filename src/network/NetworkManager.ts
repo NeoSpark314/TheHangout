@@ -6,7 +6,6 @@ import { INetworkable } from '../interfaces/INetworkable';
 import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
 import { IRoomConfigUpdatePayload, IDrawSegmentPayload } from '../interfaces/INetworkPacket';
 import { IUpdatable } from '../interfaces/IUpdatable';
-import { startKeepalive, stopKeepalive } from '../utils/HostKeepalive';
 import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from './NetworkSynchronizer';
@@ -50,12 +49,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         });
 
         document.addEventListener('visibilitychange', () => {
-            if (!this.context.isDedicatedHost) return;
             if (document.hidden) {
-                console.warn('[NetworkManager] Tab hidden — keepalive worker active.');
-                if (this.context.managers.hud) {
-                    this.context.managers.hud.showNotification('⚠ Tab hidden — sync running via worker', 8000);
-                }
+                console.warn('[NetworkManager] Tab hidden.');
             }
         });
     }
@@ -105,11 +100,6 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 this.context.managers.media.bindPeer(this.peer);
             }
 
-            if (this.context.isDedicatedHost) {
-                startKeepalive(() => {
-                    if (document.hidden) this.syncStateManually();
-                });
-            }
             eventBus.emit(EVENTS.HOST_READY, id);
         });
 
@@ -216,7 +206,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public syncStateManually(): void {
-        // Exposed for dedicated host keepalive
+        // Exposed for potential manual sync
         (this.synchronizer as any).syncState();
     }
 
@@ -318,7 +308,6 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public disconnect(): void {
-        stopKeepalive();
         if (this.relaySocket) {
             this.relaySocket.close();
             this.relaySocket = null;

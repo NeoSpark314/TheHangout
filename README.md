@@ -15,7 +15,7 @@ Main objectives:
 
 ```bash
 npm install
-npm run dev          # Development (Vite + PeerJS cloud)
+npm run dev          # Development (Vite + PeerJS)
 ```
 
 ### Static site version

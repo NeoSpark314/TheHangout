@@ -103,11 +103,6 @@ export class RenderManager {
         this.isMenuMode = false;
     }
 
-    public switchToSpectatorView(): void {
-        this.isMenuMode = false;
-        this.cameraGroup.position.set(0, 8, 10);
-    }
-
     public update(delta: number, possessedPlayer: any): void {
         if (this.isMenuMode) {
             this.menuRotation += delta * 0.1;
@@ -141,13 +136,6 @@ export class RenderManager {
                 this.cameraGroup.getWorldQuaternion(groupWorldQuat);
                 this.camera.quaternion.copy(groupWorldQuat.invert().multiply(worldQuat));
             }
-        } else if (possessedPlayer.type === 'SPECTATOR') {
-            const sp = possessedPlayer;
-            if (sp.targetPosition) {
-                this.cameraGroup.position.set(sp.targetPosition.x, sp.targetPosition.y, sp.targetPosition.z);
-            }
-            this.cameraGroup.rotation.set(0, sp.yaw || 0, 0, 'YXZ');
-            this.camera.rotation.set(sp.pitch || 0, 0, 0, 'YXZ');
         }
     }
 

@@ -8,7 +8,6 @@ export class FlatUIManager implements IUpdatable {
     private overlay: HTMLElement;
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;
-    private dedicatedHostBtn: HTMLButtonElement;
     private joinBtn: HTMLButtonElement;
     private roomInput: HTMLInputElement;
     private copyRoomBtn: HTMLButtonElement;
@@ -29,7 +28,6 @@ export class FlatUIManager implements IUpdatable {
         this.overlay = document.getElementById('ui-overlay')!;
         this.nameInput = document.getElementById('player-name') as HTMLInputElement;
         this.createBtn = document.getElementById('create-btn') as HTMLButtonElement;
-        this.dedicatedHostBtn = document.getElementById('dedicated-host-btn') as HTMLButtonElement;
         this.joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
         this.roomInput = document.getElementById('room-id') as HTMLInputElement;
         this.copyRoomBtn = document.getElementById('copy-room-btn') as HTMLButtonElement;
@@ -62,11 +60,11 @@ export class FlatUIManager implements IUpdatable {
         const networkBadge = document.getElementById('network-mode');
         if (networkBadge) {
             if (this.context.isLocalServer) {
-                networkBadge.textContent = '🖥 Local Network';
-                networkBadge.classList.add('local');
+                networkBadge.textContent = '🖥 Dedicated Server';
+                networkBadge.classList.add('server');
             } else {
-                networkBadge.textContent = '☁ Cloud';
-                networkBadge.classList.add('cloud');
+                networkBadge.textContent = '☁ PeerJS';
+                networkBadge.classList.add('peerjs');
             }
         }
 
@@ -148,7 +146,7 @@ export class FlatUIManager implements IUpdatable {
     }
 
     public update(delta: number): void {
-        if (this.overlay.style.display === 'none' && this.isMobile && !this.context.isDedicatedHost && !this._joysticksInitialized) {
+        if (this.overlay.style.display === 'none' && this.isMobile && !this._joysticksInitialized) {
             this.context.managers.input?.initMobileJoysticks();
             this._joysticksInitialized = true;
         }
@@ -216,13 +214,11 @@ export class FlatUIManager implements IUpdatable {
 
     private disableAllButtons(): void {
         this.createBtn.disabled = true;
-        if (this.dedicatedHostBtn) this.dedicatedHostBtn.disabled = true;
         this.joinBtn.disabled = true;
     }
 
     private enableAllButtons(): void {
         this.createBtn.disabled = false;
-        if (this.dedicatedHostBtn) this.dedicatedHostBtn.disabled = false;
         this.joinBtn.disabled = false;
     }
 
@@ -245,7 +241,6 @@ export class FlatUIManager implements IUpdatable {
     private setupDefaultMode(): void {
         if (this.context.isLocalServer) {
             this.createBtn.style.display = 'none';
-            if (this.dedicatedHostBtn) this.dedicatedHostBtn.style.display = 'none';
 
             this.joinBtn.textContent = 'Enter Hangout';
             this.joinBtn.classList.remove('secondary-btn');
@@ -285,24 +280,6 @@ export class FlatUIManager implements IUpdatable {
             this.setStatus('Creating room...');
             eventBus.emit(EVENTS.CREATE_ROOM, customId);
         });
-
-        if (this.dedicatedHostBtn) {
-            this.dedicatedHostBtn.addEventListener('click', async () => {
-                if (this.context.voiceEnabled) {
-                    this.ensureAudioContextResumed();
-                    await this.context.managers.media.toggleMicrophone();
-                }
-                const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
-                this.disableAllButtons();
-                this.clearError();
-                this.saveToStorage();
-                this.context.playerName = 'Host';
-                this.context.isHost = true;
-                this.context.isDedicatedHost = true;
-                this.setStatus('Creating dedicated room...');
-                eventBus.emit(EVENTS.CREATE_ROOM, customId);
-            });
-        }
 
         this.joinBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
@@ -363,7 +340,7 @@ export class FlatUIManager implements IUpdatable {
                     console.log('[FlatUIManager] Showing desktop controls');
                     this.desktopControls.style.display = 'block';
                 }
-                if (this.isMobile && !this.context.isDedicatedHost) {
+                if (this.isMobile) {
                     const hud = document.getElementById('mobile-hud');
                     if (hud) {
                         hud.style.display = 'flex';
@@ -390,7 +367,6 @@ export class FlatUIManager implements IUpdatable {
         if (this.roomInput && this.roomInput.offsetParent) elements.push(this.roomInput);
         if (this.copyRoomBtn && this.copyRoomBtn.offsetParent) elements.push(this.copyRoomBtn);
         if (this.createBtn && this.createBtn.offsetParent) elements.push(this.createBtn);
-        if (this.dedicatedHostBtn && this.dedicatedHostBtn.offsetParent) elements.push(this.dedicatedHostBtn);
         if (this.joinBtn && this.joinBtn.offsetParent) elements.push(this.joinBtn);
         if (this.voiceBtn && this.voiceBtn.offsetParent) elements.push(this.voiceBtn);
         return elements;

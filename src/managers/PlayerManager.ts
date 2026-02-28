@@ -12,13 +12,6 @@ export class PlayerManager {
 
     public init(id: string): void {
         const managers = this.context.managers;
-        if (this.context.isDedicatedHost) {
-            console.log('[PlayerManager] Dedicated Host mode — creating local spectator entity.');
-            this.context.localPlayer = EntityFactory.createSpectator(this.context, id, true);
-            managers.entity.addEntity(this.context.localPlayer);
-            this.isInitialized = true;
-            return;
-        }
 
         console.log('[PlayerManager] Initializing Local Player with ID:', id);
 

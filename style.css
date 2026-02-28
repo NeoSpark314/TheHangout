@@ -212,14 +212,14 @@ body {
     border-radius: 6px;
 }
 
-.network-mode-badge.local {
+.network-mode-badge.server {
     color: #00ff64;
     background: rgba(0, 255, 100, 0.1);
     border: 1px solid rgba(0, 255, 100, 0.3);
     text-shadow: 0 0 5px rgba(0, 255, 100, 0.5);
 }
 
-.network-mode-badge.cloud {
+.network-mode-badge.peerjs {
     color: var(--primary-color);
     background: rgba(0, 255, 255, 0.1);
     border: 1px solid rgba(0, 255, 255, 0.2);

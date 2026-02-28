@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { SpectatorEntity } from '../entities/SpectatorEntity';
 import { StickFigureView } from '../views/StickFigureView';
-import { SpectatorView } from '../views/SpectatorView';
 import { PhysicsPropView } from '../views/PhysicsPropView';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { PenEntity } from '../entities/PenEntity';
@@ -19,7 +17,6 @@ export class EntityFactory {
         // Register default types
         this.register('LOCAL_PLAYER', (context, id, config) => this.createPlayer(context, id, { ...config, isLocal: true }));
         this.register('REMOTE_PLAYER', (context, id, config) => this.createPlayer(context, id, { ...config, isLocal: false }));
-        this.register('SPECTATOR', (context, id, config) => this.createSpectator(context, id, config.isAuthority));
         this.register('PHYSICS_PROP', (context, id, config) => {
             // For remote discovery, we might not have the mesh yet
             // If config.mesh is missing, createGrabbable handles it or we use a default
@@ -55,19 +52,6 @@ export class EntityFactory {
             : new RemotePlayer(context, id, view);
 
         if (render && view instanceof StickFigureView) {
-            view.addToScene(render.scene);
-            view.addToInteractionGroup(render.interactionGroup);
-        }
-
-        return entity;
-    }
-
-    public static createSpectator(context: GameContext, id: string, isAuthority: boolean): SpectatorEntity {
-        const render = context.managers.render;
-        const view = render ? new SpectatorView() : new NullView(id);
-        const entity = new SpectatorEntity(context, id, isAuthority, view);
-
-        if (render && view instanceof SpectatorView) {
             view.addToScene(render.scene);
             view.addToInteractionGroup(render.interactionGroup);
         }

@@ -17,7 +17,6 @@ import type { DrawingManager } from '../managers/DrawingManager';
 import type { TrackingManager } from '../managers/TrackingManager';
 import type { VRUIManager } from '../managers/VRUIManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
-import type { SpectatorEntity } from '../entities/SpectatorEntity';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -75,7 +74,7 @@ export class GameContext {
         seed: Math.floor(Math.random() * 2147483647)
     };
 
-    public localPlayer: LocalPlayer | SpectatorEntity | null = null;
+    public localPlayer: LocalPlayer | null = null;
     public isMenuOpen: boolean = false;
 
     private _managers: Partial<IManagers> = {};
