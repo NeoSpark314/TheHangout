@@ -347,11 +347,13 @@ export class FlatUIManager implements IUpdatable {
     }
 
     public hideOverlay(): void {
+        console.log('[FlatUIManager] hideOverlay() called');
         if (this.overlay) {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
                 this.overlay.style.display = 'none';
                 if (this.desktopControls && !this.isMobile) {
+                    console.log('[FlatUIManager] Showing desktop controls');
                     this.desktopControls.style.display = 'block';
                 }
                 if (this.isMobile && !this.context.isDedicatedHost) {
@@ -412,12 +414,16 @@ export class FlatUIManager implements IUpdatable {
     }
 
     public showOverlay(): void {
+        console.log('[FlatUIManager] showOverlay() called');
         if (this.overlay) {
             this.overlay.style.display = 'flex';
             this.overlay.offsetHeight;
             this.overlay.style.opacity = '1';
         }
-        if (this.desktopControls) this.desktopControls.style.display = 'none';
+        if (this.desktopControls) {
+            console.log('[FlatUIManager] Hiding desktop controls');
+            this.desktopControls.style.display = 'none';
+        }
         const hud = document.getElementById('mobile-hud');
         if (hud) hud.style.display = 'none';
     }
