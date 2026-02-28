@@ -46,17 +46,36 @@ The `App` class manages the startup sequence, ensuring all managers are register
 - **Synchronizer**: A 20Hz loop that broadcasts authoritative entity states using standardized, bandwidth-efficient interfaces.
 - **Feature Replication**: `ReplicationManager` handles generic feature events and optional snapshots for late joiners.
 
+### Network Lanes
+- **Lane A: Continuous State Sync**  
+  Used for high-frequency, continuously changing simulation state.
+  - Player/avatar pose and humanoid deltas (`hmd`, `hm`)
+  - Physics body state + ownership transfer
+  - Why: these domains need authority, interpolation, and tight cadence.
+- **Lane B: Feature Replication (Event + Snapshot)**  
+  Used for semantic gameplay effects and accumulated feature state.
+  - Drum pad hits (event)
+  - High five effects (event)
+  - Drawing history (event stream + snapshot for late join)
+  - Why: local-first feature logic with network awareness and optional late-join recovery.
+- **Lane C: Media/Voice Transport**  
+  Dedicated path for audio chunk streaming.
+  - Why: different throughput/timing profile and decode pipeline than gameplay state.
+
 ### Replication Boundaries
-- Use `ReplicationManager` for semantic feature events and snapshotable accumulated state (drum hits, drawings, room feature state).
-- Do **not** use `ReplicationManager` for high-rate continuous simulation streams:
-  - Physics transforms/ownership are handled by dedicated entity + ownership sync paths.
-  - Avatar/head/hand pose sync uses dedicated compact player-state payloads (`hmd`, `hm`) and interpolation logic.
-- Reason: those continuous domains require tighter cadence, authority rules, and specialized smoothing/reconciliation that a generic event channel is not designed to provide.
+- Use `ReplicationManager` for semantic events and snapshotable feature state.
+- Do **not** use `ReplicationManager` for high-rate physics/avatar streams.
+- Keep transport responsibilities separate: continuous simulation, feature semantics, and voice/media each stay in their lane.
 
 ### Tracking & Gestures
 - **Tracking Providers own hand state**: `DesktopTrackingProvider` and `XRTrackingProvider` are the authoritative writers of `hands` tracking data.
 - **InputManager consumes tracking state**: Gesture and interaction intents are derived directly from `TrackingManager` hand state, not from view/entity mirrors.
 - **HumanoidState is avatar/network focused**: `HumanoidState` is used for avatar pose replication/rendering (`hmd`), while interaction logic uses tracked hands.
+
+### Social & VFX
+- **SocialEffectsManager**: feature-specific local detection + replicated semantic events (`feature:social`, currently high fives).
+- **ParticleSystemManager**: generic GPU-style `THREE.Points` spark system used by social and future effects.
+- **AudioManager + SoundSynth**: local playback of replicated social/drum events with distance/pan shaping.
 
 ## Project Structure
 
