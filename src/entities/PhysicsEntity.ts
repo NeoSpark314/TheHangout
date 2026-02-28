@@ -86,6 +86,14 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         return this.simMode;
     }
 
+    public getSnapshotBufferSize(): number {
+        return this.snapshotBuffer.length;
+    }
+
+    public getLastOwnershipTransferSeq(): number {
+        return this.lastOwnershipTransferSeq;
+    }
+
     public syncAuthority(): void {
         const localId = this.context.localPlayer?.id || 'local';
         const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && this.context.isHost);

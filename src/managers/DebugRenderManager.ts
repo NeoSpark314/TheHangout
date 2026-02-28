@@ -186,7 +186,7 @@ export class DebugRenderManager implements IUpdatable {
             const shortId = this.compactId(body.id, 14);
             const shortOwner = this.compactId(owner, 12);
             const sleep = isSleeping ? 'sleep' : 'awake';
-            const labelText = `${shortId}\nown:${shortOwner}  a:${authority}\nsim:${sim}  ${sleep}`;
+            const labelText = `${shortId}\nown:${shortOwner}  a:${authority}\nsim:${sim}  ${sleep}\nsb:${body.snapshotBufferSize}  seq:${body.lastTransferSeq}`;
             visual.label.visible = this.settings.showAuthorityLabels;
 
             if (labelText !== visual.labelText) {
@@ -233,7 +233,7 @@ export class DebugRenderManager implements IUpdatable {
     private buildLabelCanvas(text: string): HTMLCanvasElement {
         const canvas = document.createElement('canvas');
         canvas.width = 384;
-        canvas.height = 150;
+        canvas.height = 190;
         const ctx = canvas.getContext('2d');
         if (!ctx) return canvas;
 

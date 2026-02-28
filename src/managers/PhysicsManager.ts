@@ -16,6 +16,8 @@ export interface IPhysicsDebugBody {
     isAuthority: boolean;
     hasNetworkState: boolean;
     simMode: string | null;
+    snapshotBufferSize: number;
+    lastTransferSeq: number;
 }
 
 interface IPhysicsDebugBodyEntry {
@@ -25,6 +27,8 @@ interface IPhysicsDebugBodyEntry {
     getOwnerId?: () => string | null;
     getIsAuthority?: () => boolean;
     getSimMode?: () => string | null;
+    getSnapshotBufferSize?: () => number;
+    getLastTransferSeq?: () => number;
 }
 
 export class PhysicsManager {
@@ -156,7 +160,9 @@ export class PhysicsManager {
                 ownerId: entry.getOwnerId ? entry.getOwnerId() : null,
                 isAuthority: entry.getIsAuthority ? entry.getIsAuthority() : false,
                 hasNetworkState: !!entry.getOwnerId,
-                simMode: entry.getSimMode ? entry.getSimMode() : null
+                simMode: entry.getSimMode ? entry.getSimMode() : null,
+                snapshotBufferSize: entry.getSnapshotBufferSize ? entry.getSnapshotBufferSize() : 0,
+                lastTransferSeq: entry.getLastTransferSeq ? entry.getLastTransferSeq() : 0
             });
         }
         return out;
@@ -180,6 +186,8 @@ export class PhysicsManager {
             entry.getOwnerId = () => entity.ownerId;
             entry.getIsAuthority = () => entity.isAuthority;
             entry.getSimMode = () => entity.getSimMode?.() ?? null;
+            entry.getSnapshotBufferSize = () => entity.getSnapshotBufferSize?.() ?? 0;
+            entry.getLastTransferSeq = () => entity.getLastOwnershipTransferSeq?.() ?? 0;
         }
 
         this.debugBodies.set(handle, entry);
