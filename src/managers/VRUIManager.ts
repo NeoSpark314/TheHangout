@@ -133,8 +133,12 @@ export class VRUIManager implements IUpdatable {
         const playersPerPage = 4;
 
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
-            // Container to hold dynamic rows so we can clear them on pagination
-            const listContainer = new UIElement(0, 40, 1280, 580);
+            // 1. Header Row (for actions like Copy Invite)
+            const headerContainer = new UIElement(0, 20, 1280, 80);
+            roomContainer.addChild(headerContainer);
+
+            // 2. List Container (shifted down)
+            const listContainer = new UIElement(0, 110, 1280, 500);
             roomContainer.addChild(listContainer);
 
             const pageLabel = new UILabel("Page 1/1", 540, 640, 200, 60);
@@ -173,6 +177,9 @@ export class VRUIManager implements IUpdatable {
                 for (const entity of this.context.managers.entity.entities.values()) {
                     if (entity.type === 'REMOTE_PLAYER') {
                         const rp = entity as RemotePlayer;
+                        // Avoid adding duplicates if the same player is discovered multiple times (edge case)
+                        if (allPeers.find(p => p.id === rp.id)) continue;
+
                         allPeers.push({
                             id: rp.id,
                             name: rp.name || 'Unknown',
@@ -197,6 +204,7 @@ export class VRUIManager implements IUpdatable {
 
                 const totalPages = Math.max(1, Math.ceil(allPeers.length / playersPerPage));
                 if (currentPage >= totalPages) currentPage = totalPages - 1;
+                if (currentPage < 0) currentPage = 0;
 
                 pageLabel.text = `Page ${currentPage + 1}/${totalPages}`;
 
@@ -265,25 +273,25 @@ export class VRUIManager implements IUpdatable {
                     }
                 });
 
-                // Copy Invite Link Button at the bottom if enough space
-                const copyBtn = new UIButton("Copy Invite Link", 440, 520, 400, 60, () => {
-                    const url = window.location.origin + window.location.pathname + "?room=" + this.context.roomId;
-                    navigator.clipboard.writeText(url).then(() => {
-                        copyBtn.text = "Copied!";
-                        this.tablet?.ui.markDirty();
-                        setTimeout(() => {
-                            copyBtn.text = "Copy Invite Link";
-                            this.tablet?.ui.markDirty();
-                        }, 2000);
-                    });
-                });
-                copyBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
-                copyBtn.borderColor = UITheme.colors.secondary;
-                copyBtn.cornerRadius = 10;
-                listContainer.addChild(copyBtn);
-
                 this.tablet?.ui.markDirty();
             };
+
+            // Copy Invite Link Button in the header
+            const copyBtn = new UIButton("Copy Invite Link", 440, 10, 400, 60, () => {
+                const url = window.location.origin + window.location.pathname + "?room=" + this.context.roomId;
+                navigator.clipboard.writeText(url).then(() => {
+                    copyBtn.text = "Copied!";
+                    this.tablet?.ui.markDirty();
+                    setTimeout(() => {
+                        copyBtn.text = "Copy Invite Link";
+                        this.tablet?.ui.markDirty();
+                    }, 2000);
+                });
+            });
+            copyBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
+            copyBtn.borderColor = UITheme.colors.secondary;
+            copyBtn.cornerRadius = 10;
+            headerContainer.addChild(copyBtn);
 
             // Pagination Controls
             const prevBtn = new UIButton("< Prev", 200, 630, 200, 80, () => {
@@ -293,12 +301,11 @@ export class VRUIManager implements IUpdatable {
                 }
             });
             const nextBtn = new UIButton("Next >", 880, 630, 200, 80, () => {
-                // Determine max pages again
-                let remoteCount = 0;
+                let totalPeers = 1; // Start with local player
                 for (const entity of this.context.managers.entity.entities.values()) {
-                    if (entity.type === 'REMOTE_PLAYER') remoteCount++;
+                    if (entity.type === 'REMOTE_PLAYER') totalPeers++;
                 }
-                const totalPages = Math.max(1, Math.ceil(remoteCount / playersPerPage));
+                const totalPages = Math.max(1, Math.ceil(totalPeers / playersPerPage));
                 if (currentPage < totalPages - 1) {
                     currentPage++;
                     renderList();
@@ -309,9 +316,8 @@ export class VRUIManager implements IUpdatable {
             roomContainer.addChild(pageLabel);
             roomContainer.addChild(nextBtn);
 
-            // Hook up auto-refresh events. We use setTimeout to defer rendering by one tick
-            // so EntityManager has time to actually add/remove the entity before we query the list.
-            const scheduleRender = () => { setTimeout(renderList, 0); };
+            // Hook up auto-refresh events.
+            const scheduleRender = () => { setTimeout(renderList, 100); };
             eventBus.on(EVENTS.PEER_CONNECTED, scheduleRender);
             eventBus.on(EVENTS.PEER_DISCONNECTED, scheduleRender);
             eventBus.on(EVENTS.REMOTE_NAME_UPDATED, scheduleRender);
