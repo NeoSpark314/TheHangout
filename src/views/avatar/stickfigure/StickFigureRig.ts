@@ -34,7 +34,44 @@ export interface StickFigureRigVisuals {
     rightForearm: THREE.Mesh;
 }
 
+interface IArmIkResult {
+    upperQuat: THREE.Quaternion;
+    lowerQuat: THREE.Quaternion;
+    elbowDist: number;
+    wristDist: number;
+}
+
 export class StickFigureRig {
+    private readonly baseArmDir = new THREE.Vector3(0, -1, 0);
+    private readonly leftPole = new THREE.Vector3(-1, 0, 0.35).normalize();
+    private readonly rightPole = new THREE.Vector3(1, 0, 0.35).normalize();
+
+    private readonly tmpTargetInParent = new THREE.Vector3();
+    private readonly tmpParentInverse = new THREE.Matrix4();
+    private readonly tmpShoulderPos = new THREE.Vector3();
+    private readonly tmpToTarget = new THREE.Vector3();
+    private readonly tmpDir = new THREE.Vector3();
+    private readonly tmpPlaneNormal = new THREE.Vector3();
+    private readonly tmpBendDir = new THREE.Vector3();
+    private readonly tmpElbow = new THREE.Vector3();
+    private readonly tmpUpperDir = new THREE.Vector3();
+    private readonly tmpLowerDir = new THREE.Vector3();
+    private readonly tmpInvUpperQuat = new THREE.Quaternion();
+    private readonly tmpLowerLocalDir = new THREE.Vector3();
+
+    private readonly leftIk: IArmIkResult = {
+        upperQuat: new THREE.Quaternion(),
+        lowerQuat: new THREE.Quaternion(),
+        elbowDist: 0.32,
+        wristDist: 0.32
+    };
+    private readonly rightIk: IArmIkResult = {
+        upperQuat: new THREE.Quaternion(),
+        lowerQuat: new THREE.Quaternion(),
+        elbowDist: 0.32,
+        wristDist: 0.32
+    };
+
     constructor(
         private root: THREE.Object3D,
         private bones: StickFigureBones,
@@ -92,78 +129,78 @@ export class StickFigureRig {
     }
 
     public updateArms(leftHandLocalPos: THREE.Vector3, rightHandLocalPos: THREE.Vector3): void {
-        const calculateIK = (
-            shoulderBone: THREE.Bone,
-            handLocalTarget: THREE.Vector3,
-            isLeft: boolean
-        ): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
-            const parentBone = shoulderBone.parent;
-            const targetInParent = handLocalTarget.clone();
+        this.root.updateMatrixWorld(true);
 
-            if (parentBone) {
-                this.root.updateMatrixWorld(true);
-                parentBone.updateMatrixWorld(true);
-                targetInParent.applyMatrix4(this.root.matrixWorld);
-                targetInParent.applyMatrix4(new THREE.Matrix4().copy(parentBone.matrixWorld).invert());
-            }
+        this.solveArmIK(this.bones.leftShoulder, leftHandLocalPos, true, this.leftIk);
+        this.bones.leftUpperArm.quaternion.copy(this.leftIk.upperQuat);
+        this.bones.leftLowerArm.position.set(0, -this.leftIk.elbowDist, 0);
+        this.bones.leftLowerArm.quaternion.copy(this.leftIk.lowerQuat);
+        this.setupLocalCylinder(this.visuals.leftUpperArm, this.leftIk.elbowDist);
+        this.visuals.leftUpperArm.position.set(0, -this.leftIk.elbowDist * 0.5, 0);
+        this.setupLocalCylinder(this.visuals.leftForearm, this.leftIk.wristDist);
+        this.visuals.leftForearm.position.set(0, -this.leftIk.wristDist * 0.5, 0);
 
-            let upperArmLen = 0.32;
-            let lowerArmLen = 0.32;
-            const shoulderPos = shoulderBone.position.clone();
-            const toTarget = new THREE.Vector3().subVectors(targetInParent, shoulderPos);
-            const rawDist = Math.max(0.0001, toTarget.length());
+        this.solveArmIK(this.bones.rightShoulder, rightHandLocalPos, false, this.rightIk);
+        this.bones.rightUpperArm.quaternion.copy(this.rightIk.upperQuat);
+        this.bones.rightLowerArm.position.set(0, -this.rightIk.elbowDist, 0);
+        this.bones.rightLowerArm.quaternion.copy(this.rightIk.lowerQuat);
+        this.setupLocalCylinder(this.visuals.rightUpperArm, this.rightIk.elbowDist);
+        this.visuals.rightUpperArm.position.set(0, -this.rightIk.elbowDist * 0.5, 0);
+        this.setupLocalCylinder(this.visuals.rightForearm, this.rightIk.wristDist);
+        this.visuals.rightForearm.position.set(0, -this.rightIk.wristDist * 0.5, 0);
+    }
 
-            const nominalReach = upperArmLen + lowerArmLen;
-            if (rawDist > nominalReach) {
-                const stretch = rawDist / nominalReach;
-                upperArmLen *= stretch;
-                lowerArmLen *= stretch;
-            }
+    private solveArmIK(
+        shoulderBone: THREE.Bone,
+        handLocalTarget: THREE.Vector3,
+        isLeft: boolean,
+        out: IArmIkResult
+    ): void {
+        const parentBone = shoulderBone.parent;
+        this.tmpTargetInParent.copy(handLocalTarget);
 
-            const maxReach = upperArmLen + lowerArmLen - 0.0001;
-            const dist = Math.min(rawDist, maxReach);
-            const dir = toTarget.multiplyScalar(1 / rawDist);
+        if (parentBone) {
+            this.tmpTargetInParent.applyMatrix4(this.root.matrixWorld);
+            this.tmpParentInverse.copy(parentBone.matrixWorld).invert();
+            this.tmpTargetInParent.applyMatrix4(this.tmpParentInverse);
+        }
 
-            const side = isLeft ? -1 : 1;
-            const pole = new THREE.Vector3(side, 0, 0.35).normalize();
-            const planeNormal = new THREE.Vector3().crossVectors(dir, pole);
-            if (planeNormal.lengthSq() < 1e-6) planeNormal.set(0, 0, 1);
-            planeNormal.normalize();
-            const bendDir = new THREE.Vector3().crossVectors(planeNormal, dir).normalize();
+        let upperArmLen = 0.32;
+        let lowerArmLen = 0.32;
+        this.tmpShoulderPos.copy(shoulderBone.position);
+        this.tmpToTarget.subVectors(this.tmpTargetInParent, this.tmpShoulderPos);
+        const rawDist = Math.max(0.0001, this.tmpToTarget.length());
 
-            const a = (upperArmLen * upperArmLen - lowerArmLen * lowerArmLen + dist * dist) / (2 * dist);
-            const hSq = Math.max(0, upperArmLen * upperArmLen - a * a);
-            const h = Math.sqrt(hSq);
-            const elbow = shoulderPos.clone().addScaledVector(dir, a).addScaledVector(bendDir, h);
+        const nominalReach = upperArmLen + lowerArmLen;
+        if (rawDist > nominalReach) {
+            const stretch = rawDist / nominalReach;
+            upperArmLen *= stretch;
+            lowerArmLen *= stretch;
+        }
 
-            const upperDir = elbow.clone().sub(shoulderPos).normalize();
-            const lowerDir = targetInParent.clone().sub(elbow).normalize();
-            const baseDir = new THREE.Vector3(0, -1, 0);
+        const maxReach = upperArmLen + lowerArmLen - 0.0001;
+        const dist = Math.min(rawDist, maxReach);
+        this.tmpDir.copy(this.tmpToTarget).multiplyScalar(1 / rawDist);
 
-            const upperQuat = new THREE.Quaternion().setFromUnitVectors(baseDir, upperDir);
-            const lowerLocalDir = lowerDir.clone().applyQuaternion(upperQuat.clone().invert());
-            const lowerQuat = new THREE.Quaternion().setFromUnitVectors(baseDir, lowerLocalDir);
+        this.tmpPlaneNormal.crossVectors(this.tmpDir, isLeft ? this.leftPole : this.rightPole);
+        if (this.tmpPlaneNormal.lengthSq() < 1e-6) this.tmpPlaneNormal.set(0, 0, 1);
+        this.tmpPlaneNormal.normalize();
+        this.tmpBendDir.crossVectors(this.tmpPlaneNormal, this.tmpDir).normalize();
 
-            return { upperQuat, lowerQuat, elbowDist: upperArmLen, wristDist: lowerArmLen };
-        };
+        const a = (upperArmLen * upperArmLen - lowerArmLen * lowerArmLen + dist * dist) / (2 * dist);
+        const hSq = Math.max(0, upperArmLen * upperArmLen - a * a);
+        const h = Math.sqrt(hSq);
+        this.tmpElbow.copy(this.tmpShoulderPos).addScaledVector(this.tmpDir, a).addScaledVector(this.tmpBendDir, h);
 
-        const leftIk = calculateIK(this.bones.leftShoulder, leftHandLocalPos, true);
-        this.bones.leftUpperArm.quaternion.copy(leftIk.upperQuat);
-        this.bones.leftLowerArm.position.set(0, -leftIk.elbowDist, 0);
-        this.bones.leftLowerArm.quaternion.copy(leftIk.lowerQuat);
-        this.setupLocalCylinder(this.visuals.leftUpperArm, leftIk.elbowDist);
-        this.visuals.leftUpperArm.position.set(0, -leftIk.elbowDist * 0.5, 0);
-        this.setupLocalCylinder(this.visuals.leftForearm, leftIk.wristDist);
-        this.visuals.leftForearm.position.set(0, -leftIk.wristDist * 0.5, 0);
+        this.tmpUpperDir.subVectors(this.tmpElbow, this.tmpShoulderPos).normalize();
+        this.tmpLowerDir.subVectors(this.tmpTargetInParent, this.tmpElbow).normalize();
 
-        const rightIk = calculateIK(this.bones.rightShoulder, rightHandLocalPos, false);
-        this.bones.rightUpperArm.quaternion.copy(rightIk.upperQuat);
-        this.bones.rightLowerArm.position.set(0, -rightIk.elbowDist, 0);
-        this.bones.rightLowerArm.quaternion.copy(rightIk.lowerQuat);
-        this.setupLocalCylinder(this.visuals.rightUpperArm, rightIk.elbowDist);
-        this.visuals.rightUpperArm.position.set(0, -rightIk.elbowDist * 0.5, 0);
-        this.setupLocalCylinder(this.visuals.rightForearm, rightIk.wristDist);
-        this.visuals.rightForearm.position.set(0, -rightIk.wristDist * 0.5, 0);
+        out.upperQuat.setFromUnitVectors(this.baseArmDir, this.tmpUpperDir);
+        this.tmpInvUpperQuat.copy(out.upperQuat).invert();
+        this.tmpLowerLocalDir.copy(this.tmpLowerDir).applyQuaternion(this.tmpInvUpperQuat);
+        out.lowerQuat.setFromUnitVectors(this.baseArmDir, this.tmpLowerLocalDir);
+        out.elbowDist = upperArmLen;
+        out.wristDist = lowerArmLen;
     }
 
     private setupLocalCylinder(mesh: THREE.Mesh, length: number): void {
