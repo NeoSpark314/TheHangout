@@ -37,7 +37,7 @@ export class VRUIManager implements IUpdatable {
         this.tablet.ui.root.addChild(this.tabPanel);
 
         // Add default System Tab immediately
-        this.addRoomTab();
+        this.addPeersTab();
         this.addSystemTab();
 
         this.setupKeyboardListeners();
@@ -125,22 +125,16 @@ export class VRUIManager implements IUpdatable {
         }
     }
 
-    private addRoomTab() {
+    private addPeersTab() {
         if (!this.tabPanel) return;
 
-        const roomContainer = this.tabPanel.addTab('Room');
+        const roomContainer = this.tabPanel.addTab('Peers');
         let currentPage = 0;
         const playersPerPage = 4;
 
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
-            const title = new UILabel("Participants", 50, 40, 1180, 60);
-            title.font = getFont(UITheme.typography.sizes.title, 'bold');
-            title.textColor = UITheme.colors.primary;
-            title.textAlign = 'center';
-            roomContainer.addChild(title);
-
             // Container to hold dynamic rows so we can clear them on pagination
-            const listContainer = new UIElement(0, 120, 1280, 500);
+            const listContainer = new UIElement(0, 40, 1280, 580);
             roomContainer.addChild(listContainer);
 
             const pageLabel = new UILabel("Page 1/1", 540, 640, 200, 60);
@@ -151,75 +145,113 @@ export class VRUIManager implements IUpdatable {
             const renderList = () => {
                 listContainer.children = []; // Clear current list
 
-                // Gather all remote players
-                const remotePlayers: RemotePlayer[] = [];
+                // Gather all players (Local + Remote)
+                interface IPeerRow {
+                    id: string;
+                    name: string;
+                    avatarColor: string | number;
+                    isLocal: boolean;
+                    audioLevel: number;
+                    isMuted?: boolean;
+                    player?: RemotePlayer;
+                    targetPos?: THREE.Vector3;
+                    targetYaw?: number;
+                }
+
+                const allPeers: IPeerRow[] = [];
+
+                // 1. Add Local Player
+                allPeers.push({
+                    id: this.context.localPlayer?.id || 'local',
+                    name: (this.context.playerName || 'You') + ' (You)',
+                    avatarColor: this.context.avatarConfig.color,
+                    isLocal: true,
+                    audioLevel: this.context.managers.media ? this.context.managers.media.getLocalVolume() : 0
+                });
+
+                // 2. Add Remote Players
                 for (const entity of this.context.managers.entity.entities.values()) {
                     if (entity.type === 'REMOTE_PLAYER') {
-                        remotePlayers.push(entity as RemotePlayer);
+                        const rp = entity as RemotePlayer;
+                        allPeers.push({
+                            id: rp.id,
+                            name: rp.name || 'Unknown',
+                            avatarColor: rp.avatarColor as string | number,
+                            isLocal: false,
+                            audioLevel: (rp as any).audioLevel || 0,
+                            isMuted: rp.isMuted,
+                            player: rp,
+                            targetPos: rp.targetPosition ? new THREE.Vector3(rp.targetPosition.x, rp.targetPosition.y, rp.targetPosition.z) : undefined,
+                            targetYaw: rp.targetYaw
+                        });
                     }
                 }
 
-                const totalPages = Math.max(1, Math.ceil(remotePlayers.length / playersPerPage));
+                // Update Tab Title with Count
+                if (this.tabPanel) {
+                    const tabIndex = this.tabPanel.tabs.findIndex(t => t.container === roomContainer);
+                    if (tabIndex !== -1) {
+                        this.tabPanel.tabs[tabIndex].name = `Peers (${allPeers.length})`;
+                    }
+                }
+
+                const totalPages = Math.max(1, Math.ceil(allPeers.length / playersPerPage));
                 if (currentPage >= totalPages) currentPage = totalPages - 1;
 
                 pageLabel.text = `Page ${currentPage + 1}/${totalPages}`;
 
                 const startIndex = currentPage * playersPerPage;
-                const pagePlayers = remotePlayers.slice(startIndex, startIndex + playersPerPage);
+                const pagePeers = allPeers.slice(startIndex, startIndex + playersPerPage);
 
-                if (remotePlayers.length === 0) {
-                    const emptyLabel = new UILabel("You are the only one here.", 0, 200, 1280, 60);
-                    emptyLabel.font = getFont(UITheme.typography.sizes.body, 'italic');
-                    emptyLabel.textColor = UITheme.colors.textMuted;
-                    emptyLabel.textAlign = 'center';
-                    listContainer.addChild(emptyLabel);
-                } else {
-                    pagePlayers.forEach((player, index) => {
-                        const rowY = index * 120;
+                pagePeers.forEach((peer, index) => {
+                    const rowY = index * 125;
 
-                        // Avatar Color Block
-                        const colorBlock = new UIElement(50, rowY + 20, 60, 60);
-                        const c = player.avatarColor;
-                        colorBlock.backgroundColor = typeof c === 'string' ? c : '#' + (c as number).toString(16).padStart(6, '0');
-                        colorBlock.cornerRadius = 8;
-                        listContainer.addChild(colorBlock);
+                    // Avatar Color Block
+                    const colorBlock = new UIElement(50, rowY + 20, 60, 60);
+                    const c = peer.avatarColor;
+                    colorBlock.backgroundColor = typeof c === 'string' ? c : '#' + (c as number).toString(16).padStart(6, '0');
+                    colorBlock.cornerRadius = 8;
+                    listContainer.addChild(colorBlock);
 
-                        // Name
-                        const nameLabel = new UILabel(player.name || 'Unknown', 140, rowY + 20, 500, 60);
-                        nameLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
-                        nameLabel.textColor = UITheme.colors.text;
-                        nameLabel.textAlign = 'left';
-                        listContainer.addChild(nameLabel);
+                    // Name + Badges
+                    let displayName = peer.name;
+                    const isHost = peer.id === this.context.roomId || (peer.isLocal && this.context.isHost);
+                    if (isHost) displayName += ' [Host]';
+                    if (peer.audioLevel > 0.01) displayName += ' [Talking]';
 
+                    const nameLabel = new UILabel(displayName, 140, rowY + 20, 550, 60);
+                    nameLabel.font = getFont(UITheme.typography.sizes.body, peer.isLocal ? 'bold' : 'normal');
+                    nameLabel.textColor = peer.isLocal ? UITheme.colors.primary : UITheme.colors.text;
+                    nameLabel.textAlign = 'left';
+                    listContainer.addChild(nameLabel);
+
+                    if (!peer.isLocal && peer.player) {
+                        const remotePeer = peer.player;
                         // Mute Button
-                        const muteBtn = new UIButton(player.isMuted ? "Unmute" : "Mute", 700, rowY + 15, 200, 70, () => {
-                            player.isMuted = !player.isMuted;
-                            if (player.view && (player.view as any).setMuted) {
-                                (player.view as any).setMuted(player.isMuted);
+                        const muteBtn = new UIButton(peer.isMuted ? "Unmute" : "Mute", 720, rowY + 15, 200, 70, () => {
+                            remotePeer.isMuted = !remotePeer.isMuted;
+                            if (remotePeer.view && (remotePeer.view as any).setMuted) {
+                                (remotePeer.view as any).setMuted(remotePeer.isMuted);
                             }
-                            renderList(); // Re-render to update button text
+                            renderList();
                         });
-                        muteBtn.backgroundColor = player.isMuted ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
-                        muteBtn.borderColor = player.isMuted ? UITheme.colors.secondary : UITheme.colors.primary;
-                        muteBtn.textColor = player.isMuted ? UITheme.colors.secondary : UITheme.colors.text;
+                        muteBtn.backgroundColor = peer.isMuted ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                        muteBtn.borderColor = peer.isMuted ? UITheme.colors.secondary : UITheme.colors.primary;
+                        muteBtn.textColor = peer.isMuted ? UITheme.colors.secondary : UITheme.colors.text;
+                        muteBtn.cornerRadius = 8;
                         listContainer.addChild(muteBtn);
 
                         // Go To Button
-                        const gotoBtn = new UIButton("Go To", 930, rowY + 15, 200, 70, () => {
+                        const gotoBtn = new UIButton("Go To", 950, rowY + 15, 200, 70, () => {
                             const localPlayer = this.context.localPlayer as LocalPlayer;
-                            if (localPlayer && localPlayer.teleportTo) {
-                                // Calculate position 1 meter backward from their face
-                                const targetPos = new THREE.Vector3(player.targetPosition.x, player.targetPosition.y, player.targetPosition.z);
-                                const targetYaw = player.targetYaw;
-
-                                const offset = new THREE.Vector3(0, 0, 1.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), targetYaw);
+                            if (localPlayer && localPlayer.teleportTo && peer.targetPos && peer.targetYaw !== undefined) {
+                                const targetPos = new THREE.Vector3(peer.targetPos.x, peer.targetPos.y, peer.targetPos.z);
+                                const targetYaw = peer.targetYaw;
+                                const offset = new THREE.Vector3(0, 0, 1.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), targetYaw);
                                 const finalPos = targetPos.clone().add(offset);
-                                // Set our yaw to face them perfectly (their yaw + 180 degrees)
                                 const finalYaw = targetYaw + Math.PI;
-
                                 localPlayer.teleportTo(finalPos, finalYaw);
 
-                                // Optional: Flash UI or provide feedback
                                 gotoBtn.backgroundColor = UITheme.colors.primary;
                                 setTimeout(() => {
                                     gotoBtn.backgroundColor = UITheme.colors.panelBgHover;
@@ -228,9 +260,27 @@ export class VRUIManager implements IUpdatable {
                             }
                         });
                         gotoBtn.borderColor = UITheme.colors.accent;
+                        gotoBtn.cornerRadius = 8;
                         listContainer.addChild(gotoBtn);
+                    }
+                });
+
+                // Copy Invite Link Button at the bottom if enough space
+                const copyBtn = new UIButton("Copy Invite Link", 440, 520, 400, 60, () => {
+                    const url = window.location.origin + window.location.pathname + "?room=" + this.context.roomId;
+                    navigator.clipboard.writeText(url).then(() => {
+                        copyBtn.text = "Copied!";
+                        this.tablet?.ui.markDirty();
+                        setTimeout(() => {
+                            copyBtn.text = "Copy Invite Link";
+                            this.tablet?.ui.markDirty();
+                        }, 2000);
                     });
-                }
+                });
+                copyBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
+                copyBtn.borderColor = UITheme.colors.secondary;
+                copyBtn.cornerRadius = 10;
+                listContainer.addChild(copyBtn);
 
                 this.tablet?.ui.markDirty();
             };

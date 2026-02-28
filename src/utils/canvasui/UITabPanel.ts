@@ -2,7 +2,7 @@ import { UIElement } from './UIElement';
 import { UITheme, getFont } from '../UITheme';
 
 export class UITabPanel extends UIElement {
-    private tabs: { name: string, container: UIElement }[] = [];
+    public tabs: { name: string, container: UIElement }[] = [];
     private activeTabIndex: number = 0;
 
     private tabBarHeight: number = 80;
