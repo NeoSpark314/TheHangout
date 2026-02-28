@@ -39,8 +39,10 @@ export class TrackingManager {
         // Fallback default state
         return {
             head: {
-                position: { x: 0, y: 1.7, z: 0 },
-                quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                pose: {
+                    position: { x: 0, y: 1.7, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                },
                 yaw: 0
             },
             hands: {

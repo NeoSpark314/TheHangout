@@ -35,8 +35,8 @@ export class GrabSkill extends Skill {
 
                 // Calculate grab offset to prevent jumping
                 const handState = player.handStates[payload.hand];
-                const pos = handState.pointerPosition || handState.position;
-                const rot = handState.pointerQuaternion || handState.quaternion;
+                const pos = handState.pointerPose.position || handState.pose.position;
+                const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
                 const handPos = new THREE.Vector3(pos.x, pos.y, pos.z);
                 const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
@@ -133,8 +133,8 @@ export class GrabSkill extends Skill {
 
             if (held) {
                 // UPDATE HELD POSE
-                const pos = handState.pointerPosition || handState.position;
-                const rot = handState.pointerQuaternion || handState.quaternion;
+                const pos = handState.pointerPose.position || handState.pose.position;
+                const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
                 const handPos = new THREE.Vector3(pos.x, pos.y, pos.z);
                 const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
@@ -143,10 +143,10 @@ export class GrabSkill extends Skill {
                 const targetPos = new THREE.Vector3().copy(held.offsetPos).applyQuaternion(handQuat).add(handPos);
                 const targetQuat = new THREE.Quaternion().copy(handQuat).multiply(held.offsetQuat);
 
-                held.entity.updateGrabbedPose(
-                    { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-                    { x: targetQuat.x, y: targetQuat.y, z: targetQuat.z, w: targetQuat.w }
-                );
+                held.entity.updateGrabbedPose({
+                    position: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+                    quaternion: { x: targetQuat.x, y: targetQuat.y, z: targetQuat.z, w: targetQuat.w }
+                });
 
                 this._recordPosition(hand, handPos);
 
@@ -154,11 +154,11 @@ export class GrabSkill extends Skill {
                 this._updateHighlight(player.id, hand, null);
             } else {
                 let result: { interactable: IInteractable, distance: number } | null = null;
-                const targetPos = new THREE.Vector3(handState.position.x, handState.position.y, handState.position.z);
+                const targetPos = new THREE.Vector3(handState.pose.position.x, handState.pose.position.y, handState.pose.position.z);
 
                 // Unified logic: only use proximity check if the hand is active (extended/tracked)
                 if (handState.active) {
-                    const pos = handState.pointerPosition || handState.position;
+                    const pos = handState.pointerPose.position || handState.pose.position;
                     const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
                     result = managers.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 }

@@ -4,7 +4,7 @@ import { IInteractable } from '../interfaces/IInteractable';
 import { IGrabbable } from '../interfaces/IGrabbable';
 import { IInteractionEvent } from '../interfaces/IInteractionEvent';
 import { IView } from '../interfaces/IView';
-import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
 import { PhysicsPropView, IPhysicsPropState } from '../views/PhysicsPropView';
 import { IPhysicsEntityState, EntityType } from '../interfaces/IEntityState';
 import { GameContext } from '../core/GameState';
@@ -104,13 +104,13 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.releasePhysicsOwnership(velocity);
     }
 
-    public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
-        this.targetPos = { ...position };
-        this.targetRot = { ...quaternion };
+    public updateGrabbedPose(pose: IPose): void {
+        this.targetPos = { ...pose.position };
+        this.targetRot = { ...pose.quaternion };
 
         if (this.rigidBody) {
-            this.rigidBody.setNextKinematicTranslation(position);
-            this.rigidBody.setNextKinematicRotation(quaternion);
+            this.rigidBody.setNextKinematicTranslation(pose.position);
+            this.rigidBody.setNextKinematicRotation(pose.quaternion);
         }
     }
 

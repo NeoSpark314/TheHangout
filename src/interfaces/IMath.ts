@@ -10,3 +10,8 @@ export interface IQuaternion {
     z: number;
     w: number;
 }
+
+export interface IPose {
+    position: IVector3;
+    quaternion: IQuaternion;
+}

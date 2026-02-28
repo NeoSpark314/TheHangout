@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { IVector3, IQuaternion } from './IMath';
+import { IVector3, IPose } from './IMath';
 
 /**
  * Capability interface for objects that can be picked up and moved.
@@ -20,5 +20,5 @@ export interface IGrabbable {
     /**
      * Called every frame by the holder to sync the object's pose.
      */
-    updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void;
+    updateGrabbedPose(pose: IPose): void;
 }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PlayerEntity } from './PlayerEntity';
 import { IView } from '../interfaces/IView';
 import { GameContext } from '../core/GameState';
-import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
@@ -23,7 +23,7 @@ export class LocalPlayer extends PlayerEntity {
     public skills: Skill[] = [];
     public activeSkill: Skill | null = null;
 
-    public xrOrigin: { position: IVector3, quaternion: IQuaternion };
+    public xrOrigin: IPose;
 
     public _lastMoveVector: IVector3 = { x: 0, y: 0, z: 0 };
     public _leftControllerIndex: number = 0;
@@ -114,15 +114,15 @@ export class LocalPlayer extends PlayerEntity {
         managers.tracking.update(delta, frame);
 
         const trackingState = managers.tracking.getState();
-        const worldHeadPos = trackingState.head.position;
-        const worldHeadQuat = trackingState.head.quaternion;
+        const worldHeadPos = trackingState.head.pose.position;
+        const worldHeadQuat = trackingState.head.pose.quaternion;
         const bodyYaw = trackingState.head.yaw;
 
         // Sync hand states (World Space)
         this.syncHandStates(trackingState.hands);
         this.headState.position = { ...worldHeadPos };
         this.headState.quaternion = { ...worldHeadQuat };
-        this.headHeight = trackingState.head.position.y;
+        this.headHeight = trackingState.head.pose.position.y;
 
         // NEW: Refine state with procedural animations (Desktop)
         if (managers.animation) {

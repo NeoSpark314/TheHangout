@@ -639,8 +639,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             this.wristMeshes.left.visible = false;
         } else {
             this.wristMeshes.left.visible = true;
-            const worldPos = new THREE.Vector3(leftHandInfo.position.x, leftHandInfo.position.y, leftHandInfo.position.z);
-            const worldQuat = new THREE.Quaternion(leftHandInfo.quaternion.x, leftHandInfo.quaternion.y, leftHandInfo.quaternion.z, leftHandInfo.quaternion.w);
+            const worldPos = new THREE.Vector3(leftHandInfo.pose.position.x, leftHandInfo.pose.position.y, leftHandInfo.pose.position.z);
+            const worldQuat = new THREE.Quaternion(leftHandInfo.pose.quaternion.x, leftHandInfo.pose.quaternion.y, leftHandInfo.pose.quaternion.z, leftHandInfo.pose.quaternion.w);
 
             const localPos = this.mesh.worldToLocal(worldPos);
             const localQuat = invParentQuat.clone().multiply(worldQuat);
@@ -653,8 +653,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             this.wristMeshes.right.visible = false;
         } else {
             this.wristMeshes.right.visible = true;
-            const worldPos = new THREE.Vector3(rightHandInfo.position.x, rightHandInfo.position.y, rightHandInfo.position.z);
-            const worldQuat = new THREE.Quaternion(rightHandInfo.quaternion.x, rightHandInfo.quaternion.y, rightHandInfo.quaternion.z, rightHandInfo.quaternion.w);
+            const worldPos = new THREE.Vector3(rightHandInfo.pose.position.x, rightHandInfo.pose.position.y, rightHandInfo.pose.position.z);
+            const worldQuat = new THREE.Quaternion(rightHandInfo.pose.quaternion.x, rightHandInfo.pose.quaternion.y, rightHandInfo.pose.quaternion.z, rightHandInfo.pose.quaternion.w);
 
             const localPos = this.mesh.worldToLocal(worldPos);
             const localQuat = invParentQuat.clone().multiply(worldQuat);
@@ -676,8 +676,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         for (let i = 0; i < 25; i++) {
             if (leftHasJoints) {
                 this.handMeshes.left[i].visible = true;
-                const worldPos = new THREE.Vector3(leftHandInfo.joints[i].position.x, leftHandInfo.joints[i].position.y, leftHandInfo.joints[i].position.z);
-                const worldQuat = new THREE.Quaternion(leftHandInfo.joints[i].quaternion.x, leftHandInfo.joints[i].quaternion.y, leftHandInfo.joints[i].quaternion.z, leftHandInfo.joints[i].quaternion.w);
+                const worldPos = new THREE.Vector3(leftHandInfo.joints[i].pose.position.x, leftHandInfo.joints[i].pose.position.y, leftHandInfo.joints[i].pose.position.z);
+                const worldQuat = new THREE.Quaternion(leftHandInfo.joints[i].pose.quaternion.x, leftHandInfo.joints[i].pose.quaternion.y, leftHandInfo.joints[i].pose.quaternion.z, leftHandInfo.joints[i].pose.quaternion.w);
 
                 // Convert to local space
                 const localPos = this.mesh.worldToLocal(worldPos);
@@ -691,8 +691,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
             if (rightHasJoints) {
                 this.handMeshes.right[i].visible = true;
-                const worldPos = new THREE.Vector3(rightHandInfo.joints[i].position.x, rightHandInfo.joints[i].position.y, rightHandInfo.joints[i].position.z);
-                const worldQuat = new THREE.Quaternion(rightHandInfo.joints[i].quaternion.x, rightHandInfo.joints[i].quaternion.y, rightHandInfo.joints[i].quaternion.z, rightHandInfo.joints[i].quaternion.w);
+                const worldPos = new THREE.Vector3(rightHandInfo.joints[i].pose.position.x, rightHandInfo.joints[i].pose.position.y, rightHandInfo.joints[i].pose.position.z);
+                const worldQuat = new THREE.Quaternion(rightHandInfo.joints[i].pose.quaternion.x, rightHandInfo.joints[i].pose.quaternion.y, rightHandInfo.joints[i].pose.quaternion.z, rightHandInfo.joints[i].pose.quaternion.w);
 
                 // Convert to local space
                 const localPos = this.mesh.worldToLocal(worldPos);

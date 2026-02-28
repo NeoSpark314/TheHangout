@@ -9,8 +9,8 @@ export class GestureUtils {
     public static isPinching(hand: IHandState): boolean {
         if (!hand.active || !hand.hasJoints || hand.joints.length < 10) return false;
 
-        const thumbTip = hand.joints[4].position;
-        const indexTip = hand.joints[9].position;
+        const thumbTip = hand.joints[4].pose.position;
+        const indexTip = hand.joints[9].pose.position;
 
         const dx = thumbTip.x - indexTip.x;
         const dy = thumbTip.y - indexTip.y;
@@ -30,13 +30,13 @@ export class GestureUtils {
     public static isFist(hand: IHandState): boolean {
         if (!hand.active || !hand.hasJoints || hand.joints.length < 25) return false;
 
-        const wrist = hand.joints[0].position;
+        const wrist = hand.joints[0].pose.position;
         // Check Index, Middle, Ring, Pinky tips
         const tips = [9, 14, 19, 24];
 
         let closeCount = 0;
         for (const tipIdx of tips) {
-            const tip = hand.joints[tipIdx].position;
+            const tip = hand.joints[tipIdx].pose.position;
             const dx = tip.x - wrist.x;
             const dy = tip.y - wrist.y;
             const dz = tip.z - wrist.z;

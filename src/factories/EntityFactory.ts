@@ -85,7 +85,10 @@ export class EntityFactory {
         const entity = new PenEntity(context, id, !!config.isAuthority, view);
 
         if (config.position) {
-            entity.updateGrabbedPose(config.position, config.quaternion || { x: 0, y: 0, z: 0, w: 1 });
+            entity.updateGrabbedPose({
+                position: config.position,
+                quaternion: config.quaternion || { x: 0, y: 0, z: 0, w: 1 }
+            });
         }
 
         if (render && view instanceof PenView) {

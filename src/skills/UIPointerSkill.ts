@@ -116,8 +116,8 @@ export class UIPointerSkill extends Skill {
 
                 if (handState.active) {
                     // Prefer specialized pointer pose (pinch/target ray) over raw joint/grip pose
-                    const pos = handState.pointerPosition || handState.position;
-                    const rot = handState.pointerQuaternion || handState.quaternion;
+                    const pos = handState.pointerPose.position || handState.pose.position;
+                    const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
                     const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
                     const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
@@ -208,8 +208,8 @@ export class UIPointerSkill extends Skill {
             const handState = player.handStates[hand];
             if (!handState.active) return;
 
-            const pos = handState.pointerPosition || handState.position;
-            const rot = handState.pointerQuaternion || handState.quaternion;
+            const pos = handState.pointerPose.position || handState.pose.position;
+            const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
             const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
             const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);

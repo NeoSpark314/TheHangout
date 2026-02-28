@@ -44,8 +44,8 @@ export class AnimationSystem implements IUpdatable {
         if (!this.localPlayer) return;
         const hand = this.localPlayer.handStates[payload.hand];
         hand.active = true;
-        hand.position = { x: payload.position.x, y: payload.position.y, z: payload.position.z };
-        hand.quaternion = { x: payload.quaternion.x, y: payload.quaternion.y, z: payload.quaternion.z, w: payload.quaternion.w };
+        hand.pose.position = { x: payload.position.x, y: payload.position.y, z: payload.position.z };
+        hand.pose.quaternion = { x: payload.quaternion.x, y: payload.quaternion.y, z: payload.quaternion.z, w: payload.quaternion.w };
     }
 
     private _onXRHead(payload: IXRHeadTrackedPayload): void {
@@ -116,9 +116,9 @@ export class AnimationSystem implements IUpdatable {
                 const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
                 const worldPunch = punchOffset.applyQuaternion(originQuat);
 
-                state.position.x += worldPunch.x;
-                state.position.y += worldPunch.y;
-                state.position.z += worldPunch.z;
+                state.pose.position.x += worldPunch.x;
+                state.pose.position.y += worldPunch.y;
+                state.pose.position.z += worldPunch.z;
             }
         }
     }

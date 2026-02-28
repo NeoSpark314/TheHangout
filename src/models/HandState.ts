@@ -1,27 +1,31 @@
 import { IHandState, IHandJointState, INetworkHandState } from '../interfaces/ITrackingProvider';
-import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IPose } from '../interfaces/IMath';
 
 export class HandState implements IHandState {
     public active: boolean;
     public hasJoints: boolean;
-    public position: IVector3;
-    public quaternion: IQuaternion;
+    public pose: IPose;
+    public pointerPose: IPose;
     public joints: IHandJointState[];
-    public pointerPosition: IVector3;
-    public pointerQuaternion: IQuaternion;
 
     constructor(offsetX: number = 0, defaultActive: boolean = false) {
         this.active = defaultActive;
         this.hasJoints = false;
-        this.position = { x: offsetX, y: 0.8, z: 0 };
-        this.quaternion = { x: 0, y: 0, z: 0, w: 1 };
-        this.pointerPosition = { x: offsetX, y: 0.8, z: 0 };
-        this.pointerQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+        this.pose = {
+            position: { x: offsetX, y: 0.8, z: 0 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 }
+        };
+        this.pointerPose = {
+            position: { x: offsetX, y: 0.8, z: 0 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 }
+        };
         this.joints = [];
         for (let i = 0; i < 25; i++) {
             this.joints.push({
-                position: { x: 0, y: 0, z: 0 },
-                quaternion: { x: 0, y: 0, z: 0, w: 1 }
+                pose: {
+                    position: { x: 0, y: 0, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 }
+                }
             });
         }
     }
@@ -30,33 +34,33 @@ export class HandState implements IHandState {
         this.active = source.active;
         this.hasJoints = source.hasJoints;
 
-        this.position.x = source.position.x;
-        this.position.y = source.position.y;
-        this.position.z = source.position.z;
-        this.quaternion.x = source.quaternion.x;
-        this.quaternion.y = source.quaternion.y;
-        this.quaternion.z = source.quaternion.z;
-        this.quaternion.w = source.quaternion.w;
+        this.pose.position.x = source.pose.position.x;
+        this.pose.position.y = source.pose.position.y;
+        this.pose.position.z = source.pose.position.z;
+        this.pose.quaternion.x = source.pose.quaternion.x;
+        this.pose.quaternion.y = source.pose.quaternion.y;
+        this.pose.quaternion.z = source.pose.quaternion.z;
+        this.pose.quaternion.w = source.pose.quaternion.w;
 
-        this.pointerPosition.x = source.pointerPosition.x;
-        this.pointerPosition.y = source.pointerPosition.y;
-        this.pointerPosition.z = source.pointerPosition.z;
-        this.pointerQuaternion.x = source.pointerQuaternion.x;
-        this.pointerQuaternion.y = source.pointerQuaternion.y;
-        this.pointerQuaternion.z = source.pointerQuaternion.z;
-        this.pointerQuaternion.w = source.pointerQuaternion.w;
+        this.pointerPose.position.x = source.pointerPose.position.x;
+        this.pointerPose.position.y = source.pointerPose.position.y;
+        this.pointerPose.position.z = source.pointerPose.position.z;
+        this.pointerPose.quaternion.x = source.pointerPose.quaternion.x;
+        this.pointerPose.quaternion.y = source.pointerPose.quaternion.y;
+        this.pointerPose.quaternion.z = source.pointerPose.quaternion.z;
+        this.pointerPose.quaternion.w = source.pointerPose.quaternion.w;
 
         for (let i = 0; i < 25; i++) {
             const sJ = source.joints[i];
             const dJ = this.joints[i];
             if (!sJ || !dJ) continue;
-            dJ.position.x = sJ.position.x;
-            dJ.position.y = sJ.position.y;
-            dJ.position.z = sJ.position.z;
-            dJ.quaternion.x = sJ.quaternion.x;
-            dJ.quaternion.y = sJ.quaternion.y;
-            dJ.quaternion.z = sJ.quaternion.z;
-            dJ.quaternion.w = sJ.quaternion.w;
+            dJ.pose.position.x = sJ.pose.position.x;
+            dJ.pose.position.y = sJ.pose.position.y;
+            dJ.pose.position.z = sJ.pose.position.z;
+            dJ.pose.quaternion.x = sJ.pose.quaternion.x;
+            dJ.pose.quaternion.y = sJ.pose.quaternion.y;
+            dJ.pose.quaternion.z = sJ.pose.quaternion.z;
+            dJ.pose.quaternion.w = sJ.pose.quaternion.w;
         }
     }
 
@@ -67,30 +71,35 @@ export class HandState implements IHandState {
      */
     public applyData(data: INetworkHandState): void {
         if (!data) return;
-        this.active = !!data.active;
-        this.hasJoints = !!data.hasJoints;
+        if (data.active !== undefined) this.active = !!data.active;
+        if (data.hasJoints !== undefined) this.hasJoints = !!data.hasJoints;
 
-        if (data.position) {
-            this.position.x = data.position.x;
-            this.position.y = data.position.y;
-            this.position.z = data.position.z;
+        if (data.pose) {
+            if (data.pose.position) {
+                this.pose.position.x = data.pose.position.x;
+                this.pose.position.y = data.pose.position.y;
+                this.pose.position.z = data.pose.position.z;
+            }
+            if (data.pose.quaternion) {
+                this.pose.quaternion.x = data.pose.quaternion.x;
+                this.pose.quaternion.y = data.pose.quaternion.y;
+                this.pose.quaternion.z = data.pose.quaternion.z;
+                this.pose.quaternion.w = data.pose.quaternion.w;
+            }
         }
-        if (data.quaternion) {
-            this.quaternion.x = data.quaternion.x;
-            this.quaternion.y = data.quaternion.y;
-            this.quaternion.z = data.quaternion.z;
-            this.quaternion.w = data.quaternion.w;
-        }
-        if (data.pointerPosition) {
-            this.pointerPosition.x = data.pointerPosition.x;
-            this.pointerPosition.y = data.pointerPosition.y;
-            this.pointerPosition.z = data.pointerPosition.z;
-        }
-        if (data.pointerQuaternion) {
-            this.pointerQuaternion.x = data.pointerQuaternion.x;
-            this.pointerQuaternion.y = data.pointerQuaternion.y;
-            this.pointerQuaternion.z = data.pointerQuaternion.z;
-            this.pointerQuaternion.w = data.pointerQuaternion.w;
+
+        if (data.pointerPose) {
+            if (data.pointerPose.position) {
+                this.pointerPose.position.x = data.pointerPose.position.x;
+                this.pointerPose.position.y = data.pointerPose.position.y;
+                this.pointerPose.position.z = data.pointerPose.position.z;
+            }
+            if (data.pointerPose.quaternion) {
+                this.pointerPose.quaternion.x = data.pointerPose.quaternion.x;
+                this.pointerPose.quaternion.y = data.pointerPose.quaternion.y;
+                this.pointerPose.quaternion.z = data.pointerPose.quaternion.z;
+                this.pointerPose.quaternion.w = data.pointerPose.quaternion.w;
+            }
         }
 
         if (data.joints && Array.isArray(data.joints)) {
@@ -98,26 +107,26 @@ export class HandState implements IHandState {
                 const jData = data.joints[i];
                 if (!jData || !this.joints[i]) continue;
 
-                if (jData.position) {
-                    this.joints[i].position.x = jData.position.x;
-                    this.joints[i].position.y = jData.position.y;
-                    this.joints[i].position.z = jData.position.z;
+                if (jData.pose?.position) {
+                    this.joints[i].pose.position.x = jData.pose.position.x;
+                    this.joints[i].pose.position.y = jData.pose.position.y;
+                    this.joints[i].pose.position.z = jData.pose.position.z;
                 } else if (jData.p) {
-                    this.joints[i].position.x = jData.p.x;
-                    this.joints[i].position.y = jData.p.y;
-                    this.joints[i].position.z = jData.p.z;
+                    this.joints[i].pose.position.x = jData.p.x;
+                    this.joints[i].pose.position.y = jData.p.y;
+                    this.joints[i].pose.position.z = jData.p.z;
                 }
 
-                if (jData.quaternion) {
-                    this.joints[i].quaternion.x = jData.quaternion.x;
-                    this.joints[i].quaternion.y = jData.quaternion.y;
-                    this.joints[i].quaternion.z = jData.quaternion.z;
-                    this.joints[i].quaternion.w = jData.quaternion.w;
+                if (jData.pose?.quaternion) {
+                    this.joints[i].pose.quaternion.x = jData.pose.quaternion.x;
+                    this.joints[i].pose.quaternion.y = jData.pose.quaternion.y;
+                    this.joints[i].pose.quaternion.z = jData.pose.quaternion.z;
+                    this.joints[i].pose.quaternion.w = jData.pose.quaternion.w;
                 } else if (jData.q) {
-                    this.joints[i].quaternion.x = jData.q.x;
-                    this.joints[i].quaternion.y = jData.q.y;
-                    this.joints[i].quaternion.z = jData.q.z;
-                    this.joints[i].quaternion.w = jData.q.w;
+                    this.joints[i].pose.quaternion.x = jData.q.x;
+                    this.joints[i].pose.quaternion.y = jData.q.y;
+                    this.joints[i].pose.quaternion.z = jData.q.z;
+                    this.joints[i].pose.quaternion.w = jData.q.w;
                 }
             }
         }

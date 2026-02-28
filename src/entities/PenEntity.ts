@@ -2,7 +2,7 @@ import { NetworkEntity } from './NetworkEntity';
 import { IGrabbable } from '../interfaces/IGrabbable';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IInteractionEvent } from '../interfaces/IInteractionEvent';
-import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { IPenEntityState, EntityType } from '../interfaces/IEntityState';
 import { GameContext } from '../core/GameState';
@@ -47,9 +47,9 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         this.lastDrawPosition = null;
     }
 
-    public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
-        this.position = { x: position.x, y: position.y, z: position.z };
-        this.quaternion = { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w };
+    public updateGrabbedPose(pose: IPose): void {
+        this.position = { x: pose.position.x, y: pose.position.y, z: pose.position.z };
+        this.quaternion = { x: pose.quaternion.x, y: pose.quaternion.y, z: pose.quaternion.z, w: pose.quaternion.w };
     }
 
     // --- IInteractable ---

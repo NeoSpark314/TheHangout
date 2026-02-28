@@ -1,24 +1,20 @@
-import { IVector3, IQuaternion } from './IMath';
+import { IVector3, IQuaternion, IPose } from './IMath';
 
 export interface IHandJointState {
-    position: IVector3;
-    quaternion: IQuaternion;
+    pose: IPose;
 }
 
 export interface IHandState {
     active: boolean;
     hasJoints: boolean;
-    position: IVector3;
-    quaternion: IQuaternion;
+    pose: IPose;
+    pointerPose: IPose;
     joints: IHandJointState[];
-    pointerPosition: IVector3;
-    pointerQuaternion: IQuaternion;
 }
 
 export interface ITrackingState {
     head: {
-        position: IVector3;
-        quaternion: IQuaternion;
+        pose: IPose;
         yaw: number;
     };
     hands: {
@@ -34,10 +30,9 @@ export interface ITrackingState {
  * The `p` and `q` properties are minified aliases for `position` and `quaternion`.
  */
 export interface INetworkHandJointState {
-    position?: IVector3;
-    p?: IVector3;
-    quaternion?: IQuaternion;
-    q?: IQuaternion;
+    pose?: IPose;
+    p?: IVector3; // Keep shorthand `p` for position in network payload
+    q?: IQuaternion; // Keep shorthand `q` for quaternion in network payload
 }
 
 /**
@@ -48,10 +43,8 @@ export interface INetworkHandJointState {
 export interface INetworkHandState {
     active?: boolean;
     hasJoints?: boolean;
-    position?: IVector3;
-    quaternion?: IQuaternion;
-    pointerPosition?: IVector3;
-    pointerQuaternion?: IQuaternion;
+    pose?: IPose;
+    pointerPose?: IPose;
     joints?: INetworkHandJointState[];
 }
 

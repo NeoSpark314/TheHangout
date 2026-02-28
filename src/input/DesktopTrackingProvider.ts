@@ -113,8 +113,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private createInitialState(): ITrackingState {
         return {
             head: {
-                position: { x: 0, y: this.headHeight, z: 0 },
-                quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                pose: {
+                    position: { x: 0, y: this.headHeight, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                },
                 yaw: 0
             },
             hands: {
@@ -148,8 +150,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         const worldHeadQuat = originQuat.clone().multiply(localHeadQuat);
 
         this.state.head = {
-            position: { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z },
-            quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w },
+            pose: {
+                position: { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z },
+                quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w },
+            },
             yaw: new THREE.Euler().setFromQuaternion(worldHeadQuat, 'YXZ').y
         };
 
@@ -170,22 +174,22 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         const leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
         const rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
 
-        this.state.hands.left.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };
-        this.state.hands.left.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
-        this.state.hands.left.pointerPosition = { ...this.state.hands.left.position };
-        this.state.hands.left.pointerQuaternion = { ...this.state.hands.left.quaternion };
+        this.state.hands.left.pose.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };
+        this.state.hands.left.pose.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.left.pointerPose.position = { ...this.state.hands.left.pose.position };
+        this.state.hands.left.pointerPose.quaternion = { ...this.state.hands.left.pose.quaternion };
         this.state.hands.left.joints.forEach(j => {
-            j.position = { ...this.state.hands.left.position };
-            j.quaternion = { ...this.state.hands.left.quaternion };
+            j.pose.position = { ...this.state.hands.left.pose.position };
+            j.pose.quaternion = { ...this.state.hands.left.pose.quaternion };
         });
 
-        this.state.hands.right.position = { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z };
-        this.state.hands.right.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
-        this.state.hands.right.pointerPosition = { ...this.state.hands.right.position };
-        this.state.hands.right.pointerQuaternion = { ...this.state.hands.right.quaternion };
+        this.state.hands.right.pose.position = { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z };
+        this.state.hands.right.pose.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.right.pointerPose.position = { ...this.state.hands.right.pose.position };
+        this.state.hands.right.pointerPose.quaternion = { ...this.state.hands.right.pose.quaternion };
         this.state.hands.right.joints.forEach(j => {
-            j.position = { ...this.state.hands.right.position };
-            j.quaternion = { ...this.state.hands.right.quaternion };
+            j.pose.position = { ...this.state.hands.right.pose.position };
+            j.pose.quaternion = { ...this.state.hands.right.pose.quaternion };
         });
     }
 

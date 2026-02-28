@@ -36,8 +36,10 @@ export class XRTrackingProvider implements ITrackingProvider {
     private createInitialState(): ITrackingState {
         return {
             head: {
-                position: { x: 0, y: 1.7, z: 0 },
-                quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                pose: {
+                    position: { x: 0, y: 1.7, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                },
                 yaw: 0
             },
             hands: {
@@ -62,7 +64,14 @@ export class XRTrackingProvider implements ITrackingProvider {
         if (!session || !xrFrame || !referenceSpace) return;
 
         // 1. Head Tracking (Viewer Pose) - delegating to XRSystem which uses RenderManager.camera
-        this.state.head = xr.getViewerWorldPose(render, xrFrame, referenceSpace);
+        const viewerPose = xr.getViewerWorldPose(render, xrFrame, referenceSpace);
+        this.state.head = {
+            pose: {
+                position: viewerPose.position,
+                quaternion: viewerPose.quaternion
+            },
+            yaw: viewerPose.yaw
+        };
 
         // 2. Clear previous active states
         this.state.hands.left.active = false;
@@ -90,8 +99,8 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                     if (pose) {
                         const worldPose = xr.rawPoseToWorldPose(pose, render.cameraGroup);
-                        handState.joints[j].position = worldPose.position;
-                        handState.joints[j].quaternion = worldPose.quaternion;
+                        handState.joints[j].pose.position = worldPose.position;
+                        handState.joints[j].pose.quaternion = worldPose.quaternion;
 
                         if (j === 0) wristPose = worldPose;
                         validJoints++;
@@ -100,15 +109,15 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                 if (wristPose && validJoints > 0) {
                     handState.active = true;
-                    handState.position = wristPose.position;
-                    handState.quaternion = wristPose.quaternion;
+                    handState.pose.position = wristPose.position;
+                    handState.pose.quaternion = wristPose.quaternion;
 
                     // Pointer Pose for Hand Tracking: Use targetRaySpace (the pinch ray)
                     const pointerPose = source.targetRaySpace ? xrFrame.getPose(source.targetRaySpace, referenceSpace) : null;
                     if (pointerPose) {
                         const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
-                        handState.pointerPosition = worldPointerPose.position;
-                        handState.pointerQuaternion = worldPointerPose.quaternion;
+                        handState.pointerPose.position = worldPointerPose.position;
+                        handState.pointerPose.quaternion = worldPointerPose.quaternion;
                     }
                 } else {
                     handState.active = false;
@@ -122,8 +131,8 @@ export class XRTrackingProvider implements ITrackingProvider {
                     // Valid pose found in frame
                     const worldPose = xr.rawPoseToWorldPose(pose, render.cameraGroup);
                     handState.active = true;
-                    handState.position = worldPose.position;
-                    handState.quaternion = worldPose.quaternion;
+                    handState.pose.position = worldPose.position;
+                    handState.pose.quaternion = worldPose.quaternion;
 
                     // Pointer Pose for Controllers: Prefer targetRaySpace
                     // targetRaySpace is the legal "pointing" direction for controllers
@@ -131,13 +140,13 @@ export class XRTrackingProvider implements ITrackingProvider {
                         const pointerPose = xrFrame.getPose(source.targetRaySpace, referenceSpace);
                         if (pointerPose) {
                             const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
-                            handState.pointerPosition = worldPointerPose.position;
-                            handState.pointerQuaternion = worldPointerPose.quaternion;
+                            handState.pointerPose.position = worldPointerPose.position;
+                            handState.pointerPose.quaternion = worldPointerPose.quaternion;
                         }
                     } else {
                         // Fallback to position if no targetRaySpace (rare)
-                        handState.pointerPosition = handState.position;
-                        handState.pointerQuaternion = handState.quaternion;
+                        handState.pointerPose.position = handState.pose.position;
+                        handState.pointerPose.quaternion = handState.pose.quaternion;
                     }
                 } else {
                     handState.active = false;
@@ -145,8 +154,8 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                 // Reset joints for controller mode
                 for (let j = 0; j < 25; j++) {
-                    handState.joints[j].position = { x: 0, y: 0, z: 0 };
-                    handState.joints[j].quaternion = { x: 0, y: 0, z: 0, w: 1 };
+                    handState.joints[j].pose.position = { x: 0, y: 0, z: 0 };
+                    handState.joints[j].pose.quaternion = { x: 0, y: 0, z: 0, w: 1 };
                 }
             }
         }

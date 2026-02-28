@@ -3,7 +3,7 @@ import { GameContext } from '../core/GameState';
 import { IGrabbable } from '../interfaces/IGrabbable';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IInteractionEvent } from '../interfaces/IInteractionEvent';
-import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
 import { CanvasUI } from '../utils/canvasui';
 
 export class TabletEntity implements IGrabbable, IInteractable {
@@ -191,9 +191,9 @@ export class TabletEntity implements IGrabbable, IInteractable {
         return [this.leftHandle, this.rightHandle];
     }
 
-    public updateGrabbedPose(position: IVector3, quaternion: IQuaternion): void {
-        this.position.set(position.x, position.y, position.z);
-        this.quaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+    public updateGrabbedPose(pose: IPose): void {
+        this.position.set(pose.position.x, pose.position.y, pose.position.z);
+        this.quaternion.set(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w);
 
         this.mesh.position.copy(this.position);
         this.mesh.quaternion.copy(this.quaternion);

@@ -30,8 +30,8 @@ export class XRSystem {
             controller.getWorldPosition(this.tempVec);
             controller.getWorldQuaternion(this.tempQuat);
 
-            state.position = { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z };
-            state.quaternion = { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w };
+            state.pose.position = { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z };
+            state.pose.quaternion = { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w };
         };
 
         process(handStates.left, leftIndex);
