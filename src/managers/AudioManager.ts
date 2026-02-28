@@ -2,6 +2,7 @@ import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { SoundSynth } from '../utils/SoundSynth';
 import { GameContext } from '../core/GameState';
+import { IVector3 } from '../interfaces/IMath';
 
 export class AudioManager {
     public ctx: AudioContext | null = null;
@@ -54,9 +55,21 @@ export class AudioManager {
             }
         });
 
-        eventBus.on(EVENTS.DRUM_PAD_HIT, (data: { frequency: number, intensity: number }) => {
+        eventBus.on(EVENTS.DRUM_PAD_HIT, (data: { frequency: number, intensity: number, position?: IVector3 }) => {
             if (this.isInitialized && this.ctx) {
-                SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity);
+                const headPos = this.context.managers.tracking.getState().head.pose.position;
+                const hitPos = data.position;
+                let distance = 0;
+                let pan = 0;
+                if (hitPos) {
+                    const dx = hitPos.x - headPos.x;
+                    const dy = hitPos.y - headPos.y;
+                    const dz = hitPos.z - headPos.z;
+                    distance = Math.hypot(dx, dy, dz);
+                    pan = Math.max(-1, Math.min(1, dx / 6));
+                }
+
+                SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { pan, distance });
             }
         });
     }

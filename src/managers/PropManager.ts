@@ -17,8 +17,12 @@ export class PropManager {
     private hasSpawnedDominoes: boolean = false;
     private drumPads: THREE.Group | null = null;
     private drumPadMeshes: THREE.Mesh[] = [];
+    private drumPadPositions: THREE.Vector3[] = [];
     private drumPadFlash: number[] = [];
     private drumPadFreqByHandle: Map<number, { padId: string; frequency: number }> = new Map();
+    private drumPadById: Map<string, { index: number; frequency: number; position: THREE.Vector3 }> = new Map();
+    private handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
+    private lastHandPadHitAtMs: Map<string, number> = new Map();
     private onDrumPadHitHandler: ((data: { padId: string; frequency: number; intensity: number }) => void) | null = null;
     private onPhysicsCollisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
 
@@ -48,10 +52,12 @@ export class PropManager {
             const v = entity.rigidBody.linvel();
             const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
             const intensity = Math.max(0.08, Math.min(1.0, speed * 0.22));
+            const padInfo = this.drumPadById.get(hit.padId);
             eventBus.emit(EVENTS.DRUM_PAD_HIT, {
                 padId: hit.padId,
                 frequency: hit.frequency,
-                intensity
+                intensity,
+                position: padInfo ? { x: padInfo.position.x, y: padInfo.position.y, z: padInfo.position.z } : undefined
             });
         };
         eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
@@ -89,6 +95,8 @@ export class PropManager {
             mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.25;
             this.drumPadFlash[i] = Math.max(0, flash - delta * 2.2);
         }
+
+        this.updateHandDrumHits(delta);
     }
 
     private createTable(): void {
@@ -294,13 +302,13 @@ export class PropManager {
         const notes = [220, 247, 277, 294, 330, 370, 415, 440];
         const padCount = notes.length;
         const radius = 1.85;
-        const center = new THREE.Vector3(0, 1.05, -3.0);
+        const center = new THREE.Vector3(6.2, 1.1, -1.8);
 
         for (let i = 0; i < padCount; i++) {
             const t = (i / (padCount - 1));
             const angle = THREE.MathUtils.lerp(-0.95, 0.95, t);
-            const px = center.x + Math.sin(angle) * radius;
-            const pz = center.z + Math.cos(angle) * radius;
+            const px = center.x - Math.cos(angle) * radius;
+            const pz = center.z + Math.sin(angle) * radius;
             const padY = center.y;
 
             const color = new THREE.Color().setHSL(0.72 - t * 0.6, 1.0, 0.54);
@@ -320,7 +328,9 @@ export class PropManager {
             ));
             this.drumPads.add(pad);
             this.drumPadMeshes.push(pad);
+            this.drumPadPositions.push(new THREE.Vector3(px, padY, pz));
             this.drumPadFlash.push(0);
+            this.drumPadById.set(`pad-${i}`, { index: i, frequency: notes[i], position: new THREE.Vector3(px, padY, pz) });
 
             const collider = this.context.managers.physics.createStaticCuboidCollider(
                 0.21, 0.04, 0.21,
@@ -332,6 +342,90 @@ export class PropManager {
         }
 
         if (this.scene) this.scene.add(this.drumPads);
+    }
+
+    private updateHandDrumHits(delta: number): void {
+        const tracking = this.context.managers.tracking.getState();
+        const dt = Math.max(0.0001, delta);
+        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+        const padRadius = 0.27;
+        const strikeCooldownMs = 120;
+
+        for (const hand of ['left', 'right'] as const) {
+            const state = tracking.hands[hand];
+            if (!state.active || this.drumPadPositions.length === 0) {
+                this.handLastPos[hand] = null;
+                continue;
+            }
+
+            const strikePose = this.getAvatarHandStrikePosition(hand);
+            if (!strikePose) {
+                this.handLastPos[hand] = null;
+                continue;
+            }
+            const pos = new THREE.Vector3(strikePose.x, strikePose.y, strikePose.z);
+            const prev = this.handLastPos[hand];
+            this.handLastPos[hand] = pos;
+            if (!prev) continue;
+
+            const vx = (pos.x - prev.x) / dt;
+            const vy = (pos.y - prev.y) / dt;
+            const vz = (pos.z - prev.z) / dt;
+            const speed = Math.hypot(vx, vy, vz);
+            if (vy > -0.08 || speed < 0.28) continue;
+
+            for (let i = 0; i < this.drumPadPositions.length; i++) {
+                const padPos = this.drumPadPositions[i];
+                const dx = pos.x - padPos.x;
+                const dz = pos.z - padPos.z;
+                const distXZ = Math.hypot(dx, dz);
+                if (distXZ > padRadius) continue;
+
+                const crossedTop = prev.y > (padPos.y + 0.1) && pos.y <= (padPos.y + 0.12);
+                const nearTop = Math.abs(pos.y - padPos.y) <= 0.14;
+                if (!crossedTop && !nearTop) continue;
+
+                const key = `${hand}:${i}`;
+                const lastHit = this.lastHandPadHitAtMs.get(key) ?? 0;
+                if ((now - lastHit) < strikeCooldownMs) continue;
+                this.lastHandPadHitAtMs.set(key, now);
+
+                const strikeSpeed = Math.max(0, -vy) + speed * 0.22;
+                const intensity = Math.min(1.0, Math.max(0.12, strikeSpeed * 0.12));
+                const freq = this.drumPadById.get(`pad-${i}`)?.frequency ?? 220;
+                eventBus.emit(EVENTS.DRUM_PAD_HIT, {
+                    padId: `pad-${i}`,
+                    frequency: freq,
+                    intensity,
+                    position: { x: padPos.x, y: padPos.y, z: padPos.z }
+                });
+            }
+        }
+    }
+
+    private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
+        const trackingState = this.context.managers.tracking.getState().hands[hand];
+        const localHumanoidJoints = this.context.localPlayer?.humanoid?.joints;
+
+        if (trackingState.hasJoints) {
+            const tipPose = trackingState.joints[9]?.pose?.position;
+            if (tipPose && (tipPose.x !== 0 || tipPose.y !== 0 || tipPose.z !== 0)) {
+                return tipPose;
+            }
+        }
+
+        const wristName = hand === 'left' ? 'leftHand' : 'rightHand';
+        const wristPose = localHumanoidJoints?.[wristName]?.position;
+        if (wristPose && (wristPose.x !== 0 || wristPose.y !== 0 || wristPose.z !== 0)) {
+            return wristPose;
+        }
+
+        const handPose = trackingState.pose.position;
+        if (handPose && (handPose.x !== 0 || handPose.y !== 0 || handPose.z !== 0)) {
+            return handPose;
+        }
+
+        return null;
     }
 
     public clearProcedural(): void {
@@ -354,8 +448,13 @@ export class PropManager {
         this.decorations = null;
         this.drumPads = null;
         this.drumPadMeshes = [];
+        this.drumPadPositions = [];
         this.drumPadFlash = [];
         this.drumPadFreqByHandle.clear();
+        this.drumPadById.clear();
+        this.handLastPos.left = null;
+        this.handLastPos.right = null;
+        this.lastHandPadHitAtMs.clear();
     }
 
     private parsePadIndex(padId: string): number {
