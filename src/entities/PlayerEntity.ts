@@ -1,21 +1,7 @@
 import { NetworkEntity } from './NetworkEntity';
 import { GameContext } from '../core/GameState';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
-
-export interface IHandJointState {
-    position: IVector3;
-    quaternion: IQuaternion;
-}
-
-export interface IHandState {
-    active: boolean;
-    hasJoints: boolean;
-    position: IVector3;
-    quaternion: IQuaternion;
-    pointerPosition?: IVector3;
-    pointerQuaternion?: IQuaternion;
-    joints: IHandJointState[];
-}
+import { IHandState } from '../interfaces/ITrackingProvider';
 
 export abstract class PlayerEntity extends NetworkEntity {
     public static readonly DEFAULT_HEAD_HEIGHT = 1.7;
@@ -40,6 +26,8 @@ export abstract class PlayerEntity extends NetworkEntity {
                 hasJoints: false,
                 position: { x: offsetX, y: 0.8, z: 0 },
                 quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                pointerPosition: { x: 0, y: 0, z: 0 },
+                pointerQuaternion: { x: 0, y: 0, z: 0, w: 1 },
                 joints: []
             };
             for (let i = 0; i < 25; i++) {

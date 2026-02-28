@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
-import { IHandState } from '../entities/PlayerEntity';
+import { IHandState } from '../interfaces/ITrackingProvider';
 import { RenderManager } from '../managers/RenderManager';
 
 /**

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
 import { IVector3, IQuaternion } from '../interfaces/IMath';
-import { IHandState } from '../entities/PlayerEntity';
+import { IHandState } from '../interfaces/ITrackingProvider';
 import { GameContext } from '../core/GameState';
 
 export interface IPlayerViewState {

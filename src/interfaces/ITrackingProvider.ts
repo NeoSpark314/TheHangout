@@ -11,6 +11,8 @@ export interface IHandState {
     position: IVector3;
     quaternion: IQuaternion;
     joints: IHandJointState[];
+    pointerPosition: IVector3;
+    pointerQuaternion: IQuaternion;
 }
 
 export interface ITrackingState {

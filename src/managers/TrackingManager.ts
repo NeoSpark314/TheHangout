@@ -1,6 +1,5 @@
 import { GameContext } from '../core/GameState';
-import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
-import { IHandState } from '../entities/PlayerEntity';
+import { ITrackingProvider, ITrackingState, IHandState } from '../interfaces/ITrackingProvider';
 
 export class TrackingManager {
     private activeProvider: ITrackingProvider | null = null;
@@ -68,6 +67,8 @@ export class TrackingManager {
             hasJoints: false,
             position: { x: offsetX, y: 0.8, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
+            pointerPosition: { x: offsetX, y: 0.8, z: 0 },
+            pointerQuaternion: { x: 0, y: 0, z: 0, w: 1 },
             joints: []
         };
         for (let i = 0; i < 25; i++) {

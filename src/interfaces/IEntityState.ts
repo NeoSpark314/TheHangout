@@ -1,4 +1,4 @@
-import { IHandState } from '../entities/PlayerEntity';
+import { IHandState } from '../interfaces/ITrackingProvider';
 
 /**
  * High-performance spatial types using flat arrays to minimize 

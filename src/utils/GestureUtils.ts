@@ -1,4 +1,4 @@
-import { IHandState } from '../entities/PlayerEntity';
+import { IHandState } from '../interfaces/ITrackingProvider';
 
 export class GestureUtils {
     /**

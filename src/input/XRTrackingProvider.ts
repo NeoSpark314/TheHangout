@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
-import { IHandState } from '../entities/PlayerEntity';
+import { IHandState } from '../interfaces/ITrackingProvider';
 
 const JOINT_NAMES: XRHandJoint[] = [
     "wrist",
@@ -52,6 +52,8 @@ export class XRTrackingProvider implements ITrackingProvider {
             hasJoints: false,
             position: { x: offsetX, y: 0.8, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
+            pointerPosition: { x: offsetX, y: 0.8, z: 0 },
+            pointerQuaternion: { x: 0, y: 0, z: 0, w: 1 },
             joints: []
         };
         for (let i = 0; i < 25; i++) {
@@ -123,9 +125,6 @@ export class XRTrackingProvider implements ITrackingProvider {
                         const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
                         handState.pointerPosition = worldPointerPose.position;
                         handState.pointerQuaternion = worldPointerPose.quaternion;
-                    } else {
-                        delete handState.pointerPosition;
-                        delete handState.pointerQuaternion;
                     }
                 } else {
                     handState.active = false;
@@ -158,8 +157,6 @@ export class XRTrackingProvider implements ITrackingProvider {
                     }
                 } else {
                     handState.active = false;
-                    delete handState.pointerPosition;
-                    delete handState.pointerQuaternion;
                 }
 
                 // Reset joints for controller mode

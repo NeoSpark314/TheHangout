@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
-import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
-import { IHandState, PlayerEntity } from '../entities/PlayerEntity';
+import { ITrackingProvider, ITrackingState, IHandState } from '../interfaces/ITrackingProvider';
+import { PlayerEntity } from '../entities/PlayerEntity';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -134,6 +134,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
             hasJoints: false,
             position: { x: offsetX, y: 0.8, z: 0 },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
+            pointerPosition: { x: 0, y: 0, z: 0 },
+            pointerQuaternion: { x: 0, y: 0, z: 0, w: 1 },
             joints: []
         };
         for (let i = 0; i < 25; i++) {
