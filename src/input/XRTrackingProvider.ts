@@ -116,6 +116,17 @@ export class XRTrackingProvider implements ITrackingProvider {
                     handState.active = true;
                     handState.position = wristPose.position;
                     handState.quaternion = wristPose.quaternion;
+
+                    // Pointer Pose for Hand Tracking: Use targetRaySpace (the pinch ray)
+                    const pointerPose = source.targetRaySpace ? xrFrame.getPose(source.targetRaySpace, referenceSpace) : null;
+                    if (pointerPose) {
+                        const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
+                        handState.pointerPosition = worldPointerPose.position;
+                        handState.pointerQuaternion = worldPointerPose.quaternion;
+                    } else {
+                        delete handState.pointerPosition;
+                        delete handState.pointerQuaternion;
+                    }
                 } else {
                     handState.active = false;
                 }
@@ -130,11 +141,25 @@ export class XRTrackingProvider implements ITrackingProvider {
                     handState.active = true;
                     handState.position = worldPose.position;
                     handState.quaternion = worldPose.quaternion;
+
+                    // Pointer Pose for Controllers: Prefer targetRaySpace
+                    // targetRaySpace is the legal "pointing" direction for controllers
+                    if (source.targetRaySpace) {
+                        const pointerPose = xrFrame.getPose(source.targetRaySpace, referenceSpace);
+                        if (pointerPose) {
+                            const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
+                            handState.pointerPosition = worldPointerPose.position;
+                            handState.pointerQuaternion = worldPointerPose.quaternion;
+                        }
+                    } else {
+                        // Fallback to position if no targetRaySpace (rare)
+                        handState.pointerPosition = handState.position;
+                        handState.pointerQuaternion = handState.quaternion;
+                    }
                 } else {
-                    // Fail-Safe: If session started but no pose yet, stay inactive
-                    // DO NOT fallback to render.getXRController(i) as the index 'i'
-                    // is unreliable and often points to uninitialized Three.js groups.
                     handState.active = false;
+                    delete handState.pointerPosition;
+                    delete handState.pointerQuaternion;
                 }
 
                 // Reset joints for controller mode

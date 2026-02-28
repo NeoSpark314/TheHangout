@@ -169,6 +169,22 @@ export class LocalPlayer extends PlayerEntity {
             dst.quaternion.z = src.quaternion.z;
             dst.quaternion.w = src.quaternion.w;
 
+            if (src.pointerPosition && src.pointerQuaternion) {
+                if (!dst.pointerPosition) dst.pointerPosition = { x: 0, y: 0, z: 0 };
+                if (!dst.pointerQuaternion) dst.pointerQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+
+                dst.pointerPosition.x = src.pointerPosition.x;
+                dst.pointerPosition.y = src.pointerPosition.y;
+                dst.pointerPosition.z = src.pointerPosition.z;
+                dst.pointerQuaternion.x = src.pointerQuaternion.x;
+                dst.pointerQuaternion.y = src.pointerQuaternion.y;
+                dst.pointerQuaternion.z = src.pointerQuaternion.z;
+                dst.pointerQuaternion.w = src.pointerQuaternion.w;
+            } else {
+                dst.pointerPosition = undefined;
+                dst.pointerQuaternion = undefined;
+            }
+
             for (let i = 0; i < 25; i++) {
                 const sJ = src.joints[i];
                 const dJ = dst.joints[i];

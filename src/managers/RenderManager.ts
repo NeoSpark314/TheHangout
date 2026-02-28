@@ -85,6 +85,7 @@ export class RenderManager {
         // Add VR Button ONLY if we detect a true HMD
         if (isTrueHMD) {
             const vrButton = VRButton.createButton(this.renderer, {
+                requiredFeatures: ['local-floor'],
                 optionalFeatures: ['hand-tracking']
             });
             this.container.appendChild(vrButton);

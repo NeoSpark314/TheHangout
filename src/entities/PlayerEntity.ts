@@ -12,6 +12,8 @@ export interface IHandState {
     hasJoints: boolean;
     position: IVector3;
     quaternion: IQuaternion;
+    pointerPosition?: IVector3;
+    pointerQuaternion?: IQuaternion;
     joints: IHandJointState[];
 }
 
