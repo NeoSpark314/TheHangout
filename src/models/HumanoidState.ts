@@ -79,26 +79,31 @@ export class HumanoidState implements IHumanoidState {
      * Extracts all modified joints into a minified payload for network transmission,
      * and CLEARS the dirty flag so they aren't sent again until modified.
      */
-    public consumeNetworkDelta(): NetworkHumanoidDelta | null {
-        if (this.dirtyJoints.size === 0) return null;
+    public consumeNetworkDelta(fullSync: boolean = false): NetworkHumanoidDelta | null {
+        if (!fullSync && this.dirtyJoints.size === 0) return null;
 
         const delta: NetworkHumanoidDelta = {};
+        const jointsToSerialize = fullSync ? Object.keys(this.joints) : Array.from(this.dirtyJoints);
+        let hasData = false;
 
-        for (const jointName of this.dirtyJoints) {
-            const pose = this.joints[jointName];
+        for (const jointName of jointsToSerialize) {
+            const name = jointName as HumanoidJointName;
+            const pose = this.joints[name];
             if (pose) {
                 // Short keys for bandwidth compression
-                delta[jointName] = {
+                delta[name] = {
                     p: [pose.position.x, pose.position.y, pose.position.z],
                     q: [pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w]
                 };
-            } else {
-                delta[jointName] = null;
+            } else if (!fullSync) {
+                // We only explicitly push 'null' deletions during incremental diffs
+                delta[name] = null;
             }
+            hasData = true;
         }
 
         this.dirtyJoints.clear();
-        return delta;
+        return hasData ? delta : null;
     }
 
     /**

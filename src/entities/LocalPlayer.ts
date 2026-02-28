@@ -173,16 +173,9 @@ export class LocalPlayer extends PlayerEntity {
             lerpFactor: 1.0
         }, delta);
 
-        // Always emit state if this player is the authority
-        eventBus.emit(EVENTS.LOCAL_PLAYER_MOVED, this.getNetworkState());
     }
 
-    // Legacies synced locally, no longer used for full syncs
-    private syncHandStates(source: { left: IHandState, right: IHandState }): void {
-        // Obsolete
-    }
-
-    public getNetworkState(): IPlayerEntityState {
+    public getNetworkState(fullSync: boolean = false): IPlayerEntityState {
         const managers = this.context.managers;
         const trackingState = managers.tracking.getState();
         const bodyYaw = trackingState.head.yaw;
@@ -195,7 +188,7 @@ export class LocalPlayer extends PlayerEntity {
             y: bodyYaw,
             h: this.headState.position.y,
             hq: [this.headState.quaternion.x, this.headState.quaternion.y, this.headState.quaternion.z, this.headState.quaternion.w],
-            hmd: this.humanoid.consumeNetworkDelta() || undefined,
+            hmd: this.humanoid.consumeNetworkDelta(fullSync) || undefined,
             conf: {
                 color: this.context.avatarConfig.color
             },

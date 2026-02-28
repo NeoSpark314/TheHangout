@@ -59,7 +59,7 @@ export abstract class NetworkEntity implements IEntity, INetworkable<any> {
     }
 
     abstract update(delta: number): void;
-    abstract getNetworkState(): any;
+    abstract getNetworkState(fullSync?: boolean): any;
     abstract applyNetworkState(state: any): void;
 
     /**

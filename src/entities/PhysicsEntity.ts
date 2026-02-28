@@ -202,7 +202,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
     }
 
-    public getNetworkState(): IPhysicsEntityState {
+    public getNetworkState(fullSync: boolean = false): IPhysicsEntityState {
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
         const vel = this.rigidBody.linvel();

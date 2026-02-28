@@ -108,7 +108,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
         }
     }
 
-    public getNetworkState(): IPenEntityState {
+    public getNetworkState(fullSync: boolean = false): IPenEntityState {
         return {
             id: this.id,
             type: EntityType.PEN,

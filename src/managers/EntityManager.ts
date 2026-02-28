@@ -105,7 +105,7 @@ export class EntityManager implements IUpdatable {
         for (const entity of this.entities.values()) {
             const networkable = entity as unknown as INetworkable<any>;
             if (!entity.isDestroyed && networkable.getNetworkState) {
-                const state = networkable.getNetworkState();
+                const state = networkable.getNetworkState(true);
                 if (state) {
                     states.push({
                         id: entity.id,
