@@ -4,7 +4,7 @@ import { GameContext } from '../core/GameState';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
 import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
-import { IRoomConfigUpdatePayload, IDrawSegmentPayload } from '../interfaces/INetworkPacket';
+import { IRoomConfigUpdatePayload, IDrawSegmentPayload, IOwnershipReleasePayload } from '../interfaces/INetworkPacket';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
@@ -266,6 +266,9 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         const isLocalOwner = payload.newOwnerId === (this.context.localPlayer?.id || 'local');
         (entity as { ownerId?: string | null }).ownerId = payload.newOwnerId;
         entity.isAuthority = isLocalOwner;
+
+        const networkable = entity as unknown as { onNetworkEvent?: (type: string, data: unknown) => void };
+        networkable.onNetworkEvent?.('OWNERSHIP_TRANSFER', payload);
     }
 
     public handleOwnershipRequest(senderId: string, payload: { entityId: string }): void {
@@ -416,7 +419,7 @@ class OwnershipRequestHandler implements IPacketHandler<PacketPayloadMap[typeof 
 
 class OwnershipReleaseHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_RELEASE]> {
     constructor(private network: NetworkManager, private context: GameContext) { }
-    handle(senderId: string, payload: { entityId: string, newOwnerId: string }): void {
+    handle(senderId: string, payload: IOwnershipReleasePayload): void {
         if (this.context.isHost) this.network.handleOwnershipRelease(senderId, payload);
     }
 }

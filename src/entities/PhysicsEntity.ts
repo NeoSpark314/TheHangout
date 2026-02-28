@@ -25,6 +25,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lerpFactor: number = 0.2;
+    private pendingRelease: boolean = false;
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
@@ -61,8 +62,16 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             }
         }
 
-        this.ownerId = null;
-        this.syncAuthority();
+        // Keep client-side authority until host transfer ACK arrives so throws stay locally simulated.
+        const localId = this.context.localPlayer?.id || 'local';
+        if (this.context.isHost) {
+            this.ownerId = null;
+            this.syncAuthority();
+        } else {
+            this.pendingRelease = true;
+            this.ownerId = localId;
+            this.isAuthority = true;
+        }
 
         const state = this.getNetworkState();
         eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
@@ -127,6 +136,13 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             }
 
             this.rigidBody.wakeUp();
+        } else if (type === 'OWNERSHIP_TRANSFER') {
+            const newOwnerId = payload?.newOwnerId ?? null;
+            const localId = this.context.localPlayer?.id || 'local';
+
+            if (this.pendingRelease && newOwnerId !== localId) {
+                this.pendingRelease = false;
+            }
         }
     }
 
@@ -155,7 +171,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
 
 
-            if (!this.heldBy && this.ownerId !== null && !this.context.isHost && this.rigidBody.isSleeping()) {
+            if (!this.pendingRelease && !this.heldBy && this.ownerId !== null && !this.context.isHost && this.rigidBody.isSleeping()) {
                 this.releasePhysicsOwnership();
             }
 

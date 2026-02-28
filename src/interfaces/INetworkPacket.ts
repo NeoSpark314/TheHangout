@@ -12,6 +12,9 @@ export interface IOwnershipRequestPayload {
 
 export interface IOwnershipReleasePayload {
     entityId: string;
+    velocity?: [number, number, number];
+    position?: [number, number, number];
+    quaternion?: [number, number, number, number];
 }
 
 export interface IDrawSegmentPayload {

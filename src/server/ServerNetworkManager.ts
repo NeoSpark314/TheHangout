@@ -5,6 +5,7 @@ import { NetworkDispatcher } from '../network/NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from '../network/NetworkSynchronizer';
 import { IStateUpdatePacket, EntityType } from '../interfaces/IEntityState';
 import { PacketPayloadMap } from '../network/NetworkTypes';
+import { IOwnershipReleasePayload } from '../interfaces/INetworkPacket';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private context!: GameContext;
@@ -49,7 +50,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         });
 
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, {
-            handle: (senderId: string, payload: { entityId: string, newOwnerId: string }) => {
+            handle: (senderId: string, payload: IOwnershipReleasePayload) => {
                 this.handleOwnershipRelease(senderId, payload);
             }
         });
