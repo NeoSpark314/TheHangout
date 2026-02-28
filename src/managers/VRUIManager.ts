@@ -18,6 +18,11 @@ export class VRUIManager implements IUpdatable {
     private peersTab: any = null; // Store UITab handle
     private systemTab: any = null;
     private refreshPeersList: (() => void) | null = null;
+    private peersTalkingInterval: ReturnType<typeof setInterval> | null = null;
+    private onPeerUpdateHandler: (() => void) | null = null;
+    private onVoiceStateHandler: (() => void) | null = null;
+    private scheduleRenderHandler: (() => void) | null = null;
+    private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
 
     constructor(private context: GameContext) { }
 
@@ -50,14 +55,46 @@ export class VRUIManager implements IUpdatable {
     }
 
     private setupKeyboardListeners(): void {
-        window.addEventListener('keydown', (e) => {
+        if (this.keyboardHandler) {
+            window.removeEventListener('keydown', this.keyboardHandler);
+        }
+
+        this.keyboardHandler = (e: KeyboardEvent) => {
             if (e.key.toLowerCase() === 'm') {
                 const render = this.context.managers.render;
                 if (render && !render.isXRPresenting()) {
                     this.toggle2DMenu();
                 }
             }
-        });
+        };
+        window.addEventListener('keydown', this.keyboardHandler);
+    }
+
+    private teardownPeersTabSubscriptions(): void {
+        if (this.peersTalkingInterval) {
+            clearInterval(this.peersTalkingInterval);
+            this.peersTalkingInterval = null;
+        }
+
+        if (this.onPeerUpdateHandler) {
+            eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.onPeerUpdateHandler);
+            eventBus.off(EVENTS.PEER_STATE_UPDATED, this.onPeerUpdateHandler);
+            eventBus.off(EVENTS.PEER_JOINED_ROOM, this.onPeerUpdateHandler);
+            eventBus.off(EVENTS.PEER_DISCONNECTED, this.onPeerUpdateHandler);
+            this.onPeerUpdateHandler = null;
+        }
+
+        if (this.onVoiceStateHandler) {
+            eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.onVoiceStateHandler);
+            this.onVoiceStateHandler = null;
+        }
+
+        if (this.scheduleRenderHandler) {
+            eventBus.off(EVENTS.PEER_CONNECTED, this.scheduleRenderHandler);
+            eventBus.off(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
+            eventBus.off(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
+            this.scheduleRenderHandler = null;
+        }
     }
 
     private toggle2DMenu(): void {
@@ -133,6 +170,7 @@ export class VRUIManager implements IUpdatable {
 
     private addPeersTab() {
         if (!this.tabPanel) return;
+        this.teardownPeersTabSubscriptions();
 
         this.peersTab = this.tabPanel.addTab('Peers');
         const roomContainer = this.peersTab.container;
@@ -294,20 +332,20 @@ export class VRUIManager implements IUpdatable {
             this.refreshPeersList = renderList;
 
             // Reactive updates
-            const onPeerUpdate = () => {
+            this.onPeerUpdateHandler = () => {
                 const isVR = this.context.managers.render?.isXRPresenting();
                 if (this.context.isMenuOpen || isVR) {
                     renderList();
                 }
             };
 
-            eventBus.on(EVENTS.VOICE_STATE_UPDATED, onPeerUpdate);
-            eventBus.on(EVENTS.PEER_STATE_UPDATED, onPeerUpdate);
-            eventBus.on(EVENTS.PEER_JOINED_ROOM, onPeerUpdate);
-            eventBus.on(EVENTS.PEER_DISCONNECTED, onPeerUpdate);
+            eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.onPeerUpdateHandler);
+            eventBus.on(EVENTS.PEER_STATE_UPDATED, this.onPeerUpdateHandler);
+            eventBus.on(EVENTS.PEER_JOINED_ROOM, this.onPeerUpdateHandler);
+            eventBus.on(EVENTS.PEER_DISCONNECTED, this.onPeerUpdateHandler);
 
             // Periodically refresh for Talking indicators if menu is visible
-            const talkingInterval = setInterval(() => {
+            this.peersTalkingInterval = setInterval(() => {
                 const isVR = this.context.managers.render?.isXRPresenting();
                 if (this.context.isMenuOpen || isVR) {
                     renderList();
@@ -337,7 +375,8 @@ export class VRUIManager implements IUpdatable {
                 this.tablet?.ui.markDirty();
             };
 
-            eventBus.on(EVENTS.VOICE_STATE_UPDATED, updateMicUI);
+            this.onVoiceStateHandler = updateMicUI;
+            eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.onVoiceStateHandler);
             updateMicUI(); // Initial state
 
             const copyBtn = new UIButton("Copy Invite Link", 660, 10, 380, 60, () => {
@@ -380,10 +419,10 @@ export class VRUIManager implements IUpdatable {
             roomContainer.addChild(nextBtn);
 
             // Hook up auto-refresh events.
-            const scheduleRender = () => { setTimeout(renderList, 100); };
-            eventBus.on(EVENTS.PEER_CONNECTED, scheduleRender);
-            eventBus.on(EVENTS.PEER_DISCONNECTED, scheduleRender);
-            eventBus.on(EVENTS.REMOTE_NAME_UPDATED, scheduleRender);
+            this.scheduleRenderHandler = () => { setTimeout(renderList, 100); };
+            eventBus.on(EVENTS.PEER_CONNECTED, this.scheduleRenderHandler);
+            eventBus.on(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
+            eventBus.on(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
 
             // Initial render
             renderList();
@@ -539,6 +578,14 @@ export class VRUIManager implements IUpdatable {
             }
 
             this.tablet.update(delta);
+        }
+    }
+
+    public destroy(): void {
+        this.teardownPeersTabSubscriptions();
+        if (this.keyboardHandler) {
+            window.removeEventListener('keydown', this.keyboardHandler);
+            this.keyboardHandler = null;
         }
     }
 }

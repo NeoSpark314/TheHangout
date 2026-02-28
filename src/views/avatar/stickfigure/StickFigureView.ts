@@ -67,6 +67,17 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private voiceAudio!: VoiceAudioComponent;
     private rig!: StickFigureRig;
     private hands!: StickFigureHands;
+    private readonly tmpTargetPos = new THREE.Vector3();
+    private readonly tmpYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    private readonly tmpYawQuat = new THREE.Quaternion();
+    private readonly tmpWorldHeadQuat = new THREE.Quaternion();
+    private readonly tmpParentWorldQuat = new THREE.Quaternion();
+    private readonly tmpLeftHandLocal = new THREE.Vector3();
+    private readonly tmpRightHandLocal = new THREE.Vector3();
+    private readonly defaultLeftTrackedTarget = new THREE.Vector3(-0.35, 0.95, 0.1);
+    private readonly defaultRightTrackedTarget = new THREE.Vector3(0.35, 0.95, 0.1);
+    private readonly defaultLeftRestTarget = new THREE.Vector3(-0.3, 0.9, 0);
+    private readonly defaultRightRestTarget = new THREE.Vector3(0.3, 0.9, 0);
 
     constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -354,18 +365,19 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         const lerpFactor = state.lerpFactor ?? 1.0;
 
         if (state.position) {
-            const targetPos = new THREE.Vector3(state.position.x, state.position.y, state.position.z);
+            this.tmpTargetPos.set(state.position.x, state.position.y, state.position.z);
             if (lerpFactor < 1.0) {
-                this.mesh.position.lerp(targetPos, lerpFactor);
+                this.mesh.position.lerp(this.tmpTargetPos, lerpFactor);
             } else {
-                this.mesh.position.copy(targetPos);
+                this.mesh.position.copy(this.tmpTargetPos);
             }
         }
 
         if (state.yaw !== undefined) {
             if (lerpFactor < 1.0) {
-                const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, state.yaw, 0, 'YXZ'));
-                this.mesh.quaternion.slerp(targetQuat, lerpFactor);
+                this.tmpYawEuler.set(0, state.yaw, 0, 'YXZ');
+                this.tmpYawQuat.setFromEuler(this.tmpYawEuler);
+                this.mesh.quaternion.slerp(this.tmpYawQuat, lerpFactor);
             } else {
                 this.mesh.rotation.y = state.yaw;
             }
@@ -381,15 +393,14 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
         if (state.headQuaternion) {
             // Incoming quaternion is world space. To make the mesh rotate correctly relative to parent:
-            const worldHeadQuat = new THREE.Quaternion(state.headQuaternion.x, state.headQuaternion.y, state.headQuaternion.z, state.headQuaternion.w);
-            const parentWorldQuat = new THREE.Quaternion();
-            this.mesh.getWorldQuaternion(parentWorldQuat);
-            const localHeadQuat = parentWorldQuat.invert().multiply(worldHeadQuat);
+            this.tmpWorldHeadQuat.set(state.headQuaternion.x, state.headQuaternion.y, state.headQuaternion.z, state.headQuaternion.w);
+            this.mesh.getWorldQuaternion(this.tmpParentWorldQuat);
+            this.tmpParentWorldQuat.invert().multiply(this.tmpWorldHeadQuat);
 
             if (lerpFactor < 1.0) {
-                this.headMesh.quaternion.slerp(localHeadQuat, lerpFactor);
+                this.headMesh.quaternion.slerp(this.tmpParentWorldQuat, lerpFactor);
             } else {
-                this.headMesh.quaternion.copy(localHeadQuat);
+                this.headMesh.quaternion.copy(this.tmpParentWorldQuat);
             }
         }
 
@@ -400,22 +411,28 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             const leftWrist = state.humanoid.joints['leftHand'];
             const rightWrist = state.humanoid.joints['rightHand'];
 
-            const leftTargetLocal = leftWrist
-                ? this.mesh.worldToLocal(new THREE.Vector3(leftWrist.position.x, leftWrist.position.y, leftWrist.position.z))
-                : new THREE.Vector3(-0.35, 0.95, 0.1);
+            if (leftWrist) {
+                this.tmpLeftHandLocal.set(leftWrist.position.x, leftWrist.position.y, leftWrist.position.z);
+                this.mesh.worldToLocal(this.tmpLeftHandLocal);
+            } else {
+                this.tmpLeftHandLocal.copy(this.defaultLeftTrackedTarget);
+            }
 
-            const rightTargetLocal = rightWrist
-                ? this.mesh.worldToLocal(new THREE.Vector3(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z))
-                : new THREE.Vector3(0.35, 0.95, 0.1);
+            if (rightWrist) {
+                this.tmpRightHandLocal.set(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z);
+                this.mesh.worldToLocal(this.tmpRightHandLocal);
+            } else {
+                this.tmpRightHandLocal.copy(this.defaultRightTrackedTarget);
+            }
 
-            this.rig.updateArms(leftTargetLocal, rightTargetLocal);
+            this.rig.updateArms(this.tmpLeftHandLocal, this.tmpRightHandLocal);
 
             // Update Fingers & Wrist Markers
             this.hands.updateHumanoidHand('left', state.humanoid, lerpFactor);
             this.hands.updateHumanoidHand('right', state.humanoid, lerpFactor);
         } else {
             // Default rest pose
-            this.rig.updateArms(new THREE.Vector3(-0.3, 0.9, 0), new THREE.Vector3(0.3, 0.9, 0));
+            this.rig.updateArms(this.defaultLeftRestTarget, this.defaultRightRestTarget);
             this.hands.updateHumanoidHand('left', undefined, lerpFactor);
             this.hands.updateHumanoidHand('right', undefined, lerpFactor);
         }
