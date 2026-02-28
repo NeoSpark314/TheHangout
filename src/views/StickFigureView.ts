@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { EntityView } from './EntityView';
-import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
-import { IHandState } from '../interfaces/ITrackingProvider';
+import { IVector3, IPose } from '../interfaces/IMath';
 import { GameContext } from '../core/GameState';
 import { HumanoidState } from '../models/HumanoidState';
 import { HumanoidJointName } from '../interfaces/IHumanoid';

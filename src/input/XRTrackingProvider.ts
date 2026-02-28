@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
-import { IHandState } from '../interfaces/ITrackingProvider';
 import { HandState } from '../models/HandState';
 import { HumanoidState } from '../models/HumanoidState';
 import { HumanoidJointName } from '../interfaces/IHumanoid';

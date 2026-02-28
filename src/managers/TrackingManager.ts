@@ -1,5 +1,5 @@
 import { GameContext } from '../core/GameState';
-import { ITrackingProvider, ITrackingState, IHandState } from '../interfaces/ITrackingProvider';
+import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
 import { HandState } from '../models/HandState';
 
 export class TrackingManager {

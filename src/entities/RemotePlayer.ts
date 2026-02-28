@@ -3,7 +3,6 @@ import { IVector3, IQuaternion } from '../interfaces/IMath';
 import { IView } from '../interfaces/IView';
 import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
-import { HandState } from '../models/HandState';
 import { HumanoidState } from '../models/HumanoidState';
 import { HumanoidJointName } from '../interfaces/IHumanoid';
 import { GameContext } from '../core/GameState';
@@ -106,15 +105,6 @@ export class RemotePlayer extends PlayerEntity {
 
         if (data.hmd !== undefined) {
             this.humanoid.applyNetworkDelta(data.hmd);
-        }
-
-        if (data.hands) {
-            if (data.hands.left && this.handStates.left instanceof HandState) {
-                this.handStates.left.applyData(data.hands.left);
-            }
-            if (data.hands.right && this.handStates.right instanceof HandState) {
-                this.handStates.right.applyData(data.hands.right);
-            }
         }
     }
 

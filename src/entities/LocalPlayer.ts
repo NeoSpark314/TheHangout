@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PlayerEntity } from './PlayerEntity';
 import { IView } from '../interfaces/IView';
 import { GameContext } from '../core/GameState';
-import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
+import { IVector3, IPose } from '../interfaces/IMath';
 import { Skill } from '../skills/Skill';
 import { MovementSkill } from '../skills/MovementSkill';
 import { GrabSkill } from '../skills/GrabSkill';
@@ -11,9 +11,7 @@ import { StickFigureView, IPlayerViewState } from '../views/StickFigureView';
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
-import { IHandState } from '../interfaces/ITrackingProvider';
 import { HumanoidState } from '../models/HumanoidState';
-import { NetworkHumanoidDelta } from '../models/HumanoidState';
 
 /**
  * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).

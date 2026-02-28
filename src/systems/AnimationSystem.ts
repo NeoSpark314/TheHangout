@@ -63,7 +63,7 @@ export class AnimationSystem implements IUpdatable {
         if (!this.localPlayer || !this.managers) return;
         const render = this.managers.render;
 
-        // If VR is active, the XR tracks already populate handStates. We do nothing else.
+        // If VR is active, XR tracking provider already owns hand state updates.
         if (render.isXRPresenting()) {
             this._isVR = true;
             return;
