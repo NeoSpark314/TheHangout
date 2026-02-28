@@ -1,5 +1,6 @@
 import { IPacketHandler } from './PacketHandler';
 import { NetworkEnvelope } from './NetworkTypes';
+import { isValidPayloadForType } from './NetworkGuards';
 
 type PacketMapBase = object;
 
@@ -28,6 +29,10 @@ export class NetworkDispatcher<TPacketMap extends PacketMapBase = PacketMapBase>
             const handler = this.handlers.get(envelope.type);
 
             if (handler) {
+                if (!isValidPayloadForType(envelope.type, envelope.payload)) {
+                    console.warn(`[NetworkDispatcher] Dropping invalid payload for packet type ${envelope.type}`);
+                    return;
+                }
                 handler.handle(senderId, envelope.payload);
             }
         } catch (e) {
