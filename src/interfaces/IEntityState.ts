@@ -40,6 +40,7 @@ export interface IPlayerEntityState extends IBaseEntityState {
     conf: {
         color: string | number;
     };
+    mic?: boolean; // self-mute state
 }
 
 /**

@@ -161,6 +161,7 @@ export class VRUIManager implements IUpdatable {
                     isLocal: boolean;
                     audioLevel: number;
                     isMuted?: boolean;
+                    micEnabled?: boolean;
                     player?: RemotePlayer;
                     targetPos?: THREE.Vector3;
                     targetYaw?: number;
@@ -174,7 +175,8 @@ export class VRUIManager implements IUpdatable {
                     name: (this.context.playerName || 'You') + ' (You)',
                     avatarColor: this.context.avatarConfig.color,
                     isLocal: true,
-                    audioLevel: this.context.managers.media ? this.context.managers.media.getLocalVolume() : 0
+                    audioLevel: this.context.managers.media ? this.context.managers.media.getLocalVolume() : 0,
+                    micEnabled: this.context.voiceEnabled
                 });
 
                 // 2. Add Remote Players
@@ -189,8 +191,9 @@ export class VRUIManager implements IUpdatable {
                             name: rp.name || 'Unknown',
                             avatarColor: rp.avatarColor as string | number,
                             isLocal: false,
-                            audioLevel: (rp as any).audioLevel || 0,
+                            audioLevel: rp.audioLevel,
                             isMuted: rp.isMuted,
+                            micEnabled: rp.micEnabled,
                             player: rp,
                             targetPos: rp.targetPosition ? new THREE.Vector3(rp.targetPosition.x, rp.targetPosition.y, rp.targetPosition.z) : undefined,
                             targetYaw: rp.targetYaw
@@ -226,6 +229,7 @@ export class VRUIManager implements IUpdatable {
                     let displayName = peer.name;
                     const isHost = peer.id === this.context.roomId || (peer.isLocal && this.context.isHost);
                     if (isHost) displayName += ' [Host]';
+                    if (peer.micEnabled === false) displayName += ' [Muted]';
                     if (peer.audioLevel > 0.01) displayName += ' [Talking]';
 
                     const nameLabel = new UILabel(displayName, 140, rowY + 20, 550, 60);

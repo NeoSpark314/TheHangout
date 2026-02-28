@@ -137,6 +137,9 @@ export class LocalPlayer extends PlayerEntity {
         }
 
         // 5. PHASE 5: Apply to View
+        this.audioLevel = managers.media ? managers.media.getLocalVolume() : 0;
+        this.micEnabled = this.context.voiceEnabled;
+
         this.view.applyState({
             position: { x: this.headState.position.x, y: 0, z: this.headState.position.z },
             yaw: bodyYaw,
@@ -146,7 +149,7 @@ export class LocalPlayer extends PlayerEntity {
             name: this.name || 'You',
             color: this.context.avatarConfig.color,
             isLocal: true,
-            audioLevel: managers.media ? managers.media.getLocalVolume() : 0,
+            audioLevel: this.audioLevel,
             lerpFactor: 1.0
         }, delta);
 
@@ -199,6 +202,7 @@ export class LocalPlayer extends PlayerEntity {
             conf: {
                 color: this.context.avatarConfig.color
             },
+            mic: this.context.voiceEnabled,
             ownerId: this.ownerId
         };
     }

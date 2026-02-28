@@ -13,7 +13,6 @@ export class RemotePlayer extends PlayerEntity {
     public targetPosition: IVector3 = { x: 0, y: 5, z: 0 };
     public targetYaw: number = 0;
     public avatarColor: string | number | undefined;
-    public isMuted: boolean = false;
     private lastNetworkUpdateTime: number = performance.now();
     private _onVoiceStream: (data: any) => void;
 
@@ -55,6 +54,10 @@ export class RemotePlayer extends PlayerEntity {
 
         if (data.conf && data.conf.color !== this.avatarColor) {
             this.avatarColor = data.conf.color;
+        }
+
+        if (data.mic !== undefined) {
+            this.micEnabled = !!data.mic;
         }
 
         if (data.p) this.targetPosition = { x: data.p[0], y: data.p[1], z: data.p[2] };
@@ -100,7 +103,7 @@ export class RemotePlayer extends PlayerEntity {
         }
 
         const lerpFactor = 15 * delta;
-        const audioLevel = this.view.getAudioLevel();
+        this.audioLevel = this.view.getAudioLevel();
 
         this.view.applyState({
             position: this.targetPosition,
@@ -108,9 +111,9 @@ export class RemotePlayer extends PlayerEntity {
             headHeight: this.headHeight,
             headQuaternion: this.headState.quaternion,
             handStates: this.handStates,
-            name: this.isMuted ? `${this.name || 'Player'} (MUTED)` : (this.name || 'Player'),
+            name: !this.micEnabled ? `${this.name || 'Player'} [Muted]` : (this.isMuted ? `${this.name || 'Player'} (MUTED)` : (this.name || 'Player')),
             color: this.avatarColor,
-            audioLevel: audioLevel,
+            audioLevel: this.audioLevel,
             lerpFactor: lerpFactor
         }, delta);
     }

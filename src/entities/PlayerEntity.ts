@@ -21,6 +21,9 @@ export abstract class PlayerEntity extends NetworkEntity {
     public headHeight: number = PlayerEntity.DEFAULT_HEAD_HEIGHT;
     public headState: { position: IVector3, quaternion: IQuaternion };
     public handStates: { left: IHandState, right: IHandState };
+    public micEnabled: boolean = true;
+    public audioLevel: number = 0;
+    public isMuted: boolean = false;
 
     constructor(protected context: GameContext, id: string, type: string, isAuthority: boolean) {
         super(context, id, type, isAuthority);
