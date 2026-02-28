@@ -4,10 +4,11 @@ import { PACKET_TYPES } from '../utils/Constants';
 import { NetworkDispatcher } from '../network/NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from '../network/NetworkSynchronizer';
 import { IStateUpdatePacket, EntityType } from '../interfaces/IEntityState';
+import { PacketPayloadMap } from '../network/NetworkTypes';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private context!: GameContext;
-    private dispatcher: NetworkDispatcher;
+    private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer!: NetworkSynchronizer;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
 
@@ -16,7 +17,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     public bytesSent: number = 0;
 
     constructor() {
-        this.dispatcher = new NetworkDispatcher();
+        this.dispatcher = new NetworkDispatcher<PacketPayloadMap>();
     }
 
     public setContext(context: GameContext): void {

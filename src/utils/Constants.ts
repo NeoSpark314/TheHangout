@@ -52,7 +52,7 @@ export const PACKET_TYPES = {
     DRAW_LINE_SEGMENT: 7,
     AUDIO_CHUNK: 8,
     PEER_JOINED: 9
-};
+} as const;
 
 export const INPUT_CONFIG = {
     GAMEPAD_LOOK_SENSITIVITY: 1.5,

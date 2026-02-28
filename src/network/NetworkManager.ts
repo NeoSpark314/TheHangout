@@ -10,6 +10,7 @@ import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from './NetworkSynchronizer';
 import { IPacketHandler } from './PacketHandler';
+import { PacketPayloadMap } from './NetworkTypes';
 
 /**
  * Architectural Role: Responsible for establishing and managing peer-to-peer WebRTC connections.
@@ -24,11 +25,11 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     private relaySocket: WebSocket | null = null;
     public connections: Map<string, DataConnection | RelayConnection> = new Map();
 
-    private dispatcher: NetworkDispatcher;
+    private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer: NetworkSynchronizer;
 
     constructor(private context: GameContext) {
-        this.dispatcher = new NetworkDispatcher();
+        this.dispatcher = new NetworkDispatcher<PacketPayloadMap>();
         this.synchronizer = new NetworkSynchronizer(this, context);
 
         this.registerHandlers();
@@ -355,7 +356,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
  * HANDLERS
  */
 
-class StateUpdateHandler implements IPacketHandler {
+class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.STATE_UPDATE]> {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         if (!this.context.isHost) {
@@ -364,7 +365,7 @@ class StateUpdateHandler implements IPacketHandler {
     }
 }
 
-class PlayerInputHandler implements IPacketHandler {
+class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PLAYER_INPUT]> {
     constructor(private network: NetworkManager, private context: GameContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         this.network.applyStateUpdate(payload);
@@ -382,14 +383,14 @@ class PlayerInputHandler implements IPacketHandler {
     }
 }
 
-class PeerDisconnectHandler implements IPacketHandler {
+class PeerDisconnectHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PEER_DISCONNECT]> {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: unknown): void {
         if (!this.context.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, payload);
     }
 }
 
-class RoomConfigHandler implements IPacketHandler {
+class RoomConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.ROOM_CONFIG_UPDATE]> {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: IRoomConfigUpdatePayload): void {
         if (!this.context.isHost) {
@@ -406,28 +407,28 @@ class RoomConfigHandler implements IPacketHandler {
     }
 }
 
-class OwnershipRequestHandler implements IPacketHandler {
+class OwnershipRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_REQUEST]> {
     constructor(private network: NetworkManager, private context: GameContext) { }
     handle(senderId: string, payload: { entityId: string }): void {
         if (this.context.isHost) this.network.handleOwnershipRequest(senderId, payload);
     }
 }
 
-class OwnershipReleaseHandler implements IPacketHandler {
+class OwnershipReleaseHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_RELEASE]> {
     constructor(private network: NetworkManager, private context: GameContext) { }
     handle(senderId: string, payload: { entityId: string, newOwnerId: string }): void {
         if (this.context.isHost) this.network.handleOwnershipRelease(senderId, payload);
     }
 }
 
-class OwnershipTransferHandler implements IPacketHandler {
+class OwnershipTransferHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_TRANSFER]> {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: { entityId: string, newOwnerId: string | null }): void {
         if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
     }
 }
 
-class DrawLineHandler implements IPacketHandler {
+class DrawLineHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DRAW_LINE_SEGMENT]> {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: IDrawSegmentPayload): void {
         if (this.context.managers.drawing) {
@@ -436,7 +437,7 @@ class DrawLineHandler implements IPacketHandler {
     }
 }
 
-class PeerJoinedHandler implements IPacketHandler {
+class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PEER_JOINED]> {
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: { peerId: string }): void {
         if (!this.context.isHost && this.context.isLocalServer) {
