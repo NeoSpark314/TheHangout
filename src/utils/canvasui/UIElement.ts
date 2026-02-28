@@ -13,7 +13,7 @@ export class UIElement {
 
     // Optional style overrides
     public backgroundColor: string = UITheme.colors.panelBg;
-    public hoverColor: string = UITheme.colors.panelBgHover;
+    public hoverColor?: string;
     public borderColor: string = UITheme.colors.primary;
     public borderWidth: number = UITheme.styling.borderWidth;
     public cornerRadius: number = UITheme.styling.cornerRadius;
@@ -164,7 +164,7 @@ export class UIElement {
     protected drawSelf(ctx: CanvasRenderingContext2D): void {
         // Base implementation draws a simple background box.
         // Can be overridden or left empty for container elements.
-        ctx.fillStyle = this.isHovered ? this.hoverColor : this.backgroundColor;
+        ctx.fillStyle = (this.isHovered && this.hoverColor) ? this.hoverColor : this.backgroundColor;
 
         if (this.cornerRadius > 0) {
             ctx.beginPath();
