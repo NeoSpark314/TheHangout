@@ -140,6 +140,10 @@ export class FlatUIManager implements IUpdatable {
             this.handleLeave();
         });
 
+        eventBus.on(EVENTS.VOICE_STATE_UPDATED, () => {
+            this.updateVoiceButton(this.context.voiceEnabled);
+        });
+
         this.loadFromStorage();
     }
 
@@ -158,10 +162,13 @@ export class FlatUIManager implements IUpdatable {
         this.roomInput.value = storedRoom || 'TestRoom';
 
         const storedVoice = localStorage.getItem('hangout_voiceEnabled');
-        if (storedVoice === 'true') {
+        if (storedVoice === 'false') {
+            this.context.voiceEnabled = false;
+        } else {
+            // Default to true or what's stored as true
             this.context.voiceEnabled = true;
-            this.updateVoiceButton(true);
         }
+        this.updateVoiceButton(this.context.voiceEnabled);
 
         const storedColor = localStorage.getItem('hangout_avatarColor');
         if (storedColor) {
@@ -391,7 +398,12 @@ export class FlatUIManager implements IUpdatable {
 
     private async toggleVoice(): Promise<void> {
         this.context.voiceEnabled = !this.context.voiceEnabled;
-        this.updateVoiceButton(this.context.voiceEnabled);
+        if (this.context.voiceEnabled) {
+            await this.context.managers.media.toggleMicrophone();
+        } else {
+            this.context.managers.media.stopMicrophone();
+        }
+        eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
     }
 
     private updateVoiceButton(enabled: boolean): void {

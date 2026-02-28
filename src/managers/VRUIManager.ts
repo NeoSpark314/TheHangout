@@ -277,8 +277,33 @@ export class VRUIManager implements IUpdatable {
                 this.tablet?.ui.markDirty();
             };
 
-            // Copy Invite Link Button in the header
-            const copyBtn = new UIButton("Copy Invite Link", 440, 10, 400, 60, () => {
+            // 3. Header Controls
+            const micBtn = new UIButton("Mic: ON", 240, 10, 380, 60, () => {
+                this.context.voiceEnabled = !this.context.voiceEnabled;
+                if (this.context.voiceEnabled) {
+                    this.context.managers.media.toggleMicrophone().then(() => {
+                        eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
+                    });
+                } else {
+                    this.context.managers.media.stopMicrophone();
+                    eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
+                }
+            });
+            micBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
+            micBtn.cornerRadius = 10;
+            headerContainer.addChild(micBtn);
+
+            const updateMicUI = () => {
+                micBtn.text = this.context.voiceEnabled ? "Mic: ON" : "Mic: OFF";
+                micBtn.backgroundColor = this.context.voiceEnabled ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                micBtn.borderColor = this.context.voiceEnabled ? UITheme.colors.primary : UITheme.colors.textMuted;
+                this.tablet?.ui.markDirty();
+            };
+
+            eventBus.on(EVENTS.VOICE_STATE_UPDATED, updateMicUI);
+            updateMicUI(); // Initial state
+
+            const copyBtn = new UIButton("Copy Invite Link", 660, 10, 380, 60, () => {
                 const url = window.location.origin + window.location.pathname + "?room=" + this.context.roomId;
                 navigator.clipboard.writeText(url).then(() => {
                     copyBtn.text = "Copied!";
@@ -331,28 +356,17 @@ export class VRUIManager implements IUpdatable {
     private addSystemTab() {
         if (!this.tabPanel) return;
 
-        this.systemTab = this.tabPanel.addTab('Settings');
+        this.systemTab = this.tabPanel.addTab('System');
         const systemContainer = this.systemTab.container;
 
-        // Can inject basic buttons for toggling voice or leaving
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
-            const title = new UILabel("Settings", 50, 50, 1180, 80);
+            const title = new UILabel("System", 50, 50, 1180, 80);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
             title.textAlign = 'center';
             systemContainer.addChild(title);
 
-            const voiceBtn = new UIButton("Toggle Voice", 220, 200, 400, 100, () => {
-                this.context.voiceEnabled = !this.context.voiceEnabled;
-                console.log("Voice toggled from VR UI:", this.context.voiceEnabled);
-                voiceBtn.text = this.context.voiceEnabled ? "Voice: ON" : "Voice: OFF";
-                voiceBtn.backgroundColor = this.context.voiceEnabled ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
-                voiceBtn.borderColor = this.context.voiceEnabled ? UITheme.colors.primary : UITheme.colors.textMuted;
-                this.tablet?.ui.markDirty();
-            });
-            systemContainer.addChild(voiceBtn);
-
-            const leaveBtn = new UIButton("Leave Room", 660, 200, 400, 100, () => {
+            const leaveBtn = new UIButton("Leave Room", 440, 630, 400, 80, () => {
                 const render = this.context.managers.render;
                 if (render && render.isXRPresenting()) {
                     render.getXRSession()?.end().then(() => {
@@ -361,13 +375,14 @@ export class VRUIManager implements IUpdatable {
                         location.reload();
                     });
                 } else {
-                    location.reload(); // Simple approach for now
+                    location.reload();
                 }
             });
             leaveBtn.backgroundColor = UITheme.colors.danger;
             leaveBtn.borderColor = UITheme.colors.secondary;
             leaveBtn.textColor = UITheme.colors.text;
             leaveBtn.hoverColor = UITheme.colors.dangerHover;
+            leaveBtn.cornerRadius = 10;
             systemContainer.addChild(leaveBtn);
         });
     }

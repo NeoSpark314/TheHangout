@@ -66,7 +66,7 @@ export class GameContext {
     public avatarConfig: IAvatarConfig = {
         color: '#00ffff'
     };
-    public voiceEnabled: boolean = false;
+    public voiceEnabled: boolean = true;
     public roomConfig: IRoomConfig = {
         environment: 'cyber-stube',
         skyColor: '#0b0c10',
