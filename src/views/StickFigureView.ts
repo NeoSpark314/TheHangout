@@ -3,9 +3,10 @@ import { EntityView } from './EntityView';
 import { IVector3, IPose } from '../interfaces/IMath';
 import { GameContext } from '../core/GameState';
 import { HumanoidState } from '../models/HumanoidState';
-import { HumanoidJointName } from '../interfaces/IHumanoid';
 import { NameTagComponent } from './avatar/components/NameTagComponent';
 import { VoiceAudioComponent } from './avatar/components/VoiceAudioComponent';
+import { StickFigureRig, StickFigureBones, StickFigureRigVisuals } from './avatar/stickfigure/StickFigureRig';
+import { StickFigureHands } from './avatar/stickfigure/StickFigureHands';
 
 export interface IPlayerViewState {
     position: IVector3;
@@ -63,15 +64,9 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private wristMeshes: { left: THREE.Mesh, right: THREE.Mesh };
     private nameTagComponent!: NameTagComponent;
 
-    static HAND_INDICES = [
-        0, 1, 1, 2, 2, 3, 3, 4,
-        0, 5, 5, 6, 6, 7, 7, 8, 8, 9,
-        0, 10, 10, 11, 11, 12, 12, 13, 13, 14,
-        0, 15, 15, 16, 16, 17, 17, 18, 18, 19,
-        0, 20, 20, 21, 21, 22, 22, 23, 23, 24
-    ];
-
     private voiceAudio!: VoiceAudioComponent;
+    private rig!: StickFigureRig;
+    private hands!: StickFigureHands;
 
     constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -90,6 +85,26 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         this._buildGeometry();
         this.nameTagComponent = new NameTagComponent(this.mesh, () => this.headMesh.position.y, this.color);
         this.voiceAudio = new VoiceAudioComponent(this.headMesh, this.context.managers.render?.audioListener, this.isLocal);
+        this.rig = new StickFigureRig(
+            this.mesh,
+            this.bones as unknown as StickFigureBones,
+            {
+                headMesh: this.headMesh,
+                torso: this.torso,
+                shoulders: this.shoulders,
+                pelvis: this.pelvis,
+                leftLeg: this.leftLeg,
+                leftLowerLegMesh: this.leftLowerLegMesh,
+                rightLeg: this.rightLeg,
+                rightLowerLegMesh: this.rightLowerLegMesh,
+                leftUpperArm: this.leftUpperArm,
+                leftForearm: this.leftForearm,
+                rightUpperArm: this.rightUpperArm,
+                rightForearm: this.rightForearm
+            } as StickFigureRigVisuals,
+            () => this._updateNameTagPosition()
+        );
+        this.hands = new StickFigureHands(this.mesh, this.wristMeshes, this.handMeshes, this.handCylinders);
     }
 
     public attachVoiceStream(stream: MediaStream): void {
@@ -323,7 +338,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             this.handMeshes.right.push(rightJoint);
         }
 
-        for (let i = 0; i < StickFigureView.HAND_INDICES.length / 2; i++) {
+        for (let i = 0; i < StickFigureHands.HAND_INDICES.length / 2; i++) {
             const leftCyl = new THREE.Mesh(handCylinderGeom, this.cyberMaterial);
             leftCyl.visible = false;
             this.mesh.add(leftCyl);
@@ -360,7 +375,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             const height = lerpFactor < 1.0
                 ? THREE.MathUtils.lerp(this.currentHeadHeight, state.headHeight, lerpFactor)
                 : state.headHeight;
-            this.updatePosture(height);
+            this.currentHeadHeight = height;
+            this.rig.updatePosture(height);
         }
 
         if (state.headQuaternion) {
@@ -392,16 +408,16 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
                 ? this.mesh.worldToLocal(new THREE.Vector3(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z))
                 : new THREE.Vector3(0.35, 0.95, 0.1);
 
-            this.updateArms(leftTargetLocal, rightTargetLocal);
+            this.rig.updateArms(leftTargetLocal, rightTargetLocal);
 
             // Update Fingers & Wrist Markers
-            this._updateHumanoidHand('left', state.humanoid, lerpFactor);
-            this._updateHumanoidHand('right', state.humanoid, lerpFactor);
+            this.hands.updateHumanoidHand('left', state.humanoid, lerpFactor);
+            this.hands.updateHumanoidHand('right', state.humanoid, lerpFactor);
         } else {
             // Default rest pose
-            this.updateArms(new THREE.Vector3(-0.3, 0.9, 0), new THREE.Vector3(0.3, 0.9, 0));
-            this._updateHumanoidHand('left', undefined, lerpFactor);
-            this._updateHumanoidHand('right', undefined, lerpFactor);
+            this.rig.updateArms(new THREE.Vector3(-0.3, 0.9, 0), new THREE.Vector3(0.3, 0.9, 0));
+            this.hands.updateHumanoidHand('left', undefined, lerpFactor);
+            this.hands.updateHumanoidHand('right', undefined, lerpFactor);
         }
         if (state.audioLevel !== undefined) {
             const targetMouthScale = 1.0 + (state.audioLevel * 10.0);
@@ -426,18 +442,6 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         // Sprites billboard automatically in Three.js, no manual rotation needed.
     }
 
-    private _alignCylinder(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3, radius: number = 0.02): void {
-        const dir = new THREE.Vector3().subVectors(end, start);
-        const len = dir.length();
-        if (len < 0.001) {
-            mesh.scale.set(0, 0, 0);
-            return;
-        }
-        mesh.scale.set(1, len, 1);
-        mesh.position.copy(start).addScaledVector(dir, 0.5);
-        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-    }
-
     public setColor(color: string | number): void {
         this.color = color;
         const colorObj = new THREE.Color(color as any);
@@ -454,262 +458,12 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         this.nameTagComponent.updatePosition();
     }
 
-    public updatePosture(headHeight: number): void {
-        this.currentHeadHeight = headHeight;
-
-        // --- 1. Position the IK Root Bones ---
-        const neckHeight = Math.max(0.4, headHeight - 0.2);
-        this.headMesh.position.y = neckHeight;
-
-        // Slightly higher waist keeps shoulders from sitting too low,
-        // reducing the "long neck" look.
-        const waistHeight = neckHeight * 0.6;
-        this.bones.hips.position.set(0, waistHeight, 0);
-
-        // Scale visual limbs (their centers are 0,0,0, stretching from -0.5 to 0.5)
-        // Since they are children of bones now, we don't move their absolute positions,
-        // we scale them to fill the gap to the next bone.
-
-        const spineLength = neckHeight - waistHeight;
-        this.bones.spine.position.set(0, 0, 0);
-        const chestRatio = 0.62;
-        this.bones.chest.position.set(0, spineLength * chestRatio, 0);
-        this.bones.neck.position.set(0, spineLength * (1 - chestRatio), 0);
-
-        this._setupLocalCylinder(this.torso, spineLength);
-        this.torso.position.set(0, spineLength * 0.5, 0); // shift mesh up relative to hip
-
-        const shoulderWidth = 0.5;
-        this.bones.leftShoulder.position.set(-shoulderWidth / 2, 0, 0);
-        this.bones.rightShoulder.position.set(shoulderWidth / 2, 0, 0);
-
-        // The visual bar connecting shoulders
-        this._setupLocalCylinder(this.shoulders, shoulderWidth);
-        this.shoulders.rotation.z = Math.PI / 2;
-
-        const legLength = waistHeight;
-        const upperLegLength = legLength * 0.5;
-        const lowerLegLength = legLength * 0.5;
-
-        // The visual bar connecting hips (pelvis)
-        const pelvisWidth = 0.3;
-        this._setupLocalCylinder(this.pelvis, pelvisWidth);
-        this.pelvis.rotation.z = Math.PI / 2;
-
-        this.bones.leftUpperLeg.position.set(-pelvisWidth / 2, 0, 0);
-        this.bones.leftLowerLeg.position.set(0, -upperLegLength, 0);
-        this._setupLocalCylinder(this.leftLeg, upperLegLength);
-        this.leftLeg.position.set(0, -upperLegLength * 0.5, 0);
-
-        this._setupLocalCylinder(this.leftLowerLegMesh, lowerLegLength);
-        this.leftLowerLegMesh.position.set(0, -lowerLegLength * 0.5, 0);
-        this.bones.leftFoot.position.set(0, -lowerLegLength, 0);
-
-        this.bones.rightUpperLeg.position.set(0.15, 0, 0);
-        this.bones.rightLowerLeg.position.set(0, -upperLegLength, 0);
-        this._setupLocalCylinder(this.rightLeg, upperLegLength);
-        this.rightLeg.position.set(0, -upperLegLength * 0.5, 0);
-
-        this._setupLocalCylinder(this.rightLowerLegMesh, lowerLegLength);
-        this.rightLowerLegMesh.position.set(0, -lowerLegLength * 0.5, 0);
-        this.bones.rightFoot.position.set(0, -lowerLegLength, 0);
-
-        this._updateNameTagPosition();
-    }
-
-    private _setupLocalCylinder(mesh: THREE.Mesh, length: number) {
-        if (length < 0.001) {
-            mesh.scale.set(0, 0, 0);
-        } else {
-            mesh.scale.set(1, length, 1);
-        }
-    }
-
-    public updateArms(leftHandLocalPos: THREE.Vector3, rightHandLocalPos: THREE.Vector3): void {
-        const calculateIK = (
-            shoulderBone: THREE.Bone,
-            handLocalTarget: THREE.Vector3,
-            isLeft: boolean
-        ): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
-            const parentBone = shoulderBone.parent;
-            const targetInParent = handLocalTarget.clone();
-
-            if (parentBone) {
-                // Convert mesh-local target to world and then into shoulder parent space.
-                this.mesh.updateMatrixWorld(true);
-                parentBone.updateMatrixWorld(true);
-                targetInParent.applyMatrix4(this.mesh.matrixWorld);
-                targetInParent.applyMatrix4(new THREE.Matrix4().copy(parentBone.matrixWorld).invert());
-            }
-
-            let upperArmLen = 0.32;
-            let lowerArmLen = 0.32;
-            const shoulderPos = shoulderBone.position.clone();
-            const toTarget = new THREE.Vector3().subVectors(targetInParent, shoulderPos);
-            const rawDist = Math.max(0.0001, toTarget.length());
-
-            // Stretch both segments proportionally so the arm stays visually connected
-            // when hands/controllers are beyond nominal reach.
-            const nominalReach = upperArmLen + lowerArmLen;
-            if (rawDist > nominalReach) {
-                const stretch = rawDist / nominalReach;
-                upperArmLen *= stretch;
-                lowerArmLen *= stretch;
-            }
-
-            const maxReach = upperArmLen + lowerArmLen - 0.0001;
-            const dist = Math.min(rawDist, maxReach);
-            const dir = toTarget.multiplyScalar(1 / rawDist);
-
-            // Stable elbow bend plane: outward + a little forward.
-            const side = isLeft ? -1 : 1;
-            const pole = new THREE.Vector3(side, 0, 0.35).normalize();
-            const planeNormal = new THREE.Vector3().crossVectors(dir, pole);
-            if (planeNormal.lengthSq() < 1e-6) planeNormal.set(0, 0, 1);
-            planeNormal.normalize();
-            const bendDir = new THREE.Vector3().crossVectors(planeNormal, dir).normalize();
-
-            // Analytic two-bone solve
-            const a = (upperArmLen * upperArmLen - lowerArmLen * lowerArmLen + dist * dist) / (2 * dist);
-            const hSq = Math.max(0, upperArmLen * upperArmLen - a * a);
-            const h = Math.sqrt(hSq);
-            const elbow = shoulderPos
-                .clone()
-                .addScaledVector(dir, a)
-                .addScaledVector(bendDir, h);
-
-            const upperDir = elbow.clone().sub(shoulderPos).normalize();
-            const lowerDir = targetInParent.clone().sub(elbow).normalize();
-            const baseDir = new THREE.Vector3(0, -1, 0);
-
-            const upperQuat = new THREE.Quaternion().setFromUnitVectors(baseDir, upperDir);
-            const lowerLocalDir = lowerDir.clone().applyQuaternion(upperQuat.clone().invert());
-            const lowerQuat = new THREE.Quaternion().setFromUnitVectors(baseDir, lowerLocalDir);
-
-            return { upperQuat, lowerQuat, elbowDist: upperArmLen, wristDist: lowerArmLen };
-        };
-
-        const leftIk = calculateIK(this.bones.leftShoulder, leftHandLocalPos, true);
-        this.bones.leftUpperArm.quaternion.copy(leftIk.upperQuat);
-        // Place lower arm at the end of upper arm
-        this.bones.leftLowerArm.position.set(0, -leftIk.elbowDist, 0);
-        this.bones.leftLowerArm.quaternion.copy(leftIk.lowerQuat);
-
-        this._setupLocalCylinder(this.leftUpperArm, leftIk.elbowDist);
-        this.leftUpperArm.position.set(0, -leftIk.elbowDist * 0.5, 0);
-        this._setupLocalCylinder(this.leftForearm, leftIk.wristDist);
-        this.leftForearm.position.set(0, -leftIk.wristDist * 0.5, 0);
-
-
-        const rightIk = calculateIK(this.bones.rightShoulder, rightHandLocalPos, false);
-        this.bones.rightUpperArm.quaternion.copy(rightIk.upperQuat);
-        this.bones.rightLowerArm.position.set(0, -rightIk.elbowDist, 0);
-        this.bones.rightLowerArm.quaternion.copy(rightIk.lowerQuat);
-
-        this._setupLocalCylinder(this.rightUpperArm, rightIk.elbowDist);
-        this.rightUpperArm.position.set(0, -rightIk.elbowDist * 0.5, 0);
-        this._setupLocalCylinder(this.rightForearm, rightIk.wristDist);
-        this.rightForearm.position.set(0, -rightIk.wristDist * 0.5, 0);
-    }
-
-    // Ordered list of humanoid joint names matching standard WebXR 25-joint arrays
-    private static HUM_JOINTS = {
-        left: [
-            "leftHand",
-            "leftThumbMetacarpal", "leftThumbProximal", "leftThumbDistal", "leftThumbTip",
-            "leftIndexMetacarpal", "leftIndexProximal", "leftIndexIntermediate", "leftIndexDistal", "leftIndexTip",
-            "leftMiddleMetacarpal", "leftMiddleProximal", "leftMiddleIntermediate", "leftMiddleDistal", "leftMiddleTip",
-            "leftRingMetacarpal", "leftRingProximal", "leftRingIntermediate", "leftRingDistal", "leftRingTip",
-            "leftLittleMetacarpal", "leftLittleProximal", "leftLittleIntermediate", "leftLittleDistal", "leftLittleTip"
-        ] as HumanoidJointName[],
-        right: [
-            "rightHand",
-            "rightThumbMetacarpal", "rightThumbProximal", "rightThumbDistal", "rightThumbTip",
-            "rightIndexMetacarpal", "rightIndexProximal", "rightIndexIntermediate", "rightIndexDistal", "rightIndexTip",
-            "rightMiddleMetacarpal", "rightMiddleProximal", "rightMiddleIntermediate", "rightMiddleDistal", "rightMiddleTip",
-            "rightRingMetacarpal", "rightRingProximal", "rightRingIntermediate", "rightRingDistal", "rightRingTip",
-            "rightLittleMetacarpal", "rightLittleProximal", "rightLittleIntermediate", "rightLittleDistal", "rightLittleTip"
-        ] as HumanoidJointName[]
-    };
-
-    private _updateHumanoidHand(hand: 'left' | 'right', humanoidInfo: HumanoidState | undefined, lerpFactor: number): void {
-        const inverseWorldQuat = new THREE.Quaternion();
-        this.mesh.getWorldQuaternion(inverseWorldQuat).invert();
-
-        const jointNames = StickFigureView.HUM_JOINTS[hand];
-        let hasActiveFingers = false;
-
-        if (humanoidInfo && humanoidInfo.joints) {
-            // Check if we have tracking for the index tip (indicates full hand tracking active)
-            const indexTip = jointNames[9];
-            hasActiveFingers = !!humanoidInfo.joints[indexTip];
-
-            const wristPose = humanoidInfo.joints[jointNames[0]];
-
-            // 1. Update Wrist Marker (Cube)
-            if (!wristPose || hasActiveFingers) {
-                this.wristMeshes[hand].visible = false;
-            } else {
-                this.wristMeshes[hand].visible = true;
-                const worldPos = new THREE.Vector3(wristPose.position.x, wristPose.position.y, wristPose.position.z);
-                const worldQuat = new THREE.Quaternion(wristPose.quaternion.x, wristPose.quaternion.y, wristPose.quaternion.z, wristPose.quaternion.w);
-                const localPos = this.mesh.worldToLocal(worldPos);
-                const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
-
-                this.wristMeshes[hand].position.lerp(localPos, lerpFactor);
-                this.wristMeshes[hand].quaternion.slerp(localQuat, lerpFactor);
-            }
-
-            // 2. Update Finger Spheres
-            for (let i = 0; i < 25; i++) {
-                const p = humanoidInfo.joints[jointNames[i]];
-
-                if (hasActiveFingers && p) {
-                    this.handMeshes[hand][i].visible = true;
-                    const worldPos = new THREE.Vector3(p.position.x, p.position.y, p.position.z);
-                    const worldQuat = new THREE.Quaternion(p.quaternion.x, p.quaternion.y, p.quaternion.z, p.quaternion.w);
-                    const localPos = this.mesh.worldToLocal(worldPos);
-                    const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
-
-                    this.handMeshes[hand][i].position.lerp(localPos, lerpFactor);
-                    this.handMeshes[hand][i].quaternion.slerp(localQuat, lerpFactor);
-                } else {
-                    this.handMeshes[hand][i].visible = false;
-                }
-            }
-        } else {
-            this.wristMeshes[hand].visible = false;
-            for (let i = 0; i < 25; i++) {
-                this.handMeshes[hand][i].visible = false;
-            }
-        }
-
-        // 3. Update Connecting Cylinders
-        this._updateHandSkeleton(hand, hasActiveFingers);
-    }
-
-    private _updateHandSkeleton(hand: 'left' | 'right', hasJoints: boolean): void {
-        const cylinders = this.handCylinders[hand];
-        if (!hasJoints) {
-            cylinders.forEach(c => c.visible = false);
-            return;
-        }
-        for (let i = 0; i < cylinders.length; i++) {
-            const startIdx = StickFigureView.HAND_INDICES[i * 2];
-            const endIdx = StickFigureView.HAND_INDICES[i * 2 + 1];
-            const startJoint = this.handMeshes[hand][startIdx];
-            const endJoint = this.handMeshes[hand][endIdx];
-            cylinders[i].visible = true;
-            this._alignCylinder(cylinders[i], startJoint.position, endJoint.position, 0.003);
-        }
-    }
-
     public getLeftWristMarkerPosition(): THREE.Vector3 {
-        return this.handMeshes.left[0].visible ? this.handMeshes.left[0].position : this.wristMeshes.left.position;
+        return this.hands.getWristMarkerPosition('left');
     }
 
     public getRightWristMarkerPosition(): THREE.Vector3 {
-        return this.handMeshes.right[0].visible ? this.handMeshes.right[0].position : this.wristMeshes.right.position;
+        return this.hands.getWristMarkerPosition('right');
     }
 
     public destroy(): void {
