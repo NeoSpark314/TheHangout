@@ -628,84 +628,51 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     }
 
     public updateWristMarkers(leftHandInfo: IHandState, rightHandInfo: IHandState, lerpFactor: number = 1.0): void {
-        const leftHasJoints = leftHandInfo.active && leftHandInfo.hasJoints;
-        const rightHasJoints = rightHandInfo.active && rightHandInfo.hasJoints;
-
-        const parentWorldQuat = new THREE.Quaternion();
-        this.mesh.getWorldQuaternion(parentWorldQuat);
-        const invParentQuat = parentWorldQuat.invert();
-
-        if (!leftHandInfo.active || leftHasJoints) {
-            this.wristMeshes.left.visible = false;
-        } else {
-            this.wristMeshes.left.visible = true;
-            const worldPos = new THREE.Vector3(leftHandInfo.pose.position.x, leftHandInfo.pose.position.y, leftHandInfo.pose.position.z);
-            const worldQuat = new THREE.Quaternion(leftHandInfo.pose.quaternion.x, leftHandInfo.pose.quaternion.y, leftHandInfo.pose.quaternion.z, leftHandInfo.pose.quaternion.w);
-
-            const localPos = this.mesh.worldToLocal(worldPos);
-            const localQuat = invParentQuat.clone().multiply(worldQuat);
-
-            this.wristMeshes.left.position.lerp(localPos, lerpFactor);
-            this.wristMeshes.left.quaternion.slerp(localQuat, lerpFactor);
-        }
-
-        if (!rightHandInfo.active || rightHasJoints) {
-            this.wristMeshes.right.visible = false;
-        } else {
-            this.wristMeshes.right.visible = true;
-            const worldPos = new THREE.Vector3(rightHandInfo.pose.position.x, rightHandInfo.pose.position.y, rightHandInfo.pose.position.z);
-            const worldQuat = new THREE.Quaternion(rightHandInfo.pose.quaternion.x, rightHandInfo.pose.quaternion.y, rightHandInfo.pose.quaternion.z, rightHandInfo.pose.quaternion.w);
-
-            const localPos = this.mesh.worldToLocal(worldPos);
-            const localQuat = invParentQuat.clone().multiply(worldQuat);
-
-            this.wristMeshes.right.position.lerp(localPos, lerpFactor);
-            this.wristMeshes.right.quaternion.slerp(localQuat, lerpFactor);
-        }
-        this._updateHandJoints(leftHandInfo, rightHandInfo, lerpFactor);
-    }
-
-    private _updateHandJoints(leftHandInfo: IHandState, rightHandInfo: IHandState, lerpFactor: number): void {
-        const leftHasJoints = leftHandInfo.active && leftHandInfo.hasJoints;
-        const rightHasJoints = rightHandInfo.active && rightHandInfo.hasJoints;
-
-        // Get world-to-local transformation helpers
         const inverseWorldQuat = new THREE.Quaternion();
         this.mesh.getWorldQuaternion(inverseWorldQuat).invert();
 
+        this._updateHand('left', leftHandInfo, inverseWorldQuat, lerpFactor);
+        this._updateHand('right', rightHandInfo, inverseWorldQuat, lerpFactor);
+    }
+
+    private _updateHand(hand: 'left' | 'right', handInfo: IHandState, inverseWorldQuat: THREE.Quaternion, lerpFactor: number): void {
+        const hasJoints = handInfo.active && handInfo.hasJoints;
+
+        // 1. Update Wrist Marker (Cube)
+        if (!handInfo.active || hasJoints) {
+            this.wristMeshes[hand].visible = false;
+        } else {
+            this.wristMeshes[hand].visible = true;
+            const worldPos = new THREE.Vector3(handInfo.pose.position.x, handInfo.pose.position.y, handInfo.pose.position.z);
+            const worldQuat = new THREE.Quaternion(handInfo.pose.quaternion.x, handInfo.pose.quaternion.y, handInfo.pose.quaternion.z, handInfo.pose.quaternion.w);
+
+            const localPos = this.mesh.worldToLocal(worldPos);
+            const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
+
+            this.wristMeshes[hand].position.lerp(localPos, lerpFactor);
+            this.wristMeshes[hand].quaternion.slerp(localQuat, lerpFactor);
+        }
+
+        // 2. Update Hand Joints
         for (let i = 0; i < 25; i++) {
-            if (leftHasJoints) {
-                this.handMeshes.left[i].visible = true;
-                const worldPos = new THREE.Vector3(leftHandInfo.joints[i].pose.position.x, leftHandInfo.joints[i].pose.position.y, leftHandInfo.joints[i].pose.position.z);
-                const worldQuat = new THREE.Quaternion(leftHandInfo.joints[i].pose.quaternion.x, leftHandInfo.joints[i].pose.quaternion.y, leftHandInfo.joints[i].pose.quaternion.z, leftHandInfo.joints[i].pose.quaternion.w);
+            if (hasJoints) {
+                this.handMeshes[hand][i].visible = true;
+                const jointPose = handInfo.joints[i].pose;
+                const worldPos = new THREE.Vector3(jointPose.position.x, jointPose.position.y, jointPose.position.z);
+                const worldQuat = new THREE.Quaternion(jointPose.quaternion.x, jointPose.quaternion.y, jointPose.quaternion.z, jointPose.quaternion.w);
 
-                // Convert to local space
                 const localPos = this.mesh.worldToLocal(worldPos);
                 const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
 
-                this.handMeshes.left[i].position.lerp(localPos, lerpFactor);
-                this.handMeshes.left[i].quaternion.slerp(localQuat, lerpFactor);
+                this.handMeshes[hand][i].position.lerp(localPos, lerpFactor);
+                this.handMeshes[hand][i].quaternion.slerp(localQuat, lerpFactor);
             } else {
-                this.handMeshes.left[i].visible = false;
-            }
-
-            if (rightHasJoints) {
-                this.handMeshes.right[i].visible = true;
-                const worldPos = new THREE.Vector3(rightHandInfo.joints[i].pose.position.x, rightHandInfo.joints[i].pose.position.y, rightHandInfo.joints[i].pose.position.z);
-                const worldQuat = new THREE.Quaternion(rightHandInfo.joints[i].pose.quaternion.x, rightHandInfo.joints[i].pose.quaternion.y, rightHandInfo.joints[i].pose.quaternion.z, rightHandInfo.joints[i].pose.quaternion.w);
-
-                // Convert to local space
-                const localPos = this.mesh.worldToLocal(worldPos);
-                const localQuat = inverseWorldQuat.clone().multiply(worldQuat);
-
-                this.handMeshes.right[i].position.lerp(localPos, lerpFactor);
-                this.handMeshes.right[i].quaternion.slerp(localQuat, lerpFactor);
-            } else {
-                this.handMeshes.right[i].visible = false;
+                this.handMeshes[hand][i].visible = false;
             }
         }
-        this._updateHandSkeleton('left', leftHasJoints);
-        this._updateHandSkeleton('right', rightHasJoints);
+
+        // 3. Update Hand Skeleton
+        this._updateHandSkeleton(hand, hasJoints);
     }
 
     private _updateHandSkeleton(hand: 'left' | 'right', hasJoints: boolean): void {
