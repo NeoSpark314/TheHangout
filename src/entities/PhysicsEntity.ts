@@ -13,20 +13,21 @@ import { EVENTS } from '../utils/Constants';
 
 /**
  * Source of Truth: This entity owns the logic and physical state of a prop.
- * Visuals (PhysicsPropView) follow this state via interpolation.
+ * Visuals are applied in a dedicated post-physics presentation phase via `present(...)`.
  *
- * Ownership / simulation model:
- * - Authoritative instance simulates real dynamics (Dynamic body when free, Kinematic when held).
- * - Non-authoritative instance acts as a kinematic network proxy (no local dynamics) and
- *   only interpolates visuals to remote snapshots.
- * - On guest release we keep temporary local authority (`pendingRelease`) until host ACK
- *   (`OWNERSHIP_TRANSFER`) to avoid throw discontinuities at handoff time.
- *
- * Why this exists:
- * - Immediate guest authority drop causes "throw dies on release" artifacts.
- * - Teleport-correcting non-authoritative dynamic bodies causes jitter and sleep churn.
- * - Explicit proxy mode keeps behavior deterministic across host/guest roles.
+ * Explicit simulation modes:
+ * - AuthoritativeDynamic: local authority, free rigid body simulation.
+ * - HeldKinematic: local authority while grabbed.
+ * - PendingReleaseDynamic: guest throw handoff window until host ownership transfer ACK.
+ * - ProxyKinematic: non-authoritative network follower.
  */
+export enum PhysicsSimMode {
+    AuthoritativeDynamic = 'AuthoritativeDynamic',
+    HeldKinematic = 'HeldKinematic',
+    PendingReleaseDynamic = 'PendingReleaseDynamic',
+    ProxyKinematic = 'ProxyKinematic'
+}
+
 export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
     public view: IView<IPhysicsPropState> | null;
@@ -37,12 +38,15 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lerpFactor: number = 0.2;
-    // True after a guest release until host transfer ACK confirms authority handoff.
-    private pendingRelease: boolean = false;
-    // Visual-only smoothing state for non-authoritative proxy rendering.
+
+    private simMode: PhysicsSimMode = PhysicsSimMode.AuthoritativeDynamic;
+
     private proxyRenderPos: IVector3 = { x: 0, y: 0, z: 0 };
     private proxyRenderRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private proxyInitialized: boolean = false;
+
+    private presentPos: IVector3 = { x: 0, y: 0, z: 0 };
+    private presentRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
@@ -57,8 +61,15 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.targetRot = { x: rot.x, y: rot.y, z: rot.z, w: rot.w };
         this.proxyRenderPos = { ...this.targetPos };
         this.proxyRenderRot = { ...this.targetRot };
+        this.presentPos = { ...this.targetPos };
+        this.presentRot = { ...this.targetRot };
 
         this.syncAuthority();
+        this.refreshSimMode();
+    }
+
+    public getSimMode(): PhysicsSimMode {
+        return this.simMode;
     }
 
     public syncAuthority(): void {
@@ -73,23 +84,22 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     public releasePhysicsOwnership(velocity?: IVector3): void {
         if (!this.isAuthority) return;
 
-        if (this.rigidBody) {
-            this.rigidBody.wakeUp();
-            this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-            if (velocity && (Math.abs(velocity.x) > 0.1 || Math.abs(velocity.y) > 0.1 || Math.abs(velocity.z) > 0.1)) {
-                this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
-            }
+        this.rigidBody.wakeUp();
+        this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        if (velocity && (Math.abs(velocity.x) > 0.1 || Math.abs(velocity.y) > 0.1 || Math.abs(velocity.z) > 0.1)) {
+            this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
         }
 
-        // Keep guest-side authority until host transfer ACK arrives so release/throw remains continuous.
         const localId = this.context.localPlayer?.id || 'local';
         if (this.context.isHost) {
             this.ownerId = null;
             this.syncAuthority();
+            this.refreshSimMode();
         } else {
-            this.pendingRelease = true;
+            // Keep local simulation alive until host sends OWNERSHIP_TRANSFER.
             this.ownerId = localId;
             this.isAuthority = true;
+            this.setSimMode(PhysicsSimMode.PendingReleaseDynamic);
         }
 
         const state = this.getNetworkState();
@@ -120,10 +130,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.requestOwnership();
 
         this.heldBy = playerId;
-        this.rigidBody.wakeUp();
-        this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
-        this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-        this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        this.refreshSimMode();
     }
 
     public onRelease(velocity?: IVector3): void {
@@ -137,18 +144,17 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.targetRot = { ...pose.quaternion };
         this.proxyRenderPos = { ...pose.position };
         this.proxyRenderRot = { ...pose.quaternion };
+        this.presentPos = { ...pose.position };
+        this.presentRot = { ...pose.quaternion };
         this.proxyInitialized = true;
 
-        if (this.rigidBody) {
-            this.rigidBody.setNextKinematicTranslation(pose.position);
-            this.rigidBody.setNextKinematicRotation(pose.quaternion);
-        }
+        this.rigidBody.setNextKinematicTranslation(pose.position);
+        this.rigidBody.setNextKinematicRotation(pose.quaternion);
     }
 
     public onNetworkEvent(type: string, payload: any): void {
-        if (type === 'OWNERSHIP_RELEASE' && this.rigidBody) {
-            this.heldBy = null; // Reset held status locally
-            // Restore Dynamic physics locally
+        if (type === 'OWNERSHIP_RELEASE') {
+            this.heldBy = null;
             this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
 
             if (payload.position) this.rigidBody.setTranslation({ x: payload.position[0], y: payload.position[1], z: payload.position[2] }, false);
@@ -158,97 +164,91 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             }
 
             this.rigidBody.wakeUp();
-        } else if (type === 'OWNERSHIP_TRANSFER') {
+            this.refreshSimMode();
+            return;
+        }
+
+        if (type === 'OWNERSHIP_TRANSFER') {
             const newOwnerId = payload?.newOwnerId ?? null;
             const localId = this.context.localPlayer?.id || 'local';
 
-            // Host ACK finished release handoff; we can now safely stop local authoritative sim.
-            if (this.pendingRelease && newOwnerId !== localId) {
-                this.pendingRelease = false;
+            // Host ACK ended pending release.
+            if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && newOwnerId !== localId) {
+                this.refreshSimMode();
             }
         }
     }
 
     public update(delta: number, _frame?: XRFrame): void {
-        if (!this.rigidBody) return;
-
         this.syncAuthority();
+        this.refreshSimMode();
 
-        if (this.isAuthority) {
-            if (this.heldBy) {
-                if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.KinematicPositionBased) {
-                    this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
-                    this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                    this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-                }
-            } else if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.Dynamic) {
-                this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-                this.rigidBody.wakeUp();
-            }
-
-            const position = this.rigidBody.translation();
-            const rotation = this.rigidBody.rotation();
-
-            // If we are holding it, apply target transforms
-            if (this.heldBy && this.rigidBody.bodyType() === RAPIER.RigidBodyType.KinematicPositionBased) {
+        switch (this.simMode) {
+            case PhysicsSimMode.HeldKinematic: {
                 this.rigidBody.setNextKinematicTranslation(this.targetPos);
                 this.rigidBody.setNextKinematicRotation(this.targetRot);
+                const position = this.rigidBody.translation();
+                const rotation = this.rigidBody.rotation();
+                this.presentPos = { x: position.x, y: position.y, z: position.z };
+                this.presentRot = { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w };
+                break;
             }
+            case PhysicsSimMode.AuthoritativeDynamic:
+            case PhysicsSimMode.PendingReleaseDynamic: {
+                const position = this.rigidBody.translation();
+                const rotation = this.rigidBody.rotation();
+                this.presentPos = { x: position.x, y: position.y, z: position.z };
+                this.presentRot = { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w };
 
-            if (this.view) {
-                this.view.applyState({
-                    position: { x: position.x, y: position.y, z: position.z },
-                    quaternion: { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
-                    lerpFactor: 1.0
-                }, delta);
+                if (
+                    this.simMode === PhysicsSimMode.AuthoritativeDynamic &&
+                    this.ownerId !== null &&
+                    !this.context.isHost &&
+                    this.rigidBody.isSleeping()
+                ) {
+                    this.releasePhysicsOwnership();
+                }
+
+                if (this.isGrabbable && !this.heldBy && this.spawnPosition && position.y < -10) {
+                    this.rigidBody.setTranslation(
+                        { x: this.spawnPosition.x, y: this.spawnPosition.y, z: this.spawnPosition.z },
+                        true
+                    );
+                    this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                    this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+                    this.rigidBody.wakeUp();
+                }
+                break;
             }
+            case PhysicsSimMode.ProxyKinematic: {
+                this.rigidBody.setNextKinematicTranslation({ x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z });
+                this.rigidBody.setNextKinematicRotation({ x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w });
 
+                if (!this.proxyInitialized) {
+                    this.proxyRenderPos = { ...this.targetPos };
+                    this.proxyRenderRot = { ...this.targetRot };
+                    this.proxyInitialized = true;
+                } else {
+                    this.proxyRenderPos.x += (this.targetPos.x - this.proxyRenderPos.x) * this.lerpFactor;
+                    this.proxyRenderPos.y += (this.targetPos.y - this.proxyRenderPos.y) * this.lerpFactor;
+                    this.proxyRenderPos.z += (this.targetPos.z - this.proxyRenderPos.z) * this.lerpFactor;
+                    this.nlerpQuaternion(this.proxyRenderRot, this.targetRot, this.lerpFactor);
+                }
 
-
-            if (!this.pendingRelease && !this.heldBy && this.ownerId !== null && !this.context.isHost && this.rigidBody.isSleeping()) {
-                this.releasePhysicsOwnership();
-            }
-
-            if (this.isGrabbable && !this.heldBy && this.spawnPosition && position.y < -10) {
-                this.rigidBody.setTranslation(
-                    { x: this.spawnPosition.x, y: this.spawnPosition.y, z: this.spawnPosition.z },
-                    true
-                );
-                this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-                this.rigidBody.wakeUp();
-            }
-        } else {
-            // Non-authoritative: strict kinematic proxy mode.
-            // We follow network targets in physics-space for collision coherence, but smooth only visually.
-            if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.KinematicPositionBased) {
-                this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
-                this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-            }
-
-            this.rigidBody.setNextKinematicTranslation({ x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z });
-            this.rigidBody.setNextKinematicRotation({ x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w });
-
-            if (!this.proxyInitialized) {
-                this.proxyRenderPos = { ...this.targetPos };
-                this.proxyRenderRot = { ...this.targetRot };
-                this.proxyInitialized = true;
-            } else {
-                this.proxyRenderPos.x += (this.targetPos.x - this.proxyRenderPos.x) * this.lerpFactor;
-                this.proxyRenderPos.y += (this.targetPos.y - this.proxyRenderPos.y) * this.lerpFactor;
-                this.proxyRenderPos.z += (this.targetPos.z - this.proxyRenderPos.z) * this.lerpFactor;
-                this.nlerpQuaternion(this.proxyRenderRot, this.targetRot, this.lerpFactor);
-            }
-
-            if (this.view) {
-                this.view.applyState({
-                    position: this.proxyRenderPos,
-                    quaternion: this.proxyRenderRot,
-                    lerpFactor: 1.0
-                }, delta);
+                this.presentPos = this.proxyRenderPos;
+                this.presentRot = this.proxyRenderRot;
+                break;
             }
         }
+    }
+
+    public present(delta: number): void {
+        if (!this.view) return;
+        this.view.applyState({
+            position: this.presentPos,
+            quaternion: this.presentRot,
+            lerpFactor: 1.0
+        }, delta);
     }
 
     public getNetworkState(fullSync: boolean = false): IPhysicsEntityState {
@@ -270,7 +270,6 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     public applyNetworkState(state: IPhysicsEntityState): void {
         this.syncNetworkState(state);
 
-        // If we are currently the authority (holding it), ignore the server's outdated state
         if (this.isAuthority) return;
 
         const wasHeld = this.heldBy;
@@ -286,15 +285,51 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             Math.pow(this.targetPos.y - oldTargetPos.y, 2) +
             Math.pow(this.targetPos.z - oldTargetPos.z, 2) > 1.0;
 
-        // Snap visual proxy on major discontinuities to avoid long trailing lerps after teleports/ownership flips.
         if (stateTransition || hugeJump) {
             this.proxyRenderPos = { ...this.targetPos };
             this.proxyRenderRot = { ...this.targetRot };
+            this.presentPos = this.proxyRenderPos;
+            this.presentRot = this.proxyRenderRot;
             this.proxyInitialized = true;
         }
+    }
 
-        if (!this.heldBy && wasHeld && state.v) {
-            this.rigidBody?.setLinvel({ x: state.v[0], y: state.v[1], z: state.v[2] }, true);
+    private refreshSimMode(): void {
+        if (!this.isAuthority) {
+            this.setSimMode(PhysicsSimMode.ProxyKinematic);
+            return;
+        }
+
+        if (this.heldBy) {
+            this.setSimMode(PhysicsSimMode.HeldKinematic);
+            return;
+        }
+
+        if (!this.context.isHost && this.simMode === PhysicsSimMode.PendingReleaseDynamic) {
+            this.setSimMode(PhysicsSimMode.PendingReleaseDynamic);
+            return;
+        }
+
+        this.setSimMode(PhysicsSimMode.AuthoritativeDynamic);
+    }
+
+    private setSimMode(nextMode: PhysicsSimMode): void {
+        if (this.simMode === nextMode) return;
+        this.simMode = nextMode;
+
+        switch (nextMode) {
+            case PhysicsSimMode.HeldKinematic:
+            case PhysicsSimMode.ProxyKinematic:
+                this.rigidBody.wakeUp();
+                this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+                this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+                break;
+            case PhysicsSimMode.AuthoritativeDynamic:
+            case PhysicsSimMode.PendingReleaseDynamic:
+                this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                this.rigidBody.wakeUp();
+                break;
         }
     }
 

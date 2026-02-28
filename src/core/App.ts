@@ -18,6 +18,7 @@ import { TrackingManager } from '../managers/TrackingManager';
 import { XRTrackingProvider } from '../input/XRTrackingProvider';
 import { DesktopTrackingProvider } from '../input/DesktopTrackingProvider';
 import { AnimationSystem } from '../systems/AnimationSystem';
+import { PhysicsPresentationSystem } from '../systems/PhysicsPresentationSystem';
 import { VRUIManager } from '../managers/VRUIManager';
 import { DebugRenderManager } from '../managers/DebugRenderManager';
 import eventBus from './EventBus';
@@ -164,6 +165,7 @@ export class App {
                 update: (delta) => managers.physics!.step(delta)
             });
         }
+        this.engine.addSystem(new PhysicsPresentationSystem(this.context));
 
         if (managers.room) this.engine.addSystem(managers.room as any);
         if (managers.ui) this.engine.addSystem(managers.ui as any);
