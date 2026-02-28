@@ -182,8 +182,7 @@ export class DebugRenderManager implements IUpdatable {
         if (visual.label) {
             const owner = body.ownerId || 'host';
             const authority = body.isAuthority ? 'local' : 'remote';
-            const sleepState = isSleeping ? 'sleeping' : 'awake';
-            const sim = body.isAuthority ? 'auth' : 'proxy';
+            const sim = this.compactSimMode(body.simMode, body.isAuthority);
             const shortId = this.compactId(body.id, 14);
             const shortOwner = this.compactId(owner, 12);
             const sleep = isSleeping ? 'sleep' : 'awake';
@@ -311,6 +310,15 @@ export class DebugRenderManager implements IUpdatable {
         if (value.length <= maxLen) return value;
         const keep = Math.max(3, Math.floor((maxLen - 1) / 2));
         return `${value.slice(0, keep)}~${value.slice(-keep)}`;
+    }
+
+    private compactSimMode(simMode: string | null, isAuthority: boolean): string {
+        if (!simMode) return isAuthority ? 'auth' : 'proxy';
+        if (simMode === 'AuthoritativeDynamic') return 'auth-dyn';
+        if (simMode === 'HeldKinematic') return 'held-kin';
+        if (simMode === 'PendingReleaseDynamic') return 'pend-dyn';
+        if (simMode === 'ProxyKinematic') return 'proxy-kin';
+        return simMode.toLowerCase();
     }
 
     private disposeVisual(visual: IDebugVisual): void {

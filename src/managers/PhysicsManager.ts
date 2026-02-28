@@ -15,6 +15,7 @@ export interface IPhysicsDebugBody {
     ownerId: string | null;
     isAuthority: boolean;
     hasNetworkState: boolean;
+    simMode: string | null;
 }
 
 interface IPhysicsDebugBodyEntry {
@@ -23,6 +24,7 @@ interface IPhysicsDebugBodyEntry {
     colliders: RAPIER.Collider[];
     getOwnerId?: () => string | null;
     getIsAuthority?: () => boolean;
+    getSimMode?: () => string | null;
 }
 
 export class PhysicsManager {
@@ -153,7 +155,8 @@ export class PhysicsManager {
                 colliders: entry.colliders,
                 ownerId: entry.getOwnerId ? entry.getOwnerId() : null,
                 isAuthority: entry.getIsAuthority ? entry.getIsAuthority() : false,
-                hasNetworkState: !!entry.getOwnerId
+                hasNetworkState: !!entry.getOwnerId,
+                simMode: entry.getSimMode ? entry.getSimMode() : null
             });
         }
         return out;
@@ -176,6 +179,7 @@ export class PhysicsManager {
         if (entity) {
             entry.getOwnerId = () => entity.ownerId;
             entry.getIsAuthority = () => entity.isAuthority;
+            entry.getSimMode = () => entity.getSimMode?.() ?? null;
         }
 
         this.debugBodies.set(handle, entry);
