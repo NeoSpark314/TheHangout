@@ -40,6 +40,7 @@ export class PhysicsManager {
     private debugBodies: Map<number, IPhysicsDebugBodyEntry> = new Map();
     private eventQueue: RAPIER.EventQueue | null = null;
     private colliderToEntity: Map<number, PhysicsEntity> = new Map();
+    private entityToPrimaryCollider: Map<string, RAPIER.Collider> = new Map();
     private activePropContacts: Map<string, { a: number; b: number }> = new Map();
     private lastTouchClaimAtMsByEntity: Map<string, number> = new Map();
     // Soft multiplayer UX lease: while holding an authoritative prop, touching another prop
@@ -48,6 +49,8 @@ export class PhysicsManager {
     private touchLeaseProximityDistance: number = 0.55;
     private pendingReleaseMinHoldMs: number = 220;
     private pendingReleaseMaxHoldMs: number = 900;
+    private touchQueryShape: RAPIER.Ball = new RAPIER.Ball(0.55);
+    private readonly identityRotation = { x: 0, y: 0, z: 0, w: 1 };
 
     constructor(private context: GameContext) { }
 
@@ -199,6 +202,7 @@ export class PhysicsManager {
 
     public setTouchLeaseProximityDistance(distance: number): void {
         this.touchLeaseProximityDistance = Math.max(0.1, Math.min(2.0, distance));
+        this.touchQueryShape = new RAPIER.Ball(this.touchLeaseProximityDistance);
     }
 
     public getPendingReleaseMinHoldMs(): number {
@@ -248,6 +252,9 @@ export class PhysicsManager {
             entry.getSnapshotBufferSize = () => entity.getSnapshotBufferSize?.() ?? 0;
             entry.getLastTransferSeq = () => entity.getLastOwnershipTransferSeq?.() ?? 0;
             this.colliderToEntity.set(collider.handle, entity);
+            if (!this.entityToPrimaryCollider.has(entity.id)) {
+                this.entityToPrimaryCollider.set(entity.id, collider);
+            }
         }
 
         this.debugBodies.set(handle, entry);
@@ -295,49 +302,42 @@ export class PhysicsManager {
     }
 
     private processProximityTouchLeases(): void {
-        if (this.context.isHost) return;
+        if (this.context.isHost || !this.world) return;
 
         const localId = this.context.localPlayer?.id;
         if (!localId) return;
 
-        const physicsEntities: PhysicsEntity[] = [];
-        for (const entity of this.context.managers.entity.entities.values()) {
-            if (entity.type === EntityType.PHYSICS_PROP) {
-                physicsEntities.push(entity as PhysicsEntity);
-            }
-        }
-
-        if (physicsEntities.length < 2) return;
-
         const heldAuthoritative: PhysicsEntity[] = [];
-        for (const entity of physicsEntities) {
-            if (entity.heldBy === localId && entity.isAuthority) {
-                heldAuthoritative.push(entity);
+        const dedupe = new Set<string>();
+        for (const entity of this.context.managers.entity.entities.values()) {
+            if (entity.type !== EntityType.PHYSICS_PROP) continue;
+            const prop = entity as PhysicsEntity;
+            if (prop.heldBy === localId && prop.isAuthority && !dedupe.has(prop.id)) {
+                dedupe.add(prop.id);
+                heldAuthoritative.push(prop);
             }
         }
 
         if (heldAuthoritative.length === 0) return;
 
         const nowMs = this.nowMs();
-        const maxD2 = this.touchLeaseProximityDistance * this.touchLeaseProximityDistance;
-
         for (const source of heldAuthoritative) {
             const sourcePos = source.rigidBody.translation();
-            for (const target of physicsEntities) {
-                if (target === source) continue;
-                if (target.isDestroyed) continue;
-                if (target.ownerId === localId || target.isAuthority) continue;
-                if (target.heldBy && target.heldBy !== localId) continue;
-
-                const targetPos = target.rigidBody.translation();
-                const dx = sourcePos.x - targetPos.x;
-                const dy = sourcePos.y - targetPos.y;
-                const dz = sourcePos.z - targetPos.z;
-                const d2 = dx * dx + dy * dy + dz * dz;
-                if (d2 <= maxD2) {
+            const sourceCollider = this.entityToPrimaryCollider.get(source.id);
+            this.world.intersectionsWithShape(
+                { x: sourcePos.x, y: sourcePos.y, z: sourcePos.z },
+                this.identityRotation,
+                this.touchQueryShape,
+                (collider) => {
+                    const target = this.colliderToEntity.get(collider.handle);
+                    if (!target || target === source) return true;
                     this.tryClaimTouchLease(target, nowMs, localId);
-                }
-            }
+                    return true;
+                },
+                undefined,
+                undefined,
+                sourceCollider
+            );
         }
     }
 

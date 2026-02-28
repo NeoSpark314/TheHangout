@@ -86,6 +86,32 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.refreshSimMode();
     }
 
+    private setVec3(out: IVector3, x: number, y: number, z: number): void {
+        out.x = x;
+        out.y = y;
+        out.z = z;
+    }
+
+    private copyVec3(out: IVector3, src: IVector3): void {
+        out.x = src.x;
+        out.y = src.y;
+        out.z = src.z;
+    }
+
+    private setQuat(out: IQuaternion, x: number, y: number, z: number, w: number): void {
+        out.x = x;
+        out.y = y;
+        out.z = z;
+        out.w = w;
+    }
+
+    private copyQuat(out: IQuaternion, src: IQuaternion): void {
+        out.x = src.x;
+        out.y = src.y;
+        out.z = src.z;
+        out.w = src.w;
+    }
+
     public getSimMode(): PhysicsSimMode {
         return this.simMode;
     }
@@ -177,12 +203,12 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     }
 
     public updateGrabbedPose(pose: IPose): void {
-        this.targetPos = { ...pose.position };
-        this.targetRot = { ...pose.quaternion };
-        this.proxyRenderPos = { ...pose.position };
-        this.proxyRenderRot = { ...pose.quaternion };
-        this.presentPos = { ...pose.position };
-        this.presentRot = { ...pose.quaternion };
+        this.copyVec3(this.targetPos, pose.position);
+        this.copyQuat(this.targetRot, pose.quaternion);
+        this.copyVec3(this.proxyRenderPos, pose.position);
+        this.copyQuat(this.proxyRenderRot, pose.quaternion);
+        this.copyVec3(this.presentPos, pose.position);
+        this.copyQuat(this.presentRot, pose.quaternion);
         this.proxyInitialized = true;
 
         this.rigidBody.setNextKinematicTranslation(pose.position);
@@ -231,16 +257,16 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 this.rigidBody.setNextKinematicRotation(this.targetRot);
                 const position = this.rigidBody.translation();
                 const rotation = this.rigidBody.rotation();
-                this.presentPos = { x: position.x, y: position.y, z: position.z };
-                this.presentRot = { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w };
+                this.setVec3(this.presentPos, position.x, position.y, position.z);
+                this.setQuat(this.presentRot, rotation.x, rotation.y, rotation.z, rotation.w);
                 break;
             }
             case PhysicsSimMode.AuthoritativeDynamic:
             case PhysicsSimMode.PendingReleaseDynamic: {
                 const position = this.rigidBody.translation();
                 const rotation = this.rigidBody.rotation();
-                this.presentPos = { x: position.x, y: position.y, z: position.z };
-                this.presentRot = { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w };
+                this.setVec3(this.presentPos, position.x, position.y, position.z);
+                this.setQuat(this.presentRot, rotation.x, rotation.y, rotation.z, rotation.w);
 
                 if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && this.pendingReleaseArmed) {
                     const now = this.nowMs();
@@ -345,14 +371,14 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         }
 
         this.heldBy = snapshot.heldBy;
-        this.targetPos = { ...snapshot.position };
-        this.targetRot = { ...snapshot.quaternion };
+        this.copyVec3(this.targetPos, snapshot.position);
+        this.copyQuat(this.targetRot, snapshot.quaternion);
 
         if (!this.proxyInitialized) {
-            this.proxyRenderPos = { ...this.targetPos };
-            this.proxyRenderRot = { ...this.targetRot };
-            this.presentPos = this.proxyRenderPos;
-            this.presentRot = this.proxyRenderRot;
+            this.copyVec3(this.proxyRenderPos, this.targetPos);
+            this.copyQuat(this.proxyRenderRot, this.targetRot);
+            this.copyVec3(this.presentPos, this.proxyRenderPos);
+            this.copyQuat(this.presentRot, this.proxyRenderRot);
             this.proxyInitialized = true;
         }
     }
@@ -392,10 +418,10 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                     // On authority -> proxy transition, drop stale snapshots and seed from current pose.
                     this.clearSnapshotBuffer();
                     this.seedSnapshotFromCurrentPose();
-                    this.proxyRenderPos = { ...this.targetPos };
-                    this.proxyRenderRot = { ...this.targetRot };
-                    this.presentPos = this.proxyRenderPos;
-                    this.presentRot = this.proxyRenderRot;
+                    this.copyVec3(this.proxyRenderPos, this.targetPos);
+                    this.copyQuat(this.proxyRenderRot, this.targetRot);
+                    this.copyVec3(this.presentPos, this.proxyRenderPos);
+                    this.copyQuat(this.presentRot, this.proxyRenderRot);
                     this.proxyInitialized = true;
                 }
                 break;
@@ -419,8 +445,8 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         const sampled = this.sampleSnapshotAt(sampleTime);
         if (!sampled) return;
 
-        this.targetPos = sampled.position;
-        this.targetRot = sampled.quaternion;
+        this.copyVec3(this.targetPos, sampled.position);
+        this.copyQuat(this.targetRot, sampled.quaternion);
         this.heldBy = sampled.heldBy;
     }
 
@@ -536,8 +562,8 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         };
 
         this.snapshotBuffer.push(snapshot);
-        this.targetPos = { ...snapshot.position };
-        this.targetRot = { ...snapshot.quaternion };
+        this.copyVec3(this.targetPos, snapshot.position);
+        this.copyQuat(this.targetRot, snapshot.quaternion);
     }
 
     public destroy(): void {
