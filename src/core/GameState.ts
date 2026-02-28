@@ -15,6 +15,7 @@ import type { AssetManager } from '../managers/AssetManager';
 import type { DrawingManager } from '../managers/DrawingManager';
 import type { TrackingManager } from '../managers/TrackingManager';
 import type { VRUIManager } from '../managers/VRUIManager';
+import type { DebugRenderManager } from '../managers/DebugRenderManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
 
 export interface IAvatarConfig {
@@ -47,6 +48,7 @@ export interface IManagers {
     drawing: DrawingManager;
     tracking: TrackingManager;
     vrUi: VRUIManager;
+    debugRender: DebugRenderManager;
 }
 
 /**

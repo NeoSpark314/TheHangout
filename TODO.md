@@ -1,6 +1,5 @@
 ### My TODO notes:
 
-- Debounce pinch gesture for hand tracking (and probably also grab)
 - Find a solution for movement with hand tracking
 - Review the use of any again
 

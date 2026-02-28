@@ -19,6 +19,7 @@ import { XRTrackingProvider } from '../input/XRTrackingProvider';
 import { DesktopTrackingProvider } from '../input/DesktopTrackingProvider';
 import { AnimationSystem } from '../systems/AnimationSystem';
 import { VRUIManager } from '../managers/VRUIManager';
+import { DebugRenderManager } from '../managers/DebugRenderManager';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -92,6 +93,7 @@ export class App {
         this.context.setManager('animation', new AnimationSystem());
         this.context.setManager('interaction', new InteractionSystem(this.context));
         this.context.setManager('vrUi', new VRUIManager(this.context));
+        this.context.setManager('debugRender', new DebugRenderManager(this.context));
 
         // Tracking Initialization
         const tracking = new TrackingManager(this.context);
@@ -147,6 +149,9 @@ export class App {
         if (managers.vrUi) {
             managers.vrUi.init();
         }
+        if (managers.debugRender) {
+            managers.debugRender.init();
+        }
 
         // Register systems to GameEngine in the exact desired execution order
         if (managers.network) this.engine.addSystem(managers.network as any);
@@ -164,6 +169,7 @@ export class App {
         if (managers.ui) this.engine.addSystem(managers.ui as any);
         if (managers.hud) this.engine.addSystem(managers.hud as any);
         if (managers.vrUi) this.engine.addSystem(managers.vrUi as any);
+        if (managers.debugRender) this.engine.addSystem(managers.debugRender as any);
 
         if (managers.render) {
             this.engine.addSystem({

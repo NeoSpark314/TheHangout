@@ -8,11 +8,29 @@ import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 
+export interface IPhysicsDebugBody {
+    id: string;
+    rigidBody: RAPIER.RigidBody;
+    colliders: RAPIER.Collider[];
+    ownerId: string | null;
+    isAuthority: boolean;
+    hasNetworkState: boolean;
+}
+
+interface IPhysicsDebugBodyEntry {
+    id: string;
+    rigidBody: RAPIER.RigidBody;
+    colliders: RAPIER.Collider[];
+    getOwnerId?: () => string | null;
+    getIsAuthority?: () => boolean;
+}
+
 export class PhysicsManager {
     public world: RAPIER.World | null = null;
     private nextPhysicsId: number = 0;
     private accumulator: number = 0;
     private fixedTimeStep: number = 1 / 60;
+    private debugBodies: Map<number, IPhysicsDebugBodyEntry> = new Map();
 
     constructor(private context: GameContext) { }
 
@@ -32,7 +50,8 @@ export class PhysicsManager {
         const groundBody = this.world.createRigidBody(groundBodyDesc);
         const groundColliderDesc = RAPIER.ColliderDesc.cuboid(size, halfHeight, size);
         groundColliderDesc.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-        this.world.createCollider(groundColliderDesc, groundBody);
+        const groundCollider = this.world.createCollider(groundColliderDesc, groundBody);
+        this.registerDebugBody('ground', groundBody, groundCollider);
     }
 
     public createCuboid(hx: number, hy: number, hz: number, position: IVector3, mesh: any, isStatic: boolean = false): RAPIER.RigidBody | undefined {
@@ -45,7 +64,8 @@ export class PhysicsManager {
             .setFriction(1.0)
             .setRestitution(0.0)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-        this.world.createCollider(colliderDesc, rigidBody);
+        const collider = this.world.createCollider(colliderDesc, rigidBody);
+        this.registerDebugBody(`cuboid-${this.nextPhysicsId++}`, rigidBody, collider);
         return rigidBody;
     }
 
@@ -61,7 +81,8 @@ export class PhysicsManager {
             .setFriction(1.0)
             .setRestitution(0.0)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-        this.world.createCollider(colliderDesc, rigidBody);
+        const collider = this.world.createCollider(colliderDesc, rigidBody);
+        this.registerDebugBody(`hexagon-${this.nextPhysicsId++}`, rigidBody, collider);
         return rigidBody;
     }
 
@@ -97,13 +118,14 @@ export class PhysicsManager {
             .setRestitution(0.2)
             .setFriction(0.7)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-        this.world.createCollider(colliderDesc, rigidBody);
+        const collider = this.world.createCollider(colliderDesc, rigidBody);
 
         const physicsEntity = new PhysicsEntity(this.context, entityId, this.context.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
             view: finalView
         });
+        this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
         const entityManager = this.context.managers.entity;
         if (entityManager) {
@@ -120,5 +142,42 @@ export class PhysicsManager {
             this.world.step();
             this.accumulator -= this.fixedTimeStep;
         }
+    }
+
+    public getDebugBodies(): IPhysicsDebugBody[] {
+        const out: IPhysicsDebugBody[] = [];
+        for (const entry of this.debugBodies.values()) {
+            out.push({
+                id: entry.id,
+                rigidBody: entry.rigidBody,
+                colliders: entry.colliders,
+                ownerId: entry.getOwnerId ? entry.getOwnerId() : null,
+                isAuthority: entry.getIsAuthority ? entry.getIsAuthority() : false,
+                hasNetworkState: !!entry.getOwnerId
+            });
+        }
+        return out;
+    }
+
+    private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsEntity): void {
+        const handle = rigidBody.handle;
+        const existing = this.debugBodies.get(handle);
+        if (existing) {
+            existing.colliders.push(collider);
+            return;
+        }
+
+        const entry: IPhysicsDebugBodyEntry = {
+            id,
+            rigidBody,
+            colliders: [collider]
+        };
+
+        if (entity) {
+            entry.getOwnerId = () => entity.ownerId;
+            entry.getIsAuthority = () => entity.isAuthority;
+        }
+
+        this.debugBodies.set(handle, entry);
     }
 }

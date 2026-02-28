@@ -435,12 +435,65 @@ export class VRUIManager implements IUpdatable {
         this.systemTab = this.tabPanel.addTab('System');
         const systemContainer = this.systemTab.container;
 
-        import('../utils/canvasui').then(({ UIButton, UILabel }) => {
+        import('../utils/canvasui').then(({ UIButton, UILabel, UIToggle }) => {
             const title = new UILabel("System", 50, 50, 1180, 80);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
             title.textAlign = 'center';
             systemContainer.addChild(title);
+
+            const debugManager = this.context.managers.debugRender;
+            const debugSettings = debugManager?.getSettings();
+
+            const debugHeader = new UILabel("Debug Rendering", 120, 170, 1040, 60);
+            debugHeader.font = getFont(UITheme.typography.sizes.body, 'bold');
+            debugHeader.textAlign = 'left';
+            debugHeader.textColor = UITheme.colors.accent;
+            systemContainer.addChild(debugHeader);
+
+            const debugMaster = new UIToggle(
+                "Enable Debug Overlay",
+                debugSettings?.enabled ?? false,
+                140, 230, 700, 52,
+                (checked) => {
+                    debugManager?.setEnabled(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            systemContainer.addChild(debugMaster);
+
+            const showCollidersToggle = new UIToggle(
+                "Collision Bounds (physics)",
+                debugSettings?.showColliders ?? true,
+                180, 290, 700, 52,
+                (checked) => {
+                    debugManager?.setShowColliders(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            systemContainer.addChild(showCollidersToggle);
+
+            const showAxesToggle = new UIToggle(
+                "Object Axes (movable bodies)",
+                debugSettings?.showAxes ?? true,
+                180, 350, 700, 52,
+                (checked) => {
+                    debugManager?.setShowAxes(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            systemContainer.addChild(showAxesToggle);
+
+            const showAuthorityToggle = new UIToggle(
+                "Authority Labels (network props)",
+                debugSettings?.showAuthorityLabels ?? true,
+                180, 410, 700, 52,
+                (checked) => {
+                    debugManager?.setShowAuthorityLabels(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            systemContainer.addChild(showAuthorityToggle);
 
             const leaveBtn = new UIButton("Leave Room", 440, 630, 400, 80, () => {
                 const render = this.context.managers.render;
