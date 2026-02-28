@@ -14,6 +14,9 @@ export class VRUIManager implements IUpdatable {
     private tabPanel: UITabPanel | null = null;
     private overlayContainer: HTMLDivElement | null = null;
 
+    private peersTab: any = null; // Store UITab handle
+    private systemTab: any = null;
+
     constructor(private context: GameContext) { }
 
     public init(): void {
@@ -128,7 +131,8 @@ export class VRUIManager implements IUpdatable {
     private addPeersTab() {
         if (!this.tabPanel) return;
 
-        const roomContainer = this.tabPanel.addTab('Peers');
+        this.peersTab = this.tabPanel.addTab('Peers');
+        const roomContainer = this.peersTab.container;
         let currentPage = 0;
         const playersPerPage = 4;
 
@@ -195,11 +199,8 @@ export class VRUIManager implements IUpdatable {
                 }
 
                 // Update Tab Title with Count
-                if (this.tabPanel) {
-                    const tabIndex = this.tabPanel.tabs.findIndex(t => t.container === roomContainer);
-                    if (tabIndex !== -1) {
-                        this.tabPanel.tabs[tabIndex].name = `Peers (${allPeers.length})`;
-                    }
+                if (this.peersTab) {
+                    this.peersTab.label.text = `Peers (${allPeers.length})`;
                 }
 
                 const totalPages = Math.max(1, Math.ceil(allPeers.length / playersPerPage));
@@ -330,7 +331,8 @@ export class VRUIManager implements IUpdatable {
     private addSystemTab() {
         if (!this.tabPanel) return;
 
-        const systemContainer = this.tabPanel.addTab('Settings');
+        this.systemTab = this.tabPanel.addTab('Settings');
+        const systemContainer = this.systemTab.container;
 
         // Can inject basic buttons for toggling voice or leaving
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
@@ -377,8 +379,8 @@ export class VRUIManager implements IUpdatable {
      */
     public addTab(title: string, buildCallback: (container: UIElement) => void): void {
         if (!this.tabPanel) return;
-        const container = this.tabPanel.addTab(title);
-        buildCallback(container);
+        const tab = this.tabPanel.addTab(title);
+        buildCallback(tab.container);
         this.tablet?.ui.markDirty();
     }
 
