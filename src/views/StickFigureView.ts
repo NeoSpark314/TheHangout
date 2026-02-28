@@ -4,6 +4,8 @@ import { IVector3, IPose } from '../interfaces/IMath';
 import { GameContext } from '../core/GameState';
 import { HumanoidState } from '../models/HumanoidState';
 import { HumanoidJointName } from '../interfaces/IHumanoid';
+import { NameTagComponent } from './avatar/components/NameTagComponent';
+import { VoiceAudioComponent } from './avatar/components/VoiceAudioComponent';
 
 export interface IPlayerViewState {
     position: IVector3;
@@ -23,7 +25,6 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     public isLocal: boolean;
     public headMesh!: THREE.Mesh;
     private currentHeadHeight: number = 1.7;
-    private _lastName: string = '';
 
     private accentMaterial!: THREE.MeshBasicMaterial;
     private cyberMaterial!: THREE.MeshBasicMaterial;
@@ -60,7 +61,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private handMeshes: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private handCylinders: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private wristMeshes: { left: THREE.Mesh, right: THREE.Mesh };
-    private nameTag: THREE.Sprite | null = null;
+    private nameTagComponent!: NameTagComponent;
 
     static HAND_INDICES = [
         0, 1, 1, 2, 2, 3, 3, 4,
@@ -70,13 +71,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         0, 20, 20, 21, 21, 22, 22, 23, 23, 24
     ];
 
-    private positionalAudio: THREE.PositionalAudio | null = null;
-    private audioAnalyser: THREE.AudioAnalyser | null = null;
-    private audioElement: HTMLAudioElement | null = null;
-    private mediaSource: MediaSource | null = null;
-    private sourceBuffer: SourceBuffer | null = null;
-    private bufferQueue: Uint8Array[] = [];
-    private manuallyMuted: boolean = false;
+    private voiceAudio!: VoiceAudioComponent;
 
     constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -93,209 +88,24 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         };
 
         this._buildGeometry();
-        this._setupAudio();
-    }
-
-    private _setupAudio(): void {
-        const render = this.context.managers.render;
-        if (render?.audioListener) {
-            this.positionalAudio = new THREE.PositionalAudio(render.audioListener);
-            this.positionalAudio.setRefDistance(3);
-            this.positionalAudio.setRolloffFactor(1.0);
-            this.positionalAudio.setDistanceModel('exponential');
-            // Attach audio to the head so it comes from their mouth
-            this.headMesh.add(this.positionalAudio);
-        }
+        this.nameTagComponent = new NameTagComponent(this.mesh, () => this.headMesh.position.y, this.color);
+        this.voiceAudio = new VoiceAudioComponent(this.headMesh, this.context.managers.render?.audioListener, this.isLocal);
     }
 
     public attachVoiceStream(stream: MediaStream): void {
-        if (this.positionalAudio) {
-            try {
-                if (!this.audioElement) {
-                    this.audioElement = new Audio();
-                    this.audioElement.muted = this.manuallyMuted || true; // Native stream starts muted unless explicitly allowed
-                }
-                this.audioElement.srcObject = stream;
-                this.audioElement.play().catch(e => console.warn('[StickFigureView] Auto-play blocked for hidden audio:', e));
-
-                this.positionalAudio.setMediaStreamSource(stream);
-
-                // Setup analyser for mouth animation
-                this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
-            } catch (e) {
-                console.error('[StickFigureView] Failed to set media stream source:', e);
-            }
-        }
+        this.voiceAudio.attachVoiceStream(stream);
     }
 
     public attachAudioChunk(data: { chunk: string, isHeader: boolean } | string): void {
-        if (!this.positionalAudio) return;
-
-        let base64Chunk: string;
-        let isHeader = false;
-
-        if (typeof data === 'string') {
-            base64Chunk = data;
-        } else {
-            base64Chunk = data.chunk;
-            isHeader = data.isHeader;
-        }
-
-        // If we get a header and we already have a media source, it means the stream was restarted.
-        // We MUST re-create the media source to start fresh with the new header.
-        if (isHeader && this.mediaSource) {
-            console.log('[StickFigureView] New audio header received, resetting MediaSource.');
-            this.cleanupAudioSource();
-        }
-
-        if (!this.mediaSource) {
-            this.mediaSource = new MediaSource();
-            if (!this.audioElement) {
-                this.audioElement = new Audio();
-                this.audioElement.autoplay = true;
-                this.audioElement.muted = this.manuallyMuted;
-            }
-
-            const blobUrl = URL.createObjectURL(this.mediaSource);
-            this.audioElement.src = blobUrl;
-            // Removed premature play() call that was causing NotSupportedError
-
-            if (!this.audioAnalyser) {
-                console.log(`[StickFigureView] Connecting AudioElement to PositionalAudio for ${this.isLocal ? 'local' : 'remote'} player`);
-                this.positionalAudio.setMediaElementSource(this.audioElement as HTMLMediaElement);
-                this.audioAnalyser = new THREE.AudioAnalyser(this.positionalAudio, 32);
-            }
-
-            this.mediaSource.addEventListener('sourceopen', () => {
-                const mimeTypes = [
-                    'audio/webm;codecs=opus',
-                    'audio/webm',
-                    'audio/mpeg'
-                ];
-                let selectedMime = '';
-                for (const mime of mimeTypes) {
-                    if (MediaSource.isTypeSupported(mime)) {
-                        selectedMime = mime;
-                        break;
-                    }
-                }
-
-                if (selectedMime) {
-                    console.log(`[StickFigureView] MediaSource opened. Adding SourceBuffer for: ${selectedMime}`);
-                    this.sourceBuffer = this.mediaSource!.addSourceBuffer(selectedMime);
-                    this.sourceBuffer.mode = 'sequence'; // CRITICAL: ignore container timestamps for live relay
-                    this.sourceBuffer.addEventListener('updateend', () => this.processAudioQueue());
-                    this.processAudioQueue();
-                } else {
-                    console.error('[StickFigureView] No supported MIME type found for MediaSource');
-                }
-            });
-        }
-
-        try {
-            const binaryStr = atob(base64Chunk);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
-            }
-
-            this.bufferQueue.push(bytes);
-            if (this.sourceBuffer && !this.sourceBuffer.updating) {
-                this.processAudioQueue();
-            }
-        } catch (e) { /* ignore parse error */ }
-    }
-
-    private cleanupAudioSource(): void {
-        if (this.mediaSource) {
-            if (this.mediaSource.readyState === 'open' && this.sourceBuffer) {
-                try {
-                    if (this.sourceBuffer.updating) {
-                        this.sourceBuffer.abort();
-                    }
-                    this.mediaSource.removeSourceBuffer(this.sourceBuffer);
-                } catch (e) {
-                    console.warn('[StickFigureView] Error removing SourceBuffer:', e);
-                }
-            }
-            this.mediaSource = null;
-            this.sourceBuffer = null;
-            this.bufferQueue = [];
-        }
-        if (this.audioElement) {
-            this.audioElement.pause();
-            const oldSrc = this.audioElement.src;
-            this.audioElement.src = '';
-            this.audioElement.removeAttribute('src');
-            this.audioElement.load();
-            if (oldSrc && oldSrc.startsWith('blob:')) {
-                URL.revokeObjectURL(oldSrc);
-            }
-        }
-    }
-
-    private processAudioQueue(): void {
-        const canAppend = this.mediaSource &&
-            this.mediaSource.readyState === 'open' &&
-            this.sourceBuffer &&
-            !this.sourceBuffer.updating &&
-            this.bufferQueue.length > 0;
-
-        if (!canAppend) return;
-
-        // Final safety check: is this source buffer still attached?
-        let isAttached = false;
-        try {
-            for (let i = 0; i < this.mediaSource!.sourceBuffers.length; i++) {
-                if (this.mediaSource!.sourceBuffers[i] === this.sourceBuffer) {
-                    isAttached = true;
-                    break;
-                }
-            }
-        } catch (e) { isAttached = false; }
-
-        if (!isAttached) {
-            this.sourceBuffer = null;
-            return;
-        }
-
-        const chunk = this.bufferQueue.shift()!;
-        try {
-            this.sourceBuffer!.appendBuffer(chunk as any);
-        } catch (e) {
-            console.error('[StickFigureView] Error appending buffer:', e);
-            // If we get an error, it might be an invalid state, clear the queue to avoid spin loops
-            this.bufferQueue = [];
-        }
-
-        if (this.audioElement) {
-            const buffered = this.audioElement.buffered;
-            if (buffered.length > 0) {
-                const end = buffered.end(buffered.length - 1);
-
-                // Small catch-up threshold to reduce latency while preventing choppy audio
-                if (end - this.audioElement.currentTime > 0.5) {
-                    this.audioElement.currentTime = end - 0.1;
-                }
-
-                if (this.audioElement.paused) {
-                    this.audioElement.play().catch(err => {
-                        console.warn('[StickFigureView] Auto-play failed:', err);
-                    });
-                }
-            }
-        }
+        this.voiceAudio.attachAudioChunk(data);
     }
 
     public setMuted(muted: boolean): void {
-        this.manuallyMuted = muted;
-        if (this.audioElement) {
-            this.audioElement.muted = muted;
-        }
+        this.voiceAudio.setMuted(muted);
     }
 
     public getAudioLevel(): number {
-        return this.audioAnalyser ? this.audioAnalyser.getAverageFrequency() / 128.0 : 0;
+        return this.voiceAudio.getAudioLevel();
     }
 
     private _buildGeometry(): void {
@@ -603,8 +413,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         }
 
         this._billboardNameTag();
-        if (state.name !== undefined && state.name !== this._lastName) {
-            this._lastName = state.name;
+        if (state.name !== undefined) {
             this.setName(state.name);
         }
 
@@ -634,77 +443,15 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         const colorObj = new THREE.Color(color as any);
         this.accentMaterial.color.copy(colorObj);
         if (this.headOutline) (this.headOutline.material as THREE.LineBasicMaterial).color.copy(colorObj);
-        if (this.nameTag && this._lastName) {
-            this.setName(this._lastName);
-        }
+        this.nameTagComponent.setColor(color);
     }
 
     public setName(name: string): void {
-        if (!name) {
-            if (this.nameTag) {
-                this.mesh.remove(this.nameTag);
-                if (this.nameTag.material.map) {
-                    this.nameTag.material.map.dispose();
-                }
-                this.nameTag.material.dispose();
-                this.nameTag = null;
-            }
-            return;
-        }
-
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d')!;
-        canvas.width = 512;
-        canvas.height = 128;
-
-        // Background
-        context.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        const radius = 30;
-        context.beginPath();
-        context.moveTo(radius, 0);
-        context.lineTo(canvas.width - radius, 0);
-        context.quadraticCurveTo(canvas.width, 0, canvas.width, radius);
-        context.lineTo(canvas.width, canvas.height - radius);
-        context.quadraticCurveTo(canvas.width, canvas.height, canvas.width - radius, canvas.height);
-        context.lineTo(radius, canvas.height);
-        context.quadraticCurveTo(0, canvas.height, 0, canvas.height - radius);
-        context.lineTo(0, radius);
-        context.quadraticCurveTo(0, 0, radius, 0);
-        context.closePath();
-        context.fill();
-
-        context.font = 'bold 70px Inter, Arial, sans-serif';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-
-        const fillStyle = typeof this.color === 'string' && this.color.startsWith('#')
-            ? this.color
-            : '#' + (this.color as number).toString(16).padStart(6, '0');
-
-        context.fillStyle = fillStyle;
-        context.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        context.shadowBlur = 6;
-        context.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-
-        if (this.nameTag) {
-            const oldMap = this.nameTag.material.map;
-            this.nameTag.material = spriteMaterial;
-            if (oldMap) oldMap.dispose();
-        } else {
-            this.nameTag = new THREE.Sprite(spriteMaterial);
-            this.nameTag.scale.set(1.0, 0.25, 1.0);
-            this.mesh.add(this.nameTag);
-        }
-        this._updateNameTagPosition();
+        this.nameTagComponent.setName(name);
     }
 
     private _updateNameTagPosition(): void {
-        if (this.nameTag) {
-            this.nameTag.position.y = this.headMesh.position.y + 0.45;
-        }
+        this.nameTagComponent.updatePosition();
     }
 
     public updatePosture(headHeight: number): void {
@@ -967,22 +714,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
     public destroy(): void {
         this._cleanupMesh();
-        this.cleanupAudioSource();
-        this.audioElement = null;
-
-        if (this.positionalAudio) {
-            try {
-                if (this.positionalAudio.hasPlaybackControl) {
-                    this.positionalAudio.stop();
-                }
-                if (this.positionalAudio.source) {
-                    this.positionalAudio.disconnect();
-                }
-            } catch (e) {
-                // Ignore disconnect errors
-            }
-            this.headMesh.remove(this.positionalAudio);
-        }
+        this.voiceAudio.destroy();
 
         this.mesh.traverse((object) => {
             const mesh = object as THREE.Mesh;
@@ -997,9 +729,6 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
                 }
             }
         });
-        if (this.nameTag) {
-            if (this.nameTag.material.map) this.nameTag.material.map.dispose();
-            this.nameTag.material.dispose();
-        }
+        this.nameTagComponent.destroy();
     }
 }
