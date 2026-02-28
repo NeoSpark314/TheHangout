@@ -4,7 +4,6 @@ import { INPUT_CONFIG } from '../utils/Constants';
 import { IInteractionPointer } from '../interfaces/IPointer';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { RenderManager } from '../managers/RenderManager';
-import { XRSystem } from '../systems/XRSystem';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IXRHandTrackedPayload, IXRHeadTrackedPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
@@ -166,7 +165,6 @@ export class InputManager implements IUpdatable {
 
     private _processInteractions(): void {
         const render = this.context.managers.render;
-        const xr = this.context.managers.xr;
 
         const currentStates = {
             left: { isSqueezing: false, isInteracting: false, triggerValue: 0 },

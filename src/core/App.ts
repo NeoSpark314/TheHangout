@@ -12,7 +12,6 @@ import { InputManager } from '../input/InputManager';
 import { RoomManager } from '../managers/RoomManager';
 import { AudioManager } from '../managers/AudioManager';
 import { InteractionSystem } from '../systems/InteractionSystem';
-import { XRSystem } from '../systems/XRSystem';
 import { AssetManager } from '../managers/AssetManager';
 import { DrawingManager } from '../managers/DrawingManager';
 import { TrackingManager } from '../managers/TrackingManager';
@@ -91,7 +90,6 @@ export class App {
         this.context.setManager('assets', new AssetManager(this.context));
         this.context.setManager('drawing', new DrawingManager(this.context.managers.render.scene, this.context));
         this.context.setManager('animation', new AnimationSystem());
-        this.context.setManager('xr', new XRSystem());
         this.context.setManager('interaction', new InteractionSystem(this.context));
         this.context.setManager('vrUi', new VRUIManager(this.context));
 

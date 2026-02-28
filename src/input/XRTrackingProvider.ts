@@ -3,6 +3,8 @@ import { GameContext } from '../core/GameState';
 import { ITrackingProvider, ITrackingState } from '../interfaces/ITrackingProvider';
 import { IHandState } from '../interfaces/ITrackingProvider';
 import { HandState } from '../models/HandState';
+import { IVector3, IQuaternion } from '../interfaces/IMath';
+import { RenderManager } from '../managers/RenderManager';
 
 const JOINT_NAMES: XRHandJoint[] = [
     "wrist",
@@ -16,6 +18,9 @@ const JOINT_NAMES: XRHandJoint[] = [
 export class XRTrackingProvider implements ITrackingProvider {
     public id = 'xr';
     private state: ITrackingState;
+    private tempVec = new THREE.Vector3();
+    private tempQuat = new THREE.Quaternion();
+
     constructor(private context: GameContext) {
         this.state = this.createInitialState();
     }
@@ -54,7 +59,6 @@ export class XRTrackingProvider implements ITrackingProvider {
     public update(delta: number, frame?: XRFrame): void {
         const managers = this.context.managers;
         const render = managers.render;
-        const xr = managers.xr;
 
         if (!render.isXRPresenting()) return;
 
@@ -63,8 +67,8 @@ export class XRTrackingProvider implements ITrackingProvider {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !xrFrame || !referenceSpace) return;
 
-        // 1. Head Tracking (Viewer Pose) - delegating to XRSystem which uses RenderManager.camera
-        const viewerPose = xr.getViewerWorldPose(render, xrFrame, referenceSpace);
+        // 1. Head Tracking (Viewer Pose) - polling directly from RenderManager.camera
+        const viewerPose = this.getViewerWorldPose(render, xrFrame, referenceSpace);
         this.state.head = {
             pose: {
                 position: viewerPose.position,
@@ -98,7 +102,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                     const pose = joint ? xrFrame.getJointPose(joint, referenceSpace) : null;
 
                     if (pose) {
-                        const worldPose = xr.rawPoseToWorldPose(pose, render.cameraGroup);
+                        const worldPose = this.rawPoseToWorldPose(pose, render.cameraGroup);
                         handState.joints[j].pose.position = worldPose.position;
                         handState.joints[j].pose.quaternion = worldPose.quaternion;
 
@@ -115,7 +119,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                     // Pointer Pose for Hand Tracking: Use targetRaySpace (the pinch ray)
                     const pointerPose = source.targetRaySpace ? xrFrame.getPose(source.targetRaySpace, referenceSpace) : null;
                     if (pointerPose) {
-                        const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
+                        const worldPointerPose = this.rawPoseToWorldPose(pointerPose, render.cameraGroup);
                         handState.pointerPose.position = worldPointerPose.position;
                         handState.pointerPose.quaternion = worldPointerPose.quaternion;
                     }
@@ -129,7 +133,7 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                 if (pose) {
                     // Valid pose found in frame
-                    const worldPose = xr.rawPoseToWorldPose(pose, render.cameraGroup);
+                    const worldPose = this.rawPoseToWorldPose(pose, render.cameraGroup);
                     handState.active = true;
                     handState.pose.position = worldPose.position;
                     handState.pose.quaternion = worldPose.quaternion;
@@ -139,7 +143,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                     if (source.targetRaySpace) {
                         const pointerPose = xrFrame.getPose(source.targetRaySpace, referenceSpace);
                         if (pointerPose) {
-                            const worldPointerPose = xr.rawPoseToWorldPose(pointerPose, render.cameraGroup);
+                            const worldPointerPose = this.rawPoseToWorldPose(pointerPose, render.cameraGroup);
                             handState.pointerPose.position = worldPointerPose.position;
                             handState.pointerPose.quaternion = worldPointerPose.quaternion;
                         }
@@ -163,6 +167,47 @@ export class XRTrackingProvider implements ITrackingProvider {
 
     public getState(): ITrackingState {
         return this.state;
+    }
+
+    private getViewerWorldPose(
+        render: RenderManager,
+        xrFrame: XRFrame,
+        referenceSpace: XRReferenceSpace
+    ): { position: IVector3, quaternion: IQuaternion, yaw: number } {
+        // Source of Truth for head: Three.js camera (already synced to WebXR viewer pose)
+        render.camera.getWorldPosition(this.tempVec);
+        render.camera.getWorldQuaternion(this.tempQuat);
+        const euler = new THREE.Euler().setFromQuaternion(this.tempQuat, 'YXZ');
+
+        return {
+            position: { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z },
+            quaternion: { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w },
+            yaw: euler.y
+        };
+    }
+
+    private rawPoseToWorldPose(
+        pose: XRPose,
+        cameraGroup: THREE.Group
+    ): { position: IVector3, quaternion: IQuaternion } {
+        const orientation = pose.transform.orientation;
+        const position = pose.transform.position;
+
+        this.tempVec.set(position.x, position.y, position.z);
+        this.tempQuat.set(orientation.x, orientation.y, orientation.z, orientation.w);
+
+        // Transform from reference space to world space using the cameraGroup (XR Origin)
+        this.tempVec.applyMatrix4(cameraGroup.matrixWorld);
+
+        // Combine rotations: cameraGroup world orientation * pose orientation
+        const groupQuat = new THREE.Quaternion();
+        cameraGroup.getWorldQuaternion(groupQuat);
+        this.tempQuat.premultiply(groupQuat);
+
+        return {
+            position: { x: this.tempVec.x, y: this.tempVec.y, z: this.tempVec.z },
+            quaternion: { x: this.tempQuat.x, y: this.tempQuat.y, z: this.tempQuat.z, w: this.tempQuat.w }
+        };
     }
 
     public destroy(): void { }
