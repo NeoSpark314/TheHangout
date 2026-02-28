@@ -16,6 +16,7 @@ export class VRUIManager implements IUpdatable {
 
     private peersTab: any = null; // Store UITab handle
     private systemTab: any = null;
+    private refreshPeersList: (() => void) | null = null;
 
     constructor(private context: GameContext) { }
 
@@ -151,6 +152,10 @@ export class VRUIManager implements IUpdatable {
             pageLabel.textAlign = 'center';
 
             const renderList = () => {
+                if (this.peersTab && !this.peersTab.container.children.includes(listContainer)) {
+                    // If the list is no longer in the container (tab switched), skip
+                    return;
+                }
                 listContainer.children = []; // Clear current list
 
                 // Gather all players (Local + Remote)
@@ -280,6 +285,29 @@ export class VRUIManager implements IUpdatable {
 
                 this.tablet?.ui.markDirty();
             };
+
+            this.refreshPeersList = renderList;
+
+            // Reactive updates
+            const onPeerUpdate = () => {
+                const isVR = this.context.managers.render?.isXRPresenting();
+                if (this.context.isMenuOpen || isVR) {
+                    renderList();
+                }
+            };
+
+            eventBus.on(EVENTS.VOICE_STATE_UPDATED, onPeerUpdate);
+            eventBus.on(EVENTS.PEER_STATE_UPDATED, onPeerUpdate);
+            eventBus.on(EVENTS.PEER_JOINED_ROOM, onPeerUpdate);
+            eventBus.on(EVENTS.PEER_DISCONNECTED, onPeerUpdate);
+
+            // Periodically refresh for Talking indicators if menu is visible
+            const talkingInterval = setInterval(() => {
+                const isVR = this.context.managers.render?.isXRPresenting();
+                if (this.context.isMenuOpen || isVR) {
+                    renderList();
+                }
+            }, 500);
 
             // 3. Header Controls
             const micBtn = new UIButton("Mic: ON", 240, 10, 380, 60, () => {

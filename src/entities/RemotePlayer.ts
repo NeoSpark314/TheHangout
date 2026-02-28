@@ -47,17 +47,26 @@ export class RemotePlayer extends PlayerEntity {
     }
 
     public applyNetworkState(data: IPlayerEntityState): void {
+        let stateChanged = false;
+
         if (data.n !== undefined && data.n !== this.name) {
             this.name = data.n;
             eventBus.emit(EVENTS.REMOTE_NAME_UPDATED, { peerId: this.peerId, name: this.name });
+            stateChanged = true;
         }
 
         if (data.conf && data.conf.color !== this.avatarColor) {
             this.avatarColor = data.conf.color;
+            stateChanged = true;
         }
 
-        if (data.mic !== undefined) {
+        if (data.mic !== undefined && this.micEnabled !== !!data.mic) {
             this.micEnabled = !!data.mic;
+            stateChanged = true;
+        }
+
+        if (stateChanged) {
+            eventBus.emit(EVENTS.PEER_STATE_UPDATED, this.peerId);
         }
 
         if (data.p) this.targetPosition = { x: data.p[0], y: data.p[1], z: data.p[2] };
