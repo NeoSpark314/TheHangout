@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { EntityFactory } from '../factories/EntityFactory';
 import { GameContext, IRoomConfig } from '../core/GameState';
+import eventBus from '../core/EventBus';
+import { EVENTS } from '../utils/Constants';
+import { PhysicsEntity } from '../entities/PhysicsEntity';
 
 export class PropManager {
     private scene: THREE.Scene;
@@ -11,10 +14,47 @@ export class PropManager {
     private podest: THREE.Group | null = null;
     private decorations: THREE.Group | null = null;
     private hasSpawnedGrabbables: boolean = false;
+    private hasSpawnedDominoes: boolean = false;
+    private drumPads: THREE.Group | null = null;
+    private drumPadMeshes: THREE.Mesh[] = [];
+    private drumPadFlash: number[] = [];
+    private drumPadFreqByHandle: Map<number, { padId: string; frequency: number }> = new Map();
+    private onDrumPadHitHandler: ((data: { padId: string; frequency: number; intensity: number }) => void) | null = null;
+    private onPhysicsCollisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
 
     constructor(scene: THREE.Scene, randomFunc: () => number, private context: GameContext) {
         this.scene = scene;
         this.random = randomFunc;
+
+        this.onDrumPadHitHandler = (data) => {
+            const idx = this.parsePadIndex(data.padId);
+            if (idx >= 0 && idx < this.drumPadFlash.length) {
+                this.drumPadFlash[idx] = Math.max(this.drumPadFlash[idx], Math.min(1.0, data.intensity * 1.2));
+            }
+        };
+        eventBus.on(EVENTS.DRUM_PAD_HIT, this.onDrumPadHitHandler);
+
+        this.onPhysicsCollisionStartedHandler = (data) => {
+            const padA = this.drumPadFreqByHandle.get(data.handleA);
+            const padB = this.drumPadFreqByHandle.get(data.handleB);
+            if (!padA && !padB) return;
+
+            const hit = padA || padB!;
+            const entityId = padA ? data.entityBId : data.entityAId;
+            if (!entityId) return;
+            const entity = this.context.managers.entity.getEntity(entityId) as PhysicsEntity | undefined;
+            if (!entity || entity.type !== 'PHYSICS_PROP') return;
+
+            const v = entity.rigidBody.linvel();
+            const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
+            const intensity = Math.max(0.08, Math.min(1.0, speed * 0.22));
+            eventBus.emit(EVENTS.DRUM_PAD_HIT, {
+                padId: hit.padId,
+                frequency: hit.frequency,
+                intensity
+            });
+        };
+        eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
     }
 
     public applyConfig(config: IRoomConfig): void {
@@ -25,7 +65,10 @@ export class PropManager {
             if (!this.hologram) this.createHologram();
             if (!this.podest) this.createPodest();
             if (!this.decorations) this.createDecorations();
+            if (!this.drumPads) this.createDrumPads();
             if (!this.hasSpawnedGrabbables) this.createGrabbables();
+            // Domino run disabled for now until grab/interaction shape tuning is improved.
+            // if (!this.hasSpawnedDominoes) this.createDominoRun();
         } catch (e) {
             console.error('[PropManager] applyConfig crashed:', e);
         }
@@ -36,6 +79,15 @@ export class PropManager {
             this.hologram.rotation.y += delta * 1.5;
             this.hologram.rotation.z += delta * 0.5;
             this.hologram.position.y = 0.5 + Math.sin(Date.now() * 0.002) * 0.05;
+        }
+
+        for (let i = 0; i < this.drumPadMeshes.length; i++) {
+            const mesh = this.drumPadMeshes[i];
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            const flash = this.drumPadFlash[i] || 0;
+            const target = 0.18 + flash * 1.3;
+            mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.25;
+            this.drumPadFlash[i] = Math.max(0, flash - delta * 2.2);
         }
     }
 
@@ -188,6 +240,100 @@ export class PropManager {
         }
     }
 
+    private createDominoRun(): void {
+        this.hasSpawnedDominoes = true;
+
+        const base = new THREE.Vector3(-3.5, 0.35, -2.6);
+        const dominoCount = 24;
+        const step = 0.28;
+        const half = { x: 0.03, y: 0.13, z: 0.09 };
+
+        for (let i = 0; i < dominoCount; i++) {
+            const lane = Math.floor(i / 8);
+            const laneDir = lane % 2 === 0 ? 1 : -1;
+            const laneIndex = i % 8;
+            const x = base.x + laneDir * (laneIndex * step);
+            const z = base.z + lane * 0.45;
+            const yaw = laneDir > 0 ? 0 : Math.PI;
+
+            const geo = new THREE.BoxGeometry(half.x * 2, half.y * 2, half.z * 2);
+            const hue = (i / dominoCount) * 0.75;
+            const color = new THREE.Color().setHSL(hue, 1.0, 0.56);
+            const mat = new THREE.MeshStandardMaterial({
+                color,
+                emissive: color.clone().multiplyScalar(0.55),
+                emissiveIntensity: 0.3,
+                metalness: 0.35,
+                roughness: 0.45
+            });
+
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, base.y, z);
+            mesh.rotation.y = yaw;
+            mesh.add(new THREE.LineSegments(
+                new THREE.EdgesGeometry(geo),
+                new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })
+            ));
+
+            const id = `domino-${i}`;
+            EntityFactory.createGrabbable(
+                this.context,
+                id,
+                0.12,
+                { x, y: base.y, z },
+                mesh,
+                half
+            );
+        }
+    }
+
+    private createDrumPads(): void {
+        this.drumPads = new THREE.Group();
+        this.drumPads.position.set(0, 0, 0);
+
+        const notes = [220, 247, 277, 294, 330, 370, 415, 440];
+        const padCount = notes.length;
+        const radius = 1.85;
+        const center = new THREE.Vector3(0, 0.08, -3.0);
+
+        for (let i = 0; i < padCount; i++) {
+            const t = (i / (padCount - 1));
+            const angle = THREE.MathUtils.lerp(-0.95, 0.95, t);
+            const px = center.x + Math.sin(angle) * radius;
+            const pz = center.z + Math.cos(angle) * radius;
+            const padY = center.y;
+
+            const color = new THREE.Color().setHSL(0.72 - t * 0.6, 1.0, 0.54);
+            const geo = new THREE.BoxGeometry(0.42, 0.08, 0.42);
+            const mat = new THREE.MeshStandardMaterial({
+                color,
+                emissive: color.clone().multiplyScalar(0.8),
+                emissiveIntensity: 0.18,
+                metalness: 0.2,
+                roughness: 0.38
+            });
+            const pad = new THREE.Mesh(geo, mat);
+            pad.position.set(px, padY, pz);
+            pad.add(new THREE.LineSegments(
+                new THREE.EdgesGeometry(geo),
+                new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.45 })
+            ));
+            this.drumPads.add(pad);
+            this.drumPadMeshes.push(pad);
+            this.drumPadFlash.push(0);
+
+            const collider = this.context.managers.physics.createStaticCuboidCollider(
+                0.21, 0.04, 0.21,
+                { x: px, y: padY, z: pz }
+            );
+            if (collider) {
+                this.drumPadFreqByHandle.set(collider.handle, { padId: `pad-${i}`, frequency: notes[i] });
+            }
+        }
+
+        if (this.scene) this.scene.add(this.drumPads);
+    }
+
     public clearProcedural(): void {
         const remove = (obj: THREE.Object3D | null) => {
             if (!obj || !this.scene) return;
@@ -203,8 +349,19 @@ export class PropManager {
         };
         remove(this.podest);
         remove(this.decorations);
+        remove(this.drumPads);
         this.podest = null;
         this.decorations = null;
+        this.drumPads = null;
+        this.drumPadMeshes = [];
+        this.drumPadFlash = [];
+        this.drumPadFreqByHandle.clear();
+    }
+
+    private parsePadIndex(padId: string): number {
+        if (!padId.startsWith('pad-')) return -1;
+        const v = Number.parseInt(padId.slice(4), 10);
+        return Number.isFinite(v) ? v : -1;
     }
 
     public spawnGrabbableCube(position?: { x: number, y: number, z: number }): void {

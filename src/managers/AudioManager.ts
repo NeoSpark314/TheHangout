@@ -53,6 +53,12 @@ export class AudioManager {
                 SoundSynth.playCollision(this.ctx, data.intensity);
             }
         });
+
+        eventBus.on(EVENTS.DRUM_PAD_HIT, (data: { frequency: number, intensity: number }) => {
+            if (this.isInitialized && this.ctx) {
+                SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity);
+            }
+        });
     }
 
     public update(delta: number): void {

@@ -18,6 +18,11 @@ export interface IGrabbable {
     getGrabRoots?(): THREE.Object3D[];
 
     /**
+     * Optional approximate radius (meters) used for near-grab sphere overlap tests.
+     */
+    getGrabRadius?(): number;
+
+    /**
      * Called every frame by the holder to sync the object's pose.
      */
     updateGrabbedPose(pose: IPose): void;

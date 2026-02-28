@@ -42,6 +42,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     public isGrabbable: boolean;
     public spawnPosition: IVector3 | null;
     public heldBy: string | null = null;
+    private grabRadius: number;
 
     private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
@@ -72,6 +73,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.view = options.view || null;
         this.isGrabbable = options.grabbable || false;
         this.spawnPosition = options.spawnPosition ? { ...options.spawnPosition } : null;
+        this.grabRadius = Math.max(0.03, options.grabRadius ?? 0.06);
 
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
@@ -200,6 +202,10 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         if (!this.rigidBody) return;
         this.heldBy = null;
         this.releasePhysicsOwnership(velocity);
+    }
+
+    public getGrabRadius(): number {
+        return this.grabRadius;
     }
 
     public updateGrabbedPose(pose: IPose): void {

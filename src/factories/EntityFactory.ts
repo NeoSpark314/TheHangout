@@ -20,7 +20,14 @@ export class EntityFactory {
         this.register('PHYSICS_PROP', (context, id, config) => {
             // For remote discovery, we might not have the mesh yet
             // If config.mesh is missing, createGrabbable handles it or we use a default
-            return this.createGrabbable(context, id, config.size || 0.12, config.position || { x: 0, y: 0, z: 0 }, config.mesh);
+            return this.createGrabbable(
+                context,
+                id,
+                config.size || 0.12,
+                config.position || { x: 0, y: 0, z: 0 },
+                config.mesh,
+                config.halfExtents
+            );
         });
         this.register('PEN', (context, id, config) => this.createPen(context, id, config));
     }
@@ -59,7 +66,14 @@ export class EntityFactory {
         return entity;
     }
 
-    public static createGrabbable(context: GameContext, id: string, size: number, position: IVector3, mesh: THREE.Mesh): PhysicsEntity | null {
+    public static createGrabbable(
+        context: GameContext,
+        id: string,
+        size: number,
+        position: IVector3,
+        mesh: THREE.Mesh,
+        halfExtents?: IVector3
+    ): PhysicsEntity | null {
         const managers = context.managers;
         const render = managers.render;
 
@@ -76,7 +90,7 @@ export class EntityFactory {
             view.addToInteractionGroup(render.interactionGroup);
         }
 
-        return managers.physics.createGrabbable(id, size, position, mesh, view);
+        return managers.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
     }
 
     public static createPen(context: GameContext, id: string, config: any): PenEntity {

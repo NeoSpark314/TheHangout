@@ -51,6 +51,7 @@ export class PhysicsManager {
     private pendingReleaseMinHoldMs: number = 220;
     private pendingReleaseMaxHoldMs: number = 900;
     private touchQueryShape: RAPIER.Ball = new RAPIER.Ball(0.55);
+    private grabQueryShape: RAPIER.Ball = new RAPIER.Ball(0.05);
     private readonly identityRotation = { x: 0, y: 0, z: 0, w: 1 };
     private touchQueryHitsThisFrame: number = 0;
     private touchQueryHitsAccum: number = 0;
@@ -115,7 +116,14 @@ export class PhysicsManager {
         return rigidBody;
     }
 
-    public createGrabbable(id: string, size: number, position: IVector3, mesh: any, view?: IView<any>): PhysicsEntity | null {
+    public createGrabbable(
+        id: string,
+        size: number,
+        position: IVector3,
+        mesh: any,
+        view?: IView<any>,
+        halfExtents?: IVector3
+    ): PhysicsEntity | null {
         if (!this.world) return null;
 
         const entityId = id || `grabbable-${this.nextPhysicsId++}`;
@@ -123,7 +131,10 @@ export class PhysicsManager {
         // If no mesh or view was provided (remote discovery), create a default one
         let finalView = view;
         if (!finalView) {
-            const geo = new THREE.BoxGeometry(size, size, size);
+            const hx = halfExtents?.x ?? (size / 2);
+            const hy = halfExtents?.y ?? (size / 2);
+            const hz = halfExtents?.z ?? (size / 2);
+            const geo = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
             const mat = new THREE.MeshStandardMaterial({ color: 0x888888 });
             const defaultMesh = new THREE.Mesh(geo, mat);
             defaultMesh.position.set(position.x, position.y, position.z);
@@ -134,7 +145,9 @@ export class PhysicsManager {
             }
         }
 
-        const hs = size / 2;
+        const hx = halfExtents?.x ?? (size / 2);
+        const hy = halfExtents?.y ?? (size / 2);
+        const hz = halfExtents?.z ?? (size / 2);
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
             .setLinearDamping(0.5)
@@ -143,7 +156,7 @@ export class PhysicsManager {
             .setSleeping(true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
-        const colliderDesc = RAPIER.ColliderDesc.cuboid(hs, hs, hs)
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
             .setRestitution(0.2)
             .setFriction(0.7)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
@@ -152,7 +165,8 @@ export class PhysicsManager {
         const physicsEntity = new PhysicsEntity(this.context, entityId, this.context.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
-            view: finalView
+            view: finalView,
+            grabRadius: Math.max(hx, hy, hz)
         });
         physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
@@ -243,6 +257,54 @@ export class PhysicsManager {
         return this.touchQueryAvgHitsPerFrame;
     }
 
+    public queryNearestPhysicsGrabbable(point: IVector3, gripRadius: number): { entity: PhysicsEntity; distance: number } | null {
+        if (!this.world) return null;
+        this.grabQueryShape.radius = Math.max(0.01, gripRadius);
+
+        let nearestEntity: PhysicsEntity | null = null;
+        let minDistance = Number.POSITIVE_INFINITY;
+
+        this.world.intersectionsWithShape(
+            { x: point.x, y: point.y, z: point.z },
+            this.identityRotation,
+            this.grabQueryShape,
+            (collider) => {
+                const entity = this.colliderToEntity.get(collider.handle);
+                if (!entity || entity.isDestroyed || !entity.isGrabbable || !!entity.heldBy) return true;
+
+                const projection = collider.projectPoint({ x: point.x, y: point.y, z: point.z }, true);
+                if (!projection) return true;
+
+                const dx = projection.point.x - point.x;
+                const dy = projection.point.y - point.y;
+                const dz = projection.point.z - point.z;
+                const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestEntity = entity;
+                }
+                return true;
+            }
+        );
+
+        if (!nearestEntity || minDistance > gripRadius) return null;
+        return { entity: nearestEntity, distance: minDistance };
+    }
+
+    public createStaticCuboidCollider(hx: number, hy: number, hz: number, position: IVector3): RAPIER.Collider | null {
+        if (!this.world) return null;
+        const body = this.world.createRigidBody(
+            RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
+        );
+        const collider = this.world.createCollider(
+            RAPIER.ColliderDesc.cuboid(hx, hy, hz).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+            body
+        );
+        this.registerDebugBody(`static-cuboid-${this.nextPhysicsId++}`, body, collider);
+        return collider;
+    }
+
     private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsEntity): void {
         const handle = rigidBody.handle;
         const existing = this.debugBodies.get(handle);
@@ -281,14 +343,23 @@ export class PhysicsManager {
         this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
             const a = this.colliderToEntity.get(handle1);
             const b = this.colliderToEntity.get(handle2);
-            if (!a || !b) return;
-
-            const key = this.contactKey(handle1, handle2);
-            if (started) {
-                this.activePropContacts.set(key, { a: handle1, b: handle2 });
-            } else {
-                this.activePropContacts.delete(key);
+            if (a && b) {
+                const key = this.contactKey(handle1, handle2);
+                if (started) {
+                    this.activePropContacts.set(key, { a: handle1, b: handle2 });
+                } else {
+                    this.activePropContacts.delete(key);
+                }
             }
+
+            if (!started) return;
+
+            eventBus.emit(EVENTS.PHYSICS_COLLISION_STARTED, {
+                handleA: handle1,
+                handleB: handle2,
+                entityAId: a?.id || null,
+                entityBId: b?.id || null
+            });
         });
     }
 
@@ -398,4 +469,5 @@ export class PhysicsManager {
         this.touchQueryAvgAccumulatorSec = 0;
         this.touchQueryHitsByEntityAccum.clear();
     }
+
 }

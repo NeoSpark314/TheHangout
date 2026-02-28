@@ -14,7 +14,7 @@ import { IHandIntentPayload } from '../interfaces/IIntents';
  * Works purely on logical handStates (no pointer checks required).
  */
 export class GrabSkill extends Skill {
-    private grabRadius: number = 0.1;
+    private grabRadius: number = 0.05;
 
     private heldObjects: Map<string, { entity: IGrabbable, offsetPos: THREE.Vector3, offsetQuat: THREE.Quaternion }> = new Map();
     private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { IInteractable } from '../interfaces/IInteractable';
 import { GameContext } from '../core/GameState';
 import { isGrabbable, isInteractable } from '../utils/TypeGuards';
+import { EntityType } from '../interfaces/IEntityState';
 
 export class InteractionSystem {
     constructor(private context: GameContext) {
@@ -46,9 +47,20 @@ export class InteractionSystem {
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
+        const physicsHit = this.context.managers.physics?.queryNearestPhysicsGrabbable(
+            { x: point.x, y: point.y, z: point.z },
+            maxDist
+        );
+        if (physicsHit && isInteractable(physicsHit.entity)) {
+            nearest = physicsHit.entity as unknown as IInteractable;
+            minDist = physicsHit.distance;
+        }
+
         for (const entity of this.context.managers.entity.entities.values()) {
+            if (entity.type === EntityType.PHYSICS_PROP) continue;
             // Check if it's grabbable, interactable and NOT currently held
             if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
+                const entityRadius = this.getEntityGrabRadius(entity as unknown as { getGrabRadius?: () => number });
                 // Check if the entity provides specific grab handles
                 const grabRoots = (entity.getGrabRoots && typeof entity.getGrabRoots === 'function')
                     ? entity.getGrabRoots() : null;
@@ -57,10 +69,11 @@ export class InteractionSystem {
                     for (const grabRoot of grabRoots) {
                         grabRoot.updateMatrixWorld(true);
                         grabRoot.getWorldPosition(this.tempVec);
-                        const dist = point.distanceTo(this.tempVec);
+                        const rootRadius = Math.max(entityRadius, this.getObjectGrabRadius(grabRoot));
+                        const overlapDist = point.distanceTo(this.tempVec) - rootRadius;
 
-                        if (dist < minDist) {
-                            minDist = dist;
+                        if (overlapDist <= maxDist && overlapDist < minDist) {
+                            minDist = overlapDist;
                             nearest = entity;
                         }
                     }
@@ -73,10 +86,11 @@ export class InteractionSystem {
                     // Ensure the world matrix is up to date for this frame
                     mesh.updateMatrixWorld(true);
                     mesh.getWorldPosition(this.tempVec);
-                    const dist = point.distanceTo(this.tempVec);
+                    const rootRadius = Math.max(entityRadius, this.getObjectGrabRadius(mesh));
+                    const overlapDist = point.distanceTo(this.tempVec) - rootRadius;
 
-                    if (dist < minDist) {
-                        minDist = dist;
+                    if (overlapDist <= maxDist && overlapDist < minDist) {
+                        minDist = overlapDist;
                         nearest = entity;
                     }
                 }
@@ -87,4 +101,44 @@ export class InteractionSystem {
     }
 
     private tempVec = new THREE.Vector3();
+    private tempScale = new THREE.Vector3();
+    private tempBox = new THREE.Box3();
+    private grabRadiusCache = new Map<string, number>();
+
+    private getEntityGrabRadius(entity: { getGrabRadius?: () => number }): number {
+        const r = entity.getGrabRadius?.();
+        if (typeof r === 'number' && Number.isFinite(r)) {
+            return Math.max(0.01, r);
+        }
+        return 0.05;
+    }
+
+    private getObjectGrabRadius(object: THREE.Object3D): number {
+        const cached = this.grabRadiusCache.get(object.uuid);
+        if (cached !== undefined) return cached;
+
+        let radius = 0.05;
+        const mesh = object as THREE.Mesh;
+        if ((mesh as any).isMesh && mesh.geometry) {
+            const geo = mesh.geometry as THREE.BufferGeometry;
+            if (!geo.boundingSphere) {
+                geo.computeBoundingSphere();
+            }
+            if (geo.boundingSphere) {
+                object.getWorldScale(this.tempScale);
+                const s = Math.max(Math.abs(this.tempScale.x), Math.abs(this.tempScale.y), Math.abs(this.tempScale.z), 1e-6);
+                radius = Math.max(0.01, geo.boundingSphere.radius * s);
+            }
+        } else {
+            this.tempBox.setFromObject(object);
+            this.tempBox.getSize(this.tempScale);
+            const d = Math.max(this.tempScale.x, this.tempScale.y, this.tempScale.z);
+            if (Number.isFinite(d) && d > 0) {
+                radius = d * 0.5;
+            }
+        }
+
+        this.grabRadiusCache.set(object.uuid, radius);
+        return radius;
+    }
 }

@@ -63,4 +63,32 @@ export class SoundSynth {
         osc.start();
         osc.stop(now + 0.05);
     }
+
+    public static playPadTone(ctx: AudioContext, freq: number, intensity: number = 0.5): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.5), now + 0.18);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(3200, now);
+        filter.frequency.exponentialRampToValueAtTime(700, now + 0.18);
+
+        const vol = Math.min(0.35, Math.max(0.06, intensity * 0.18));
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.22);
+    }
 }
