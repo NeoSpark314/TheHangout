@@ -62,13 +62,17 @@ The `App` class manages the startup sequence, ensuring all managers are register
 ```
 ├── src/
 │   ├── core/           # App, GameEngine, EventBus, GameContext
-│   ├── entities/       # State Owners: LocalPlayer, PhysicsEntity, PenEntity
-│   ├── interfaces/     # Strict Contracts: IUpdatable, IEntity, IView, IEntityState, INetworkPacket
-│   ├── managers/       # Orchestrators: Render, Network, Physics, Assets, Drawing
-│   ├── network/        # Messaging: Dispatcher, Synchronizer, PacketHandlers
+│   ├── entities/       # Logic Owners: LocalPlayer, PhysicsEntity, PenEntity, TabletEntity
+│   ├── factories/      # Object creation: EntityFactory
 │   ├── input/          # Hardware Input Layers: Keyboard, Gamepad, XR, Joystick
-│   ├── systems/        # Logic Hubs: XRSystem, InteractionSystem
-│   ├── views/          # Visuals: StickFigureView, PhysicsPropView, PenView
-│   └── utils/          # Math, Constants, HostKeepalive
-└── vite.config.js
+│   ├── interfaces/     # Strict Contracts: IUpdatable, IEntity, IView, IEntityState, IPose
+│   ├── managers/       # Orchestrators: Render, Network, Physics, Assets, VRUI
+│   ├── models/         # Pure Data Models: HandState
+│   ├── network/        # Messaging: Dispatcher, Synchronizer, PacketHandlers
+│   ├── server/         # Tiny local Node/Bun relay server scripts
+│   ├── skills/         # Action logic modules: MovementSkill, GrabSkill, UIPointerSkill
+│   ├── systems/        # Logic Hubs: InteractionSystem, AnimationSystem
+│   ├── views/          # Three.js Visuals: StickFigureView, PhysicsPropView, CanvasUI
+│   └── utils/          # Math, Constants, GestureUtils
+└── vite.config.ts
 ```
