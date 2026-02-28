@@ -183,7 +183,11 @@ export class DebugRenderManager implements IUpdatable {
             const owner = body.ownerId || 'host';
             const authority = body.isAuthority ? 'local' : 'remote';
             const sleepState = isSleeping ? 'sleeping' : 'awake';
-            const labelText = `${body.id}\nowner: ${owner}\nauth: ${authority}\nstate: ${sleepState}`;
+            const sim = body.isAuthority ? 'auth' : 'proxy';
+            const shortId = this.compactId(body.id, 14);
+            const shortOwner = this.compactId(owner, 12);
+            const sleep = isSleeping ? 'sleep' : 'awake';
+            const labelText = `${shortId}\nown:${shortOwner}  a:${authority}\nsim:${sim}  ${sleep}`;
             visual.label.visible = this.settings.showAuthorityLabels;
 
             if (labelText !== visual.labelText) {
@@ -229,8 +233,8 @@ export class DebugRenderManager implements IUpdatable {
 
     private buildLabelCanvas(text: string): HTMLCanvasElement {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 256;
+        canvas.width = 384;
+        canvas.height = 150;
         const ctx = canvas.getContext('2d');
         if (!ctx) return canvas;
 
@@ -243,10 +247,10 @@ export class DebugRenderManager implements IUpdatable {
         ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
 
         ctx.fillStyle = '#e5f8ff';
-        ctx.font = 'bold 38px Inter, sans-serif';
+        ctx.font = 'bold 28px Inter, sans-serif';
         const lines = text.split('\n');
         lines.forEach((line, i) => {
-            ctx.fillText(line, 20, 62 + i * 62);
+            ctx.fillText(line, 14, 38 + i * 44);
         });
 
         return canvas;
@@ -301,6 +305,12 @@ export class DebugRenderManager implements IUpdatable {
 
     private isFixed(body: RAPIER.RigidBody): boolean {
         return body.bodyType() === RAPIER.RigidBodyType.Fixed;
+    }
+
+    private compactId(value: string, maxLen: number): string {
+        if (value.length <= maxLen) return value;
+        const keep = Math.max(3, Math.floor((maxLen - 1) / 2));
+        return `${value.slice(0, keep)}~${value.slice(-keep)}`;
     }
 
     private disposeVisual(visual: IDebugVisual): void {
