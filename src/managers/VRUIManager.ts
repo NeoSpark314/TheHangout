@@ -235,8 +235,8 @@ export class VRUIManager implements IUpdatable {
                     let displayName = peer.name;
                     const isHost = peer.id === this.context.roomId || (peer.isLocal && this.context.isHost);
                     if (isHost) displayName += ' [Host]';
-                    if (peer.micEnabled === false) displayName += ' [Muted]';
-                    if (peer.audioLevel > 0.01) displayName += ' [Talking]';
+                    if (peer.micEnabled === false) displayName += ' 🔇';
+                    if (peer.audioLevel > 0.01) displayName += ' 🔊';
 
                     const nameLabel = new UILabel(displayName, 140, rowY + 20, 550, 60);
                     nameLabel.font = getFont(UITheme.typography.sizes.body, peer.isLocal ? 'bold' : 'normal');

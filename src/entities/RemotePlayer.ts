@@ -132,7 +132,7 @@ export class RemotePlayer extends PlayerEntity {
             headHeight: this.headHeight,
             headQuaternion: this.headState.quaternion,
             humanoid: this.humanoid,
-            name: !this.micEnabled ? `${this.name || 'Player'} [Muted]` : (this.isMuted ? `${this.name || 'Player'} (MUTED)` : (this.name || 'Player')),
+            name: (!this.micEnabled || this.isMuted) ? `${this.name || 'Player'} 🔇` : (this.name || 'Player'),
             color: this.avatarColor,
             audioLevel: this.audioLevel,
             lerpFactor: lerpFactor

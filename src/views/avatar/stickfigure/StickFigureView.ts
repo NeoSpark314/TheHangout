@@ -439,7 +439,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     }
 
     private _billboardNameTag(): void {
-        // Sprites billboard automatically in Three.js, no manual rotation needed.
+        this.nameTagComponent.faceCamera(this.context.managers.render?.camera);
     }
 
     public setColor(color: string | number): void {
