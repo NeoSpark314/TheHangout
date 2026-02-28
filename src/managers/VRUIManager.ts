@@ -7,6 +7,7 @@ import { RemotePlayer } from '../entities/RemotePlayer';
 import { LocalPlayer } from '../entities/LocalPlayer';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
+import { formatPlayerDisplayName } from '../utils/PlayerBadgeUtils';
 import * as THREE from 'three';
 
 export class VRUIManager implements IUpdatable {
@@ -232,11 +233,14 @@ export class VRUIManager implements IUpdatable {
                     listContainer.addChild(colorBlock);
 
                     // Name + Badges
-                    let displayName = peer.name;
                     const isHost = peer.id === this.context.roomId || (peer.isLocal && this.context.isHost);
-                    if (isHost) displayName += ' [Host]';
-                    if (peer.micEnabled === false) displayName += ' 🔇';
-                    if (peer.audioLevel > 0.01) displayName += ' 🔊';
+                    const displayName = formatPlayerDisplayName({
+                        name: peer.name,
+                        isHost,
+                        micEnabled: peer.micEnabled,
+                        isMuted: peer.isMuted,
+                        audioLevel: peer.audioLevel
+                    });
 
                     const nameLabel = new UILabel(displayName, 140, rowY + 20, 550, 60);
                     nameLabel.font = getFont(UITheme.typography.sizes.body, peer.isLocal ? 'bold' : 'normal');

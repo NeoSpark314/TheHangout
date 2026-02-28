@@ -8,6 +8,7 @@ import { HumanoidJointName } from '../interfaces/IHumanoid';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
+import { formatPlayerDisplayName } from '../utils/PlayerBadgeUtils';
 
 export class RemotePlayer extends PlayerEntity {
     private static readonly HAND_FINGER_JOINTS: Record<'left' | 'right', HumanoidJointName[]> = {
@@ -132,7 +133,17 @@ export class RemotePlayer extends PlayerEntity {
             headHeight: this.headHeight,
             headQuaternion: this.headState.quaternion,
             humanoid: this.humanoid,
-            name: (!this.micEnabled || this.isMuted) ? `${this.name || 'Player'} 🔇` : (this.name || 'Player'),
+            name: formatPlayerDisplayName(
+                {
+                    name: this.name || 'Player',
+                    micEnabled: this.micEnabled,
+                    isMuted: this.isMuted
+                },
+                {
+                    includeHost: false,
+                    includeTalking: false
+                }
+            ),
             color: this.avatarColor,
             audioLevel: this.audioLevel,
             lerpFactor: lerpFactor
