@@ -7,6 +7,7 @@ import { PhysicsPropView } from '../views/PhysicsPropView';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
+import { EntityType } from '../interfaces/IEntityState';
 
 export interface IPhysicsDebugBody {
     id: string;
@@ -37,6 +38,14 @@ export class PhysicsManager {
     private accumulator: number = 0;
     private fixedTimeStep: number = 1 / 60;
     private debugBodies: Map<number, IPhysicsDebugBodyEntry> = new Map();
+    private eventQueue: RAPIER.EventQueue | null = null;
+    private colliderToEntity: Map<number, PhysicsEntity> = new Map();
+    private activePropContacts: Map<string, { a: number; b: number }> = new Map();
+    private lastTouchClaimAtMsByEntity: Map<string, number> = new Map();
+    // Soft multiplayer UX lease: while holding an authoritative prop, touching another prop
+    // periodically requests ownership of the touched prop for local low-latency interaction.
+    private touchLeaseClaimIntervalMs: number = 250;
+    private touchLeaseProximityDistance: number = 0.55;
 
     constructor(private context: GameContext) { }
 
@@ -44,6 +53,7 @@ export class PhysicsManager {
         await RAPIER.init();
         const gravity = { x: 0.0, y: -9.81, z: 0.0 };
         this.world = new RAPIER.World(gravity);
+        this.eventQueue = new RAPIER.EventQueue(true);
         console.log('[PhysicsManager] Rapier3D initialized');
         eventBus.emit(EVENTS.PHYSICS_READY);
     }
@@ -145,9 +155,13 @@ export class PhysicsManager {
         if (!this.world) return;
         this.accumulator += delta;
         while (this.accumulator >= this.fixedTimeStep) {
-            this.world.step();
+            this.world.step(this.eventQueue || undefined);
+            this.drainCollisionEvents();
             this.accumulator -= this.fixedTimeStep;
         }
+
+        this.processTouchOwnershipLeases();
+        this.processProximityTouchLeases();
     }
 
     public getDebugBodies(): IPhysicsDebugBody[] {
@@ -168,11 +182,22 @@ export class PhysicsManager {
         return out;
     }
 
+    public getTouchLeaseClaimIntervalMs(): number {
+        return this.touchLeaseClaimIntervalMs;
+    }
+
+    public setTouchLeaseClaimIntervalMs(ms: number): void {
+        this.touchLeaseClaimIntervalMs = Math.max(50, Math.floor(ms));
+    }
+
     private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsEntity): void {
         const handle = rigidBody.handle;
         const existing = this.debugBodies.get(handle);
         if (existing) {
             existing.colliders.push(collider);
+            if (entity) {
+                this.colliderToEntity.set(collider.handle, entity);
+            }
             return;
         }
 
@@ -188,8 +213,119 @@ export class PhysicsManager {
             entry.getSimMode = () => entity.getSimMode?.() ?? null;
             entry.getSnapshotBufferSize = () => entity.getSnapshotBufferSize?.() ?? 0;
             entry.getLastTransferSeq = () => entity.getLastOwnershipTransferSeq?.() ?? 0;
+            this.colliderToEntity.set(collider.handle, entity);
         }
 
         this.debugBodies.set(handle, entry);
+    }
+
+    private drainCollisionEvents(): void {
+        if (!this.eventQueue) return;
+
+        this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+            const a = this.colliderToEntity.get(handle1);
+            const b = this.colliderToEntity.get(handle2);
+            if (!a || !b) return;
+
+            const key = this.contactKey(handle1, handle2);
+            if (started) {
+                this.activePropContacts.set(key, { a: handle1, b: handle2 });
+            } else {
+                this.activePropContacts.delete(key);
+            }
+        });
+    }
+
+    private processTouchOwnershipLeases(): void {
+        if (this.context.isHost) return;
+
+        const localId = this.context.localPlayer?.id;
+        if (!localId) return;
+
+        const nowMs = this.nowMs();
+        for (const [key, pair] of this.activePropContacts.entries()) {
+            const entityA = this.colliderToEntity.get(pair.a);
+            const entityB = this.colliderToEntity.get(pair.b);
+            if (!entityA || !entityB || entityA.isDestroyed || entityB.isDestroyed) {
+                this.activePropContacts.delete(key);
+                continue;
+            }
+
+            if (entityA.heldBy === localId && entityA.isAuthority) {
+                this.tryClaimTouchLease(entityB, nowMs, localId);
+            }
+            if (entityB.heldBy === localId && entityB.isAuthority) {
+                this.tryClaimTouchLease(entityA, nowMs, localId);
+            }
+        }
+    }
+
+    private processProximityTouchLeases(): void {
+        if (this.context.isHost) return;
+
+        const localId = this.context.localPlayer?.id;
+        if (!localId) return;
+
+        const physicsEntities: PhysicsEntity[] = [];
+        for (const entity of this.context.managers.entity.entities.values()) {
+            if (entity.type === EntityType.PHYSICS_PROP) {
+                physicsEntities.push(entity as PhysicsEntity);
+            }
+        }
+
+        if (physicsEntities.length < 2) return;
+
+        const heldAuthoritative: PhysicsEntity[] = [];
+        for (const entity of physicsEntities) {
+            if (entity.heldBy === localId && entity.isAuthority) {
+                heldAuthoritative.push(entity);
+            }
+        }
+
+        if (heldAuthoritative.length === 0) return;
+
+        const nowMs = this.nowMs();
+        const maxD2 = this.touchLeaseProximityDistance * this.touchLeaseProximityDistance;
+
+        for (const source of heldAuthoritative) {
+            const sourcePos = source.rigidBody.translation();
+            for (const target of physicsEntities) {
+                if (target === source) continue;
+                if (target.isDestroyed) continue;
+                if (target.ownerId === localId || target.isAuthority) continue;
+                if (target.heldBy && target.heldBy !== localId) continue;
+
+                const targetPos = target.rigidBody.translation();
+                const dx = sourcePos.x - targetPos.x;
+                const dy = sourcePos.y - targetPos.y;
+                const dz = sourcePos.z - targetPos.z;
+                const d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 <= maxD2) {
+                    this.tryClaimTouchLease(target, nowMs, localId);
+                }
+            }
+        }
+    }
+
+    private tryClaimTouchLease(target: PhysicsEntity, nowMs: number, localId: string): void {
+        if (target.isDestroyed) return;
+        if (target.heldBy && target.heldBy !== localId) return;
+        if (target.ownerId === localId || target.isAuthority) return;
+
+        const lastClaimAt = this.lastTouchClaimAtMsByEntity.get(target.id) ?? 0;
+        if ((nowMs - lastClaimAt) < this.touchLeaseClaimIntervalMs) return;
+
+        this.lastTouchClaimAtMsByEntity.set(target.id, nowMs);
+        target.requestOwnership();
+    }
+
+    private contactKey(a: number, b: number): string {
+        return a < b ? `${a}:${b}` : `${b}:${a}`;
+    }
+
+    private nowMs(): number {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
     }
 }

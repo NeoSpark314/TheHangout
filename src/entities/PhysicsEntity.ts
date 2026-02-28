@@ -351,6 +351,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
     private setSimMode(nextMode: PhysicsSimMode): void {
         if (this.simMode === nextMode) return;
+        const prevMode = this.simMode;
         this.simMode = nextMode;
 
         switch (nextMode) {
@@ -360,9 +361,14 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
                 this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
                 this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-                if (nextMode === PhysicsSimMode.ProxyKinematic && !this.proxyInitialized) {
+                if (nextMode === PhysicsSimMode.ProxyKinematic && prevMode !== PhysicsSimMode.ProxyKinematic) {
+                    // On authority -> proxy transition, drop stale snapshots and seed from current pose.
+                    this.clearSnapshotBuffer();
+                    this.seedSnapshotFromCurrentPose();
                     this.proxyRenderPos = { ...this.targetPos };
                     this.proxyRenderRot = { ...this.targetRot };
+                    this.presentPos = this.proxyRenderPos;
+                    this.presentRot = this.proxyRenderRot;
                     this.proxyInitialized = true;
                 }
                 break;
@@ -370,6 +376,10 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             case PhysicsSimMode.PendingReleaseDynamic:
                 this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
                 this.rigidBody.wakeUp();
+                if (prevMode === PhysicsSimMode.ProxyKinematic) {
+                    // Avoid replaying old remote snapshots after reclaiming authority.
+                    this.clearSnapshotBuffer();
+                }
                 break;
         }
     }
@@ -469,6 +479,28 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private clearSnapshotBuffer(): void {
+        this.snapshotBuffer.length = 0;
+    }
+
+    private seedSnapshotFromCurrentPose(): void {
+        const position = this.rigidBody.translation();
+        const rotation = this.rigidBody.rotation();
+        const velocity = this.rigidBody.linvel();
+
+        const snapshot: INetworkSnapshot = {
+            receivedAtMs: this.nowMs(),
+            position: { x: position.x, y: position.y, z: position.z },
+            quaternion: { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
+            velocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+            heldBy: this.heldBy
+        };
+
+        this.snapshotBuffer.push(snapshot);
+        this.targetPos = { ...snapshot.position };
+        this.targetRot = { ...snapshot.quaternion };
     }
 
     public destroy(): void {
