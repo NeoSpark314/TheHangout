@@ -43,7 +43,10 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private rightElbowJoint!: THREE.Mesh;
     private leftLeg!: THREE.Mesh;
     private rightLeg!: THREE.Mesh;
+    private leftLowerLegMesh!: THREE.Mesh;
+    private rightLowerLegMesh!: THREE.Mesh;
     private shoulders!: THREE.Mesh;
+    private pelvis!: THREE.Mesh;
     private leftUpperArm!: THREE.Mesh;
     private leftForearm!: THREE.Mesh;
     private rightUpperArm!: THREE.Mesh;
@@ -450,11 +453,20 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         this.leftLeg = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         leftUpperLeg.add(this.leftLeg);
 
+        this.leftLowerLegMesh = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        leftLowerLeg.add(this.leftLowerLegMesh);
+
         this.rightLeg = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         rightUpperLeg.add(this.rightLeg);
 
+        this.rightLowerLegMesh = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        rightLowerLeg.add(this.rightLowerLegMesh);
+
         this.shoulders = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         chest.add(this.shoulders);
+
+        this.pelvis = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        hips.add(this.pelvis);
 
         this.leftUpperArm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         leftUpperArm.add(this.leftUpperArm);
@@ -718,15 +730,28 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         const upperLegLength = legLength * 0.5;
         const lowerLegLength = legLength * 0.5;
 
-        this.bones.leftUpperLeg.position.set(-0.2, 0, 0);
+        // The visual bar connecting hips (pelvis)
+        const pelvisWidth = 0.3;
+        this._setupLocalCylinder(this.pelvis, pelvisWidth);
+        this.pelvis.rotation.z = Math.PI / 2;
+
+        this.bones.leftUpperLeg.position.set(-pelvisWidth / 2, 0, 0);
         this.bones.leftLowerLeg.position.set(0, -upperLegLength, 0);
         this._setupLocalCylinder(this.leftLeg, upperLegLength);
         this.leftLeg.position.set(0, -upperLegLength * 0.5, 0);
 
-        this.bones.rightUpperLeg.position.set(0.2, 0, 0);
+        this._setupLocalCylinder(this.leftLowerLegMesh, lowerLegLength);
+        this.leftLowerLegMesh.position.set(0, -lowerLegLength * 0.5, 0);
+        this.bones.leftFoot.position.set(0, -lowerLegLength, 0);
+
+        this.bones.rightUpperLeg.position.set(0.15, 0, 0);
         this.bones.rightLowerLeg.position.set(0, -upperLegLength, 0);
         this._setupLocalCylinder(this.rightLeg, upperLegLength);
         this.rightLeg.position.set(0, -upperLegLength * 0.5, 0);
+
+        this._setupLocalCylinder(this.rightLowerLegMesh, lowerLegLength);
+        this.rightLowerLegMesh.position.set(0, -lowerLegLength * 0.5, 0);
+        this.bones.rightFoot.position.set(0, -lowerLegLength, 0);
 
         this._updateNameTagPosition();
     }
@@ -739,19 +764,32 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         }
     }
 
-    public updateArms(leftHandPos: THREE.Vector3, rightHandPos: THREE.Vector3): void {
-        const calculateIK = (shoulderBone: THREE.Bone, handWorldTarget: THREE.Vector3, isLeft: boolean): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
+    public updateArms(leftHandLocalPos: THREE.Vector3, rightHandLocalPos: THREE.Vector3): void {
+        const calculateIK = (shoulderBone: THREE.Bone, handLocalTarget: THREE.Vector3, isLeft: boolean): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
+
+            // The input target is in `this.mesh` space (the avatar root). Convert it to true World Space.
+            const handWorldTarget = handLocalTarget.clone();
+            this.mesh.localToWorld(handWorldTarget);
+
             // Get local target relative to the shoulder bone
-            shoulderBone.updateMatrixWorld();
+            shoulderBone.updateMatrixWorld(true);
             const invShoulderMat = new THREE.Matrix4().copy(shoulderBone.matrixWorld).invert();
             const targetLocal = handWorldTarget.clone().applyMatrix4(invShoulderMat);
 
             const targetDist = targetLocal.length();
             const armDir = targetLocal.clone().normalize();
 
-            // Segment lengths
-            const upperArmLen = 0.32;
-            const lowerArmLen = 0.32;
+            // Setup stretchy arms: if target is further than reach, stretch the lengths
+            let upperArmLen = 0.32;
+            let lowerArmLen = 0.32;
+            const maxReach = upperArmLen + lowerArmLen;
+
+            if (targetDist > maxReach - 0.001) {
+                // Scale bones equally to reach the target exactly
+                const stretchFactor = targetDist / maxReach;
+                upperArmLen *= stretchFactor;
+                lowerArmLen *= stretchFactor;
+            }
 
             // Basic CCD / Triangle IK math to find the elbow bend angle
             // Law of Cosines to find the angle at the shoulder
@@ -759,7 +797,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             cosAngle = Math.max(-1, Math.min(1, cosAngle));
             const shoulderAngle = Math.acos(cosAngle);
 
-            // Pole vector (hint for elbow direction: slightly outward and down)
+            // Pole vector (hint for elbow direction: slightly outward and back)
             const side = isLeft ? 1 : -1;
             const poleLocal = new THREE.Vector3(side * 0.5, -0.5, 0.2).normalize();
 
@@ -767,7 +805,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             const bendAxis = new THREE.Vector3().crossVectors(poleLocal, armDir).normalize();
 
             // If the arm is stretched out straight, the cross product is zero
-            if (bendAxis.lengthSq() < 0.001) { bendAxis.set(0, 0, 1); }
+            if (bendAxis.lengthSq() < 0.001) { bendAxis.set(1, 0, 0); }
 
             // Apply rotation from straight-down (0,-1,0) towards the target
             const baseQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), armDir);
@@ -781,13 +819,14 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             lowerCosAngle = Math.max(-1, Math.min(1, lowerCosAngle));
             const elbowAngle = Math.PI - Math.acos(lowerCosAngle);
 
-            // Elbow bends around the same local bendAxis, just relative to the straight arm
-            const lowerQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), elbowAngle); // Actually depends on the skeleton rest binding!
+            // To map the bend local to the lower arm, we reverse the upper arm rotation applied to the bendAxis
+            const lowerBendAxis = bendAxis.clone().applyQuaternion(upperQuat.clone().invert());
+            const lowerQuat = new THREE.Quaternion().setFromAxisAngle(lowerBendAxis, elbowAngle);
 
             return { upperQuat, lowerQuat, elbowDist: upperArmLen, wristDist: lowerArmLen };
         };
 
-        const leftIk = calculateIK(this.bones.leftShoulder, leftHandPos, true);
+        const leftIk = calculateIK(this.bones.leftShoulder, leftHandLocalPos, true);
         this.bones.leftUpperArm.quaternion.copy(leftIk.upperQuat);
         // Place lower arm at the end of upper arm
         this.bones.leftLowerArm.position.set(0, -leftIk.elbowDist, 0);
@@ -799,7 +838,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         this.leftForearm.position.set(0, -leftIk.wristDist * 0.5, 0);
 
 
-        const rightIk = calculateIK(this.bones.rightShoulder, rightHandPos, false);
+        const rightIk = calculateIK(this.bones.rightShoulder, rightHandLocalPos, false);
         this.bones.rightUpperArm.quaternion.copy(rightIk.upperQuat);
         this.bones.rightLowerArm.position.set(0, -rightIk.elbowDist, 0);
         this.bones.rightLowerArm.quaternion.copy(rightIk.lowerQuat);
