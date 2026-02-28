@@ -1,6 +1,18 @@
 import { GameContext } from '../core/GameState';
 import { PACKET_TYPES } from '../utils/Constants';
 
+/**
+ * Generic low/medium-frequency feature replication channel.
+ *
+ * Intended for:
+ * - semantic events (e.g. drum hits, interaction triggers)
+ * - snapshotable feature state for late joiners (e.g. drawing history)
+ *
+ * Not intended for:
+ * - high-frequency continuous transforms (physics bodies, avatar/head/hands)
+ *   which are handled by specialized sync pipelines with tighter cadence and
+ *   ownership/interpolation logic.
+ */
 export interface IReplicatedFeatureEventPayload {
     featureId: string;
     eventType: string;
@@ -173,4 +185,3 @@ export class ReplicationManager {
             : Date.now();
     }
 }
-

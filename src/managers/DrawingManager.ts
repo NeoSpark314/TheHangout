@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { GameContext } from '../core/GameState';
-import { IDrawSegmentPayload } from '../interfaces/INetworkPacket';
+import { IDrawSegmentPayload } from '../interfaces/IDrawing';
 import { IReplicatedFeature } from './ReplicationManager';
 
 /**

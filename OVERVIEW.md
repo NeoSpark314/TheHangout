@@ -23,8 +23,9 @@ The project follows a **Clean Object-Oriented (OOP) Architecture** pattern based
 6.  **Lean Player Avatar Sync Contract**: Player avatar sync is now based on `hmd` (humanoid joint delta) plus `hm` (per-hand mode flags for hand-tracking vs. controller mode). Legacy `hands` payload replication was removed to avoid redundant state paths and desync.
 7.  **Single Source of Truth for Local Hand Interaction**: Local interaction systems (grab, UI pointer, gesture intent) read hand state directly from `TrackingManager.getState().hands`. We intentionally avoid mirroring hand state into player entity fields to prevent drift and race conditions.
 8.  **Gesture Pipeline Separation**: `GestureUtils` provides raw gesture metrics (pinch distance, fist curl count), while `InputManager` owns hysteresis/latching and intent edge emission. This keeps thresholds centralized and behavior deterministic.
-9.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
-10. **Data-Oriented Math Types (Interfaces vs. Classes)**: For fundamental spatial data (`IPose`, `IVector3`, `IQuaternion`), the architecture strictly uses **Interfaces** rather than Classes with helper methods. This provides three critical benefits:
+9.  **Feature Replication Layer**: `ReplicationManager` provides a generic network-aware event+snapshot path for gameplay features (e.g. drum hits, drawing) with local echo and late-join snapshot sync.
+10. **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
+11. **Data-Oriented Math Types (Interfaces vs. Classes)**: For fundamental spatial data (`IPose`, `IVector3`, `IQuaternion`), the architecture strictly uses **Interfaces** rather than Classes with helper methods. This provides three critical benefits:
     *   **Zero Allocation Overhead**: In a 90hz VR render loop, instantiating millions of `new Pose()` class objects would thrash the Garbage Collector and cause frame drops. Interfaces are zero-cost at runtime.
     *   **Frictionless Serialization**: Raw JSON from the network (`{ position: {...}, quaternion: {...} }`) can be cast directly to `IPose` without needing to iterate and manually instantiate class instances.
     *   **Duck-Typing Interoperability**: Because the interfaces only define data shape (`x, y, z`), objects from other libraries (like `THREE.Vector3` or WebXR's `XRRigidTransform`) often automatically fulfill the contract without expensive conversions.
@@ -43,6 +44,14 @@ The `App` class manages the startup sequence, ensuring all managers are register
 - **Transport**: Raw communication via PeerJS/Sockets or local WebSocket Relay.
 - **Dispatcher**: Routes incoming packets to specific `PacketHandlers`.
 - **Synchronizer**: A 20Hz loop that broadcasts authoritative entity states using standardized, bandwidth-efficient interfaces.
+- **Feature Replication**: `ReplicationManager` handles generic feature events and optional snapshots for late joiners.
+
+### Replication Boundaries
+- Use `ReplicationManager` for semantic feature events and snapshotable accumulated state (drum hits, drawings, room feature state).
+- Do **not** use `ReplicationManager` for high-rate continuous simulation streams:
+  - Physics transforms/ownership are handled by dedicated entity + ownership sync paths.
+  - Avatar/head/hand pose sync uses dedicated compact player-state payloads (`hmd`, `hm`) and interpolation logic.
+- Reason: those continuous domains require tighter cadence, authority rules, and specialized smoothing/reconciliation that a generic event channel is not designed to provide.
 
 ### Tracking & Gestures
 - **Tracking Providers own hand state**: `DesktopTrackingProvider` and `XRTrackingProvider` are the authoritative writers of `hands` tracking data.

@@ -7,7 +7,6 @@ import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
 import {
     IFeatureSnapshotRequestPayload,
     IRoomConfigUpdatePayload,
-    IDrawSegmentPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
     IOwnershipTransferPayload
@@ -82,7 +81,6 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, new OwnershipRequestHandler(this, this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, new OwnershipReleaseHandler(this, this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.DRAW_LINE_SEGMENT, new DrawLineHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.PEER_JOINED, new PeerJoinedHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, new FeatureEventHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, new FeatureSnapshotHandler(this.context));
@@ -478,15 +476,6 @@ class OwnershipTransferHandler implements IPacketHandler<PacketPayloadMap[typeof
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: IOwnershipTransferPayload): void {
         if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
-    }
-}
-
-class DrawLineHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DRAW_LINE_SEGMENT]> {
-    constructor(private context: GameContext) { }
-    handle(senderId: string, payload: IDrawSegmentPayload): void {
-        if (this.context.managers.drawing) {
-            this.context.managers.drawing.drawLine(payload);
-        }
     }
 }
 

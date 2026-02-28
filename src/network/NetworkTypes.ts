@@ -1,7 +1,6 @@
 import { IStateUpdatePacket } from '../interfaces/IEntityState';
 import {
     IFeatureSnapshotRequestPayload,
-    IDrawSegmentPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
     IOwnershipTransferPayload,
@@ -19,7 +18,6 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.OWNERSHIP_REQUEST]: IOwnershipRequestPayload;
     [PACKET_TYPES.OWNERSHIP_RELEASE]: IOwnershipReleasePayload;
     [PACKET_TYPES.OWNERSHIP_TRANSFER]: IOwnershipTransferPayload;
-    [PACKET_TYPES.DRAW_LINE_SEGMENT]: IDrawSegmentPayload;
     [PACKET_TYPES.AUDIO_CHUNK]: unknown;
     [PACKET_TYPES.PEER_JOINED]: { peerId: string };
     [PACKET_TYPES.FEATURE_EVENT]: IReplicatedFeatureEventPayload;

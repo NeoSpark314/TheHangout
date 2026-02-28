@@ -61,12 +61,6 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             }
         });
 
-        this.dispatcher.registerHandler(PACKET_TYPES.DRAW_LINE_SEGMENT, {
-            handle: (senderId: string, payload: any) => {
-                this.relayToOthers(senderId, PACKET_TYPES.DRAW_LINE_SEGMENT, payload);
-            }
-        });
-
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, {
             handle: (senderId: string, payload: IReplicatedFeatureEventPayload) => {
                 this.context.managers.replication.handleIncomingFeatureEvent(senderId, payload);

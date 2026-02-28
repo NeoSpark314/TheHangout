@@ -44,14 +44,6 @@ function isRoomConfigPayload(payload: unknown): boolean {
     return true;
 }
 
-function isDrawLinePayload(payload: unknown): boolean {
-    if (!isObject(payload)) return false;
-    if (!Array.isArray(payload.startPos) || !Array.isArray(payload.endPos)) return false;
-    if ((payload.startPos as unknown[]).length < 3 || (payload.endPos as unknown[]).length < 3) return false;
-    if (typeof payload.color !== 'string' && typeof payload.color !== 'number') return false;
-    return true;
-}
-
 function isPeerJoinedPayload(payload: unknown): boolean {
     return isObject(payload) && typeof payload.peerId === 'string';
 }
@@ -99,8 +91,6 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isOwnershipTransferPayload(payload);
         case PACKET_TYPES.ROOM_CONFIG_UPDATE:
             return isRoomConfigPayload(payload);
-        case PACKET_TYPES.DRAW_LINE_SEGMENT:
-            return isDrawLinePayload(payload);
         case PACKET_TYPES.PEER_JOINED:
             return isPeerJoinedPayload(payload);
         case PACKET_TYPES.PEER_DISCONNECT:

@@ -1,4 +1,3 @@
-import { IEntityState } from './IEntityState';
 import { IRoomConfig } from '../core/GameState';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 
@@ -24,12 +23,6 @@ export interface IOwnershipReleasePayload {
     sentAt?: number;
 }
 
-export interface IDrawSegmentPayload {
-    startPos: number[]; // [x,y,z]
-    endPos: number[];   // [x,y,z]
-    color: string | number;
-}
-
 export interface IPeerDisconnectPayload {
     peerId: string;
 }
@@ -47,7 +40,6 @@ export type NetworkPayload =
     | IOwnershipTransferPayload
     | IOwnershipRequestPayload
     | IOwnershipReleasePayload
-    | IDrawSegmentPayload
     | IPeerDisconnectPayload
     | IRoomConfigUpdatePayload
     | IReplicatedFeatureEventPayload
