@@ -49,6 +49,7 @@ export class VRUIManager implements IUpdatable {
         // Add default System Tab immediately
         this.addPeersTab();
         this.addSystemTab();
+        this.addDebugTab();
         this.addHelpTab();
 
         this.setupKeyboardListeners();
@@ -435,65 +436,12 @@ export class VRUIManager implements IUpdatable {
         this.systemTab = this.tabPanel.addTab('System');
         const systemContainer = this.systemTab.container;
 
-        import('../utils/canvasui').then(({ UIButton, UILabel, UIToggle }) => {
+        import('../utils/canvasui').then(({ UIButton, UILabel }) => {
             const title = new UILabel("System", 50, 50, 1180, 80);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
             title.textAlign = 'center';
             systemContainer.addChild(title);
-
-            const debugManager = this.context.managers.debugRender;
-            const debugSettings = debugManager?.getSettings();
-
-            const debugHeader = new UILabel("Debug Rendering", 120, 170, 1040, 60);
-            debugHeader.font = getFont(UITheme.typography.sizes.body, 'bold');
-            debugHeader.textAlign = 'left';
-            debugHeader.textColor = UITheme.colors.accent;
-            systemContainer.addChild(debugHeader);
-
-            const debugMaster = new UIToggle(
-                "Enable Debug Overlay",
-                debugSettings?.enabled ?? false,
-                140, 230, 700, 52,
-                (checked) => {
-                    debugManager?.setEnabled(checked);
-                    this.tablet?.ui.markDirty();
-                }
-            );
-            systemContainer.addChild(debugMaster);
-
-            const showCollidersToggle = new UIToggle(
-                "Collision Bounds (physics)",
-                debugSettings?.showColliders ?? true,
-                180, 290, 700, 52,
-                (checked) => {
-                    debugManager?.setShowColliders(checked);
-                    this.tablet?.ui.markDirty();
-                }
-            );
-            systemContainer.addChild(showCollidersToggle);
-
-            const showAxesToggle = new UIToggle(
-                "Object Axes (movable bodies)",
-                debugSettings?.showAxes ?? true,
-                180, 350, 700, 52,
-                (checked) => {
-                    debugManager?.setShowAxes(checked);
-                    this.tablet?.ui.markDirty();
-                }
-            );
-            systemContainer.addChild(showAxesToggle);
-
-            const showAuthorityToggle = new UIToggle(
-                "Authority Labels (network props)",
-                debugSettings?.showAuthorityLabels ?? true,
-                180, 410, 700, 52,
-                (checked) => {
-                    debugManager?.setShowAuthorityLabels(checked);
-                    this.tablet?.ui.markDirty();
-                }
-            );
-            systemContainer.addChild(showAuthorityToggle);
 
             const leaveBtn = new UIButton("Leave Room", 440, 630, 400, 80, () => {
                 const render = this.context.managers.render;
@@ -513,6 +461,110 @@ export class VRUIManager implements IUpdatable {
             leaveBtn.hoverColor = UITheme.colors.dangerHover;
             leaveBtn.cornerRadius = 10;
             systemContainer.addChild(leaveBtn);
+        });
+    }
+
+    private addDebugTab() {
+        if (!this.tabPanel) return;
+
+        const debugTab = this.tabPanel.addTab('Debug');
+        const debugContainer = debugTab.container;
+
+        import('../utils/canvasui').then(({ UIButton, UILabel, UIToggle }) => {
+            const title = new UILabel("Debug", 50, 30, 1180, 70);
+            title.font = getFont(UITheme.typography.sizes.title, 'bold');
+            title.textColor = UITheme.colors.primary;
+            title.textAlign = 'center';
+            debugContainer.addChild(title);
+
+            const debugManager = this.context.managers.debugRender;
+            const debugSettings = debugManager?.getSettings();
+
+            const overlayToggle = new UIToggle(
+                "Enable Debug Overlay",
+                debugSettings?.enabled ?? false,
+                90, 120, 620, 52,
+                (checked) => {
+                    debugManager?.setEnabled(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            debugContainer.addChild(overlayToggle);
+
+            const physics = this.context.managers.physics;
+            const makeStepper = (
+                label: string,
+                y: number,
+                getValue: () => string,
+                onDec: () => void,
+                onInc: () => void
+            ) => {
+                const rowLabel = new UILabel(label, 90, y, 540, 54);
+                rowLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                rowLabel.textAlign = 'left';
+                rowLabel.textColor = UITheme.colors.text;
+                debugContainer.addChild(rowLabel);
+
+                const valueLabel = new UILabel(getValue(), 660, y, 220, 54);
+                valueLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                valueLabel.textAlign = 'center';
+                valueLabel.textColor = UITheme.colors.accent;
+                debugContainer.addChild(valueLabel);
+
+                const decBtn = new UIButton("-", 900, y - 6, 120, 64, () => {
+                    onDec();
+                    valueLabel.text = getValue();
+                    this.tablet?.ui.markDirty();
+                });
+                decBtn.cornerRadius = 10;
+                debugContainer.addChild(decBtn);
+
+                const incBtn = new UIButton("+", 1040, y - 6, 120, 64, () => {
+                    onInc();
+                    valueLabel.text = getValue();
+                    this.tablet?.ui.markDirty();
+                });
+                incBtn.cornerRadius = 10;
+                debugContainer.addChild(incBtn);
+            };
+
+            makeStepper(
+                "Touch Lease Claim Interval",
+                220,
+                () => `${physics.getTouchLeaseClaimIntervalMs()} ms`,
+                () => physics.setTouchLeaseClaimIntervalMs(physics.getTouchLeaseClaimIntervalMs() - 25),
+                () => physics.setTouchLeaseClaimIntervalMs(physics.getTouchLeaseClaimIntervalMs() + 25)
+            );
+
+            makeStepper(
+                "Touch Lease Proximity",
+                300,
+                () => `${physics.getTouchLeaseProximityDistance().toFixed(2)} m`,
+                () => physics.setTouchLeaseProximityDistance(physics.getTouchLeaseProximityDistance() - 0.05),
+                () => physics.setTouchLeaseProximityDistance(physics.getTouchLeaseProximityDistance() + 0.05)
+            );
+
+            makeStepper(
+                "Release Hold Min",
+                380,
+                () => `${physics.getPendingReleaseMinHoldMs()} ms`,
+                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs() - 20, physics.getPendingReleaseMaxHoldMs()),
+                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs() + 20, physics.getPendingReleaseMaxHoldMs())
+            );
+
+            makeStepper(
+                "Release Hold Max",
+                460,
+                () => `${physics.getPendingReleaseMaxHoldMs()} ms`,
+                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs(), physics.getPendingReleaseMaxHoldMs() - 40),
+                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs(), physics.getPendingReleaseMaxHoldMs() + 40)
+            );
+
+            const note = new UILabel("Tip: Keep Min below Max for snappy throws without freeze.", 90, 560, 1080, 52);
+            note.font = getFont(UITheme.typography.sizes.small);
+            note.textColor = UITheme.colors.textMuted;
+            note.textAlign = 'left';
+            debugContainer.addChild(note);
         });
     }
 

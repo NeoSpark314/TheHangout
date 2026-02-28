@@ -98,6 +98,21 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         return this.lastOwnershipTransferSeq;
     }
 
+    public getPendingReleaseMinHoldMs(): number {
+        return this.pendingReleaseMinHoldMs;
+    }
+
+    public getPendingReleaseMaxHoldMs(): number {
+        return this.pendingReleaseMaxHoldMs;
+    }
+
+    public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
+        const clampedMin = Math.max(0, Math.floor(minMs));
+        const clampedMax = Math.max(clampedMin + 50, Math.floor(maxMs));
+        this.pendingReleaseMinHoldMs = clampedMin;
+        this.pendingReleaseMaxHoldMs = clampedMax;
+    }
+
     public syncAuthority(): void {
         const localId = this.context.localPlayer?.id || 'local';
         const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && this.context.isHost);

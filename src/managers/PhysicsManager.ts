@@ -46,6 +46,8 @@ export class PhysicsManager {
     // periodically requests ownership of the touched prop for local low-latency interaction.
     private touchLeaseClaimIntervalMs: number = 250;
     private touchLeaseProximityDistance: number = 0.55;
+    private pendingReleaseMinHoldMs: number = 220;
+    private pendingReleaseMaxHoldMs: number = 900;
 
     constructor(private context: GameContext) { }
 
@@ -141,6 +143,7 @@ export class PhysicsManager {
             spawnPosition: position,
             view: finalView
         });
+        physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
         const entityManager = this.context.managers.entity;
@@ -188,6 +191,37 @@ export class PhysicsManager {
 
     public setTouchLeaseClaimIntervalMs(ms: number): void {
         this.touchLeaseClaimIntervalMs = Math.max(50, Math.floor(ms));
+    }
+
+    public getTouchLeaseProximityDistance(): number {
+        return this.touchLeaseProximityDistance;
+    }
+
+    public setTouchLeaseProximityDistance(distance: number): void {
+        this.touchLeaseProximityDistance = Math.max(0.1, Math.min(2.0, distance));
+    }
+
+    public getPendingReleaseMinHoldMs(): number {
+        return this.pendingReleaseMinHoldMs;
+    }
+
+    public getPendingReleaseMaxHoldMs(): number {
+        return this.pendingReleaseMaxHoldMs;
+    }
+
+    public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
+        const clampedMin = Math.max(0, Math.floor(minMs));
+        const clampedMax = Math.max(clampedMin + 50, Math.floor(maxMs));
+        this.pendingReleaseMinHoldMs = clampedMin;
+        this.pendingReleaseMaxHoldMs = clampedMax;
+
+        const entities = new Set<PhysicsEntity>();
+        for (const entity of this.colliderToEntity.values()) {
+            entities.add(entity);
+        }
+        for (const entity of entities) {
+            entity.setPendingReleaseHoldWindow(clampedMin, clampedMax);
+        }
     }
 
     private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsEntity): void {
