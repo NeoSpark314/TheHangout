@@ -48,6 +48,11 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private leftForearm!: THREE.Mesh;
     private rightUpperArm!: THREE.Mesh;
     private rightForearm!: THREE.Mesh;
+
+    // Bone Hierarchy
+    private skeleton!: THREE.Skeleton;
+    private bones: Record<string, THREE.Bone> = {};
+
     private handMeshes: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private handCylinders: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private wristMeshes: { left: THREE.Mesh, right: THREE.Mesh };
@@ -331,39 +336,144 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         const cylinderGeom = new THREE.CylinderGeometry(limbRadius, limbRadius, 1, 6);
         const jointGeom = new THREE.SphereGeometry(0.04, 8, 4);
 
+        // --- BONE HIERARCHY ---
+        const hips = new THREE.Bone();
+        hips.name = 'hips';
+        const spine = new THREE.Bone();
+        spine.name = 'spine';
+        const chest = new THREE.Bone();
+        chest.name = 'chest';
+        const neck = new THREE.Bone();
+        neck.name = 'neck';
+        const headBone = new THREE.Bone(); // We'll attach headMesh here
+        headBone.name = 'head';
+
+        const leftShoulder = new THREE.Bone();
+        leftShoulder.name = 'leftShoulder';
+        const leftUpperArm = new THREE.Bone();
+        leftUpperArm.name = 'leftUpperArm';
+        const leftLowerArm = new THREE.Bone();
+        leftLowerArm.name = 'leftLowerArm';
+        const leftHand = new THREE.Bone();
+        leftHand.name = 'leftHand';
+
+        const rightShoulder = new THREE.Bone();
+        rightShoulder.name = 'rightShoulder';
+        const rightUpperArm = new THREE.Bone();
+        rightUpperArm.name = 'rightUpperArm';
+        const rightLowerArm = new THREE.Bone();
+        rightLowerArm.name = 'rightLowerArm';
+        const rightHand = new THREE.Bone();
+        rightHand.name = 'rightHand';
+
+        const leftUpperLeg = new THREE.Bone();
+        leftUpperLeg.name = 'leftUpperLeg';
+        const leftLowerLeg = new THREE.Bone();
+        leftLowerLeg.name = 'leftLowerLeg';
+        const leftFoot = new THREE.Bone();
+        leftFoot.name = 'leftFoot';
+
+        const rightUpperLeg = new THREE.Bone();
+        rightUpperLeg.name = 'rightUpperLeg';
+        const rightLowerLeg = new THREE.Bone();
+        rightLowerLeg.name = 'rightLowerLeg';
+        const rightFoot = new THREE.Bone();
+        rightFoot.name = 'rightFoot';
+
+        // Build the tree
+        hips.add(spine);
+        hips.add(leftUpperLeg);
+        hips.add(rightUpperLeg);
+
+        spine.add(chest);
+        chest.add(neck);
+        neck.add(headBone);
+
+        chest.add(leftShoulder);
+        leftShoulder.add(leftUpperArm);
+        leftUpperArm.add(leftLowerArm);
+        leftLowerArm.add(leftHand);
+
+        chest.add(rightShoulder);
+        rightShoulder.add(rightUpperArm);
+        rightUpperArm.add(rightLowerArm);
+        rightLowerArm.add(rightHand);
+
+        leftUpperLeg.add(leftLowerLeg);
+        leftLowerLeg.add(leftFoot);
+
+        rightUpperLeg.add(rightLowerLeg);
+        rightLowerLeg.add(rightFoot);
+
+        this.mesh.add(hips);
+
+        this.bones = {
+            hips, spine, chest, neck, head: headBone,
+            leftShoulder, leftUpperArm, leftLowerArm, leftHand,
+            rightShoulder, rightUpperArm, rightLowerArm, rightHand,
+            leftUpperLeg, leftLowerLeg, leftFoot,
+            rightUpperLeg, rightLowerLeg, rightFoot
+        };
+
+        const boneArray = Object.values(this.bones);
+        this.skeleton = new THREE.Skeleton(boneArray);
+
+        // --- ATTACH VISUAL MESHES TO BONES ---
+        // Torso mapping
         this.torso = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
-        this.mesh.add(this.torso);
+        spine.add(this.torso);
+
         this.neckJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
-        this.mesh.add(this.neckJoint);
+        neck.add(this.neckJoint);
+
         this.waistJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
-        this.mesh.add(this.waistJoint);
+        hips.add(this.waistJoint);
+
         this.leftKnee = new THREE.Mesh(jointGeom, this.accentMaterial);
+        leftLowerLeg.add(this.leftKnee);
+
         this.rightKnee = new THREE.Mesh(jointGeom, this.accentMaterial);
-        this.mesh.add(this.leftKnee);
-        this.mesh.add(this.rightKnee);
+        rightLowerLeg.add(this.rightKnee);
+
         this.leftShoulderJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        leftUpperArm.add(this.leftShoulderJoint);
+
         this.rightShoulderJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        rightUpperArm.add(this.rightShoulderJoint);
+
         this.leftElbowJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
+        leftLowerArm.add(this.leftElbowJoint);
+
         this.rightElbowJoint = new THREE.Mesh(jointGeom, this.accentMaterial);
-        this.mesh.add(this.leftShoulderJoint);
-        this.mesh.add(this.rightShoulderJoint);
-        this.mesh.add(this.leftElbowJoint);
-        this.mesh.add(this.rightElbowJoint);
+        rightLowerArm.add(this.rightElbowJoint);
 
         this.leftLeg = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        leftUpperLeg.add(this.leftLeg);
+
         this.rightLeg = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
-        this.mesh.add(this.leftLeg);
-        this.mesh.add(this.rightLeg);
+        rightUpperLeg.add(this.rightLeg);
+
         this.shoulders = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
-        this.mesh.add(this.shoulders);
+        chest.add(this.shoulders);
+
         this.leftUpperArm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        leftUpperArm.add(this.leftUpperArm);
+
         this.leftForearm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        leftLowerArm.add(this.leftForearm);
+
         this.rightUpperArm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
+        rightUpperArm.add(this.rightUpperArm);
+
         this.rightForearm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
-        this.mesh.add(this.leftUpperArm);
-        this.mesh.add(this.leftForearm);
-        this.mesh.add(this.rightUpperArm);
-        this.mesh.add(this.rightForearm);
+        rightLowerArm.add(this.rightForearm);
+
+        /**
+         * The head mesh was previously attached to `this.mesh`. 
+         * We now attach it directly directly to the root for absolute IK or the `headBone` if driven by forward IK.
+         * For now, we will leave it attached to `this.mesh` to preserve the `updatePosture` lerping logic
+         * until we fully transition to standard Forward Kinematics.
+         */
 
         const handJointGeom = new THREE.SphereGeometry(0.006, 6, 4);
         const handLimbRadius = 0.003;
@@ -576,55 +686,128 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
     public updatePosture(headHeight: number): void {
         this.currentHeadHeight = headHeight;
+
+        // --- 1. Position the IK Root Bones ---
         const neckHeight = Math.max(0.4, headHeight - 0.2);
         this.headMesh.position.y = neckHeight;
-        this.neckJoint.position.set(0, neckHeight, 0);
-        const shoulderY = neckHeight - 0.1;
-        const shoulderStart = new THREE.Vector3(-0.25, shoulderY, 0);
-        const shoulderEnd = new THREE.Vector3(0.25, shoulderY, 0);
-        this._alignCylinder(this.shoulders, shoulderStart, shoulderEnd, 0.025);
+
         const waistHeight = neckHeight * 0.55;
-        this.waistJoint.position.set(0, waistHeight, 0);
-        this._alignCylinder(this.torso, new THREE.Vector3(0, neckHeight, 0), new THREE.Vector3(0, waistHeight, 0), 0.025);
-        const leftFoot = new THREE.Vector3(-0.2, 0, 0);
-        const rightFoot = new THREE.Vector3(0.2, 0, 0);
-        const waistPos = new THREE.Vector3(0, waistHeight, 0);
-        this._alignCylinder(this.leftLeg, waistPos, leftFoot, 0.025);
-        this._alignCylinder(this.rightLeg, waistPos, rightFoot, 0.025);
-        this.leftKnee.position.lerpVectors(waistPos, leftFoot, 0.5);
-        this.rightKnee.position.lerpVectors(waistPos, rightFoot, 0.5);
+        this.bones.hips.position.set(0, waistHeight, 0);
+
+        // Scale visual limbs (their centers are 0,0,0, stretching from -0.5 to 0.5)
+        // Since they are children of bones now, we don't move their absolute positions,
+        // we scale them to fill the gap to the next bone.
+
+        const spineLength = neckHeight - waistHeight;
+        this.bones.spine.position.set(0, 0, 0);
+        this.bones.chest.position.set(0, spineLength * 0.5, 0);
+        this.bones.neck.position.set(0, spineLength * 0.5, 0);
+
+        this._setupLocalCylinder(this.torso, spineLength);
+        this.torso.position.set(0, spineLength * 0.5, 0); // shift mesh up relative to hip
+
+        const shoulderWidth = 0.5;
+        this.bones.leftShoulder.position.set(-shoulderWidth / 2, 0, 0);
+        this.bones.rightShoulder.position.set(shoulderWidth / 2, 0, 0);
+
+        // The visual bar connecting shoulders
+        this._setupLocalCylinder(this.shoulders, shoulderWidth);
+        this.shoulders.rotation.z = Math.PI / 2;
+
+        const legLength = waistHeight;
+        const upperLegLength = legLength * 0.5;
+        const lowerLegLength = legLength * 0.5;
+
+        this.bones.leftUpperLeg.position.set(-0.2, 0, 0);
+        this.bones.leftLowerLeg.position.set(0, -upperLegLength, 0);
+        this._setupLocalCylinder(this.leftLeg, upperLegLength);
+        this.leftLeg.position.set(0, -upperLegLength * 0.5, 0);
+
+        this.bones.rightUpperLeg.position.set(0.2, 0, 0);
+        this.bones.rightLowerLeg.position.set(0, -upperLegLength, 0);
+        this._setupLocalCylinder(this.rightLeg, upperLegLength);
+        this.rightLeg.position.set(0, -upperLegLength * 0.5, 0);
+
         this._updateNameTagPosition();
     }
 
-    public updateArms(leftHandPos: THREE.Vector3, rightHandPos: THREE.Vector3): void {
-        const neckHeight = Math.max(0.4, this.currentHeadHeight - 0.2);
-        const shoulderY = neckHeight - 0.1;
-        const leftShoulder = new THREE.Vector3(-0.25, shoulderY, 0);
-        const rightShoulder = new THREE.Vector3(0.25, shoulderY, 0);
+    private _setupLocalCylinder(mesh: THREE.Mesh, length: number) {
+        if (length < 0.001) {
+            mesh.scale.set(0, 0, 0);
+        } else {
+            mesh.scale.set(1, length, 1);
+        }
+    }
 
-        const calculateElbow = (shoulder: THREE.Vector3, hand: THREE.Vector3): THREE.Vector3 => {
-            const armVec = new THREE.Vector3().subVectors(hand, shoulder);
-            const armLen = armVec.length();
-            const armDir = armVec.clone().normalize();
-            const mid = new THREE.Vector3().lerpVectors(shoulder, hand, 0.5);
-            const segmentLen = 0.32;
-            const bendDist = Math.sqrt(Math.max(0, segmentLen * segmentLen - (armLen / 2) * (armLen / 2)));
-            const side = shoulder.x > 0 ? 1 : -1;
-            const hint = new THREE.Vector3(side * 0.5, -0.2, 0.2).normalize();
-            const projection = hint.clone().projectOnPlane(armDir).normalize();
-            return mid.addScaledVector(projection, bendDist);
+    public updateArms(leftHandPos: THREE.Vector3, rightHandPos: THREE.Vector3): void {
+        const calculateIK = (shoulderBone: THREE.Bone, handWorldTarget: THREE.Vector3, isLeft: boolean): { upperQuat: THREE.Quaternion, lowerQuat: THREE.Quaternion, elbowDist: number, wristDist: number } => {
+            // Get local target relative to the shoulder bone
+            shoulderBone.updateMatrixWorld();
+            const invShoulderMat = new THREE.Matrix4().copy(shoulderBone.matrixWorld).invert();
+            const targetLocal = handWorldTarget.clone().applyMatrix4(invShoulderMat);
+
+            const targetDist = targetLocal.length();
+            const armDir = targetLocal.clone().normalize();
+
+            // Segment lengths
+            const upperArmLen = 0.32;
+            const lowerArmLen = 0.32;
+
+            // Basic CCD / Triangle IK math to find the elbow bend angle
+            // Law of Cosines to find the angle at the shoulder
+            let cosAngle = (upperArmLen * upperArmLen + targetDist * targetDist - lowerArmLen * lowerArmLen) / (2 * upperArmLen * targetDist);
+            cosAngle = Math.max(-1, Math.min(1, cosAngle));
+            const shoulderAngle = Math.acos(cosAngle);
+
+            // Pole vector (hint for elbow direction: slightly outward and down)
+            const side = isLeft ? 1 : -1;
+            const poleLocal = new THREE.Vector3(side * 0.5, -0.5, 0.2).normalize();
+
+            // Find an axis perpendicular to the arm direction and pole to bend around
+            const bendAxis = new THREE.Vector3().crossVectors(poleLocal, armDir).normalize();
+
+            // If the arm is stretched out straight, the cross product is zero
+            if (bendAxis.lengthSq() < 0.001) { bendAxis.set(0, 0, 1); }
+
+            // Apply rotation from straight-down (0,-1,0) towards the target
+            const baseQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), armDir);
+
+            // Add the bend angle
+            const bendQuat = new THREE.Quaternion().setFromAxisAngle(bendAxis, shoulderAngle);
+            const upperQuat = baseQuat.multiply(bendQuat);
+
+            // Now solve the elbow (lower arm)
+            let lowerCosAngle = (upperArmLen * upperArmLen + lowerArmLen * lowerArmLen - targetDist * targetDist) / (2 * upperArmLen * lowerArmLen);
+            lowerCosAngle = Math.max(-1, Math.min(1, lowerCosAngle));
+            const elbowAngle = Math.PI - Math.acos(lowerCosAngle);
+
+            // Elbow bends around the same local bendAxis, just relative to the straight arm
+            const lowerQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), elbowAngle); // Actually depends on the skeleton rest binding!
+
+            return { upperQuat, lowerQuat, elbowDist: upperArmLen, wristDist: lowerArmLen };
         };
 
-        const leftElbow = calculateElbow(leftShoulder, leftHandPos);
-        const rightElbow = calculateElbow(rightShoulder, rightHandPos);
-        this.leftShoulderJoint.position.copy(leftShoulder);
-        this.rightShoulderJoint.position.copy(rightShoulder);
-        this.leftElbowJoint.position.copy(leftElbow);
-        this.rightElbowJoint.position.copy(rightElbow);
-        this._alignCylinder(this.leftUpperArm, leftShoulder, leftElbow, 0.02);
-        this._alignCylinder(this.leftForearm, leftElbow, leftHandPos, 0.02);
-        this._alignCylinder(this.rightUpperArm, rightShoulder, rightElbow, 0.02);
-        this._alignCylinder(this.rightForearm, rightElbow, rightHandPos, 0.02);
+        const leftIk = calculateIK(this.bones.leftShoulder, leftHandPos, true);
+        this.bones.leftUpperArm.quaternion.copy(leftIk.upperQuat);
+        // Place lower arm at the end of upper arm
+        this.bones.leftLowerArm.position.set(0, -leftIk.elbowDist, 0);
+        this.bones.leftLowerArm.quaternion.copy(leftIk.lowerQuat);
+
+        this._setupLocalCylinder(this.leftUpperArm, leftIk.elbowDist);
+        this.leftUpperArm.position.set(0, -leftIk.elbowDist * 0.5, 0);
+        this._setupLocalCylinder(this.leftForearm, leftIk.wristDist);
+        this.leftForearm.position.set(0, -leftIk.wristDist * 0.5, 0);
+
+
+        const rightIk = calculateIK(this.bones.rightShoulder, rightHandPos, false);
+        this.bones.rightUpperArm.quaternion.copy(rightIk.upperQuat);
+        this.bones.rightLowerArm.position.set(0, -rightIk.elbowDist, 0);
+        this.bones.rightLowerArm.quaternion.copy(rightIk.lowerQuat);
+
+        this._setupLocalCylinder(this.rightUpperArm, rightIk.elbowDist);
+        this.rightUpperArm.position.set(0, -rightIk.elbowDist * 0.5, 0);
+        this._setupLocalCylinder(this.rightForearm, rightIk.wristDist);
+        this.rightForearm.position.set(0, -rightIk.wristDist * 0.5, 0);
     }
 
     public updateWristMarkers(leftHandInfo: IHandState, rightHandInfo: IHandState, lerpFactor: number = 1.0): void {
