@@ -178,29 +178,58 @@ export class SoundSynth {
             out.connect(ctx.destination);
         }
 
-        const click = ctx.createOscillator();
-        click.type = 'triangle';
-        click.frequency.setValueAtTime(1700 + (drive * 700), now);
-        click.frequency.exponentialRampToValueAtTime(340, now + 0.045);
-        const clickGain = ctx.createGain();
-        clickGain.gain.setValueAtTime(0.12 * drive, now);
-        clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
-        click.connect(clickGain);
-        clickGain.connect(out);
-        click.start(now);
-        click.stop(now + 0.06);
+        // Crash-like bright noise body.
+        const noiseLen = Math.floor(ctx.sampleRate * 0.22);
+        const noiseBuffer = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+        const channel = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseLen; i++) {
+            channel[i] = (Math.random() * 2 - 1) * (1 - (i / noiseLen) * 0.35);
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuffer;
+        const noiseBand = ctx.createBiquadFilter();
+        noiseBand.type = 'bandpass';
+        noiseBand.frequency.setValueAtTime(1700 + drive * 900, now);
+        noiseBand.Q.setValueAtTime(0.7, now);
+        const noiseHigh = ctx.createBiquadFilter();
+        noiseHigh.type = 'highpass';
+        noiseHigh.frequency.setValueAtTime(420, now);
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.0001, now);
+        noiseGain.gain.linearRampToValueAtTime(0.22 * drive, now + 0.004);
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+        noise.connect(noiseBand);
+        noiseBand.connect(noiseHigh);
+        noiseHigh.connect(noiseGain);
+        noiseGain.connect(out);
+        noise.start(now);
+        noise.stop(now + 0.21);
 
-        const body = ctx.createOscillator();
-        body.type = 'square';
-        body.frequency.setValueAtTime(420 + (drive * 160), now);
-        body.frequency.exponentialRampToValueAtTime(170, now + 0.12);
-        const bodyGain = ctx.createGain();
-        bodyGain.gain.setValueAtTime(0.0001, now);
-        bodyGain.gain.linearRampToValueAtTime(0.08 * drive, now + 0.006);
-        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
-        body.connect(bodyGain);
-        bodyGain.connect(out);
-        body.start(now);
-        body.stop(now + 0.15);
+        // Low punch so impact has weight.
+        const thump = ctx.createOscillator();
+        thump.type = 'sine';
+        thump.frequency.setValueAtTime(120 + drive * 20, now);
+        thump.frequency.exponentialRampToValueAtTime(52, now + 0.11);
+        const thumpGain = ctx.createGain();
+        thumpGain.gain.setValueAtTime(0.0001, now);
+        thumpGain.gain.linearRampToValueAtTime(0.16 * drive, now + 0.006);
+        thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+        thump.connect(thumpGain);
+        thumpGain.connect(out);
+        thump.start(now);
+        thump.stop(now + 0.15);
+
+        // Very short transient to preserve hand-slap articulation.
+        const tick = ctx.createOscillator();
+        tick.type = 'triangle';
+        tick.frequency.setValueAtTime(2200, now);
+        tick.frequency.exponentialRampToValueAtTime(500, now + 0.02);
+        const tickGain = ctx.createGain();
+        tickGain.gain.setValueAtTime(0.05 * drive, now);
+        tickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.024);
+        tick.connect(tickGain);
+        tickGain.connect(out);
+        tick.start(now);
+        tick.stop(now + 0.03);
     }
 }

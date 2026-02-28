@@ -7,110 +7,181 @@ export interface IParticleBurstOptions {
     count?: number;
     speed?: number;
     lifetime?: number;
-    size?: number;
-}
-
-interface IParticle {
-    mesh: THREE.Mesh;
-    velocity: THREE.Vector3;
-    life: number;
-    maxLife: number;
-    active: boolean;
+    size?: number; // point size scalar in world-like units
 }
 
 export class ParticleSystemManager implements IUpdatable {
-    private root: THREE.Group = new THREE.Group();
-    private particles: IParticle[] = [];
-    private gravity: number = 2.8;
-    private defaultColor = new THREE.Color(0x00ffff);
-    private rand = new THREE.Vector3();
+    private readonly capacity = 1200;
+    private readonly gravity = 2.3;
+    private readonly drag = 0.985;
+    private readonly defaultColor = new THREE.Color(0x00ffff);
+
+    private root: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+    private geometry: THREE.BufferGeometry;
+    private material: THREE.ShaderMaterial;
+
+    private positions: Float32Array;
+    private colors: Float32Array;
+    private sizes: Float32Array;
+    private alphas: Float32Array;
+    private velocities: Float32Array;
+    private life: Float32Array;
+    private maxLife: Float32Array;
+    private active: Uint8Array;
+    private cursor = 0;
 
     constructor(private scene: THREE.Scene) {
-        this.root.name = 'ParticleSystem';
+        this.positions = new Float32Array(this.capacity * 3);
+        this.colors = new Float32Array(this.capacity * 3);
+        this.sizes = new Float32Array(this.capacity);
+        this.alphas = new Float32Array(this.capacity);
+        this.velocities = new Float32Array(this.capacity * 3);
+        this.life = new Float32Array(this.capacity);
+        this.maxLife = new Float32Array(this.capacity);
+        this.active = new Uint8Array(this.capacity);
+
+        this.geometry = new THREE.BufferGeometry();
+        this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+        this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+        this.geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1));
+        this.geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphas, 1));
+        this.geometry.setDrawRange(0, this.capacity);
+
+        this.material = new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            vertexColors: true,
+            uniforms: {
+                uScale: { value: 310.0 }
+            },
+            vertexShader: `
+                attribute float aSize;
+                attribute float aAlpha;
+                varying vec3 vColor;
+                varying float vAlpha;
+                uniform float uScale;
+                void main() {
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    gl_Position = projectionMatrix * mvPosition;
+                    gl_PointSize = max(1.0, aSize * (uScale / max(0.0001, -mvPosition.z)));
+                    vColor = color;
+                    vAlpha = aAlpha;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vAlpha;
+                void main() {
+                    vec2 uv = gl_PointCoord * 2.0 - 1.0;
+                    float r2 = dot(uv, uv);
+                    if (r2 > 1.0) discard;
+                    float falloff = exp(-2.2 * r2);
+                    gl_FragColor = vec4(vColor, vAlpha * falloff);
+                }
+            `
+        });
+
+        this.root = new THREE.Points(this.geometry, this.material);
+        this.root.name = 'ParticlePoints';
+        this.root.frustumCulled = false;
         this.scene.add(this.root);
-        this.prewarm(220);
     }
 
     public update(delta: number): void {
-        for (let i = 0; i < this.particles.length; i++) {
-            const p = this.particles[i];
-            if (!p.active) continue;
+        if (delta <= 0) return;
 
-            p.life -= delta;
-            if (p.life <= 0) {
-                p.active = false;
-                p.mesh.visible = false;
+        let dirty = false;
+        for (let i = 0; i < this.capacity; i++) {
+            if (this.active[i] === 0) continue;
+
+            this.life[i] -= delta;
+            if (this.life[i] <= 0) {
+                this.active[i] = 0;
+                this.alphas[i] = 0;
+                this.sizes[i] = 0;
+                dirty = true;
                 continue;
             }
 
-            p.velocity.y -= this.gravity * delta;
-            p.mesh.position.x += p.velocity.x * delta;
-            p.mesh.position.y += p.velocity.y * delta;
-            p.mesh.position.z += p.velocity.z * delta;
+            const base = i * 3;
+            this.velocities[base + 1] -= this.gravity * delta;
+            this.velocities[base] *= this.drag;
+            this.velocities[base + 1] *= this.drag;
+            this.velocities[base + 2] *= this.drag;
 
-            const t = p.life / p.maxLife;
-            p.mesh.scale.setScalar(Math.max(0.001, t));
-            (p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, t);
+            this.positions[base] += this.velocities[base] * delta;
+            this.positions[base + 1] += this.velocities[base + 1] * delta;
+            this.positions[base + 2] += this.velocities[base + 2] * delta;
+
+            const t = this.life[i] / Math.max(0.0001, this.maxLife[i]);
+            this.alphas[i] = Math.max(0, t);
+            this.sizes[i] *= (0.91 + t * 0.09);
+            dirty = true;
         }
+
+        if (!dirty) return;
+        this.geometry.attributes.position.needsUpdate = true;
+        this.geometry.attributes.aAlpha.needsUpdate = true;
+        this.geometry.attributes.aSize.needsUpdate = true;
     }
 
     public spawnBurst(options: IParticleBurstOptions): void {
-        const count = Math.max(4, Math.min(48, Math.floor(options.count ?? 16)));
-        const baseSpeed = Math.max(0.4, options.speed ?? 1.7);
-        const lifetime = Math.max(0.08, options.lifetime ?? 0.35);
-        const baseSize = Math.max(0.006, options.size ?? 0.018);
+        const count = Math.max(4, Math.min(72, Math.floor(options.count ?? 22)));
+        const baseSpeed = Math.max(0.12, options.speed ?? 0.8);
+        const lifeBase = Math.max(0.06, options.lifetime ?? 0.2);
+        const sizeBase = Math.max(0.004, options.size ?? 0.013);
         const color = new THREE.Color(options.color ?? this.defaultColor);
 
-        for (let i = 0; i < count; i++) {
-            const p = this.allocParticle(baseSize);
-            if (!p) return;
+        let wrote = false;
+        for (let n = 0; n < count; n++) {
+            const i = this.alloc();
+            if (i < 0) break;
 
-            p.active = true;
-            p.life = lifetime * (0.75 + Math.random() * 0.45);
-            p.maxLife = p.life;
-            p.mesh.visible = true;
-            p.mesh.position.set(options.position.x, options.position.y, options.position.z);
+            const base = i * 3;
+            this.active[i] = 1;
+            this.positions[base] = options.position.x + (Math.random() - 0.5) * 0.008;
+            this.positions[base + 1] = options.position.y + (Math.random() - 0.5) * 0.008;
+            this.positions[base + 2] = options.position.z + (Math.random() - 0.5) * 0.008;
 
-            this.rand.set(Math.random() - 0.5, Math.random() - 0.15, Math.random() - 0.5).normalize();
-            const speed = baseSpeed * (0.65 + Math.random() * 0.75);
-            p.velocity.copy(this.rand).multiplyScalar(speed);
-            p.mesh.scale.setScalar(baseSize);
+            let dx = Math.random() * 2 - 1;
+            let dy = Math.random() * 2 - 1;
+            let dz = Math.random() * 2 - 1;
+            const len = Math.hypot(dx, dy, dz) || 1;
+            dx /= len;
+            dy /= len;
+            dz /= len;
 
-            const mat = p.mesh.material as THREE.MeshBasicMaterial;
-            mat.color.copy(color);
-            mat.opacity = 0.95;
+            const speed = baseSpeed * (0.75 + Math.random() * 0.55);
+            this.velocities[base] = dx * speed;
+            this.velocities[base + 1] = dy * speed;
+            this.velocities[base + 2] = dz * speed;
+
+            this.colors[base] = color.r;
+            this.colors[base + 1] = color.g;
+            this.colors[base + 2] = color.b;
+
+            const life = lifeBase * (0.75 + Math.random() * 0.5);
+            this.life[i] = life;
+            this.maxLife[i] = life;
+            this.alphas[i] = 1.0;
+            this.sizes[i] = sizeBase * (0.75 + Math.random() * 0.5);
+            wrote = true;
         }
+
+        if (!wrote) return;
+        this.geometry.attributes.position.needsUpdate = true;
+        this.geometry.attributes.color.needsUpdate = true;
+        this.geometry.attributes.aAlpha.needsUpdate = true;
+        this.geometry.attributes.aSize.needsUpdate = true;
     }
 
-    private prewarm(capacity: number): void {
-        for (let i = 0; i < capacity; i++) {
-            const geo = new THREE.SphereGeometry(1, 4, 3);
-            const mat = new THREE.MeshBasicMaterial({
-                color: this.defaultColor,
-                transparent: true,
-                opacity: 0
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.visible = false;
-            this.root.add(mesh);
-            this.particles.push({
-                mesh,
-                velocity: new THREE.Vector3(),
-                life: 0,
-                maxLife: 1,
-                active: false
-            });
+    private alloc(): number {
+        for (let pass = 0; pass < this.capacity; pass++) {
+            const i = this.cursor;
+            this.cursor = (this.cursor + 1) % this.capacity;
+            if (this.active[i] === 0) return i;
         }
-    }
-
-    private allocParticle(size: number): IParticle | null {
-        for (let i = 0; i < this.particles.length; i++) {
-            const p = this.particles[i];
-            if (p.active) continue;
-            p.mesh.scale.setScalar(size);
-            return p;
-        }
-        return null;
+        return -1;
     }
 }
-

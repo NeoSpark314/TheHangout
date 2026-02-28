@@ -130,18 +130,26 @@ export class SocialEffectsManager implements IUpdatable, IReplicatedFeature {
         this.particles.spawnBurst({
             position,
             color: 0x00ffff,
-            count: 18 + Math.floor(hit.i * 14),
-            speed: 1.5 + hit.i * 1.8,
-            lifetime: 0.25 + hit.i * 0.25,
-            size: 0.012 + hit.i * 0.015
+            count: 22 + Math.floor(hit.i * 16),
+            speed: 0.24 + hit.i * 0.34,
+            lifetime: 0.12 + hit.i * 0.12,
+            size: 0.010 + hit.i * 0.007
         });
         this.particles.spawnBurst({
             position,
             color: 0xff2ea6,
-            count: 10 + Math.floor(hit.i * 8),
-            speed: 1.3 + hit.i * 1.5,
-            lifetime: 0.2 + hit.i * 0.2,
-            size: 0.008 + hit.i * 0.01
+            count: 12 + Math.floor(hit.i * 10),
+            speed: 0.2 + hit.i * 0.28,
+            lifetime: 0.1 + hit.i * 0.1,
+            size: 0.008 + hit.i * 0.006
+        });
+        this.particles.spawnBurst({
+            position,
+            color: 0xffffff,
+            count: 6 + Math.floor(hit.i * 5),
+            speed: 0.1 + hit.i * 0.18,
+            lifetime: 0.055 + hit.i * 0.045,
+            size: 0.022 + hit.i * 0.014
         });
     }
 
@@ -205,4 +213,3 @@ export class SocialEffectsManager implements IUpdatable, IReplicatedFeature {
             : Date.now();
     }
 }
-
