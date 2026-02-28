@@ -26,6 +26,9 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lerpFactor: number = 0.2;
     private pendingRelease: boolean = false;
+    private proxyRenderPos: IVector3 = { x: 0, y: 0, z: 0 };
+    private proxyRenderRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+    private proxyInitialized: boolean = false;
 
     constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
@@ -38,6 +41,8 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         const rot = this.rigidBody.rotation();
         this.targetPos = { x: pos.x, y: pos.y, z: pos.z };
         this.targetRot = { x: rot.x, y: rot.y, z: rot.z, w: rot.w };
+        this.proxyRenderPos = { ...this.targetPos };
+        this.proxyRenderRot = { ...this.targetRot };
 
         this.syncAuthority();
     }
@@ -116,6 +121,9 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     public updateGrabbedPose(pose: IPose): void {
         this.targetPos = { ...pose.position };
         this.targetRot = { ...pose.quaternion };
+        this.proxyRenderPos = { ...pose.position };
+        this.proxyRenderRot = { ...pose.quaternion };
+        this.proxyInitialized = true;
 
         if (this.rigidBody) {
             this.rigidBody.setNextKinematicTranslation(pose.position);
@@ -152,6 +160,17 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.syncAuthority();
 
         if (this.isAuthority) {
+            if (this.heldBy) {
+                if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.KinematicPositionBased) {
+                    this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+                    this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                    this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+                }
+            } else if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.Dynamic) {
+                this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                this.rigidBody.wakeUp();
+            }
+
             const position = this.rigidBody.translation();
             const rotation = this.rigidBody.rotation();
 
@@ -185,35 +204,33 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
                 this.rigidBody.wakeUp();
             }
         } else {
-            // Non-authoritative: follow the physics or network target
-            const position = this.rigidBody.translation();
-            const rotation = this.rigidBody.rotation();
+            // Non-authoritative: this acts as a kinematic network proxy; view interpolation is visual-only.
+            if (this.rigidBody.bodyType() !== RAPIER.RigidBodyType.KinematicPositionBased) {
+                this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+                this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+            }
 
-            if (this.rigidBody.bodyType() === RAPIER.RigidBodyType.Dynamic) {
-                const dsq = Math.pow(this.targetPos.x - position.x, 2) +
-                    Math.pow(this.targetPos.y - position.y, 2) +
-                    Math.pow(this.targetPos.z - position.z, 2);
+            this.rigidBody.setNextKinematicTranslation({ x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z });
+            this.rigidBody.setNextKinematicRotation({ x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w });
 
-                if (dsq > 0.01) {
-                    this.rigidBody.setTranslation(this.targetPos, false);
-                    this.rigidBody.setRotation(this.targetRot, false);
-                }
-
-                if (this.view) {
-                    this.view.applyState({
-                        position: { x: position.x, y: position.y, z: position.z },
-                        quaternion: { x: rotation.x, y: rotation.y, z: rotation.z, w: rotation.w },
-                        lerpFactor: 1.0
-                    }, delta);
-                }
+            if (!this.proxyInitialized) {
+                this.proxyRenderPos = { ...this.targetPos };
+                this.proxyRenderRot = { ...this.targetRot };
+                this.proxyInitialized = true;
             } else {
-                if (this.view) {
-                    this.view.applyState({
-                        position: this.targetPos,
-                        quaternion: this.targetRot,
-                        lerpFactor: this.lerpFactor
-                    }, delta);
-                }
+                this.proxyRenderPos.x += (this.targetPos.x - this.proxyRenderPos.x) * this.lerpFactor;
+                this.proxyRenderPos.y += (this.targetPos.y - this.proxyRenderPos.y) * this.lerpFactor;
+                this.proxyRenderPos.z += (this.targetPos.z - this.proxyRenderPos.z) * this.lerpFactor;
+                this.nlerpQuaternion(this.proxyRenderRot, this.targetRot, this.lerpFactor);
+            }
+
+            if (this.view) {
+                this.view.applyState({
+                    position: this.proxyRenderPos,
+                    quaternion: this.proxyRenderRot,
+                    lerpFactor: 1.0
+                }, delta);
             }
         }
     }
@@ -253,34 +270,43 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
             Math.pow(this.targetPos.y - oldTargetPos.y, 2) +
             Math.pow(this.targetPos.z - oldTargetPos.z, 2) > 1.0;
 
+        // Snap the visual proxy on major discontinuities to avoid long trailing lerps.
         if (stateTransition || hugeJump) {
-            if (this.view) {
-                this.view.applyState({
-                    position: this.targetPos,
-                    quaternion: this.targetRot,
-                    lerpFactor: 1.0
-                }, 0);
-            }
-        }
-
-        if (this.rigidBody) {
-            if (this.heldBy && !wasHeld) {
-                this.rigidBody.wakeUp();
-                this.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
-            } else if (!this.heldBy && wasHeld) {
-                this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-                this.rigidBody.wakeUp();
-            }
-
-            if (this.heldBy) {
-                this.rigidBody.setNextKinematicTranslation({ x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z });
-                this.rigidBody.setNextKinematicRotation({ x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w });
-            }
+            this.proxyRenderPos = { ...this.targetPos };
+            this.proxyRenderRot = { ...this.targetRot };
+            this.proxyInitialized = true;
         }
 
         if (!this.heldBy && wasHeld && state.v) {
             this.rigidBody?.setLinvel({ x: state.v[0], y: state.v[1], z: state.v[2] }, true);
         }
+    }
+
+    private nlerpQuaternion(current: IQuaternion, target: IQuaternion, t: number): void {
+        let tx = target.x;
+        let ty = target.y;
+        let tz = target.z;
+        let tw = target.w;
+
+        const dot = current.x * tx + current.y * ty + current.z * tz + current.w * tw;
+        if (dot < 0) {
+            tx = -tx;
+            ty = -ty;
+            tz = -tz;
+            tw = -tw;
+        }
+
+        const it = 1 - t;
+        current.x = it * current.x + t * tx;
+        current.y = it * current.y + t * ty;
+        current.z = it * current.z + t * tz;
+        current.w = it * current.w + t * tw;
+
+        const len = Math.hypot(current.x, current.y, current.z, current.w) || 1;
+        current.x /= len;
+        current.y /= len;
+        current.z /= len;
+        current.w /= len;
     }
 
     public destroy(): void {
