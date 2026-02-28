@@ -396,19 +396,20 @@ export class FlatUIManager implements IUpdatable {
     private updateVoiceButton(enabled: boolean): void {
         if (!this.voiceBtn) return;
         if (enabled) {
-            this.voiceBtn.textContent = 'Voice Chat: READY';
-            this.voiceBtn.style.backgroundColor = '#ef4444';
+            this.voiceBtn.textContent = 'Voice: ON';
+            this.voiceBtn.classList.add('ready');
         } else {
-            this.voiceBtn.textContent = 'Enable Voice Chat';
-            this.voiceBtn.style.backgroundColor = '#3b82f6';
+            this.voiceBtn.textContent = 'Voice: OFF';
+            this.voiceBtn.classList.remove('ready');
         }
     }
 
     private updateAvatarButtonColor(color: string): void {
         if (!this.avatarBtn) return;
+        this.avatarBtn.style.setProperty('--avatar-color', color);
         this.avatarBtn.style.backgroundColor = `${color}33`;
         this.avatarBtn.style.borderColor = color;
-        this.avatarBtn.style.boxShadow = `0 0 10px ${color}88`;
+        this.avatarBtn.style.boxShadow = `0 0 15px ${color}66`;
     }
 
     private handleLeave(): void {

@@ -4,36 +4,38 @@
  */
 export const UITheme = {
     colors: {
-        primary: '#00ffff',          // Neon Cyan (Active elements, borders, highlights)
-        primaryHover: '#00cccc',     // Darker Cyan
+        primary: '#00ffff',          // Neon Cyan
+        primaryHover: '#00cccc',
 
-        secondary: '#ff00ff',        // Neon Magenta (Warnings, toggles)
-        secondaryHover: '#cc00cc',   // Darker Magenta
+        secondary: '#ff00ff',        // Neon Magenta
+        secondaryHover: '#cc00cc',
 
-        accent: '#ffaa00',           // Neon Orange/Gold (Callouts)
+        accent: '#ffaa00',           // Neon Orange/Gold
+        danger: '#ef4444',           // Error / Destructive
+        dangerHover: '#dc2626',
 
-        background: '#0a041c',       // Deep Space Violet (Root backgrounds)
-        panelBg: 'rgba(10, 4, 28, 0.85)', // Translucent Violet (Panels/Tabs/Buttons)
-        panelBgHover: 'rgba(20, 10, 50, 0.95)', // Lighter Violet for hovers
+        background: '#0a041c',       // Deep Space Violet
+        panelBg: 'rgba(10, 4, 28, 0.85)',
+        panelBgHover: 'rgba(20, 10, 50, 0.95)',
 
-        text: '#f8fafc',             // Off-white / High contrast
-        textMuted: '#64748b',        // Disabled / Inactive text
+        text: '#f8fafc',             // Off-white
+        textMuted: '#64748b',
 
-        border: '#ff00ff',           // Standard borders default to Magenta in this theme
-        borderActive: '#00ffff',     // Active borders default to Cyan
+        border: '#ff00ff',           // Default Magenta
+        borderActive: '#00ffff',     // Active Cyan
     },
     typography: {
-        fontFamily: 'Inter, Arial, sans-serif',
+        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
         sizes: {
-            title: 64,
-            header: 48,
-            body: 32,
-            small: 24
+            title: 54,               // Balanced for 1280x800
+            header: 42,
+            body: 28,
+            small: 20
         }
     },
     styling: {
-        borderWidth: 3,
-        cornerRadius: 8
+        borderWidth: 2,
+        cornerRadius: 12
     }
 };
 

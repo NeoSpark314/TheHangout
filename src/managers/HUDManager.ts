@@ -3,6 +3,7 @@ import eventBus from '../core/EventBus';
 import { GameContext } from '../core/GameState';
 import { EVENTS } from '../utils/Constants';
 import { IUpdatable } from '../interfaces/IUpdatable';
+import { UITheme } from '../utils/UITheme';
 
 interface Notification {
     text: string;
@@ -77,7 +78,7 @@ export class HUDManager implements IUpdatable {
 
     public showNotification(text: string, duration: number = 4000): void {
         this.notifications.push({
-            text: text.toUpperCase(),
+            text: text,
             startTime: performance.now(),
             duration: duration
         });
@@ -112,14 +113,14 @@ export class HUDManager implements IUpdatable {
                 nctx.save();
                 nctx.globalAlpha = opacity;
                 nctx.textAlign = 'center';
-                nctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                this.drawRoundedRect(nctx, this.noteCanvas.width / 2 - 300, this.noteCanvas.height / 2 - 30, 600, 60, 30);
+                nctx.fillStyle = UITheme.colors.panelBg;
+                this.drawRoundedRect(nctx, this.noteCanvas.width / 2 - 300, this.noteCanvas.height / 2 - 30, 600, 60, UITheme.styling.cornerRadius * 2);
                 nctx.fill();
-                nctx.strokeStyle = '#ff00ff';
-                nctx.lineWidth = 2;
+                nctx.strokeStyle = UITheme.colors.secondary;
+                nctx.lineWidth = UITheme.styling.borderWidth;
                 nctx.stroke();
-                nctx.font = 'bold 24px Inter, Arial, sans-serif';
-                nctx.fillStyle = '#ffffff';
+                nctx.font = `bold 28px ${UITheme.typography.fontFamily}`;
+                nctx.fillStyle = UITheme.colors.text;
                 nctx.fillText(n.text, this.noteCanvas.width / 2, this.noteCanvas.height / 2 + 8);
                 nctx.restore();
             }

@@ -291,10 +291,10 @@ export class VRUIManager implements IUpdatable {
                     location.reload(); // Simple approach for now
                 }
             });
-            leaveBtn.backgroundColor = 'rgba(200, 40, 40, 0.4)';
+            leaveBtn.backgroundColor = UITheme.colors.danger;
             leaveBtn.borderColor = UITheme.colors.secondary;
-            leaveBtn.textColor = UITheme.colors.secondary;
-            leaveBtn.hoverColor = 'rgba(255, 0, 255, 0.6)';
+            leaveBtn.textColor = UITheme.colors.text;
+            leaveBtn.hoverColor = UITheme.colors.dangerHover;
             systemContainer.addChild(leaveBtn);
         });
     }

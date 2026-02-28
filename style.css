@@ -1,32 +1,35 @@
 :root {
     --primary-color: #00ffff;
-    /* Neon Cyan */
     --primary-hover: #00cccc;
     --secondary-color: #ff00ff;
-    /* Neon Magenta */
     --secondary-hover: #cc00cc;
     --accent-color: #ffaa00;
-    /* Neon Orange/Gold */
+    --danger-color: #ef4444;
+    --danger-hover: #dc2626;
+
     --bg-color: #0a041c;
-    /* Deep Space Violet */
     --panel-bg: rgba(10, 4, 28, 0.85);
-    /* Translucent Violet */
     --panel-bg-hover: rgba(20, 10, 50, 0.95);
     --text-color: #f8fafc;
     --muted-text: #64748b;
-    --border-radius: 8px;
-    --border-width: 3px;
-    /* Sharper edges for retro feel */
-    --neon-glow: 0 0 10px rgba(0, 255, 255, 0.7), 0 0 20px rgba(0, 255, 255, 0.5);
-    --neon-glow-magenta: 0 0 10px rgba(255, 0, 255, 0.7), 0 0 20px rgba(255, 0, 255, 0.5);
+
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-size-title: 1.8rem;
+    --font-size-header: 1.4rem;
+    --font-size-body: 1rem;
+    --font-size-small: 0.85rem;
+
+    --border-radius: 12px;
+    --border-width: 2px;
+    --neon-glow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.3);
+    --neon-glow-magenta: 0 0 10px rgba(255, 0, 255, 0.5), 0 0 20px rgba(255, 0, 255, 0.3);
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Inter', 'Courier New', Courier, monospace;
-    /* Modern sleek retro */
+    font-family: var(--font-family);
 }
 
 html,
@@ -69,8 +72,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
     transition: opacity 0.5s ease;
     overflow-y: auto;
     /* Enable scrolling if panel is still too tall */
@@ -79,30 +82,28 @@ body {
 
 .panel {
     background: var(--panel-bg);
-    padding: 2rem;
+    padding: 2.5rem;
     border-radius: var(--border-radius);
     border: var(--border-width) solid var(--secondary-color);
     box-shadow: var(--neon-glow-magenta);
     width: 90%;
-    max-width: 480px;
+    max-width: 500px;
     text-align: center;
 }
 
 .panel h1 {
-    font-size: 1.8rem;
-    margin-bottom: 0.5rem;
+    font-size: var(--font-size-title);
+    margin-bottom: 0.75rem;
     color: var(--primary-color);
-    text-shadow: 0 0 5px var(--primary-color), 0 0 10px var(--primary-color);
-    text-transform: uppercase;
-    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    letter-spacing: 1px;
 }
 
 .panel p {
     color: #cbd5e1;
-    margin-bottom: 1.5rem;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    margin-bottom: 2rem;
+    font-size: var(--font-size-small);
+    letter-spacing: 0.5px;
 }
 
 .input-group {
@@ -115,43 +116,41 @@ body {
     margin-bottom: 0.5rem;
     font-weight: 600;
     color: var(--primary-color);
-    text-shadow: 0 0 3px var(--primary-color);
+    opacity: 0.9;
 }
 
 .input-group input {
     width: 100%;
-    padding: 0.75rem;
+    padding: 0.85rem;
     border-radius: var(--border-radius);
-    border: 1px solid var(--primary-color);
-    background: transparent;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.3);
     color: var(--primary-color);
-    font-size: 1rem;
+    font-size: var(--font-size-body);
     outline: none;
-    box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.2);
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .input-group input:focus,
 .input-group input.gamepad-focus {
     border-color: var(--secondary-color);
-    box-shadow: inset 0 0 5px rgba(255, 0, 255, 0.2), var(--neon-glow-magenta);
-    color: var(--secondary-color);
+    box-shadow: 0 0 10px rgba(255, 0, 255, 0.3);
+    color: var(--text-color);
 }
 
 .primary-btn {
     width: 100%;
-    padding: 0.75rem;
+    padding: 0.9rem;
     background: transparent;
     border: var(--border-width) solid var(--primary-color);
     border-radius: var(--border-radius);
     color: var(--primary-color);
-    font-size: 1.1rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 2px;
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    letter-spacing: 1px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: var(--neon-glow);
-    text-shadow: 0 0 5px var(--primary-color);
     outline: none;
 }
 
@@ -159,7 +158,7 @@ body {
 .primary-btn.gamepad-focus {
     background: var(--primary-color);
     color: var(--bg-color);
-    box-shadow: 0 0 15px var(--primary-color), 0 0 30px var(--primary-color);
+    box-shadow: 0 0 20px var(--primary-color);
 }
 
 .primary-btn.secondary-style {
@@ -202,12 +201,11 @@ body {
 /* Network mode indicator */
 .network-mode-badge {
     text-align: center;
-    font-size: 0.75rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 2px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
     padding: 4px 12px;
-    border-radius: 3px;
+    border-radius: 6px;
 }
 
 .network-mode-badge.local {
@@ -232,20 +230,19 @@ body {
 
 .action-stack input {
     flex: 1;
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid #ff00ff;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 0, 255, 0.3);
     color: #fff;
     padding: 10px;
-    border-radius: 4px;
+    border-radius: var(--border-radius);
     font-family: inherit;
-    font-size: 1rem;
-    box-shadow: inset 0 0 5px rgba(255, 0, 255, 0.2);
+    font-size: var(--font-size-body);
 }
 
 .icon-btn {
-    background: rgba(255, 0, 255, 0.2);
-    border: 1px solid #ff00ff;
-    border-radius: 4px;
+    background: rgba(255, 0, 255, 0.1);
+    border: 1px solid rgba(255, 0, 255, 0.3);
+    border-radius: var(--border-radius);
     color: #fff;
     padding: 0 10px;
     cursor: pointer;
@@ -344,16 +341,16 @@ input[type="color"] {
     font-weight: bold;
 }
 
-/* WebXR VR Button Styling */
 #VRButton {
     z-index: 100 !important;
-    border: 1px solid var(--primary-color) !important;
+    border: var(--border-width) solid var(--primary-color) !important;
     background: var(--bg-color) !important;
     color: var(--primary-color) !important;
-    font-family: 'Courier New', Courier, monospace !important;
-    text-transform: uppercase !important;
-    letter-spacing: 2px !important;
+    font-family: var(--font-family) !important;
+    font-weight: 600 !important;
+    letter-spacing: 1px !important;
     box-shadow: var(--neon-glow) !important;
+    border-radius: var(--border-radius) !important;
 }
 
 #VRButton:hover {
@@ -383,9 +380,8 @@ input[type="color"] {
     justify-content: space-between;
     align-items: center;
     color: var(--primary-color);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    font-size: var(--font-size-small);
+    letter-spacing: 0.5px;
 }
 
 #face-close-btn {
@@ -404,21 +400,24 @@ input[type="color"] {
     /* Critical for mobile/tablet drawing */
 }
 
-.face-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+#voice-btn.ready {
+    background: var(--danger-color);
+    border-color: var(--danger-hover);
+    box-shadow: 0 0 15px var(--danger-color);
+}
+
+#avatar-btn {
+    transition: all 0.3s ease;
 }
 
 #face-clear-btn {
     background: transparent;
     border: 1px solid var(--secondary-color);
     color: var(--secondary-color);
-    padding: 5px 10px;
-    border-radius: 4px;
+    padding: 5px 12px;
+    border-radius: 6px;
     cursor: pointer;
-    text-transform: uppercase;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
 }
 
 .brush-preview {
@@ -449,17 +448,15 @@ input[type="color"] {
     box-shadow: var(--neon-glow);
 }
 
-/* --- Version Info --- */
 .version-info {
     position: absolute;
     bottom: 15px;
     font-size: 0.65rem;
     color: var(--muted-text);
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     background: rgba(0, 0, 0, 0.3);
-    padding: 2px 8px;
-    border-radius: 2px;
+    padding: 4px 10px;
+    border-radius: 6px;
     pointer-events: none;
     user-select: none;
 }
