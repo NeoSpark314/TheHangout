@@ -108,9 +108,10 @@ export class UIPointerSkill extends Skill {
         if (isXR) {
             this.mouseLine.visible = false;
             this.mouseDot.visible = false;
+            const trackingHands = managers.tracking.getState().hands;
 
             for (const hand of ['left', 'right'] as const) {
-                const handState = player.handStates[hand];
+                const handState = trackingHands[hand];
                 const line = this.pointerLines[hand];
                 const dot = this.pointerDots[hand];
 
@@ -205,7 +206,7 @@ export class UIPointerSkill extends Skill {
         const tabletMesh = vrUi.tablet.mesh;
 
         if (isXR) {
-            const handState = player.handStates[hand];
+            const handState = player.context.managers.tracking.getState().hands[hand];
             if (!handState.active) return;
 
             const pos = handState.pointerPose.position || handState.pose.position;

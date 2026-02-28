@@ -34,7 +34,7 @@ export class GrabSkill extends Skill {
             if (isGrabbable(nearest)) {
 
                 // Calculate grab offset to prevent jumping
-                const handState = player.handStates[payload.hand];
+                const handState = player.context.managers.tracking.getState().hands[payload.hand];
                 const pos = handState.pointerPose.position || handState.pose.position;
                 const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
@@ -127,8 +127,9 @@ export class GrabSkill extends Skill {
     }
 
     public update(delta: number, player: LocalPlayer, managers: IManagers): void {
+        const trackingHands = managers.tracking.getState().hands;
         for (const hand of ['left', 'right'] as const) {
-            const handState = player.handStates[hand];
+            const handState = trackingHands[hand];
             const held = this.heldObjects.get(hand);
 
             if (held) {

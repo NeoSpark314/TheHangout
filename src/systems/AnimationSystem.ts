@@ -41,8 +41,8 @@ export class AnimationSystem implements IUpdatable {
 
     private _onXRHand(payload: IXRHandTrackedPayload): void {
         this._isVR = true;
-        if (!this.localPlayer) return;
-        const hand = this.localPlayer.handStates[payload.hand];
+        if (!this.localPlayer || !this.managers) return;
+        const hand = this.managers.tracking.getState().hands[payload.hand];
         hand.active = true;
         hand.pose.position = { x: payload.position.x, y: payload.position.y, z: payload.position.z };
         hand.pose.quaternion = { x: payload.quaternion.x, y: payload.quaternion.y, z: payload.quaternion.z, w: payload.quaternion.w };
@@ -88,8 +88,9 @@ export class AnimationSystem implements IUpdatable {
         // Note: Head quaternion is already synced to camera by RenderManager/TrackingProvider on Desktop
 
         // 2. Update Hand States (World Space)
+        const trackingHands = this.managers.tracking.getState().hands;
         for (const hand of ['left', 'right'] as const) {
-            const state = this.localPlayer.handStates[hand];
+            const state = trackingHands[hand];
 
             // On desktop, the DesktopTrackingProvider is now the source of truth for 
             // the hand's base pose and reach. We no longer force state.active = true 
