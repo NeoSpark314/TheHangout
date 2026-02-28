@@ -21,7 +21,11 @@ The project follows a **Clean Object-Oriented (OOP) Architecture** pattern based
 4.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems safely query these capabilities at runtime.
 5.  **Strictly Typed Network Contract**: All traffic utilizes explicitly typed packet payloads (`INetworkPacket.ts`) and Discriminated Unions (`IEntityState.ts`). We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth. 
 6.  **Type-Safe Network Hydration**: To manage bandwidth, network payloads are often minified and partial (e.g., `INetworkHandState`). We avoid using `any` during deserialization. Instead, incoming partial network interfaces are strictly defined and safely merged into robust local Class Models (e.g., `HandState.applyData()`) to prevent `undefined` runtime crashes and guarantee valid state.
-7.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
+7.  **Data-Oriented Math Types (Interfaces vs. Classes)**: For fundamental spatial data (`IPose`, `IVector3`, `IQuaternion`), the architecture strictly uses **Interfaces** rather than Classes with helper methods. This provides three critical benefits:
+    *   **Zero Allocation Overhead**: In a 90hz VR render loop, instantiating millions of `new Pose()` class objects would thrash the Garbage Collector and cause frame drops. Interfaces are zero-cost at runtime.
+    *   **Frictionless Serialization**: Raw JSON from the network (`{ position: {...}, quaternion: {...} }`) can be cast directly to `IPose` without needing to iterate and manually instantiate class instances.
+    *   **Duck-Typing Interoperability**: Because the interfaces only define data shape (`x, y, z`), objects from other libraries (like `THREE.Vector3` or WebXR's `XRRigidTransform`) often automatically fulfill the contract without expensive conversions.
+8.  **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
 
 ## Core Systems
 
