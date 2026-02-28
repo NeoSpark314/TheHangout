@@ -23,6 +23,7 @@ export class VRUIManager implements IUpdatable {
     private onVoiceStateHandler: (() => void) | null = null;
     private scheduleRenderHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
+    private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(private context: GameContext) { }
 
@@ -471,6 +472,11 @@ export class VRUIManager implements IUpdatable {
         const debugContainer = debugTab.container;
 
         import('../utils/canvasui').then(({ UIButton, UILabel, UIToggle }) => {
+            if (this.debugStatsInterval) {
+                clearInterval(this.debugStatsInterval);
+                this.debugStatsInterval = null;
+            }
+
             const title = new UILabel("Debug", 50, 30, 1180, 70);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
@@ -565,6 +571,21 @@ export class VRUIManager implements IUpdatable {
             note.textColor = UITheme.colors.textMuted;
             note.textAlign = 'left';
             debugContainer.addChild(note);
+
+            const statsLabel = new UILabel("", 90, 620, 1080, 52);
+            statsLabel.font = getFont(UITheme.typography.sizes.small, 'bold');
+            statsLabel.textColor = UITheme.colors.accent;
+            statsLabel.textAlign = 'left';
+            debugContainer.addChild(statsLabel);
+
+            const updateStats = () => {
+                const avg = physics.getTouchQueryAverageHitsPerFrame();
+                statsLabel.text = `Touch Query Hits/frame (avg 1s): ${avg.toFixed(2)}`;
+                this.tablet?.ui.markDirty();
+            };
+
+            updateStats();
+            this.debugStatsInterval = setInterval(updateStats, 500);
         });
     }
 
@@ -688,6 +709,10 @@ export class VRUIManager implements IUpdatable {
 
     public destroy(): void {
         this.teardownPeersTabSubscriptions();
+        if (this.debugStatsInterval) {
+            clearInterval(this.debugStatsInterval);
+            this.debugStatsInterval = null;
+        }
         if (this.keyboardHandler) {
             window.removeEventListener('keydown', this.keyboardHandler);
             this.keyboardHandler = null;

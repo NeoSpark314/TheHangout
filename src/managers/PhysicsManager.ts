@@ -19,6 +19,7 @@ export interface IPhysicsDebugBody {
     simMode: string | null;
     snapshotBufferSize: number;
     lastTransferSeq: number;
+    touchQueryHits: number;
 }
 
 interface IPhysicsDebugBodyEntry {
@@ -51,6 +52,13 @@ export class PhysicsManager {
     private pendingReleaseMaxHoldMs: number = 900;
     private touchQueryShape: RAPIER.Ball = new RAPIER.Ball(0.55);
     private readonly identityRotation = { x: 0, y: 0, z: 0, w: 1 };
+    private touchQueryHitsThisFrame: number = 0;
+    private touchQueryHitsAccum: number = 0;
+    private touchQueryFramesAccum: number = 0;
+    private touchQueryAvgAccumulatorSec: number = 0;
+    private touchQueryAvgHitsPerFrame: number = 0;
+    private touchQueryHitsByEntityAccum: Map<string, number> = new Map();
+    private touchQueryHitsByEntityWindow: Map<string, number> = new Map();
 
     constructor(private context: GameContext) { }
 
@@ -159,6 +167,7 @@ export class PhysicsManager {
 
     public step(delta: number): void {
         if (!this.world) return;
+        this.touchQueryHitsThisFrame = 0;
         this.accumulator += delta;
         while (this.accumulator >= this.fixedTimeStep) {
             this.world.step(this.eventQueue || undefined);
@@ -168,6 +177,7 @@ export class PhysicsManager {
 
         this.processTouchOwnershipLeases();
         this.processProximityTouchLeases();
+        this.updateTouchQueryMetrics(delta);
     }
 
     public getDebugBodies(): IPhysicsDebugBody[] {
@@ -182,7 +192,8 @@ export class PhysicsManager {
                 hasNetworkState: !!entry.getOwnerId,
                 simMode: entry.getSimMode ? entry.getSimMode() : null,
                 snapshotBufferSize: entry.getSnapshotBufferSize ? entry.getSnapshotBufferSize() : 0,
-                lastTransferSeq: entry.getLastTransferSeq ? entry.getLastTransferSeq() : 0
+                lastTransferSeq: entry.getLastTransferSeq ? entry.getLastTransferSeq() : 0,
+                touchQueryHits: this.touchQueryHitsByEntityWindow.get(entry.id) ?? 0
             });
         }
         return out;
@@ -226,6 +237,10 @@ export class PhysicsManager {
         for (const entity of entities) {
             entity.setPendingReleaseHoldWindow(clampedMin, clampedMax);
         }
+    }
+
+    public getTouchQueryAverageHitsPerFrame(): number {
+        return this.touchQueryAvgHitsPerFrame;
     }
 
     private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsEntity): void {
@@ -331,6 +346,8 @@ export class PhysicsManager {
                 (collider) => {
                     const target = this.colliderToEntity.get(collider.handle);
                     if (!target || target === source) return true;
+                    this.touchQueryHitsThisFrame++;
+                    this.touchQueryHitsByEntityAccum.set(target.id, (this.touchQueryHitsByEntityAccum.get(target.id) ?? 0) + 1);
                     this.tryClaimTouchLease(target, nowMs, localId);
                     return true;
                 },
@@ -361,5 +378,24 @@ export class PhysicsManager {
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private updateTouchQueryMetrics(delta: number): void {
+        this.touchQueryHitsAccum += this.touchQueryHitsThisFrame;
+        this.touchQueryFramesAccum += 1;
+        this.touchQueryAvgAccumulatorSec += delta;
+
+        if (this.touchQueryAvgAccumulatorSec < 1.0) return;
+
+        this.touchQueryAvgHitsPerFrame = this.touchQueryFramesAccum > 0
+            ? this.touchQueryHitsAccum / this.touchQueryFramesAccum
+            : 0;
+
+        this.touchQueryHitsByEntityWindow = new Map(this.touchQueryHitsByEntityAccum);
+
+        this.touchQueryHitsAccum = 0;
+        this.touchQueryFramesAccum = 0;
+        this.touchQueryAvgAccumulatorSec = 0;
+        this.touchQueryHitsByEntityAccum.clear();
     }
 }
