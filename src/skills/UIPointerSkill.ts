@@ -15,12 +15,6 @@ export class UIPointerSkill extends Skill {
     private mouseLine: THREE.Line;
     private mouseDot: THREE.Mesh;
 
-    // Drag state
-    private draggingHand: 'left' | 'right' | 'desktop' | null = null;
-    private dragDistance: number = 0.5;
-    private dragOffsetPos: THREE.Vector3 = new THREE.Vector3();
-    private dragOffsetQuat: THREE.Quaternion = new THREE.Quaternion();
-
     private _handlers: Array<{ event: string, handler: any }> = [];
 
     constructor() {
@@ -131,12 +125,6 @@ export class UIPointerSkill extends Skill {
 
                     this.raycaster.set(origin, direction);
 
-                    if (this.draggingHand === hand) {
-                        // Desktop/Legacy drag fallback (rarely used now)
-                        line.visible = true;
-                        dot.visible = false;
-                        continue;
-                    }
 
                     const hits = this.raycaster.intersectObject(tabletMesh);
 
