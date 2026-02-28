@@ -494,10 +494,11 @@ export class VRUIManager implements IUpdatable {
             case 'Desktop':
                 return [
                     "• Move: W, A, S, D keys",
-                    "• Look: Move Mouse (Click to Lock)",
+                    "• Look: Move Mouse",
                     "• Menu: M key",
-                    "• Grab: E key or Left Click",
-                    "• Hand Active: 1 (Left), 2 (Right)",
+                    "• Grab: Left Click",
+                    "• Interact: Right Click",
+                    "• Hand Active: Q (Left), E (Right)",
                     "• Reach Distance: Mouse Wheel"
                 ];
             case 'Touch':

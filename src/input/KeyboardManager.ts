@@ -20,12 +20,21 @@ export class KeyboardManager {
             if (e.button === 0) {
                 this.keyboard['primary_action'] = true;
                 this.justPressed.add('primary_action');
+            } else if (e.button === 2) {
+                this.keyboard['secondary_action'] = true;
+                this.justPressed.add('secondary_action');
             }
         });
         window.addEventListener('mouseup', (e) => {
             if (e.button === 0) {
                 this.keyboard['primary_action'] = false;
+            } else if (e.button === 2) {
+                this.keyboard['secondary_action'] = false;
             }
+        });
+        window.addEventListener('contextmenu', (e) => {
+            // Prevent default right-click menu since we use it for interactions
+            e.preventDefault();
         });
     }
 

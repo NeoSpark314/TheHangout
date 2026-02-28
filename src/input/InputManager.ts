@@ -129,8 +129,8 @@ export class InputManager implements IUpdatable {
 
         // 0. Desktop Hand Activation (Centralized Logic)
         if (render && !render.isXRPresenting() && tracking) {
-            tracking.setHandActive('left', this.isKeyDown('1'));
-            tracking.setHandActive('right', this.isKeyDown('2'));
+            tracking.setHandActive('left', this.isKeyDown('q'));
+            tracking.setHandActive('right', this.isKeyDown('e'));
 
             if (this._wheelDelta !== 0) {
                 tracking.adjustReach(this._wheelDelta);
@@ -195,20 +195,20 @@ export class InputManager implements IUpdatable {
             const leftActive = trackingState.hands.left.active;
             const rightActive = trackingState.hands.right.active;
 
-            const isEPressed = this.isKeyDown('e');
-            const isClickPressed = this.isKeyDown('primary_action');
+            const isGrabPressed = this.isKeyDown('primary_action'); // Left mouse click
+            const isInteractPressed = this.isKeyDown('secondary_action'); // Right mouse click
 
             if (leftActive) {
-                currentStates.left.isSqueezing = isEPressed;
-                currentStates.left.isInteracting = isClickPressed;
-                currentStates.left.triggerValue = isClickPressed ? 1.0 : 0.0;
+                currentStates.left.isSqueezing = isGrabPressed;
+                currentStates.left.isInteracting = isInteractPressed;
+                currentStates.left.triggerValue = isInteractPressed ? 1.0 : 0.0;
             }
 
             if (rightActive || (!leftActive && !rightActive)) {
                 // Default to right hand if both are inactive or right is active
-                currentStates.right.isSqueezing = isEPressed;
-                currentStates.right.isInteracting = isClickPressed;
-                currentStates.right.triggerValue = isClickPressed ? 1.0 : 0.0;
+                currentStates.right.isSqueezing = isGrabPressed;
+                currentStates.right.isInteracting = isInteractPressed;
+                currentStates.right.triggerValue = isInteractPressed ? 1.0 : 0.0;
             }
         }
 
