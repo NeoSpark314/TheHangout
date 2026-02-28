@@ -90,11 +90,22 @@ export class VRUIManager implements IUpdatable {
             });
         }
 
+        // Always re-append to ensure it's in the DOM
+        if (this.tablet && !this.overlayContainer.contains(this.tablet.ui.canvas)) {
+            this.overlayContainer.appendChild(this.tablet.ui.canvas);
+        }
+
         document.body.appendChild(this.overlayContainer);
+        this.tablet?.ui.markDirty();
+        this.tablet?.ui.update(); // Physical render
         document.exitPointerLock?.();
 
         // Hide 3D tablet
         this.tablet.setVisible(false);
+
+        // Hide desktop controls
+        const controls = document.getElementById('desktop-controls');
+        if (controls) controls.style.display = 'none';
     }
 
     private hide2DMenu(): void {
@@ -102,11 +113,15 @@ export class VRUIManager implements IUpdatable {
             this.overlayContainer.parentElement.removeChild(this.overlayContainer);
         }
 
-        // Resume 3D tablet visibility if appropriate (will be handled by update() check potentially, but let's be explicit)
-        // Actually, we want it hidden in Desktop mode normally anyway based on user request "showing the 3D tablet only in VR"
         if (this.tablet) {
             const isVR = this.context.managers.render?.isXRPresenting();
             this.tablet.setVisible(!!isVR);
+        }
+
+        // Restore desktop controls if not in VR
+        const controls = document.getElementById('desktop-controls');
+        if (controls && !this.context.managers.render?.isXRPresenting()) {
+            controls.style.display = 'block';
         }
     }
 

@@ -16,12 +16,12 @@ export class FlatUIManager implements IUpdatable {
     private avatarDialog: HTMLElement;
     private closeAvatarBtn: HTMLButtonElement;
     private avatarColorInput: HTMLInputElement;
-    private leaveBtn: HTMLElement;
     private voiceBtn: HTMLButtonElement | null;
     private statusText: HTMLElement;
     private errorText: HTMLElement;
     private versionInfo: HTMLElement;
     private shaInfo: HTMLElement;
+    private desktopControls: HTMLElement | null;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
 
@@ -37,15 +37,16 @@ export class FlatUIManager implements IUpdatable {
         this.avatarDialog = document.getElementById('avatar-dialog')!;
         this.closeAvatarBtn = document.getElementById('close-avatar-btn') as HTMLButtonElement;
         this.avatarColorInput = document.getElementById('avatar-color') as HTMLInputElement;
-        this.leaveBtn = document.getElementById('leave-btn')!;
         this.voiceBtn = document.getElementById('voice-btn') as HTMLButtonElement;
         this.statusText = document.getElementById('status-text')!;
         this.errorText = document.getElementById('error-text')!;
         this.versionInfo = document.getElementById('app-version')!;
         this.shaInfo = document.getElementById('git-sha')!;
+        this.desktopControls = document.getElementById('desktop-controls');
         this.isMobile = isMobile;
 
         this.init();
+        this.showOverlay(); // Ensure it's visible initially
     }
 
     private init(): void {
@@ -111,11 +112,7 @@ export class FlatUIManager implements IUpdatable {
             });
         }
 
-        if (this.leaveBtn) {
-            this.leaveBtn.addEventListener('click', () => {
-                this.handleLeave();
-            });
-        }
+        // Room UI events are handled in setupGuestMode / setupDefaultMode
 
         eventBus.on(EVENTS.HOST_READY, (peerId: string) => {
             if (this.context.isHost) {
@@ -354,7 +351,9 @@ export class FlatUIManager implements IUpdatable {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
                 this.overlay.style.display = 'none';
-                if (this.leaveBtn) this.leaveBtn.style.display = 'flex';
+                if (this.desktopControls && !this.isMobile) {
+                    this.desktopControls.style.display = 'block';
+                }
                 if (this.isMobile && !this.context.isDedicatedHost) {
                     const hud = document.getElementById('mobile-hud');
                     if (hud) {
@@ -412,8 +411,18 @@ export class FlatUIManager implements IUpdatable {
         this.avatarBtn.style.boxShadow = `0 0 15px ${color}66`;
     }
 
+    public showOverlay(): void {
+        if (this.overlay) {
+            this.overlay.style.display = 'flex';
+            this.overlay.offsetHeight;
+            this.overlay.style.opacity = '1';
+        }
+        if (this.desktopControls) this.desktopControls.style.display = 'none';
+        const hud = document.getElementById('mobile-hud');
+        if (hud) hud.style.display = 'none';
+    }
+
     private handleLeave(): void {
-        if (this.leaveBtn) this.leaveBtn.style.display = 'none';
         if (this.context.managers.network) this.context.managers.network.disconnect();
         if (this.context.managers.media) this.context.managers.media.stopMicrophone();
         if (this.context.managers.entity) {
@@ -428,15 +437,5 @@ export class FlatUIManager implements IUpdatable {
         this.showOverlay();
         this.setStatus('Ready');
         this.enableAllButtons();
-    }
-
-    public showOverlay(): void {
-        if (this.overlay) {
-            this.overlay.style.display = 'flex';
-            this.overlay.offsetHeight;
-            this.overlay.style.opacity = '1';
-        }
-        const hud = document.getElementById('mobile-hud');
-        if (hud) hud.style.display = 'none';
     }
 }
