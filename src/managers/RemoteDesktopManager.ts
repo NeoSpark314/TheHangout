@@ -99,10 +99,6 @@ export class RemoteDesktopManager implements IUpdatable {
             eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${key}" is offline.`);
             return;
         }
-        if (!this.isCapturing(key)) {
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is not broadcasting yet.`);
-            return;
-        }
         if (this.isActive(key)) {
             eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active in-room.`);
             return;
@@ -160,6 +156,14 @@ export class RemoteDesktopManager implements IUpdatable {
         for (const key of payload.activeKeys || []) {
             this.activeByKey.add(key);
         }
+
+        // Handle standby visuals for active surfaces
+        for (const [key, surface] of this.surfacesByKey.entries()) {
+            if (this.activeByKey.has(key) && !this.isCapturing(key)) {
+                this.drawStandby(surface);
+            }
+        }
+
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
@@ -209,15 +213,21 @@ export class RemoteDesktopManager implements IUpdatable {
         if (!ctx) {
             throw new Error('Canvas 2D context unavailable for remote desktop surface');
         }
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#00ffff';
-        ctx.font = 'bold 36px sans-serif';
-        ctx.fillText(`Waiting for ${name}...`, 40, 80);
 
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.needsUpdate = true;
+
+        const surface: IRenderSurface = {
+            key,
+            name,
+            canvas,
+            ctx,
+            texture,
+            group: new THREE.Group() // Placeholder, will be replaced below
+        };
+
+        this.drawStandby(surface);
 
         const screenMesh = new THREE.Mesh(
             new THREE.PlaneGeometry(1.6, 0.9),
@@ -244,16 +254,54 @@ export class RemoteDesktopManager implements IUpdatable {
 
         this.context.managers.render.scene.add(group);
 
-        const surface: IRenderSurface = {
-            key,
-            name,
-            group,
-            texture,
-            canvas,
-            ctx
-        };
+        surface.group = group;
         this.surfacesByKey.set(key, surface);
+
         return surface;
+    }
+
+    private drawStandby(surface: IRenderSurface): void {
+        const { ctx, canvas, texture, name } = surface;
+
+        // Background gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#0a0d14');
+        grad.addColorStop(1, '#1a1f2c');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Grid pattern
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 40) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 40) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        // Center Text
+        ctx.fillStyle = '#00ffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 15;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.font = 'bold 48px Outfit, sans-serif';
+        ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2 - 40);
+
+        ctx.shadowBlur = 0;
+        ctx.font = '300 28px Outfit, sans-serif';
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
+        ctx.fillText('STANDBY • WAITING FOR BROADCAST', canvas.width / 2, canvas.height / 2 + 30);
+
+        // Status indicator
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2 - 140, canvas.height / 2 + 30, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffaa00'; // Amber for standby
+        ctx.fill();
+
+        texture.needsUpdate = true;
     }
 
     private removeSurface(key: string): void {

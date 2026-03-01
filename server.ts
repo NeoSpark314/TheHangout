@@ -343,10 +343,11 @@ wss.on('connection', (ws) => {
                             return;
                         }
 
-                        if (!capturingKeys.has(key)) {
-                            // Source not yet broadcasting
-                            return;
-                        }
+                        // Allow summoning non-capturing online sources
+                        // if (!capturingKeys.has(key)) {
+                        //     // Source not yet broadcasting
+                        //     return;
+                        // }
 
                         desktopRoutes.set(key, {
                             roomId: currentRoomId,
@@ -507,17 +508,16 @@ desktopSourceWss.on('connection', (ws) => {
                 const key = typeof data.key === 'string' ? data.key.trim() : '';
                 if (!key) return;
                 capturingKeys.delete(key);
-                const route = desktopRoutes.get(key);
-                if (!route) {
-                    notifySubscribedClientsForKey(key);
-                    return;
-                }
-                desktopRoutes.delete(key);
                 notifySubscribedClientsForKey(key);
-                sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
-                    key,
-                    roomId: route.roomId
-                });
+
+                const route = desktopRoutes.get(key);
+                if (route) {
+                    sendPacketToRoom(route.roomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                        kind: 'desktop_stream_stopped',
+                        subjectName: route.name || key,
+                        sentAt: Date.now()
+                    });
+                }
                 return;
             }
         } catch (e) {
