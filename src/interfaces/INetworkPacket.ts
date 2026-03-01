@@ -42,6 +42,7 @@ export interface IDesktopSourcesStatusRequestPayload {
 export interface IDesktopSourcesStatusResponsePayload {
     statuses: Record<string, boolean>;
     activeKeys?: string[];
+    capturingKeys?: string[];
 }
 
 export interface IDesktopStreamSummonPayload {

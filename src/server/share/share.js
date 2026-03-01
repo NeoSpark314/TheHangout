@@ -108,6 +108,13 @@ async function startCapture() {
 
         setStatus(`Streaming "${activeKey}"`, 'warn');
 
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'source-capture-started',
+                key: activeKey
+            }));
+        }
+
         captureTimer = setInterval(() => {
             if (!socket || socket.readyState !== WebSocket.OPEN) return;
             if (!captureVideo || !captureCanvas) return;

@@ -30,6 +30,7 @@ const MY_SCREENS_STORAGE_KEY = 'hangout_myScreens';
 export class RemoteDesktopManager implements IUpdatable {
     private configs: IMyScreenConfig[] = [];
     private onlineByKey: Map<string, boolean> = new Map();
+    private capturingByKey: Map<string, boolean> = new Map();
     private activeByKey: Set<string> = new Set();
     private surfacesByKey: Map<string, IRenderSurface> = new Map();
     private decodeImage = new Image();
@@ -98,8 +99,12 @@ export class RemoteDesktopManager implements IUpdatable {
             eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${key}" is offline.`);
             return;
         }
+        if (!this.isCapturing(key)) {
+            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is not broadcasting yet.`);
+            return;
+        }
         if (this.isActive(key)) {
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active.`);
+            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active in-room.`);
             return;
         }
 
@@ -131,6 +136,10 @@ export class RemoteDesktopManager implements IUpdatable {
         return this.onlineByKey.get(key) === true;
     }
 
+    public isCapturing(key: string): boolean {
+        return this.capturingByKey.get(key) === true;
+    }
+
     public isActive(key: string): boolean {
         return this.activeByKey.has(key);
     }
@@ -140,6 +149,11 @@ export class RemoteDesktopManager implements IUpdatable {
         this.onlineByKey.clear();
         for (const [key, isOnline] of Object.entries(statuses)) {
             this.onlineByKey.set(key, !!isOnline);
+        }
+
+        this.capturingByKey.clear();
+        for (const key of payload.capturingKeys || []) {
+            this.capturingByKey.set(key, true);
         }
 
         this.activeByKey.clear();
