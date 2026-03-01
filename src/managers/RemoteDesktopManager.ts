@@ -184,7 +184,6 @@ export class RemoteDesktopManager implements IUpdatable {
                 this.removeSurface(key);
             }
         }
-        console.log('[RemoteDesktopManager] Received status update:', payload);
         this.refreshActiveLayouts();
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }

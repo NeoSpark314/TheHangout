@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The Hangout - Share Desktop</title>
     <link rel="stylesheet" href="./share.css" />
 </head>
+
 <body>
     <main class="wrap">
         <section class="card">
             <h1>Desktop Share</h1>
             <p class="lead">Register your global key and wait for a VR user to summon your screen.</p>
 
-            <label for="share-key">Share Key</label>
             <input id="share-key" type="text" placeholder="bobs-macbook-2026" />
 
             <div class="row">
@@ -31,14 +32,47 @@
                 <span id="codec-text">unknown</span>
             </div>
 
+            <div class="row">
+                <div class="control-group">
+                    <label for="quality-range">Quality (JPEG/WebP)</label>
+                    <input id="quality-range" type="range" min="10" max="100" value="65" />
+                    <span id="quality-val">65%</span>
+                </div>
+                <div class="control-group">
+                    <label for="fps-select">Target FPS</label>
+                    <select id="fps-select">
+                        <option value="5">5 FPS (Low Power)</option>
+                        <option value="12" selected>12 FPS (Smooth)</option>
+                        <option value="24">24 FPS (Cinema)</option>
+                        <option value="30">30 FPS (High)</option>
+                        <option value="60">60 FPS (Ultra)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row preview-row">
+                <button id="preview-toggle">Show Preview</button>
+                <div id="preview-container"
+                    style="display: none; margin-top: 10px; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden;">
+                    <canvas id="preview-canvas" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
+                </div>
+            </div>
+
+            <div class="status stats">
+                <div><strong>Bandwidth:</strong> <span id="bandwidth-text">0 KB/s</span></div>
+                <div><strong>Resolution:</strong> <span id="res-text">0x0</span></div>
+            </div>
+
             <ul class="notes">
+                <li><strong>Smart Transmission:</strong> Frames are only sent when someone is actually watching in a
+                    room.</li>
                 <li>Keep this page open while sharing.</li>
                 <li>You can run this on a separate PC than your VR headset.</li>
-                <li>Route: <code>/desktop-source</code> WebSocket on the local server.</li>
             </ul>
         </section>
     </main>
 
     <script type="module" src="./share.js"></script>
 </body>
+
 </html>

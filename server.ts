@@ -108,9 +108,6 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
     const requestedSet = new Set(requestedKeys);
 
     // 1. Report online status for anything the client specifically asked about
-    const registeredKeys = Array.from(globalDesktopSources.keys());
-    console.log(`[DesktopSource] Checking status for ${roomId}. Registered: [${registeredKeys.join(', ')}]. Requested: [${requestedKeys.join(', ')}]`);
-
     for (const key of requestedKeys) {
         statuses[key] = globalDesktopSources.has(key);
     }
@@ -138,7 +135,6 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
         capturingKeys: capturing,
         activeNames
     };
-    console.log(`[DesktopSource] Status Payload for room ${roomId}:`, JSON.stringify(response));
     return response;
 }
 
@@ -153,11 +149,20 @@ function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: stri
 
 function notifySubscribedClientsForKey(key: string): void {
     const route = desktopRoutes.get(key);
+    const isWatched = !!route; // If it has a route, it's summoned in a room
 
+    // 1. Notify the source itself about its watch status
+    const sourceWs = globalDesktopSources.get(key);
+    if (sourceWs && sourceWs.readyState === 1) {
+        sourceWs.send(JSON.stringify({
+            type: 'watch-status',
+            key,
+            isWatched
+        }));
+    }
+
+    // 2. Notify relay clients (the UI)
     for (const [ws, sub] of relaySourceSubscriptions.entries()) {
-        // Notify if:
-        // A) User explicitly subscribed to this key (it's in their "My Screens")
-        // B) The key is active in the user's CURRENT room
         const isRequested = sub.keys.has(key);
         const isInRoom = route && route.roomId === sub.roomId;
 

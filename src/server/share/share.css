@@ -132,6 +132,47 @@ button.danger {
     color: var(--muted);
 }
 
+.control-group {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#quality-val {
+    font-size: 0.9rem;
+    color: var(--accent);
+    text-align: right;
+}
+
+#fps-select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 8px;
+    background: #0f141b;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+}
+
+.preview-row {
+    margin-top: 20px;
+}
+
+#preview-toggle {
+    width: 100%;
+}
+
 @media (max-width: 540px) {
     .card {
         padding: 18px;

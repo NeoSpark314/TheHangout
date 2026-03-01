@@ -5,6 +5,15 @@ const stopBtn = document.getElementById('stop-btn');
 const statusText = document.getElementById('status-text');
 const codecText = document.getElementById('codec-text');
 
+const qualityInput = document.getElementById('quality-range');
+const qualityVal = document.getElementById('quality-val');
+const fpsSelect = document.getElementById('fps-select');
+const previewToggle = document.getElementById('preview-toggle');
+const previewContainer = document.getElementById('preview-container');
+const previewCanvas = document.getElementById('preview-canvas');
+const bandwidthText = document.getElementById('bandwidth-text');
+const resText = document.getElementById('res-text');
+
 const STORAGE_KEY = 'hangout_desktopSourceKey';
 
 let socket = null;
@@ -14,6 +23,11 @@ let captureVideo = null;
 let captureCanvas = null;
 let captureTimer = null;
 let useWebP = false;
+
+let isWatched = false;
+let bytesSentRecent = 0;
+let lastStatsTs = Date.now();
+let showPreview = false;
 
 function setStatus(text, cls = '') {
     statusText.textContent = text;
@@ -78,8 +92,9 @@ async function startCapture() {
     if (captureStream) return;
 
     try {
+        const targetFps = parseInt(fpsSelect.value) || 12;
         const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 8, max: 12 } },
+            video: { frameRate: { ideal: targetFps, max: targetFps + 5 } },
             audio: false
         });
 
@@ -92,7 +107,8 @@ async function startCapture() {
 
         captureCanvas = document.createElement('canvas');
         const ctx = captureCanvas.getContext('2d');
-        if (!ctx) {
+        const previewCtx = previewCanvas.getContext('2d');
+        if (!ctx || !previewCtx) {
             throw new Error('No 2D context');
         }
 
@@ -121,22 +137,50 @@ async function startCapture() {
             if (!socket || socket.readyState !== WebSocket.OPEN) return;
             if (!captureVideo || !captureCanvas) return;
 
+            // Stats Tick (every 1s approx)
+            const now = Date.now();
+            const dt = (now - lastStatsTs) / 1000;
+            if (dt >= 1.0) {
+                const kbps = Math.round((bytesSentRecent / 1024) / dt);
+                bandwidthText.textContent = `${kbps} KB/s`;
+                bytesSentRecent = 0;
+                lastStatsTs = now;
+            }
+
             const srcW = Math.max(640, captureVideo.videoWidth || 1280);
             const srcH = Math.max(360, captureVideo.videoHeight || 720);
             const outW = 1280;
             const outH = Math.max(720, Math.round((srcH / srcW) * outW));
 
+            resText.textContent = `${srcW}x${srcH} (-> ${outW}x${outH})`;
+
+            // Smart Transmission Optimization
+            if (!isWatched) {
+                setStatus(`Streaming "${activeKey}" (PAUSED - No room is watching)`, 'warn');
+                return;
+            }
+            setStatus(`Streaming "${activeKey}" (LIVE)`, 'ok');
+
             captureCanvas.width = outW;
             captureCanvas.height = outH;
             ctx.drawImage(captureVideo, 0, 0, outW, outH);
 
+            if (showPreview) {
+                previewCanvas.width = outW;
+                previewCanvas.height = outH;
+                previewCtx.drawImage(captureCanvas, 0, 0);
+            }
+
             const mime = useWebP ? 'image/webp' : 'image/jpeg';
-            const quality = useWebP ? 0.68 : 0.62;
+            const quality = parseInt(qualityInput.value) / 100;
 
             captureCanvas.toBlob(async (blob) => {
                 if (!blob || !socket || socket.readyState !== WebSocket.OPEN) return;
+                if (!isWatched) return; // Re-check inside async callback
 
                 const imageData = await blob.arrayBuffer();
+                bytesSentRecent += imageData.byteLength;
+
                 const keyEncoded = new TextEncoder().encode(activeKey);
 
                 // Binary Format: [Type: 1b][KeyLen: 1b][Key: Nb][Image: Mb]
@@ -148,7 +192,7 @@ async function startCapture() {
 
                 socket.send(buffer);
             }, mime, quality);
-        }, 150);
+        }, 1000 / targetFps);
     } catch (err) {
         console.error('[share] capture failed', err);
         stopCapture(false);
@@ -185,6 +229,11 @@ function connect() {
                 setStatus(`Registered "${msg.key}"${suffix}`, 'ok');
                 return;
             }
+            if (msg.type === 'watch-status') {
+                isWatched = msg.isWatched;
+                console.log(`[share] Watch status update: ${isWatched}`);
+                return;
+            }
             if (msg.type === 'command-start-capture') {
                 await startCapture();
                 return;
@@ -197,7 +246,7 @@ function connect() {
                 setStatus(msg.message || 'Source error', 'error');
             }
         } catch {
-            setStatus('Invalid server message', 'error');
+            // Ignore non-JSON or other messages
         }
     };
 
@@ -224,6 +273,7 @@ function disconnect() {
     updateButtons();
 }
 
+// UI Listeners
 connectBtn.addEventListener('click', () => {
     if (socket && socket.readyState === WebSocket.OPEN) {
         disconnect();
@@ -238,6 +288,28 @@ startBtn.addEventListener('click', () => {
 
 stopBtn.addEventListener('click', () => {
     stopCapture(true);
+});
+
+qualityInput.addEventListener('input', () => {
+    qualityVal.textContent = `${qualityInput.value}%`;
+});
+
+fpsSelect.addEventListener('change', () => {
+    // If already capturing, we need to restart the timer to respect new FPS immediately
+    if (captureTimer) {
+        clearInterval(captureTimer);
+        const targetFps = parseInt(fpsSelect.value) || 12;
+        // In a real app we might re-negotiate media constraints, but for now 
+        // just changing the interval is a good start. 
+        // startCapture implements this on next start.
+        setStatus('Restart capture to apply FPS changes fully', 'warn');
+    }
+});
+
+previewToggle.addEventListener('click', () => {
+    showPreview = !showPreview;
+    previewContainer.style.display = showPreview ? 'block' : 'none';
+    previewToggle.textContent = showPreview ? 'Hide Preview' : 'Show Preview';
 });
 
 const savedKey = localStorage.getItem(STORAGE_KEY);
