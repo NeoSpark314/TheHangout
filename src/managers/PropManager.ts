@@ -525,8 +525,9 @@ export class PropManager implements IReplicatedFeature {
 
     public getDesktopLayout(index: number, _total: number): IDesktopScreenLayout {
         // Logic for the CyperStube room: large billboard on the table
+        // We increase the gap to 1.5 to prevent vertical overlap when multiple sources are active
         return {
-            position: [0, 1.8 + index * 0.15, 0],
+            position: [0, 1.8 + index * 1.5, 0],
             scale: [1.5, 1.5, 1.5],
             billboard: true
         };

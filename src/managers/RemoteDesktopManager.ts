@@ -269,14 +269,16 @@ export class RemoteDesktopManager implements IUpdatable {
 
                     // Update Aspect Ratio
                     const aspect = bitmap.width / bitmap.height;
-                    const baseWidth = 1.6;
-                    const targetWidth = 0.9 * aspect;
-                    const finalScale = Math.min(baseWidth / 1.6, targetWidth / 1.6); // Scale geometry relative to original 1.6x0.9
 
-                    // Instead of complex math, just scale the group's X to match aspect vs the 1.6/0.9 base
-                    // 1.6 / 0.9 = 1.777.
-                    // New scale X = (aspect / 1.777)
-                    surface.group.scale.set(aspect / (1.6 / 0.9), 1, 1);
+                    // We keep the height fixed at 0.9 (mesh base) and adjust width.
+                    // The PlaneGeometry is already 1.6x0.9. 
+                    // To get fixed height 0.9 with aspect X, width must be 0.9 * aspect.
+                    // Mesh scale X = (0.9 * aspect) / 1.6
+                    const meshScaleX = (0.9 * aspect) / 1.6;
+
+                    surface.screenMesh.scale.set(meshScaleX, 1, 1);
+                    // Frame is slightly larger: 1.66x0.96. We scale it proportionally.
+                    surface.frameMesh.scale.set(meshScaleX, 1, 1);
                 }
 
                 surface.ctx.drawImage(bitmap, 0, 0);
