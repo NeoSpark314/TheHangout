@@ -79,7 +79,7 @@ export class FlatUIManager implements IUpdatable {
         if (this.voiceBtn) {
             this.voiceBtn.addEventListener('click', async () => {
                 this.ensureAudioContextResumed();
-                await this.toggleVoice();
+                await this.setVoicePreference(!this.context.voiceAutoEnable);
                 this.saveToStorage();
             });
         }
@@ -213,13 +213,14 @@ export class FlatUIManager implements IUpdatable {
 
         const storedVoice = localStorage.getItem('hangout_voiceEnabled');
         if (storedVoice === 'false') {
-            this.context.voiceEnabled = false;
+            this.context.voiceAutoEnable = false;
         } else {
-            this.context.voiceEnabled = true;
+            this.context.voiceAutoEnable = true;
             if (storedVoice === null) {
                 localStorage.setItem('hangout_voiceEnabled', 'true');
             }
         }
+        this.context.voiceEnabled = this.context.managers.media?.isMicrophoneEnabled() || false;
         this.updateVoiceButton(this.context.voiceEnabled);
 
         const storedColor = localStorage.getItem('hangout_avatarColor');
@@ -253,7 +254,7 @@ export class FlatUIManager implements IUpdatable {
         if (this.context.avatarConfig.color) {
             localStorage.setItem('hangout_avatarColor', this.context.avatarConfig.color as string);
         }
-        localStorage.setItem('hangout_voiceEnabled', String(this.context.voiceEnabled));
+        localStorage.setItem('hangout_voiceEnabled', String(this.context.voiceAutoEnable));
         if (room) {
             localStorage.setItem('hangout_lastRoomId', room);
         }
@@ -284,7 +285,7 @@ export class FlatUIManager implements IUpdatable {
         this.joinBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Guest';
-            if (this.context.voiceEnabled) {
+            if (this.context.voiceAutoEnable) {
                 await this.context.managers.media.ensureMicrophoneEnabled();
             }
             this.setStatus('Connecting to host...');
@@ -304,7 +305,7 @@ export class FlatUIManager implements IUpdatable {
             this.joinBtn.addEventListener('click', async () => {
                 this.ensureAudioContextResumed();
                 this.context.playerName = this.nameInput.value.trim() || 'Player';
-                if (this.context.voiceEnabled) {
+                if (this.context.voiceAutoEnable) {
                     await this.context.managers.media.ensureMicrophoneEnabled();
                 }
                 const targetId = this.roomInput.value.trim() || this.generateReadableRoomId();
@@ -323,7 +324,7 @@ export class FlatUIManager implements IUpdatable {
         this.createBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Host';
-            if (this.context.voiceEnabled) {
+            if (this.context.voiceAutoEnable) {
                 await this.context.managers.media.ensureMicrophoneEnabled();
             }
             const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
@@ -339,7 +340,7 @@ export class FlatUIManager implements IUpdatable {
         this.joinBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Player';
-            if (this.context.voiceEnabled) {
+            if (this.context.voiceAutoEnable) {
                 await this.context.managers.media.ensureMicrophoneEnabled();
             }
             const targetId = this.roomInput.value.trim();
@@ -485,14 +486,14 @@ export class FlatUIManager implements IUpdatable {
         return elements;
     }
 
-    private async toggleVoice(): Promise<void> {
-        this.context.voiceEnabled = !this.context.voiceEnabled;
-        if (this.context.voiceEnabled) {
-            await this.context.managers.media.toggleMicrophone();
+    private async setVoicePreference(enabled: boolean): Promise<void> {
+        this.context.voiceAutoEnable = enabled;
+        const actualState = await this.context.managers.media.setMicrophoneEnabled(enabled);
+        if (!enabled) {
+            this.context.voiceEnabled = false;
         } else {
-            this.context.managers.media.stopMicrophone();
+            this.context.voiceEnabled = actualState;
         }
-        eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
     }
 
     private updateVoiceButton(enabled: boolean): void {

@@ -57,20 +57,29 @@ export class MediaManager {
     }
 
     public async toggleMicrophone(): Promise<boolean> {
+        return this.setMicrophoneEnabled(!this.localStream);
+    }
+
+    public async ensureMicrophoneEnabled(): Promise<boolean> {
         if (this.localStream) {
-            this.stopMicrophone();
-            return false;
+            this.syncVoiceState();
+            return true;
         }
 
         return this.enableMicrophone();
     }
 
-    public async ensureMicrophoneEnabled(): Promise<boolean> {
-        if (this.localStream) {
-            return true;
+    public async setMicrophoneEnabled(enabled: boolean): Promise<boolean> {
+        if (enabled) {
+            return this.ensureMicrophoneEnabled();
         }
 
-        return this.enableMicrophone();
+        this.stopMicrophone();
+        return false;
+    }
+
+    public isMicrophoneEnabled(): boolean {
+        return !!this.localStream;
     }
 
     public getRemoteStream(peerId: string): MediaStream | null {
@@ -119,9 +128,11 @@ export class MediaManager {
                 }
             }
 
+            this.syncVoiceState();
             return true;
         } catch (err) {
             console.error('[MediaManager] Failed to get microphone:', err);
+            this.syncVoiceState();
             return false;
         }
     }
@@ -145,6 +156,7 @@ export class MediaManager {
             }
             this.calls.clear();
         }
+        this.syncVoiceState();
     }
 
     public bindPeer(peer: any): void {
@@ -262,5 +274,13 @@ export class MediaManager {
         }
         const volume = sum / this.freqData.length;
         return Math.min(1.0, volume / 128.0);
+    }
+
+    private syncVoiceState(): void {
+        const enabled = !!this.localStream;
+        if (this.context.voiceEnabled !== enabled) {
+            this.context.voiceEnabled = enabled;
+        }
+        eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
     }
 }

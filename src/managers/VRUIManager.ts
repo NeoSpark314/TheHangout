@@ -373,15 +373,12 @@ export class VRUIManager implements IUpdatable {
 
             // 3. Header Controls
             const micBtn = new UIButton("Mic: ON", 240, 10, 380, 60, () => {
-                this.context.voiceEnabled = !this.context.voiceEnabled;
-                if (this.context.voiceEnabled) {
-                    this.context.managers.media.toggleMicrophone().then(() => {
-                        eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
-                    });
-                } else {
-                    this.context.managers.media.stopMicrophone();
-                    eventBus.emit(EVENTS.VOICE_STATE_UPDATED);
-                }
+                const nextPreference = !this.context.voiceAutoEnable;
+                this.context.voiceAutoEnable = nextPreference;
+                localStorage.setItem('hangout_voiceEnabled', String(nextPreference));
+                this.context.managers.media.setMicrophoneEnabled(nextPreference).then((actualState) => {
+                    this.context.voiceEnabled = actualState;
+                });
             });
             micBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
             micBtn.cornerRadius = 10;
