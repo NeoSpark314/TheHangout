@@ -37,6 +37,7 @@ function getSocketUrl() {
 
 function registerSource() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    console.log(`[share] Registering global source with key: ${activeKey}`);
     socket.send(JSON.stringify({
         type: 'register-global-source',
         key: activeKey
@@ -109,13 +110,14 @@ async function startCapture() {
         setStatus(`Streaming "${activeKey}"`, 'warn');
 
         if (socket && socket.readyState === WebSocket.OPEN) {
+            console.log(`[share] Sending source-capture-started for key: ${activeKey}`);
             socket.send(JSON.stringify({
                 type: 'source-capture-started',
                 key: activeKey
             }));
         }
 
-        captureTimer = setInterval(() => {
+        captureTimer = setInterval(async () => {
             if (!socket || socket.readyState !== WebSocket.OPEN) return;
             if (!captureVideo || !captureCanvas) return;
 
@@ -130,16 +132,22 @@ async function startCapture() {
 
             const mime = useWebP ? 'image/webp' : 'image/jpeg';
             const quality = useWebP ? 0.68 : 0.62;
-            const dataUrl = captureCanvas.toDataURL(mime, quality);
 
-            socket.send(JSON.stringify({
-                type: 'source-frame',
-                key: activeKey,
-                dataUrl,
-                width: outW,
-                height: outH,
-                ts: Date.now()
-            }));
+            captureCanvas.toBlob(async (blob) => {
+                if (!blob || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+                const imageData = await blob.arrayBuffer();
+                const keyEncoded = new TextEncoder().encode(activeKey);
+
+                // Binary Format: [Type: 1b][KeyLen: 1b][Key: Nb][Image: Mb]
+                const buffer = new Uint8Array(2 + keyEncoded.length + imageData.byteLength);
+                buffer[0] = 19; // PACKET_TYPES.DESKTOP_STREAM_FRAME
+                buffer[1] = keyEncoded.length;
+                buffer.set(keyEncoded, 2);
+                buffer.set(new Uint8Array(imageData), 2 + keyEncoded.length);
+
+                socket.send(buffer);
+            }, mime, quality);
         }, 150);
     } catch (err) {
         console.error('[share] capture failed', err);

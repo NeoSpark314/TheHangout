@@ -95,11 +95,22 @@ function sendPacketToRoom(roomId: string, type: number, payload: unknown): void 
     }
 }
 
+function sendBinaryToRoom(roomId: string, data: Buffer): void {
+    const room = activeRooms.get(roomId);
+    if (!room) return;
+    for (const ws of room.network.connections.values()) {
+        if (ws?.readyState === 1) ws.send(data);
+    }
+}
+
 function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDesktopSourcesStatusResponsePayload {
     const statuses: Record<string, boolean> = {};
     const requestedSet = new Set(requestedKeys);
 
     // 1. Report online status for anything the client specifically asked about
+    const registeredKeys = Array.from(globalDesktopSources.keys());
+    console.log(`[DesktopSource] Checking status for ${roomId}. Registered: [${registeredKeys.join(', ')}]. Requested: [${requestedKeys.join(', ')}]`);
+
     for (const key of requestedKeys) {
         statuses[key] = globalDesktopSources.has(key);
     }
@@ -121,12 +132,14 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
     const allRelevantKeys = new Set([...requestedKeys, ...roomActiveKeys]);
     const capturing = Array.from(allRelevantKeys).filter(k => capturingKeys.has(k));
 
-    return {
+    const response = {
         statuses,
         activeKeys: roomActiveKeys,
         capturingKeys: capturing,
         activeNames
     };
+    console.log(`[DesktopSource] Status Payload for room ${roomId}:`, JSON.stringify(response));
+    return response;
 }
 
 function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: string[]): void {
@@ -478,6 +491,10 @@ wss.on('connection', (ws) => {
                 }
             }
         }
+
+        ws.on('close', () => {
+            relaySourceSubscriptions.delete(ws);
+        });
     });
 });
 
@@ -487,7 +504,21 @@ desktopSourceWss.on('connection', (ws) => {
 
     ws.on('message', (message) => {
         try {
+            if (Buffer.isBuffer(message)) {
+                const firstByte = message.readUInt8(0);
+                if (firstByte === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
+                    const keyLen = message.readUInt8(1);
+                    const key = message.toString('utf8', 2, 2 + keyLen);
+                    const route = desktopRoutes.get(key);
+                    if (route && route.roomId) {
+                        sendBinaryToRoom(route.roomId, message);
+                    }
+                    return;
+                }
+            }
+
             const data = typeof message === 'string' ? JSON.parse(message) : JSON.parse(message.toString());
+            console.log(`[DesktopSource] Received JSON: ${JSON.stringify(data).substring(0, 100)}`);
 
             if (data.type === 'register-global-source') {
                 const nextKey = typeof data.key === 'string' ? data.key.trim() : '';
@@ -513,6 +544,8 @@ desktopSourceWss.on('connection', (ws) => {
                 registeredKey = nextKey;
                 globalDesktopSources.set(nextKey, ws);
                 desktopSourceBySocket.set(ws, nextKey);
+
+                console.log(`[DesktopSource] Registered "${nextKey}". Total sources: ${globalDesktopSources.size}`);
                 notifySubscribedClientsForKey(nextKey);
 
                 ws.send(JSON.stringify({
@@ -526,6 +559,7 @@ desktopSourceWss.on('connection', (ws) => {
             if (data.type === 'source-capture-started') {
                 const key = typeof data.key === 'string' ? data.key.trim() : '';
                 if (!key) return;
+                console.log(`[DesktopSource] Capture STARTED for "${key}"`);
                 capturingKeys.add(key);
                 notifySubscribedClientsForKey(key);
                 return;
@@ -579,6 +613,12 @@ desktopSourceWss.on('connection', (ws) => {
 
     ws.on('close', () => {
         const key = registeredKey || desktopSourceBySocket.get(ws) || null;
+        if (key) {
+            console.log(`[DesktopSource] Connection CLOSED for "${key}"`);
+        } else {
+            console.log('[DesktopSource] Anonymous connection CLOSED');
+        }
+
         if (!key) return;
 
         if (globalDesktopSources.get(key) === ws) {

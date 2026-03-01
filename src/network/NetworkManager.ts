@@ -171,6 +171,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             const url = `${protocol}//${host}${portPart}/relay`;
 
             this.relaySocket = new WebSocket(url);
+            this.relaySocket.binaryType = 'arraybuffer';
 
             const peerId = this.context.localPlayer?.id || 'guest-' + Math.random().toString(36).substr(2, 9);
             this.localPeerId = peerId;
@@ -212,6 +213,14 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         });
 
         conn.on('data', (data: any) => {
+            if (data instanceof ArrayBuffer) {
+                const view = new DataView(data);
+                if (view.getUint8(0) === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
+                    this.context.managers.remoteDesktop.handleBinaryFrame(data);
+                }
+                return;
+            }
+
             if (data && data.type === PACKET_TYPES.AUDIO_CHUNK) {
                 const senderId = data.senderId || conn.peer;
                 const entity = this.context.managers.entity.getEntity(senderId);
@@ -601,12 +610,16 @@ class ServerConnection {
         }
 
         socket.addEventListener('message', (e) => {
+            if (e.data instanceof ArrayBuffer) {
+                this.emit('data', e.data);
+                return;
+            }
             try {
                 const data = JSON.parse(e.data);
                 if (data.type === 'peer-joined' || data.type === 'peer-left') return;
                 this.emit('data', data);
             } catch (err) {
-                // Ignore parsing errors for non-JSON traffic (like audio arraybuffers later if we move from stringify)
+                // Ignore parsing errors for non-JSON traffic
             }
         });
 

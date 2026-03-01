@@ -184,6 +184,7 @@ export class RemoteDesktopManager implements IUpdatable {
                 this.removeSurface(key);
             }
         }
+        console.log('[RemoteDesktopManager] Received status update:', payload);
         this.refreshActiveLayouts();
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
@@ -219,14 +220,49 @@ export class RemoteDesktopManager implements IUpdatable {
         if (incomingTs < surface.lastFrameTs) return; // Drop out-of-order or late frames
         surface.lastFrameTs = incomingTs;
 
-        surface.decodeImage.onload = () => {
-            // Final check: are we still supposed to be "Live"?
-            if (this.isCapturing(payload.key) && incomingTs >= surface.lastFrameTs) {
-                surface.ctx.drawImage(surface.decodeImage, 0, 0, surface.canvas.width, surface.canvas.height);
+        if (payload.dataUrl) {
+            surface.decodeImage.onload = () => {
+                // Final check: are we still supposed to be "Live"?
+                if (this.isCapturing(payload.key) && incomingTs >= surface.lastFrameTs) {
+                    surface.ctx.drawImage(surface.decodeImage, 0, 0, surface.canvas.width, surface.canvas.height);
+                    surface.texture.needsUpdate = true;
+                }
+            };
+            surface.decodeImage.src = payload.dataUrl;
+        }
+        eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
+    }
+
+    public handleBinaryFrame(buffer: ArrayBuffer): void {
+        // [1b Type][1b KeyLen][KeyLen bytes Key][Payload]
+        const view = new DataView(buffer);
+        const keyLen = view.getUint8(1);
+        const decoder = new TextDecoder();
+        const key = decoder.decode(new Uint8Array(buffer, 2, keyLen));
+        const imageData = new Uint8Array(buffer, 2 + keyLen);
+
+        const surface = this.surfacesByKey.get(key);
+        if (!surface) return;
+
+        this.capturingByKey.set(key, true);
+        this.activeByKey.add(key);
+
+        const incomingTs = Date.now();
+        if (incomingTs < surface.lastFrameTs) return;
+        surface.lastFrameTs = incomingTs;
+
+        // Async decoding optimized for VR performance
+        const blob = new Blob([imageData]);
+        createImageBitmap(blob).then((bitmap) => {
+            if (this.isCapturing(key) && incomingTs >= surface.lastFrameTs) {
+                surface.ctx.drawImage(bitmap, 0, 0, surface.canvas.width, surface.canvas.height);
                 surface.texture.needsUpdate = true;
             }
-        };
-        surface.decodeImage.src = payload.dataUrl;
+            bitmap.close();
+        }).catch(err => {
+            console.error('[RemoteDesktopManager] Async decode failed:', err);
+        });
+
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
