@@ -87,6 +87,76 @@ function stopCapture(notifyServer = false) {
     updateButtons();
 }
 
+function startCaptureLoop() {
+    if (captureTimer) clearInterval(captureTimer);
+    if (!captureStream || !captureVideo || !captureCanvas) return;
+
+    const targetFps = parseInt(fpsSelect.value) || 12;
+    const ctx = captureCanvas.getContext('2d');
+    const previewCtx = previewCanvas.getContext('2d');
+
+    captureTimer = setInterval(async () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (!captureVideo || !captureCanvas) return;
+
+        // Stats Tick (every 1s approx)
+        const now = Date.now();
+        const dt = (now - lastStatsTs) / 1000;
+        if (dt >= 1.0) {
+            const kbps = Math.round((bytesSentRecent / 1024) / dt);
+            bandwidthText.textContent = `${kbps} KB/s`;
+            bytesSentRecent = 0;
+            lastStatsTs = now;
+        }
+
+        const srcW = Math.max(640, captureVideo.videoWidth || 1280);
+        const srcH = Math.max(360, captureVideo.videoHeight || 720);
+        const outW = 1280;
+        const outH = Math.max(720, Math.round((srcH / srcW) * outW));
+
+        resText.textContent = `${srcW}x${srcH} (-> ${outW}x${outH})`;
+
+        // Smart Transmission Optimization
+        if (!isWatched) {
+            setStatus(`Streaming "${activeKey}" (PAUSED - No room is watching)`, 'warn');
+            return;
+        }
+        setStatus(`Streaming "${activeKey}" (LIVE)`, 'ok');
+
+        captureCanvas.width = outW;
+        captureCanvas.height = outH;
+        ctx.drawImage(captureVideo, 0, 0, outW, outH);
+
+        if (showPreview) {
+            previewCanvas.width = outW;
+            previewCanvas.height = outH;
+            previewCtx.drawImage(captureCanvas, 0, 0);
+        }
+
+        const mime = useWebP ? 'image/webp' : 'image/jpeg';
+        const quality = parseInt(qualityInput.value) / 100;
+
+        captureCanvas.toBlob(async (blob) => {
+            if (!blob || !socket || socket.readyState !== WebSocket.OPEN) return;
+            if (!isWatched) return; // Re-check inside async callback
+
+            const imageData = await blob.arrayBuffer();
+            bytesSentRecent += imageData.byteLength;
+
+            const keyEncoded = new TextEncoder().encode(activeKey);
+
+            // Binary Format: [Type: 1b][KeyLen: 1b][Key: Nb][Image: Mb]
+            const buffer = new Uint8Array(2 + keyEncoded.length + imageData.byteLength);
+            buffer[0] = 19; // PACKET_TYPES.DESKTOP_STREAM_FRAME
+            buffer[1] = keyEncoded.length;
+            buffer.set(keyEncoded, 2);
+            buffer.set(new Uint8Array(imageData), 2 + keyEncoded.length);
+
+            socket.send(buffer);
+        }, mime, quality);
+    }, 1000 / targetFps);
+}
+
 async function startCapture() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     if (captureStream) return;
@@ -106,11 +176,6 @@ async function startCapture() {
         await captureVideo.play();
 
         captureCanvas = document.createElement('canvas');
-        const ctx = captureCanvas.getContext('2d');
-        const previewCtx = previewCanvas.getContext('2d');
-        if (!ctx || !previewCtx) {
-            throw new Error('No 2D context');
-        }
 
         // Probe browser encoder once.
         captureCanvas.width = 16;
@@ -133,66 +198,7 @@ async function startCapture() {
             }));
         }
 
-        captureTimer = setInterval(async () => {
-            if (!socket || socket.readyState !== WebSocket.OPEN) return;
-            if (!captureVideo || !captureCanvas) return;
-
-            // Stats Tick (every 1s approx)
-            const now = Date.now();
-            const dt = (now - lastStatsTs) / 1000;
-            if (dt >= 1.0) {
-                const kbps = Math.round((bytesSentRecent / 1024) / dt);
-                bandwidthText.textContent = `${kbps} KB/s`;
-                bytesSentRecent = 0;
-                lastStatsTs = now;
-            }
-
-            const srcW = Math.max(640, captureVideo.videoWidth || 1280);
-            const srcH = Math.max(360, captureVideo.videoHeight || 720);
-            const outW = 1280;
-            const outH = Math.max(720, Math.round((srcH / srcW) * outW));
-
-            resText.textContent = `${srcW}x${srcH} (-> ${outW}x${outH})`;
-
-            // Smart Transmission Optimization
-            if (!isWatched) {
-                setStatus(`Streaming "${activeKey}" (PAUSED - No room is watching)`, 'warn');
-                return;
-            }
-            setStatus(`Streaming "${activeKey}" (LIVE)`, 'ok');
-
-            captureCanvas.width = outW;
-            captureCanvas.height = outH;
-            ctx.drawImage(captureVideo, 0, 0, outW, outH);
-
-            if (showPreview) {
-                previewCanvas.width = outW;
-                previewCanvas.height = outH;
-                previewCtx.drawImage(captureCanvas, 0, 0);
-            }
-
-            const mime = useWebP ? 'image/webp' : 'image/jpeg';
-            const quality = parseInt(qualityInput.value) / 100;
-
-            captureCanvas.toBlob(async (blob) => {
-                if (!blob || !socket || socket.readyState !== WebSocket.OPEN) return;
-                if (!isWatched) return; // Re-check inside async callback
-
-                const imageData = await blob.arrayBuffer();
-                bytesSentRecent += imageData.byteLength;
-
-                const keyEncoded = new TextEncoder().encode(activeKey);
-
-                // Binary Format: [Type: 1b][KeyLen: 1b][Key: Nb][Image: Mb]
-                const buffer = new Uint8Array(2 + keyEncoded.length + imageData.byteLength);
-                buffer[0] = 19; // PACKET_TYPES.DESKTOP_STREAM_FRAME
-                buffer[1] = keyEncoded.length;
-                buffer.set(keyEncoded, 2);
-                buffer.set(new Uint8Array(imageData), 2 + keyEncoded.length);
-
-                socket.send(buffer);
-            }, mime, quality);
-        }, 1000 / targetFps);
+        startCaptureLoop();
     } catch (err) {
         console.error('[share] capture failed', err);
         stopCapture(false);
@@ -295,14 +301,8 @@ qualityInput.addEventListener('input', () => {
 });
 
 fpsSelect.addEventListener('change', () => {
-    // If already capturing, we need to restart the timer to respect new FPS immediately
     if (captureTimer) {
-        clearInterval(captureTimer);
-        const targetFps = parseInt(fpsSelect.value) || 12;
-        // In a real app we might re-negotiate media constraints, but for now 
-        // just changing the interval is a good start. 
-        // startCapture implements this on next start.
-        setStatus('Restart capture to apply FPS changes fully', 'warn');
+        startCaptureLoop();
     }
 });
 
