@@ -53,21 +53,19 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         eventBus.on(EVENTS.CREATE_ROOM, (customId: string) => this.initHost(customId));
         eventBus.on(EVENTS.JOIN_ROOM, (roomId: string) => this.initGuest(roomId));
 
-        eventBus.on(EVENTS.REQUEST_OWNERSHIP, (payload: unknown) => {
+        eventBus.on(EVENTS.REQUEST_OWNERSHIP, (payload) => {
             if (!this.context.isHost && this.context.roomId) {
-                const base = (payload && typeof payload === 'object') ? payload as Record<string, unknown> : {};
                 this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_REQUEST, {
-                    ...base,
+                    ...payload,
                     sentAt: this.nowMs()
                 });
             }
         });
 
-        eventBus.on(EVENTS.RELEASE_OWNERSHIP, (payload: unknown) => {
+        eventBus.on(EVENTS.RELEASE_OWNERSHIP, (payload) => {
             if (!this.context.isHost && this.context.roomId) {
-                const base = (payload && typeof payload === 'object') ? payload as Record<string, unknown> : {};
                 this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, {
-                    ...base,
+                    ...payload,
                     sentAt: this.nowMs()
                 });
             }

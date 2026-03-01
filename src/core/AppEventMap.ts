@@ -1,4 +1,5 @@
 import type { IAvatarConfig } from './GameState';
+import type { IOwnershipReleasePayload, IOwnershipRequestPayload } from '../interfaces/INetworkPacket';
 import type { IHandIntentPayload, ILookIntentPayload, IMoveIntentPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
 import type { IVector3 } from '../interfaces/IMath';
 import type { IVoiceStreamReceivedEvent } from '../interfaces/IVoice';
@@ -21,8 +22,8 @@ export interface AppEventMap {
     SESSION_CONNECTED: string;
     ENTITY_DISCOVERED: string;
     PEER_DISCONNECTED: string;
-    ASSET_LOADED: unknown;
-    ASSET_LOAD_ERROR: unknown;
+    ASSET_LOADED: unknown; // Reserved until asset loading emits a stable shared payload.
+    ASSET_LOAD_ERROR: unknown; // Reserved until asset loading emits a stable shared payload.
     NETWORK_ERROR: string;
     HOST_DISCONNECTED: void;
     LOCAL_NAME_UPDATED: string;
@@ -33,13 +34,13 @@ export interface AppEventMap {
     SCENE_READY: void;
     PHYSICS_READY: void;
     AUDIO_READY: void;
-    LOCAL_PLAYER_MOVED: unknown;
-    OWNERSHIP_TRANSFERRED: unknown;
+    LOCAL_PLAYER_MOVED: unknown; // Reserved until movement broadcasts a stable shared payload.
+    OWNERSHIP_TRANSFERRED: unknown; // Reserved until a distinct app-level transfer event is reintroduced.
     ENTITY_COLLIDED: { intensity: number };
     PHYSICS_COLLISION_STARTED: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null };
-    REQUEST_OWNERSHIP: unknown;
-    RELEASE_OWNERSHIP: unknown;
-    RECLAIM_OWNERSHIP: unknown;
+    REQUEST_OWNERSHIP: IOwnershipRequestPayload;
+    RELEASE_OWNERSHIP: IOwnershipReleasePayload;
+    RECLAIM_OWNERSHIP: void;
     SYSTEM_NOTIFICATION: string;
     AUDIO_CHUNK_RECEIVED: unknown;
     PEER_JOINED_ROOM: string;

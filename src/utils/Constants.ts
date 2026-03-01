@@ -1,3 +1,14 @@
+/**
+ * Global application events only.
+ *
+ * Add events here only for cross-cutting infrastructure concerns shared across
+ * multiple systems (session lifecycle, shared input intents, ownership
+ * requests, voice plumbing, global notifications).
+ *
+ * If an event name starts to describe room-specific or item-specific gameplay
+ * semantics, keep it inside the owning feature manager and use
+ * ReplicationManager for network fan-out instead of expanding the global bus.
+ */
 export const EVENTS = {
     START_XR: 'START_XR',
     JOIN_ROOM: 'JOIN_ROOM',
