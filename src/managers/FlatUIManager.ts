@@ -160,6 +160,12 @@ export class FlatUIManager implements IUpdatable {
 
         this.loadFromStorage();
         this.renderMyScreensEditor();
+
+        // Desktop screen sharing is only for dedicated server mode
+        if (!this.context.isLocalServer) {
+            const screensGroup = document.getElementById('avatar-screens-group');
+            if (screensGroup) screensGroup.style.display = 'none';
+        }
     }
 
     public update(delta: number): void {

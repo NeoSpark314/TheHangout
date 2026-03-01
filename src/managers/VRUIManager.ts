@@ -52,7 +52,9 @@ export class VRUIManager implements IUpdatable {
 
         // Add default System Tab immediately
         this.addPeersTab();
-        this.addRoomTab();
+        if (this.context.isLocalServer) {
+            this.addRoomTab();
+        }
         this.addSystemTab();
         this.addDebugTab();
         this.addHelpTab();
