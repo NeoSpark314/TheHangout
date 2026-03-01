@@ -195,15 +195,21 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
 
         // Apply stretch in the direction the HEAD is looking (worldHeadQuat)
-        const leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
+        let leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
         let rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
 
         // Assisted non-VR reach follows the exact rendered camera center line.
         // Using the actual camera transform avoids any discrepancy between the
         // reconstructed head pose and what the player is currently seeing.
-        if (!this.manualStatus.right && this.assistedReach.right !== null) {
+        if ((!this.manualStatus.left && this.assistedReach.left !== null) || (!this.manualStatus.right && this.assistedReach.right !== null)) {
             render.camera.getWorldPosition(this.assistedCameraPos);
             render.camera.getWorldQuaternion(this.assistedCameraQuat);
+        }
+        if (!this.manualStatus.left && this.assistedReach.left !== null) {
+            const assistForward = new THREE.Vector3(0, 0, -(this.assistedForwardBase + this.assistedReach.left));
+            leftTargetWorld = this.assistedCameraPos.clone().add(assistForward.applyQuaternion(this.assistedCameraQuat));
+        }
+        if (!this.manualStatus.right && this.assistedReach.right !== null) {
             const assistForward = new THREE.Vector3(0, 0, -(this.assistedForwardBase + this.assistedReach.right));
             rightTargetWorld = this.assistedCameraPos.clone().add(assistForward.applyQuaternion(this.assistedCameraQuat));
         }

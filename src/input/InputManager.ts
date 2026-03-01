@@ -124,21 +124,24 @@ export class InputManager implements IUpdatable {
     private mobileSecondaryLatched = false;
 
     public getMovementVector(): { x: number, y: number } {
-        const v = { x: 0, y: 0 };
-        if (this.isKeyDown('w')) v.y -= 1;
-        if (this.isKeyDown('s')) v.y += 1;
-        if (this.isKeyDown('a')) v.x -= 1;
-        if (this.isKeyDown('d')) v.x += 1;
+        const keyboard = { x: 0, y: 0 };
+        if (this.isKeyDown('w')) keyboard.y -= 1;
+        if (this.isKeyDown('s')) keyboard.y += 1;
+        if (this.isKeyDown('a')) keyboard.x -= 1;
+        if (this.isKeyDown('d')) keyboard.x += 1;
 
-        v.x += this.gamepad.move.x;
-        v.y += this.gamepad.move.y;
+        const keyboardLength = Math.sqrt(keyboard.x * keyboard.x + keyboard.y * keyboard.y);
+        if (keyboardLength > 1) {
+            keyboard.x /= keyboardLength;
+            keyboard.y /= keyboardLength;
+        }
 
-        v.x += this.xrInput.move.x;
-        v.y += this.xrInput.move.y;
+        const mobile = this.mobileJoystick.getMoveVector();
 
-        const jv = this.mobileJoystick.getMoveVector();
-        v.x += jv.x;
-        v.y += jv.y;
+        const v = {
+            x: keyboard.x + mobile.x + this.gamepad.move.x + this.xrInput.move.x,
+            y: keyboard.y + mobile.y + this.gamepad.move.y + this.xrInput.move.y
+        };
 
         const length = Math.sqrt(v.x * v.x + v.y * v.y);
         if (length > 1) {

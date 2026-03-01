@@ -95,7 +95,10 @@ export class MovementSkill extends Skill {
         const moveVector = new THREE.Vector3(this._currentMove.x, 0, this._currentMove.y);
 
         if (moveVector.lengthSq() > 0) {
-            moveVector.normalize();
+            const moveMagnitude = Math.min(1, moveVector.length());
+            if (moveMagnitude > 0) {
+                moveVector.divideScalar(moveMagnitude);
+            }
 
             // Head world yaw for direction
             const headWorldQuat = new THREE.Quaternion();
@@ -104,6 +107,7 @@ export class MovementSkill extends Skill {
 
             // Transform local movement to world space relative to head heading
             moveVector.applyEuler(new THREE.Euler(0, headEuler.y, 0, 'YXZ'));
+            moveVector.multiplyScalar(moveMagnitude);
 
             player.xrOrigin.position.x += moveVector.x * this.speed * delta;
             player.xrOrigin.position.y += moveVector.y * this.speed * delta;
