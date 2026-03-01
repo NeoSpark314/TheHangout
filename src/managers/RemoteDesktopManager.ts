@@ -20,6 +20,8 @@ interface IRenderSurface {
     key: string;
     name: string;
     group: THREE.Group;
+    screenMesh: THREE.Mesh;
+    frameMesh: THREE.Mesh;
     texture: THREE.CanvasTexture;
     canvas: HTMLCanvasElement;
     ctx: CanvasRenderingContext2D;
@@ -258,8 +260,25 @@ export class RemoteDesktopManager implements IUpdatable {
                 if (surface.canvas.width !== bitmap.width || surface.canvas.height !== bitmap.height) {
                     surface.canvas.width = bitmap.width;
                     surface.canvas.height = bitmap.height;
-                    surface.texture.needsUpdate = true;
+
+                    // Changing canvas dimensions clears context; re-acquire and reset state if needed
+                    surface.ctx = surface.canvas.getContext('2d')!;
+
+                    // Force Three.js to re-allocate GPU texture by disposing old one
+                    surface.texture.dispose();
+
+                    // Update Aspect Ratio
+                    const aspect = bitmap.width / bitmap.height;
+                    const baseWidth = 1.6;
+                    const targetWidth = 0.9 * aspect;
+                    const finalScale = Math.min(baseWidth / 1.6, targetWidth / 1.6); // Scale geometry relative to original 1.6x0.9
+
+                    // Instead of complex math, just scale the group's X to match aspect vs the 1.6/0.9 base
+                    // 1.6 / 0.9 = 1.777.
+                    // New scale X = (aspect / 1.777)
+                    surface.group.scale.set(aspect / (1.6 / 0.9), 1, 1);
                 }
+
                 surface.ctx.drawImage(bitmap, 0, 0);
                 surface.texture.needsUpdate = true;
             }
@@ -293,20 +312,6 @@ export class RemoteDesktopManager implements IUpdatable {
         const decodeImage = new Image();
         decodeImage.decoding = 'async';
 
-        const surface: IRenderSurface = {
-            key,
-            name,
-            canvas,
-            ctx,
-            texture,
-            decodeImage,
-            lastFrameTs: 0,
-            isBillboard: false,
-            group: new THREE.Group() // Placeholder, will be replaced below
-        };
-
-        this.drawStandby(surface);
-
         const screenMesh = new THREE.Mesh(
             new THREE.PlaneGeometry(1.6, 0.9),
             new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
@@ -325,10 +330,23 @@ export class RemoteDesktopManager implements IUpdatable {
 
         // Initial default position until layout refreshes
         group.position.set(0, 1.5, -2.4);
-
         this.context.managers.render.scene.add(group);
 
-        surface.group = group;
+        const surface: IRenderSurface = {
+            key,
+            name,
+            canvas,
+            ctx,
+            texture,
+            decodeImage,
+            lastFrameTs: 0,
+            isBillboard: false,
+            group,
+            screenMesh,
+            frameMesh
+        };
+
+        this.drawStandby(surface);
         this.surfacesByKey.set(key, surface);
 
         this.refreshActiveLayouts();
