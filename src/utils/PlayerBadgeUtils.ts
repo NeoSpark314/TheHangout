@@ -15,8 +15,9 @@ export interface IPlayerBadgeOptions {
 
 export const PLAYER_BADGES = {
     host: '[Host]',
-    muted: '🔇',
-    talking: '🔊'
+    micOff: '[MicOff]',
+    mutedByYou: '[Muted]',
+    talking: '[Talk]'
 } as const;
 
 export function formatPlayerDisplayName(
@@ -33,9 +34,21 @@ export function formatPlayerDisplayName(
     if (includeHost && state.isHost) badges.push(PLAYER_BADGES.host);
 
     const isMicDisabled = state.micEnabled === false;
-    if (includeMuted && (isMicDisabled || state.isMuted)) badges.push(PLAYER_BADGES.muted);
+    if (includeMuted) {
+        if (isMicDisabled) {
+            badges.push(PLAYER_BADGES.micOff);
+        } else if (state.isMuted) {
+            badges.push(PLAYER_BADGES.mutedByYou);
+        }
+    }
 
-    if (includeTalking && typeof state.audioLevel === 'number' && state.audioLevel > talkingThreshold) {
+    if (
+        includeTalking &&
+        !isMicDisabled &&
+        !state.isMuted &&
+        typeof state.audioLevel === 'number' &&
+        state.audioLevel > talkingThreshold
+    ) {
         badges.push(PLAYER_BADGES.talking);
     }
 

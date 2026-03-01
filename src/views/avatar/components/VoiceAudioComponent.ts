@@ -29,8 +29,8 @@ export class VoiceAudioComponent {
         try {
             if (!this.audioElement) {
                 this.audioElement = new Audio();
-                this.audioElement.muted = this.manuallyMuted;
             }
+            this.applyMutedState();
             this.audioElement.srcObject = stream;
             this.audioElement.play().catch(e => console.warn('[VoiceAudioComponent] Auto-play blocked for hidden audio:', e));
             this.positionalAudio.setMediaStreamSource(stream);
@@ -63,8 +63,8 @@ export class VoiceAudioComponent {
             if (!this.audioElement) {
                 this.audioElement = new Audio();
                 this.audioElement.autoplay = true;
-                this.audioElement.muted = this.manuallyMuted;
             }
+            this.applyMutedState();
 
             const blobUrl = URL.createObjectURL(this.mediaSource);
             this.audioElement.src = blobUrl;
@@ -114,9 +114,7 @@ export class VoiceAudioComponent {
 
     public setMuted(muted: boolean): void {
         this.manuallyMuted = muted;
-        if (this.audioElement) {
-            this.audioElement.muted = muted;
-        }
+        this.applyMutedState();
     }
 
     public getAudioLevel(): number {
@@ -169,6 +167,16 @@ export class VoiceAudioComponent {
             if (oldSrc && oldSrc.startsWith('blob:')) {
                 URL.revokeObjectURL(oldSrc);
             }
+        }
+    }
+
+    private applyMutedState(): void {
+        if (this.audioElement) {
+            this.audioElement.muted = this.manuallyMuted;
+        }
+        if (this.positionalAudio) {
+            // PositionalAudio is the audible output path for remote voice.
+            this.positionalAudio.setVolume(this.manuallyMuted ? 0 : 1);
         }
     }
 
