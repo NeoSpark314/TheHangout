@@ -37,8 +37,9 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private pitch = 0;
     private turnSpeed = 0.002;
     private headHeight = PlayerEntity.DEFAULT_HEAD_HEIGHT;
-    private assistedCenterYOffset = 0.12;
     private assistedForwardBase = 0.22;
+    private assistedCameraPos = new THREE.Vector3();
+    private assistedCameraQuat = new THREE.Quaternion();
 
     private _lookHandler = (payload: any) => {
         // We only care about Y (pitch) here. 
@@ -197,11 +198,14 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         const leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
         let rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
 
-        // Assisted non-VR reach uses a centered, head-relative line so the user can
-        // clearly see what the helper hand is reaching toward.
+        // Assisted non-VR reach follows the exact rendered camera center line.
+        // Using the actual camera transform avoids any discrepancy between the
+        // reconstructed head pose and what the player is currently seeing.
         if (!this.manualStatus.right && this.assistedReach.right !== null) {
-            const assistOffset = new THREE.Vector3(0, -this.assistedCenterYOffset, -(this.assistedForwardBase + this.assistedReach.right));
-            rightTargetWorld = worldHeadPos.clone().add(assistOffset.applyQuaternion(worldHeadQuat));
+            render.camera.getWorldPosition(this.assistedCameraPos);
+            render.camera.getWorldQuaternion(this.assistedCameraQuat);
+            const assistForward = new THREE.Vector3(0, 0, -(this.assistedForwardBase + this.assistedReach.right));
+            rightTargetWorld = this.assistedCameraPos.clone().add(assistForward.applyQuaternion(this.assistedCameraQuat));
         }
 
         this.state.hands.left.pose.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };

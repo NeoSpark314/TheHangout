@@ -560,10 +560,10 @@ input[type="color"] {
     transform: scale(1.15);
 }
 
-#mobile-action-btn {
+#mobile-action-btn,
+#mobile-interact-btn {
     position: absolute;
     right: calc(env(safe-area-inset-right, 0px) + 20px);
-    bottom: calc(50% + 20px);
     min-width: 88px;
     min-height: 88px;
     padding: 14px 18px;
@@ -578,6 +578,16 @@ input[type="color"] {
     backdrop-filter: blur(10px);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
     touch-action: none;
+}
+
+#mobile-action-btn {
+    bottom: calc(50% + 20px);
+}
+
+#mobile-interact-btn {
+    bottom: calc(50% + 124px);
+    border-color: rgba(255, 215, 0, 0.35);
+    color: #fff7d1;
 }
 
 .joy-container {

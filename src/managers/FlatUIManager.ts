@@ -26,6 +26,7 @@ export class FlatUIManager implements IUpdatable {
     private mobileHud: HTMLElement | null;
     private mobileMenuBtn: HTMLButtonElement | null;
     private mobileActionBtn: HTMLButtonElement | null;
+    private mobileInteractBtn: HTMLButtonElement | null;
     private mobileReticle: HTMLElement | null;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
@@ -53,6 +54,7 @@ export class FlatUIManager implements IUpdatable {
         this.mobileHud = document.getElementById('mobile-hud');
         this.mobileMenuBtn = document.getElementById('mobile-menu-btn') as HTMLButtonElement | null;
         this.mobileActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
+        this.mobileInteractBtn = document.getElementById('mobile-interact-btn') as HTMLButtonElement | null;
         this.mobileReticle = document.getElementById('mobile-reticle');
         this.isMobile = isMobile;
 
@@ -154,6 +156,13 @@ export class FlatUIManager implements IUpdatable {
             this.mobileActionBtn.addEventListener('pointerup', endAction);
             this.mobileActionBtn.addEventListener('pointercancel', endAction);
             this.mobileActionBtn.addEventListener('pointerleave', endAction);
+        }
+
+        if (this.mobileInteractBtn) {
+            this.mobileInteractBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.context.managers.input?.toggleMobileSecondaryAction();
+            });
         }
 
         // Room UI events are handled in setupGuestMode / setupDefaultMode
@@ -567,6 +576,7 @@ export class FlatUIManager implements IUpdatable {
         }
         if (this.mobileHud) this.mobileHud.style.display = 'none';
         if (this.mobileActionBtn) this.mobileActionBtn.style.display = 'none';
+        if (this.mobileInteractBtn) this.mobileInteractBtn.style.display = 'none';
         if (this.mobileReticle) this.mobileReticle.classList.remove('active');
         if (this.mobileMenuBtn) {
             this.mobileMenuBtn.style.display = this.isMobile && this._mobileHudEnabled ? 'block' : 'none';
@@ -597,6 +607,7 @@ export class FlatUIManager implements IUpdatable {
 
         const input = this.context.managers.input;
         const showAction = this.overlay.style.display === 'none' && !!input?.hasMobilePrimaryAction();
+        const showInteract = this.overlay.style.display === 'none' && !!input?.hasMobileSecondaryAction();
 
         if (this.mobileHud) {
             this.mobileHud.style.display = this.overlay.style.display === 'none' ? 'block' : 'none';
@@ -608,6 +619,15 @@ export class FlatUIManager implements IUpdatable {
                 this.mobileActionBtn.style.display = 'block';
             } else {
                 this.mobileActionBtn.style.display = 'none';
+            }
+        }
+
+        if (this.mobileInteractBtn) {
+            if (showInteract) {
+                this.mobileInteractBtn.textContent = input!.getMobileSecondaryActionLabel() || 'Use';
+                this.mobileInteractBtn.style.display = 'block';
+            } else {
+                this.mobileInteractBtn.style.display = 'none';
             }
         }
 

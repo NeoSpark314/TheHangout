@@ -11,6 +11,7 @@ import { MobileJoystickManager } from './MobileJoystickManager';
 import { NonVRReachAssistController } from './NonVRReachAssistController';
 import { XRInputManager } from './XRInputManager';
 import { GestureUtils } from '../utils/GestureUtils';
+import { GrabSkill } from '../skills/GrabSkill';
 
 /**
  * Aggregates user input from multiple distinct hardware sources (Keyboard, Gamepad, Mobile Joysticks, XR).
@@ -72,6 +73,13 @@ export class InputManager implements IUpdatable {
         return this.nonVRReachAssist.hasMobilePrimaryAction();
     }
 
+    public hasMobileSecondaryAction(): boolean {
+        return !this.context.isMenuOpen &&
+            !!this.context.managers.render &&
+            !this.context.managers.render.isXRPresenting() &&
+            this.isHoldingHand('right');
+    }
+
     public isMobileFocusActive(): boolean {
         return this.nonVRReachAssist.isActive();
     }
@@ -82,6 +90,23 @@ export class InputManager implements IUpdatable {
 
     public releaseMobilePrimaryAction(): void {
         this.nonVRReachAssist.endMobileAction();
+    }
+
+    public toggleMobileSecondaryAction(): void {
+        if (this.mobileSecondaryLatched) {
+            this.mobileSecondaryLatched = false;
+            eventBus.emit(EVENTS.INTENT_INTERACT_END, { hand: 'right' } as IHandIntentPayload);
+            return;
+        }
+
+        if (!this.hasMobileSecondaryAction()) return;
+        this.mobileSecondaryLatched = true;
+        eventBus.emit(EVENTS.INTENT_INTERACT_START, { hand: 'right', value: 1.0 } as IHandIntentPayload);
+    }
+
+    public getMobileSecondaryActionLabel(): string | null {
+        if (!this.hasMobileSecondaryAction()) return null;
+        return this.mobileSecondaryLatched ? 'Stop' : 'Use';
     }
 
     public isKeyPressed(key: string): boolean {
@@ -95,6 +120,8 @@ export class InputManager implements IUpdatable {
     public clearJustPressed(): void {
         this.keyboard.clearJustPressed();
     }
+
+    private mobileSecondaryLatched = false;
 
     public getMovementVector(): { x: number, y: number } {
         const v = { x: 0, y: 0 };
@@ -150,6 +177,11 @@ export class InputManager implements IUpdatable {
         const render = managers.render;
         const tracking = managers.tracking;
 
+        if (this.mobileSecondaryLatched && !this.hasMobileSecondaryAction()) {
+            this.mobileSecondaryLatched = false;
+            eventBus.emit(EVENTS.INTENT_INTERACT_END, { hand: 'right' } as IHandIntentPayload);
+        }
+
         // 0. Desktop Hand Activation (Centralized Logic)
         if (render && !render.isXRPresenting() && tracking) {
             tracking.setHandActive('left', this.isKeyDown('q'));
@@ -165,7 +197,8 @@ export class InputManager implements IUpdatable {
                 delta,
                 manualModeActive,
                 this.isKeyDown('primary_action'),
-                !!this.gamepad.buttons[0]
+                !!this.gamepad.buttons[6],
+                !!this.gamepad.buttons[7]
             );
         }
 
@@ -227,10 +260,11 @@ export class InputManager implements IUpdatable {
             const rightActive = trackingState.hands.right.active;
             const usingManualHandGrab = this.isKeyDown('q') || this.isKeyDown('e');
 
-            // Preserve the explicit desktop hand-extension workflow. The non-VR reticle
-            // helper owns left-click grabbing only when the player is not manually using Q/E.
+            // Preserve the explicit desktop hand-extension workflow. Reach assist
+            // owns left-click grabbing only when the player is not manually using Q/E.
             const isGrabPressed = this.isKeyDown('primary_action') && usingManualHandGrab;
-            const isInteractPressed = this.isKeyDown('secondary_action'); // Right mouse click
+            const isInteractPressed = (!this.context.isMenuOpen) &&
+                (this.isKeyDown('secondary_action') || !!this.gamepad.buttons[0]); // Right mouse click or gamepad A
 
             if (leftActive) {
                 currentStates.left.isSqueezing = isGrabPressed;
@@ -266,6 +300,11 @@ export class InputManager implements IUpdatable {
             this.previousHandStates[hand].isSqueezing = curr.isSqueezing;
             this.previousHandStates[hand].isInteracting = curr.isInteracting;
         }
+    }
+
+    private isHoldingHand(hand: 'left' | 'right'): boolean {
+        const skill = this.context.localPlayer?.getSkill('grab');
+        return skill instanceof GrabSkill ? skill.isHoldingHand(hand) : false;
     }
 
     /**
