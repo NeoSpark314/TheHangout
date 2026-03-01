@@ -31,7 +31,7 @@ export class NonVRReticleInteractionController {
     private handPoint = new THREE.Vector3();
     private anchorOffset = new THREE.Vector3();
 
-    private rayDistance = 3.5;
+    private rayDistance = 6.0;
 
     constructor(private context: GameContext) { }
 

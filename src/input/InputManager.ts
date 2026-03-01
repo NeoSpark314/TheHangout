@@ -219,8 +219,11 @@ export class InputManager implements IUpdatable {
             const trackingState = tracking.getState();
             const leftActive = trackingState.hands.left.active;
             const rightActive = trackingState.hands.right.active;
+            const usingManualHandGrab = this.isKeyDown('q') || this.isKeyDown('e');
 
-            const isGrabPressed = false; // Non-VR grab is owned by the reticle helper controller.
+            // Preserve the explicit desktop hand-extension workflow. The non-VR reticle
+            // helper owns left-click grabbing only when the player is not manually using Q/E.
+            const isGrabPressed = this.isKeyDown('primary_action') && usingManualHandGrab;
             const isInteractPressed = this.isKeyDown('secondary_action'); // Right mouse click
 
             if (leftActive) {
