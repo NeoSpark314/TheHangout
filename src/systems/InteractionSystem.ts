@@ -9,10 +9,14 @@ export class InteractionSystem {
     }
 
     /**
-     * Finds the first interactable object hit by a ray.
-     * Currently disabled.
+     * Finds the first interactable object hit by a ray, including hit distance/point.
+     * Pointer-driven input layers can use this for local focus logic without teaching
+     * gameplay systems about non-XR interaction modes.
      */
-    public findInteractableUnderRay(ray: { origin: THREE.Vector3, direction: THREE.Vector3 }, maxDist: number): IInteractable | null {
+    public findInteractableHitUnderRay(
+        ray: { origin: THREE.Vector3, direction: THREE.Vector3 },
+        maxDist: number
+    ): { interactable: IInteractable; distance: number; point: THREE.Vector3 } | null {
         if (!this.context.managers.render) return null;
 
         const hits = this.context.managers.render.raycast(ray.origin, ray.direction, maxDist);
@@ -27,7 +31,11 @@ export class InteractionSystem {
                 if (entityId) {
                     const entity = entityManager.getEntity(entityId);
                     if (entity && isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
-                        return entity as unknown as IInteractable;
+                        return {
+                            interactable: entity as unknown as IInteractable,
+                            distance: hit.distance,
+                            point: hit.point.clone()
+                        };
                     }
                     // We hit a mesh linked to an entity, but it wasn't interactable, so stop climbing the tree
                     break;
@@ -37,6 +45,13 @@ export class InteractionSystem {
         }
 
         return null;
+    }
+
+    /**
+     * Convenience wrapper for callers that only need the interactable.
+     */
+    public findInteractableUnderRay(ray: { origin: THREE.Vector3, direction: THREE.Vector3 }, maxDist: number): IInteractable | null {
+        return this.findInteractableHitUnderRay(ray, maxDist)?.interactable || null;
     }
 
     /**

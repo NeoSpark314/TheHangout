@@ -116,7 +116,7 @@ export class VRUIManager implements IUpdatable {
         }
     }
 
-    private toggle2DMenu(): void {
+    public toggle2DMenu(): void {
         this.context.isMenuOpen = !this.context.isMenuOpen;
         if (this.context.isMenuOpen) {
             this.show2DMenu();

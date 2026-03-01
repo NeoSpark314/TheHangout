@@ -23,8 +23,13 @@ export class FlatUIManager implements IUpdatable {
     private desktopControls: HTMLElement | null;
     private myScreensList: HTMLElement | null;
     private addScreenBtn: HTMLButtonElement | null;
+    private mobileHud: HTMLElement | null;
+    private mobileMenuBtn: HTMLButtonElement | null;
+    private mobileActionBtn: HTMLButtonElement | null;
+    private mobileReticle: HTMLElement | null;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
+    private _mobileHudEnabled: boolean = false;
 
     constructor(private context: GameContext) {
         this.overlay = document.getElementById('ui-overlay')!;
@@ -45,6 +50,10 @@ export class FlatUIManager implements IUpdatable {
         this.desktopControls = document.getElementById('desktop-controls');
         this.myScreensList = document.getElementById('my-screens-list');
         this.addScreenBtn = document.getElementById('add-screen-btn') as HTMLButtonElement | null;
+        this.mobileHud = document.getElementById('mobile-hud');
+        this.mobileMenuBtn = document.getElementById('mobile-menu-btn') as HTMLButtonElement | null;
+        this.mobileActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
+        this.mobileReticle = document.getElementById('mobile-reticle');
         this.isMobile = isMobile;
 
         this.init();
@@ -123,6 +132,30 @@ export class FlatUIManager implements IUpdatable {
             });
         }
 
+        if (this.mobileMenuBtn) {
+            this.mobileMenuBtn.addEventListener('click', () => {
+                if (this._mobileHudEnabled) {
+                    this.context.managers.vrUi?.toggle2DMenu();
+                }
+            });
+        }
+
+        if (this.mobileActionBtn) {
+            const startAction = (e: Event) => {
+                e.preventDefault();
+                this.context.managers.input?.beginMobilePrimaryAction();
+            };
+            const endAction = (e: Event) => {
+                e.preventDefault();
+                this.context.managers.input?.endMobilePrimaryAction();
+            };
+
+            this.mobileActionBtn.addEventListener('pointerdown', startAction);
+            this.mobileActionBtn.addEventListener('pointerup', endAction);
+            this.mobileActionBtn.addEventListener('pointercancel', endAction);
+            this.mobileActionBtn.addEventListener('pointerleave', endAction);
+        }
+
         // Room UI events are handled in setupGuestMode / setupDefaultMode
 
         eventBus.on(EVENTS.HOST_READY, (peerId: string) => {
@@ -172,6 +205,10 @@ export class FlatUIManager implements IUpdatable {
         if (this.overlay.style.display === 'none' && this.isMobile && !this._joysticksInitialized) {
             this.context.managers.input?.initMobileJoysticks();
             this._joysticksInitialized = true;
+        }
+
+        if (this.isMobile) {
+            this.updateMobileHudState();
         }
     }
 
@@ -446,6 +483,7 @@ export class FlatUIManager implements IUpdatable {
 
     public hideOverlay(): void {
         console.log('[FlatUIManager] hideOverlay() called');
+        this.context.isMenuOpen = false;
         if (this.overlay) {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
@@ -455,12 +493,12 @@ export class FlatUIManager implements IUpdatable {
                     this.desktopControls.style.display = 'block';
                 }
                 if (this.isMobile) {
-                    const hud = document.getElementById('mobile-hud');
-                    if (hud) {
-                        hud.style.display = 'flex';
-                        this.context.managers.input?.initMobileJoysticks();
-                        this._joysticksInitialized = true;
-                    }
+                    this._mobileHudEnabled = true;
+                    if (this.mobileHud) this.mobileHud.style.display = 'block';
+                    if (this.mobileMenuBtn) this.mobileMenuBtn.style.display = 'block';
+                    this.context.managers.input?.initMobileJoysticks();
+                    this._joysticksInitialized = true;
+                    this.updateMobileHudState();
                 }
             }, 500);
         }
@@ -517,6 +555,7 @@ export class FlatUIManager implements IUpdatable {
 
     public showOverlay(): void {
         console.log('[FlatUIManager] showOverlay() called');
+        this.context.isMenuOpen = true;
         if (this.overlay) {
             this.overlay.style.display = 'flex';
             this.overlay.offsetHeight;
@@ -526,8 +565,12 @@ export class FlatUIManager implements IUpdatable {
             console.log('[FlatUIManager] Hiding desktop controls');
             this.desktopControls.style.display = 'none';
         }
-        const hud = document.getElementById('mobile-hud');
-        if (hud) hud.style.display = 'none';
+        if (this.mobileHud) this.mobileHud.style.display = 'none';
+        if (this.mobileActionBtn) this.mobileActionBtn.style.display = 'none';
+        if (this.mobileReticle) this.mobileReticle.classList.remove('active');
+        if (this.mobileMenuBtn) {
+            this.mobileMenuBtn.style.display = this.isMobile && this._mobileHudEnabled ? 'block' : 'none';
+        }
     }
 
     private handleLeave(): void {
@@ -542,8 +585,38 @@ export class FlatUIManager implements IUpdatable {
             });
         }
         this.context.isDedicatedHost = false;
+        this._mobileHudEnabled = false;
+        if (this.mobileMenuBtn) this.mobileMenuBtn.style.display = 'none';
         this.showOverlay();
         this.setStatus('Ready');
         this.enableAllButtons();
+    }
+
+    private updateMobileHudState(): void {
+        if (!this.isMobile || !this._mobileHudEnabled) return;
+
+        const input = this.context.managers.input;
+        const showAction = this.overlay.style.display === 'none' && !!input?.hasMobilePrimaryAction();
+
+        if (this.mobileHud) {
+            this.mobileHud.style.display = this.overlay.style.display === 'none' ? 'block' : 'none';
+        }
+
+        if (this.mobileActionBtn) {
+            if (showAction) {
+                this.mobileActionBtn.textContent = input!.getMobilePrimaryActionLabel() || 'Use';
+                this.mobileActionBtn.style.display = 'block';
+            } else {
+                this.mobileActionBtn.style.display = 'none';
+            }
+        }
+
+        if (this.mobileReticle) {
+            this.mobileReticle.classList.toggle('active', !!input?.isMobileFocusActive());
+        }
+
+        if (this.mobileMenuBtn) {
+            this.mobileMenuBtn.textContent = this.context.isMenuOpen ? 'Close' : 'Menu';
+        }
     }
 }

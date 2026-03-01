@@ -514,25 +514,87 @@ input[type="color"] {
 /* --- Mobile HUD & Joysticks --- */
 #mobile-hud {
     position: fixed;
-    bottom: 0;
+    top: 0;
     left: 0;
     width: 100%;
-    height: 50%;
-    /* Repositioned to bottom half for ergonomics */
+    height: 100%;
     z-index: 5;
     pointer-events: none;
     display: none;
     /* Controlled by UIManager */
-    flex-direction: row;
-    justify-content: space-between;
+}
+
+#mobile-menu-btn {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    left: calc(env(safe-area-inset-left, 0px) + 14px);
+    z-index: 2101;
+    pointer-events: auto;
+    border: 1px solid rgba(0, 255, 255, 0.35);
+    background: rgba(8, 12, 24, 0.86);
+    color: #e8feff;
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+#mobile-reticle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid rgba(232, 254, 255, 0.92);
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.35);
+}
+
+#mobile-reticle.active {
+    border-color: #00ffff;
+    transform: scale(1.15);
+}
+
+#mobile-action-btn {
+    position: absolute;
+    right: calc(env(safe-area-inset-right, 0px) + 20px);
+    bottom: calc(50% + 20px);
+    min-width: 88px;
+    min-height: 88px;
+    padding: 14px 18px;
+    border-radius: 24px;
+    border: 1px solid rgba(0, 255, 255, 0.35);
+    background: rgba(8, 12, 24, 0.86);
+    color: #e8feff;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    pointer-events: auto;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+    touch-action: none;
 }
 
 .joy-container {
     width: 50%;
-    height: 100%;
-    position: relative;
+    height: 50%;
+    position: absolute;
+    bottom: 0;
     pointer-events: auto;
     overflow: hidden;
+}
+
+#joystick-left {
+    left: 0;
+}
+
+#joystick-right {
+    right: 0;
 }
 
 /* --- Mobile Landscape Optimization --- */

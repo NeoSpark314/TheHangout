@@ -1,9 +1,6 @@
-import * as THREE from 'three';
 import { GameContext } from '../core/GameState';
 import { INPUT_CONFIG } from '../utils/Constants';
-import { IInteractionPointer } from '../interfaces/IPointer';
 import { IUpdatable } from '../interfaces/IUpdatable';
-import { RenderManager } from '../managers/RenderManager';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
@@ -11,6 +8,7 @@ import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IVRSnapTurn
 import { KeyboardManager } from './KeyboardManager';
 import { GamepadManager } from './GamepadManager';
 import { MobileJoystickManager } from './MobileJoystickManager';
+import { MobileInteractionController } from './MobileInteractionController';
 import { XRInputManager } from './XRInputManager';
 import { GestureUtils } from '../utils/GestureUtils';
 
@@ -22,6 +20,7 @@ export class InputManager implements IUpdatable {
     public keyboard: KeyboardManager;
     public gamepad: GamepadManager;
     public mobileJoystick: MobileJoystickManager;
+    public mobileInteraction: MobileInteractionController;
     public xrInput: XRInputManager;
     private _wheelDelta = 0;
 
@@ -29,6 +28,7 @@ export class InputManager implements IUpdatable {
         this.keyboard = new KeyboardManager();
         this.gamepad = new GamepadManager(context);
         this.mobileJoystick = new MobileJoystickManager();
+        this.mobileInteraction = new MobileInteractionController(context);
         this.xrInput = new XRInputManager(context);
 
         this._initMouseLook();
@@ -62,6 +62,26 @@ export class InputManager implements IUpdatable {
 
     public initMobileJoysticks(): void {
         this.mobileJoystick.init();
+    }
+
+    public getMobilePrimaryActionLabel(): string | null {
+        return this.mobileInteraction.getPrimaryActionLabel();
+    }
+
+    public hasMobilePrimaryAction(): boolean {
+        return this.mobileInteraction.hasPrimaryAction();
+    }
+
+    public isMobileFocusActive(): boolean {
+        return this.mobileInteraction.isFocusActive();
+    }
+
+    public beginMobilePrimaryAction(): void {
+        this.mobileInteraction.beginPrimaryAction();
+    }
+
+    public endMobilePrimaryAction(): void {
+        this.mobileInteraction.endPrimaryAction();
     }
 
     public isKeyPressed(key: string): boolean {
@@ -139,6 +159,8 @@ export class InputManager implements IUpdatable {
                 tracking.adjustReach(this._wheelDelta);
                 this._wheelDelta = 0;
             }
+
+            this.mobileInteraction.update();
         }
 
         // 1. Continuous intents
