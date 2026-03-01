@@ -5,11 +5,9 @@ const stopBtn = document.getElementById('stop-btn');
 const statusText = document.getElementById('status-text');
 const codecText = document.getElementById('codec-text');
 
-const qualityInput = document.getElementById('quality-range');
-const qualityVal = document.getElementById('quality-val');
+const qualitySelect = document.getElementById('quality-select');
+const resSelect = document.getElementById('res-select');
 const fpsSelect = document.getElementById('fps-select');
-const previewToggle = document.getElementById('preview-toggle');
-const previewContainer = document.getElementById('preview-container');
 const previewCanvas = document.getElementById('preview-canvas');
 const bandwidthText = document.getElementById('bandwidth-text');
 const resText = document.getElementById('res-text');
@@ -27,7 +25,7 @@ let useWebP = false;
 let isWatched = false;
 let bytesSentRecent = 0;
 let lastStatsTs = Date.now();
-let showPreview = false;
+const showPreview = true; // Always true now
 
 function setStatus(text, cls = '') {
     statusText.textContent = text;
@@ -51,7 +49,7 @@ function getSocketUrl() {
 
 function registerSource() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    console.log(`[share] Registering global source with key: ${activeKey}`);
+    console.log(`[share] Registering source: ${activeKey}`);
     socket.send(JSON.stringify({
         type: 'register-global-source',
         key: activeKey
@@ -111,10 +109,20 @@ function startCaptureLoop() {
 
         const srcW = Math.max(640, captureVideo.videoWidth || 1280);
         const srcH = Math.max(360, captureVideo.videoHeight || 720);
-        const outW = 1280;
-        const outH = Math.max(720, Math.round((srcH / srcW) * outW));
 
-        resText.textContent = `${srcW}x${srcH} (-> ${outW}x${outH})`;
+        // Resolution Logic
+        let outW = srcW;
+        let outH = srcH;
+        const resPreset = resSelect.value;
+        if (resPreset !== 'native') {
+            const targetH = parseInt(resPreset);
+            if (srcH > targetH) {
+                outH = targetH;
+                outW = Math.round((srcW / srcH) * targetH);
+            }
+        }
+
+        resText.textContent = `${srcW}x${srcH} ${outH === srcH ? '(Native)' : `-> ${outW}x${outH}`}`;
 
         // Smart Transmission Optimization
         if (!isWatched) {
@@ -134,11 +142,11 @@ function startCaptureLoop() {
         }
 
         const mime = useWebP ? 'image/webp' : 'image/jpeg';
-        const quality = parseInt(qualityInput.value) / 100;
+        const quality = parseFloat(qualitySelect.value) || 0.65;
 
         captureCanvas.toBlob(async (blob) => {
             if (!blob || !socket || socket.readyState !== WebSocket.OPEN) return;
-            if (!isWatched) return; // Re-check inside async callback
+            if (!isWatched) return;
 
             const imageData = await blob.arrayBuffer();
             bytesSentRecent += imageData.byteLength;
@@ -191,7 +199,6 @@ async function startCapture() {
         setStatus(`Streaming "${activeKey}"`, 'warn');
 
         if (socket && socket.readyState === WebSocket.OPEN) {
-            console.log(`[share] Sending source-capture-started for key: ${activeKey}`);
             socket.send(JSON.stringify({
                 type: 'source-capture-started',
                 key: activeKey
@@ -237,7 +244,6 @@ function connect() {
             }
             if (msg.type === 'watch-status') {
                 isWatched = msg.isWatched;
-                console.log(`[share] Watch status update: ${isWatched}`);
                 return;
             }
             if (msg.type === 'command-start-capture') {
@@ -248,12 +254,7 @@ function connect() {
                 stopCapture(false);
                 return;
             }
-            if (msg.type === 'source-error') {
-                setStatus(msg.message || 'Source error', 'error');
-            }
-        } catch {
-            // Ignore non-JSON or other messages
-        }
+        } catch { }
     };
 
     socket.onclose = () => {
@@ -296,20 +297,12 @@ stopBtn.addEventListener('click', () => {
     stopCapture(true);
 });
 
-qualityInput.addEventListener('input', () => {
-    qualityVal.textContent = `${qualityInput.value}%`;
-});
-
-fpsSelect.addEventListener('change', () => {
-    if (captureTimer) {
-        startCaptureLoop();
-    }
-});
-
-previewToggle.addEventListener('click', () => {
-    showPreview = !showPreview;
-    previewContainer.style.display = showPreview ? 'block' : 'none';
-    previewToggle.textContent = showPreview ? 'Hide Preview' : 'Show Preview';
+[qualitySelect, resSelect, fpsSelect].forEach(el => {
+    el.addEventListener('change', () => {
+        if (captureTimer) {
+            startCaptureLoop();
+        }
+    });
 });
 
 const savedKey = localStorage.getItem(STORAGE_KEY);

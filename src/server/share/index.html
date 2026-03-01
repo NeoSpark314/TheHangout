@@ -10,65 +10,78 @@
 
 <body>
     <main class="wrap">
-        <section class="card">
-            <h1>Desktop Share</h1>
-            <p class="lead">Register your global key and wait for a VR user to summon your screen.</p>
+        <section class="card share-container">
+            <div class="settings-pane">
+                <h1>Desktop Share</h1>
+                <p class="lead">Register your key and wait for a VR user to summon your screen.</p>
 
-            <input id="share-key" type="text" placeholder="bobs-macbook-2026" />
+                <input id="share-key" type="text" placeholder="bobs-macbook-2026" />
 
-            <div class="row">
-                <button id="connect-btn">Connect</button>
-                <button id="start-btn" class="muted" disabled>Start Capture</button>
-                <button id="stop-btn" class="danger" disabled>Stop Capture</button>
-            </div>
-
-            <div class="status">
-                <strong>Status:</strong>
-                <span id="status-text">Disconnected</span>
-            </div>
-
-            <div class="status">
-                <strong>Codec:</strong>
-                <span id="codec-text">unknown</span>
-            </div>
-
-            <div class="row">
-                <div class="control-group">
-                    <label for="quality-range">Quality (JPEG/WebP)</label>
-                    <input id="quality-range" type="range" min="10" max="100" value="65" />
-                    <span id="quality-val">65%</span>
+                <div class="row">
+                    <button id="connect-btn">Connect</button>
+                    <button id="start-btn" class="muted" disabled>Start Capture</button>
+                    <button id="stop-btn" class="danger" disabled>Stop Capture</button>
                 </div>
-                <div class="control-group">
-                    <label for="fps-select">Target FPS</label>
-                    <select id="fps-select">
-                        <option value="5">5 FPS (Low Power)</option>
-                        <option value="12" selected>12 FPS (Smooth)</option>
-                        <option value="24">24 FPS (Cinema)</option>
-                        <option value="30">30 FPS (High)</option>
-                        <option value="60">60 FPS (Ultra)</option>
-                    </select>
+
+                <div class="status-group">
+                    <div class="status">
+                        <strong>Status:</strong> <span id="status-text">Disconnected</span>
+                    </div>
+                    <div class="status">
+                        <strong>Codec:</strong> <span id="codec-text">unknown</span>
+                    </div>
+                </div>
+
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="quality-select">Compression</label>
+                        <select id="quality-select">
+                            <option value="0.4">Low (Small size)</option>
+                            <option value="0.65" selected>Medium (Standard)</option>
+                            <option value="0.8">High (Crisp)</option>
+                            <option value="0.95">Ultra (90%)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="res-select">Resolution</label>
+                        <select id="res-select">
+                            <option value="480">Low (480p)</option>
+                            <option value="720" selected>Medium (720p)</option>
+                            <option value="1080">High (1080p)</option>
+                            <option value="native">Native (Source)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="fps-select">Target FPS</label>
+                        <select id="fps-select">
+                            <option value="5">5 FPS (Low Power)</option>
+                            <option value="12" selected>12 FPS (Smooth)</option>
+                            <option value="24">24 FPS (Cinema)</option>
+                            <option value="30">30 FPS (High)</option>
+                            <option value="60">60 FPS (Ultra)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="status stats">
+                    <div><strong>Bandwidth:</strong> <span id="bandwidth-text">0 KB/s</span></div>
+                    <div><strong>Resolution:</strong> <span id="res-text">0x0</span></div>
+                </div>
+
+                <ul class="notes">
+                    <li><strong>Smart Transmission:</strong> Only captures when watched.</li>
+                    <li>Keep this page open while sharing.</li>
+                </ul>
+            </div>
+
+            <div class="preview-pane">
+                <div class="preview-header">
+                    <strong>Live Preview</strong>
+                </div>
+                <div id="preview-container">
+                    <canvas id="preview-canvas"></canvas>
                 </div>
             </div>
-
-            <div class="row preview-row">
-                <button id="preview-toggle">Show Preview</button>
-                <div id="preview-container"
-                    style="display: none; margin-top: 10px; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden;">
-                    <canvas id="preview-canvas" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
-                </div>
-            </div>
-
-            <div class="status stats">
-                <div><strong>Bandwidth:</strong> <span id="bandwidth-text">0 KB/s</span></div>
-                <div><strong>Resolution:</strong> <span id="res-text">0x0</span></div>
-            </div>
-
-            <ul class="notes">
-                <li><strong>Smart Transmission:</strong> Frames are only sent when someone is actually watching in a
-                    room.</li>
-                <li>Keep this page open while sharing.</li>
-                <li>You can run this on a separate PC than your VR headset.</li>
-            </ul>
         </section>
     </main>
 

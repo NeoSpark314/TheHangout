@@ -254,7 +254,13 @@ export class RemoteDesktopManager implements IUpdatable {
         const blob = new Blob([imageData]);
         createImageBitmap(blob).then((bitmap) => {
             if (this.isCapturing(key) && incomingTs >= surface.lastFrameTs) {
-                surface.ctx.drawImage(bitmap, 0, 0, surface.canvas.width, surface.canvas.height);
+                // Dynamic resolution support
+                if (surface.canvas.width !== bitmap.width || surface.canvas.height !== bitmap.height) {
+                    surface.canvas.width = bitmap.width;
+                    surface.canvas.height = bitmap.height;
+                    surface.texture.needsUpdate = true;
+                }
+                surface.ctx.drawImage(bitmap, 0, 0);
                 surface.texture.needsUpdate = true;
             }
             bitmap.close();
