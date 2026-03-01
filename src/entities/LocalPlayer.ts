@@ -51,7 +51,7 @@ export class LocalPlayer extends PlayerEntity {
             quaternion: { x: 0, y: Math.sin(spawnYaw / 2), z: 0, w: Math.cos(spawnYaw / 2) }
         };
 
-        eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config: any) => {
+        eventBus.on(EVENTS.AVATAR_CONFIG_UPDATED, (config) => {
             if (this.view) {
                 this.view.setColor(config.color);
             }
@@ -143,7 +143,7 @@ export class LocalPlayer extends PlayerEntity {
         this.headState.quaternion = { ...worldHeadQuat };
         this.headHeight = trackingState.head.pose.position.y;
 
-        // NEW: Refine state with procedural animations (Desktop)
+        // Refine state with procedural desktop animations after tracking has updated.
         if (managers.animation) {
             managers.animation.update(delta);
         }
@@ -204,6 +204,7 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public moveOriginTo(position: THREE.Vector3, yaw: number): void {
+        // Low-level helper for callers that intentionally need to reposition the XR origin itself.
         this.xrOrigin.position.x = position.x;
         this.xrOrigin.position.y = position.y;
         this.xrOrigin.position.z = position.z;
@@ -243,12 +244,10 @@ export class LocalPlayer extends PlayerEntity {
             w: Math.cos(targetOriginYaw / 2)
         };
 
-        // 2. Alert the movement skill to flush momentum and sync its internal orientation
+        // Keep the movement skill's body yaw aligned with the new origin rotation.
         const movement = this.getSkill('movement') as MovementSkill;
         if (movement) {
             movement.setYaw(targetOriginYaw);
-            // In MovementSkill, locomotion intent is computed on-the-fly from _currentMove.
-            // There is no persistent physics velocity vector to clear.
         }
     }
 
