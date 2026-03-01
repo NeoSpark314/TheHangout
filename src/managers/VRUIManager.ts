@@ -329,8 +329,8 @@ export class VRUIManager implements IUpdatable {
                                 const targetYaw = peer.targetYaw;
                                 const offset = new THREE.Vector3(0, 0, 1.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), targetYaw);
                                 const finalPos = targetPos.clone().add(offset);
-                                const finalYaw = targetYaw + Math.PI;
-                                localPlayer.teleportTo(finalPos, finalYaw);
+                                const finalYaw = targetYaw;
+                                localPlayer.teleportTo(finalPos, finalYaw, { targetSpace: 'player' });
 
                                 gotoBtn.backgroundColor = UITheme.colors.primary;
                                 setTimeout(() => {

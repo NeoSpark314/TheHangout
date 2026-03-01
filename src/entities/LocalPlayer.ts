@@ -13,6 +13,12 @@ import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { HumanoidState } from '../models/HumanoidState';
 
+export interface ILocalPlayerTeleportOptions {
+    // `player` places the user's floor anchor at the target while keeping the current origin Y.
+    // `head` places the actual HMD at the target, including Y.
+    targetSpace?: 'player' | 'head';
+}
+
 /**
  * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).
  * The RenderManager and Views must follow this state, never modify it directly.
@@ -197,20 +203,50 @@ export class LocalPlayer extends PlayerEntity {
         // LocalPlayer state is driven by input, not network updates.
     }
 
-    public teleportTo(position: THREE.Vector3, yaw: number): void {
-        const managers = this.context.managers;
-
-        // 1. Move the xrOrigin base
+    public moveOriginTo(position: THREE.Vector3, yaw: number): void {
         this.xrOrigin.position.x = position.x;
         this.xrOrigin.position.y = position.y;
         this.xrOrigin.position.z = position.z;
+        this.xrOrigin.quaternion = {
+            x: 0,
+            y: Math.sin(yaw / 2),
+            z: 0,
+            w: Math.cos(yaw / 2)
+        };
+    }
 
-        this.xrOrigin.quaternion = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+    public teleportTo(position: THREE.Vector3, yaw: number, options: ILocalPlayerTeleportOptions = {}): void {
+        const managers = this.context.managers;
+        const targetSpace = options.targetSpace || 'player';
+
+        const localHeadOffset = new THREE.Vector3().copy(managers.render.camera.position);
+        const localHeadEuler = new THREE.Euler().setFromQuaternion(managers.render.camera.quaternion, 'YXZ');
+        const localHeadYaw = localHeadEuler.y;
+
+        // To make the user's actual headset face `yaw`, rotate the origin by the remaining yaw.
+        const targetOriginYaw = yaw - localHeadYaw;
+
+        const targetOriginQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetOriginYaw);
+        const worldHeadOffset = localHeadOffset.applyQuaternion(targetOriginQuat);
+
+        this.xrOrigin.position.x = position.x - worldHeadOffset.x;
+        this.xrOrigin.position.z = position.z - worldHeadOffset.z;
+
+        if (targetSpace === 'head') {
+            this.xrOrigin.position.y = position.y - worldHeadOffset.y;
+        }
+
+        this.xrOrigin.quaternion = {
+            x: 0,
+            y: Math.sin(targetOriginYaw / 2),
+            z: 0,
+            w: Math.cos(targetOriginYaw / 2)
+        };
 
         // 2. Alert the movement skill to flush momentum and sync its internal orientation
         const movement = this.getSkill('movement') as MovementSkill;
         if (movement) {
-            movement.setYaw(yaw);
+            movement.setYaw(targetOriginYaw);
             // In MovementSkill, locomotion intent is computed on-the-fly from _currentMove.
             // There is no persistent physics velocity vector to clear.
         }
