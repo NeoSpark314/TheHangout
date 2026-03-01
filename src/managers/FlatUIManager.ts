@@ -133,7 +133,7 @@ export class FlatUIManager implements IUpdatable {
             }
         });
 
-        eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
+        eventBus.on(EVENTS.SESSION_CONNECTED, () => {
             if (!this.context.isHost) {
                 this.setStatus('Connected!');
                 setTimeout(() => this.hideOverlay(), 1000);

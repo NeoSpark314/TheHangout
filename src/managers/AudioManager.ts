@@ -37,7 +37,7 @@ export class AudioManager {
     }
 
     private setupListeners(): void {
-        eventBus.on(EVENTS.PEER_CONNECTED, () => {
+        eventBus.on(EVENTS.ENTITY_DISCOVERED, () => {
             if (this.isInitialized && this.ctx) {
                 SoundSynth.playArpeggio(this.ctx, this.JOIN_FREQS, 'square');
             }

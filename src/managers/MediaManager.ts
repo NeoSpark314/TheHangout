@@ -17,7 +17,7 @@ export class MediaManager {
     private mediaRecorder: MediaRecorder | null = null;
 
     constructor(private context: GameContext) {
-        eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
+        eventBus.on(EVENTS.ENTITY_DISCOVERED, (peerId: string) => {
             const network = this.context.managers.network;
             const localId = network?.peer?.id || network?.localPeerId;
             const isRemoteNetworkPeer = !!network?.connections?.has(peerId);

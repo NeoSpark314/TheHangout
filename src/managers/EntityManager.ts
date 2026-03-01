@@ -24,7 +24,7 @@ export class EntityManager implements IUpdatable {
 
         if (entity) {
             this.addEntity(entity);
-            eventBus.emit(EVENTS.PEER_CONNECTED, id); // Reuse for discovery notification
+            eventBus.emit(EVENTS.ENTITY_DISCOVERED, id);
             return entity;
         }
 

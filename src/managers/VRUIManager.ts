@@ -98,7 +98,7 @@ export class VRUIManager implements IUpdatable {
         }
 
         if (this.scheduleRenderHandler) {
-            eventBus.off(EVENTS.PEER_CONNECTED, this.scheduleRenderHandler);
+            eventBus.off(EVENTS.ENTITY_DISCOVERED, this.scheduleRenderHandler);
             eventBus.off(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
             eventBus.off(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
             this.scheduleRenderHandler = null;
@@ -110,7 +110,7 @@ export class VRUIManager implements IUpdatable {
         }
 
         if (this.onDesktopResubscribeHandler) {
-            eventBus.off(EVENTS.PEER_CONNECTED, this.onDesktopResubscribeHandler);
+            eventBus.off(EVENTS.SESSION_CONNECTED, this.onDesktopResubscribeHandler);
             eventBus.off(EVENTS.PEER_JOINED_ROOM, this.onDesktopResubscribeHandler);
             this.onDesktopResubscribeHandler = null;
         }
@@ -439,7 +439,7 @@ export class VRUIManager implements IUpdatable {
 
             // Hook up auto-refresh events.
             this.scheduleRenderHandler = () => { setTimeout(renderList, 100); };
-            eventBus.on(EVENTS.PEER_CONNECTED, this.scheduleRenderHandler);
+            eventBus.on(EVENTS.ENTITY_DISCOVERED, this.scheduleRenderHandler);
             eventBus.on(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
             eventBus.on(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
 
@@ -587,7 +587,7 @@ export class VRUIManager implements IUpdatable {
             };
 
             eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
-            eventBus.on(EVENTS.PEER_CONNECTED, this.onDesktopResubscribeHandler);
+            eventBus.on(EVENTS.SESSION_CONNECTED, this.onDesktopResubscribeHandler);
             eventBus.on(EVENTS.PEER_JOINED_ROOM, this.onDesktopResubscribeHandler);
             desktop.requestSourceStatus();
             renderList();

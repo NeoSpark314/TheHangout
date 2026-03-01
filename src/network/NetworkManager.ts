@@ -208,6 +208,12 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
                 this.context.managers.replication.sendSnapshotToPeer(conn.peer);
             } else {
+                if (!this.context.isLocalServer) {
+                    const localId = this.peer?.id;
+                    if (localId) {
+                        eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
+                    }
+                }
                 this.context.managers.replication.requestSnapshotFromHost();
             }
         });
@@ -467,7 +473,7 @@ class RoomConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET
             if (this.context.isLocalServer) {
                 const network = this.context.managers.network as any;
                 if (network.localPeerId) {
-                    eventBus.emit(EVENTS.PEER_CONNECTED, network.localPeerId);
+                    eventBus.emit(EVENTS.SESSION_CONNECTED, network.localPeerId);
                 }
             }
         }
