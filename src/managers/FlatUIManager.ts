@@ -141,12 +141,19 @@ export class FlatUIManager implements IUpdatable {
         }
 
         if (this.mobileActionBtn) {
-            const toggleAction = (e: Event) => {
+            const beginAction = (e: Event) => {
                 e.preventDefault();
                 this.context.managers.input?.toggleMobilePrimaryAction();
             };
+            const endAction = (e: Event) => {
+                e.preventDefault();
+                this.context.managers.input?.releaseMobilePrimaryAction();
+            };
 
-            this.mobileActionBtn.addEventListener('click', toggleAction);
+            this.mobileActionBtn.addEventListener('pointerdown', beginAction);
+            this.mobileActionBtn.addEventListener('pointerup', endAction);
+            this.mobileActionBtn.addEventListener('pointercancel', endAction);
+            this.mobileActionBtn.addEventListener('pointerleave', endAction);
         }
 
         // Room UI events are handled in setupGuestMode / setupDefaultMode

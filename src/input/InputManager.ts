@@ -77,7 +77,11 @@ export class InputManager implements IUpdatable {
     }
 
     public toggleMobilePrimaryAction(): void {
-        this.nonVRReachAssist.toggleMobileAction();
+        this.nonVRReachAssist.beginMobileAction();
+    }
+
+    public releaseMobilePrimaryAction(): void {
+        this.nonVRReachAssist.endMobileAction();
     }
 
     public isKeyPressed(key: string): boolean {

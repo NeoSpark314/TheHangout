@@ -15,11 +15,12 @@ type ReachPhase = 'idle' | 'extending' | 'holding' | 'retracting';
 export class NonVRReachAssistController {
     private readonly isMobileMode = isMobile;
     private phase: ReachPhase = 'idle';
-    private mobileRequested = false;
+    private mobilePressing = false;
+    private mobileLatched = false;
     private reach = 0;
-    private maxReach = 2.2;
-    private extendSpeed = 3.2;
-    private retractSpeed = 4.5;
+    private maxReach = 1.45;
+    private extendSpeed = 5.4;
+    private retractSpeed = 6.5;
 
     constructor(private context: GameContext) { }
 
@@ -31,7 +32,7 @@ export class NonVRReachAssistController {
             return;
         }
 
-        const requested = this.mobileRequested || desktopGrabHeld || gamepadGrabHeld;
+        const requested = this.mobilePressing || this.mobileLatched || desktopGrabHeld || gamepadGrabHeld;
         const isHolding = this.isHolding();
 
         if (requested) {
@@ -43,8 +44,8 @@ export class NonVRReachAssistController {
                 eventBus.emit(EVENTS.INTENT_GRAB_END, { hand: 'right' } as IHandIntentPayload);
             }
             this.phase = 'retracting';
-            if (this.mobileRequested) {
-                this.mobileRequested = false;
+            if (this.mobilePressing) {
+                this.mobilePressing = false;
             }
         }
 
@@ -56,6 +57,10 @@ export class NonVRReachAssistController {
                 eventBus.emit(EVENTS.INTENT_GRAB_START, { hand: 'right' } as IHandIntentPayload);
             }
             if (this.isHolding()) {
+                if (this.mobilePressing) {
+                    this.mobileLatched = true;
+                    this.mobilePressing = false;
+                }
                 this.phase = 'holding';
             }
         } else if (this.phase === 'holding') {
@@ -73,23 +78,31 @@ export class NonVRReachAssistController {
         this.applyReach();
     }
 
-    public toggleMobileAction(): void {
+    public beginMobileAction(): void {
         if (!this.isMobileMode) return;
 
-        if (this.phase === 'extending' || this.phase === 'holding' || this.mobileRequested) {
-            this.mobileRequested = false;
-            if (this.phase === 'extending' || this.phase === 'holding') {
-                if (this.isHolding()) {
-                    eventBus.emit(EVENTS.INTENT_GRAB_END, { hand: 'right' } as IHandIntentPayload);
-                }
-                this.phase = 'retracting';
+        if (this.mobileLatched || this.phase === 'holding') {
+            this.mobileLatched = false;
+            this.mobilePressing = false;
+            if (this.isHolding()) {
+                eventBus.emit(EVENTS.INTENT_GRAB_END, { hand: 'right' } as IHandIntentPayload);
             }
+            this.phase = 'retracting';
             return;
         }
 
-        this.mobileRequested = true;
+        this.mobilePressing = true;
         if (this.phase === 'idle' || this.phase === 'retracting') {
             this.phase = 'extending';
+        }
+    }
+
+    public endMobileAction(): void {
+        if (!this.isMobileMode) return;
+        if (this.mobileLatched) return;
+        this.mobilePressing = false;
+        if (this.phase === 'extending' && !this.isHolding()) {
+            this.phase = 'retracting';
         }
     }
 
@@ -101,7 +114,7 @@ export class NonVRReachAssistController {
 
     public getMobilePrimaryActionLabel(): string | null {
         if (!this.hasMobilePrimaryAction()) return null;
-        return (this.phase === 'extending' || this.phase === 'holding' || this.mobileRequested) ? 'Drop' : 'Grab';
+        return (this.mobileLatched || this.phase === 'holding') ? 'Drop' : 'Grab';
     }
 
     public isActive(): boolean {
@@ -112,7 +125,8 @@ export class NonVRReachAssistController {
         if (this.phase === 'holding' && this.isHolding()) {
             eventBus.emit(EVENTS.INTENT_GRAB_END, { hand: 'right' } as IHandIntentPayload);
         }
-        this.mobileRequested = false;
+        this.mobilePressing = false;
+        this.mobileLatched = false;
         this.phase = 'idle';
         this.reach = 0;
     }

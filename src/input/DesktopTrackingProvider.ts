@@ -37,6 +37,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private pitch = 0;
     private turnSpeed = 0.002;
     private headHeight = PlayerEntity.DEFAULT_HEAD_HEIGHT;
+    private assistedCenterYOffset = 0.12;
+    private assistedForwardBase = 0.22;
 
     private _lookHandler = (payload: any) => {
         // We only care about Y (pitch) here. 
@@ -193,7 +195,14 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         // Apply stretch in the direction the HEAD is looking (worldHeadQuat)
         const leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
-        const rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
+        let rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
+
+        // Assisted non-VR reach uses a centered, head-relative line so the user can
+        // clearly see what the helper hand is reaching toward.
+        if (!this.manualStatus.right && this.assistedReach.right !== null) {
+            const assistOffset = new THREE.Vector3(0, -this.assistedCenterYOffset, -(this.assistedForwardBase + this.assistedReach.right));
+            rightTargetWorld = worldHeadPos.clone().add(assistOffset.applyQuaternion(worldHeadQuat));
+        }
 
         this.state.hands.left.pose.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };
         this.state.hands.left.pose.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
