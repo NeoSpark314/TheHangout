@@ -35,20 +35,11 @@ export class PropManager implements IReplicatedFeature {
     private drumPadById: Map<string, { index: number; frequency: number; position: THREE.Vector3 }> = new Map();
     private handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private lastHandPadHitAtMs: Map<string, number> = new Map();
-    private onDrumPadHitHandler: ((data: { padId: string; frequency: number; intensity: number }) => void) | null = null;
     private onPhysicsCollisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
 
     constructor(scene: THREE.Scene, randomFunc: () => number, private context: GameContext) {
         this.scene = scene;
         this.random = randomFunc;
-
-        this.onDrumPadHitHandler = (data) => {
-            const idx = this.parsePadIndex(data.padId);
-            if (idx >= 0 && idx < this.drumPadFlash.length) {
-                this.drumPadFlash[idx] = Math.max(this.drumPadFlash[idx], Math.min(1.0, data.intensity * 1.2));
-            }
-        };
-        eventBus.on(EVENTS.DRUM_PAD_HIT, this.onDrumPadHitHandler);
         this.context.managers.replication.registerFeature(this);
 
         this.onPhysicsCollisionStartedHandler = (data) => {
@@ -66,12 +57,12 @@ export class PropManager implements IReplicatedFeature {
             const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
             const intensity = Math.max(0.08, Math.min(1.0, speed * 0.22));
             const padInfo = this.drumPadById.get(hit.padId);
-            this.emitDrumHit({
+            this.applyDrumHit({
                 padId: hit.padId,
                 frequency: hit.frequency,
                 intensity,
                 position: padInfo ? { x: padInfo.position.x, y: padInfo.position.y, z: padInfo.position.z } : undefined
-            });
+            }, true);
         };
         eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
     }
@@ -420,12 +411,12 @@ export class PropManager implements IReplicatedFeature {
                 const strikeSpeed = Math.max(0, -vy) + speed * 0.22;
                 const intensity = Math.min(1.0, Math.max(0.12, strikeSpeed * 0.12));
                 const freq = this.drumPadById.get(`pad-${i}`)?.frequency ?? 220;
-                this.emitDrumHit({
+                this.applyDrumHit({
                     padId: `pad-${i}`,
                     frequency: freq,
                     intensity,
                     position: { x: padPos.x, y: padPos.y, z: padPos.z }
-                });
+                }, true);
             }
         }
     }
@@ -462,11 +453,31 @@ export class PropManager implements IReplicatedFeature {
         const hit = data as IDrumPadHitPayload;
         if (!hit || typeof hit.padId !== 'string') return;
         if (typeof hit.frequency !== 'number' || typeof hit.intensity !== 'number') return;
-        eventBus.emit(EVENTS.DRUM_PAD_HIT, hit);
+        this.applyDrumHit(hit, false);
     }
 
-    private emitDrumHit(hit: IDrumPadHitPayload): void {
-        this.context.managers.replication.emitFeatureEvent(this.featureId, 'hit', hit);
+    /**
+     * Feature-local drum hit pipeline.
+     *
+     * Drum pads are room-specific behavior, so we keep the flash/audio logic and
+     * replication trigger inside the room feature instead of publishing a global
+     * app event. This keeps the global EventBus focused on shared infrastructure.
+     */
+    private applyDrumHit(hit: IDrumPadHitPayload, replicate: boolean): void {
+        const idx = this.parsePadIndex(hit.padId);
+        if (idx >= 0 && idx < this.drumPadFlash.length) {
+            this.drumPadFlash[idx] = Math.max(this.drumPadFlash[idx], Math.min(1.0, hit.intensity * 1.2));
+        }
+
+        this.context.managers.audio?.playDrumPadHit({
+            frequency: hit.frequency,
+            intensity: hit.intensity,
+            position: hit.position
+        });
+
+        if (replicate) {
+            this.context.managers.replication.emitFeatureEvent(this.featureId, 'hit', hit);
+        }
     }
 
     public clearProcedural(): void {

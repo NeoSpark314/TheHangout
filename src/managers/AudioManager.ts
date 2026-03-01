@@ -55,24 +55,6 @@ export class AudioManager {
             }
         });
 
-        eventBus.on(EVENTS.DRUM_PAD_HIT, (data: { frequency: number, intensity: number, position?: IVector3 }) => {
-            if (this.isInitialized && this.ctx) {
-                const headPos = this.context.managers.tracking.getState().head.pose.position;
-                const hitPos = data.position;
-                let distance = 0;
-                let pan = 0;
-                if (hitPos) {
-                    const dx = hitPos.x - headPos.x;
-                    const dy = hitPos.y - headPos.y;
-                    const dz = hitPos.z - headPos.z;
-                    distance = Math.hypot(dx, dy, dz);
-                    pan = Math.max(-1, Math.min(1, dx / 6));
-                }
-
-                SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { pan, distance });
-            }
-        });
-
         eventBus.on(EVENTS.SOCIAL_HIGH_FIVE, (data: { position?: IVector3; intensity: number }) => {
             if (this.isInitialized && this.ctx) {
                 const headPos = this.context.managers.tracking.getState().head.pose.position;
@@ -93,5 +75,29 @@ export class AudioManager {
 
     public update(delta: number): void {
         // Spatial logic
+    }
+
+    /**
+     * Feature-facing API for localized drum-pad feedback.
+     *
+     * This stays out of the global EventBus because drum pads are room-specific
+     * domain logic, not an app-wide infrastructure concern.
+     */
+    public playDrumPadHit(data: { frequency: number; intensity: number; position?: IVector3 }): void {
+        if (!this.isInitialized || !this.ctx) return;
+
+        const headPos = this.context.managers.tracking.getState().head.pose.position;
+        const hitPos = data.position;
+        let distance = 0;
+        let pan = 0;
+        if (hitPos) {
+            const dx = hitPos.x - headPos.x;
+            const dy = hitPos.y - headPos.y;
+            const dz = hitPos.z - headPos.z;
+            distance = Math.hypot(dx, dy, dz);
+            pan = Math.max(-1, Math.min(1, dx / 6));
+        }
+
+        SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { pan, distance });
     }
 }

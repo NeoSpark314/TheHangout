@@ -57,6 +57,14 @@ export class ReplicationManager {
         this.features.set(feature.featureId, feature);
     }
 
+    /**
+     * Feature-scoped replication entry point.
+     *
+     * Use this for room/item-specific domain behavior (for example, a drum hit,
+     * a puzzle trigger, or a drawing segment). This keeps those semantics out of
+     * the global app EventBus, which should remain reserved for shared
+     * infrastructure and lifecycle events.
+     */
     public emitFeatureEvent(featureId: string, eventType: string, data: unknown): void {
         const payload: IReplicatedFeatureEventPayload = {
             featureId,

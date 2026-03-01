@@ -1,9 +1,18 @@
 import type { IAvatarConfig } from './GameState';
-import type { IDrawSegmentPayload } from '../interfaces/IDrawing';
 import type { IHandIntentPayload, ILookIntentPayload, IMoveIntentPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
 import type { IVector3 } from '../interfaces/IMath';
 import type { IVoiceStreamReceivedEvent } from '../interfaces/IVoice';
 
+/**
+ * Global app-wide events only.
+ *
+ * Architectural boundary:
+ * - Keep cross-cutting infrastructure here (session lifecycle, input intents,
+ *   ownership requests, shared UI/system notifications, voice plumbing).
+ * - Do not add room-specific or item-specific domain events here. Those belong
+ *   inside feature/room managers and should use feature-local APIs plus
+ *   ReplicationManager for network fan-out.
+ */
 export interface AppEventMap {
     START_XR: void;
     JOIN_ROOM: string;
@@ -27,13 +36,11 @@ export interface AppEventMap {
     LOCAL_PLAYER_MOVED: unknown;
     OWNERSHIP_TRANSFERRED: unknown;
     ENTITY_COLLIDED: { intensity: number };
-    DRUM_PAD_HIT: { padId: string; frequency: number; intensity: number; position?: IVector3 };
     PHYSICS_COLLISION_STARTED: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null };
     REQUEST_OWNERSHIP: unknown;
     RELEASE_OWNERSHIP: unknown;
     RECLAIM_OWNERSHIP: unknown;
     SYSTEM_NOTIFICATION: string;
-    PEN_DRAW_SEGMENT: IDrawSegmentPayload;
     AUDIO_CHUNK_RECEIVED: unknown;
     PEER_JOINED_ROOM: string;
     XR_SESSION_STARTED: void;

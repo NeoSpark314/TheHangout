@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import eventBus from '../core/EventBus';
-import { EVENTS } from '../utils/Constants';
 import { GameContext } from '../core/GameState';
 import { IDrawSegmentPayload } from '../interfaces/IDrawing';
 import { IReplicatedFeature } from './ReplicationManager';
@@ -24,13 +22,27 @@ export class DrawingManager implements IReplicatedFeature {
             this.scene.add(this.lineGroup);
         }
         this.context.managers.replication.registerFeature(this);
-
-        eventBus.on(EVENTS.PEN_DRAW_SEGMENT, (segment: IDrawSegmentPayload) => {
-            this.context.managers.replication.emitFeatureEvent(this.featureId, 'segment', segment);
-        });
     }
 
-    public drawLine(segment: IDrawSegmentPayload): void {
+    /**
+     * Feature-local API for pen strokes.
+     *
+     * We intentionally keep drawing semantics out of the global EventBus.
+     * The drawing feature owns both local rendering and network replication so
+     * room/item-specific behavior does not leak into app-wide infrastructure.
+     */
+    public addSegment(segment: IDrawSegmentPayload, replicate: boolean = true): void {
+        if (!this.isValidSegment(segment)) return;
+
+        if (replicate) {
+            this.context.managers.replication.emitFeatureEvent(this.featureId, 'segment', segment);
+            return;
+        }
+
+        this.drawLine(segment);
+    }
+
+    private drawLine(segment: IDrawSegmentPayload): void {
         this.segments.push(segment);
         if (this.segments.length > this.maxSegments) {
             this.segments.splice(0, this.segments.length - this.maxSegments);
@@ -55,7 +67,7 @@ export class DrawingManager implements IReplicatedFeature {
         if (eventType !== 'segment') return;
         const segment = data as IDrawSegmentPayload;
         if (!this.isValidSegment(segment)) return;
-        this.drawLine(segment);
+        this.addSegment(segment, false);
     }
 
     public captureSnapshot(): unknown {

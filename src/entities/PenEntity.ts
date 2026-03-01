@@ -3,11 +3,10 @@ import { IGrabbable } from '../interfaces/IGrabbable';
 import { IInteractable } from '../interfaces/IInteractable';
 import { IInteractionEvent } from '../interfaces/IInteractionEvent';
 import { IVector3, IQuaternion, IPose } from '../interfaces/IMath';
+import { IDrawSegmentPayload } from '../interfaces/IDrawing';
 import { IView } from '../interfaces/IView';
 import { IPenEntityState, EntityType } from '../interfaces/IEntityState';
 import { GameContext } from '../core/GameState';
-import eventBus from '../core/EventBus';
-import { EVENTS } from '../utils/Constants';
 import * as THREE from 'three';
 
 /**
@@ -95,11 +94,12 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
 
                 // Only draw if we've moved enough (1cm) to save bandwidth/performance
                 if (distSq > 0.0001) {
-                    eventBus.emit(EVENTS.PEN_DRAW_SEGMENT, {
+                    const segment: IDrawSegmentPayload = {
                         startPos: [this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z],
                         endPos: [tipPos.x, tipPos.y, tipPos.z],
                         color: this.color
-                    });
+                    };
+                    this.context.managers.drawing.addSegment(segment);
                     this.lastDrawPosition = { x: tipPos.x, y: tipPos.y, z: tipPos.z };
                 }
             } else {
