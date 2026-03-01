@@ -1,5 +1,6 @@
 import { GameContext } from '../core/GameState';
 import { PACKET_TYPES } from '../utils/Constants';
+import { INetworkable } from '../interfaces/INetworkable';
 
 export interface INetworkTransport {
     broadcast(type: number, payload: any): void;
@@ -31,7 +32,7 @@ export class NetworkSynchronizer {
         }
     }
 
-    private syncState(forceAll: boolean = false): void {
+    public syncState(forceAll: boolean = false): void {
         const managers = this.context.managers;
         if (!managers.entity) return;
 
@@ -49,6 +50,33 @@ export class NetworkSynchronizer {
                     this.transport.sendData(this.context.roomId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
                 }
             }
+        }
+    }
+
+    public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
+        const managers = this.context.managers;
+        const entity = managers.entity?.getEntity(entityId);
+        if (!entity || entity.isDestroyed) return;
+
+        const networkable = entity as unknown as INetworkable<unknown>;
+        if (!networkable.getNetworkState) return;
+
+        const state = networkable.getNetworkState(forceFullState);
+        if (!state) return;
+
+        const packet = [{
+            id: entity.id,
+            type: entity.type,
+            state
+        }];
+
+        if (this.context.isHost) {
+            this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, packet);
+            return;
+        }
+
+        if (this.context.roomId) {
+            this.transport.sendData(this.context.roomId, PACKET_TYPES.PLAYER_INPUT, packet);
         }
     }
 }

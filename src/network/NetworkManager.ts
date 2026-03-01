@@ -258,8 +258,11 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public syncStateManually(): void {
-        // Exposed for potential manual sync
-        (this.synchronizer as any).syncState();
+        this.synchronizer.syncState();
+    }
+
+    public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
+        this.synchronizer.syncEntityNow(entityId, forceFullState);
     }
 
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {

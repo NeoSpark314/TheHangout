@@ -196,6 +196,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.pendingReleaseArmed = false;
         this.heldBy = playerId;
         this.refreshSimMode();
+        this.context.managers.network?.syncEntityNow(this.id);
     }
 
     public onRelease(velocity?: IVector3): void {
