@@ -16,12 +16,14 @@ export class VRUIManager implements IUpdatable {
     private overlayContainer: HTMLDivElement | null = null;
 
     private peersTab: any = null; // Store UITab handle
+    private roomTab: any = null;
     private systemTab: any = null;
     private refreshPeersList: (() => void) | null = null;
     private peersTalkingInterval: ReturnType<typeof setInterval> | null = null;
     private onPeerUpdateHandler: (() => void) | null = null;
     private onVoiceStateHandler: (() => void) | null = null;
     private scheduleRenderHandler: (() => void) | null = null;
+    private onDesktopUpdateHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -49,6 +51,7 @@ export class VRUIManager implements IUpdatable {
 
         // Add default System Tab immediately
         this.addPeersTab();
+        this.addRoomTab();
         this.addSystemTab();
         this.addDebugTab();
         this.addHelpTab();
@@ -96,6 +99,11 @@ export class VRUIManager implements IUpdatable {
             eventBus.off(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
             eventBus.off(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
             this.scheduleRenderHandler = null;
+        }
+
+        if (this.onDesktopUpdateHandler) {
+            eventBus.off(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
+            this.onDesktopUpdateHandler = null;
         }
     }
 
@@ -462,6 +470,112 @@ export class VRUIManager implements IUpdatable {
             leaveBtn.hoverColor = UITheme.colors.dangerHover;
             leaveBtn.cornerRadius = 10;
             systemContainer.addChild(leaveBtn);
+        });
+    }
+
+    private addRoomTab() {
+        if (!this.tabPanel) return;
+
+        this.roomTab = this.tabPanel.addTab('Room');
+        const roomContainer = this.roomTab.container;
+
+        import('../utils/canvasui').then(({ UIButton, UILabel }) => {
+            const desktop = this.context.managers.remoteDesktop;
+
+            const title = new UILabel('Remote Screens', 50, 30, 1180, 70);
+            title.font = getFont(UITheme.typography.sizes.title, 'bold');
+            title.textColor = UITheme.colors.primary;
+            title.textAlign = 'center';
+            roomContainer.addChild(title);
+
+            const subtitle = new UILabel('Manage your pre-configured global desktop sources', 70, 90, 1140, 40);
+            subtitle.font = getFont(UITheme.typography.sizes.small);
+            subtitle.textColor = UITheme.colors.textMuted;
+            subtitle.textAlign = 'center';
+            roomContainer.addChild(subtitle);
+
+            const refreshBtn = new UIButton('Refresh Status', 420, 140, 440, 70, () => {
+                desktop.requestSourceStatus();
+            });
+            refreshBtn.cornerRadius = 10;
+            roomContainer.addChild(refreshBtn);
+
+            const listContainer = new UIElement(40, 240, 1200, 500);
+            roomContainer.addChild(listContainer);
+
+            const renderList = () => {
+                listContainer.children = [];
+                const configs = desktop.getConfigs();
+
+                if (configs.length === 0) {
+                    const emptyLabel = new UILabel('No screens configured. Add entries in the main menu profile screen.', 40, 20, 1120, 50);
+                    emptyLabel.font = getFont(UITheme.typography.sizes.body);
+                    emptyLabel.textColor = UITheme.colors.textMuted;
+                    emptyLabel.textAlign = 'center';
+                    listContainer.addChild(emptyLabel);
+                    this.tablet?.ui.markDirty();
+                    return;
+                }
+
+                configs.slice(0, 5).forEach((cfg, index) => {
+                    const rowY = index * 95;
+                    const online = desktop.isOnline(cfg.key);
+                    const active = desktop.isActive(cfg.key);
+                    const statusText = active ? 'Active' : (online ? 'Online' : 'Offline');
+                    const statusColor = active
+                        ? UITheme.colors.accent
+                        : (online ? UITheme.colors.primary : UITheme.colors.textMuted);
+
+                    const nameLabel = new UILabel(cfg.name, 20, rowY + 8, 360, 40);
+                    nameLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                    nameLabel.textColor = UITheme.colors.text;
+                    nameLabel.textAlign = 'left';
+                    listContainer.addChild(nameLabel);
+
+                    const keyLabel = new UILabel(cfg.key, 20, rowY + 44, 500, 34);
+                    keyLabel.font = getFont(UITheme.typography.sizes.small);
+                    keyLabel.textColor = UITheme.colors.textMuted;
+                    keyLabel.textAlign = 'left';
+                    listContainer.addChild(keyLabel);
+
+                    const statusLabel = new UILabel(statusText, 560, rowY + 26, 180, 40);
+                    statusLabel.font = getFont(UITheme.typography.sizes.small, 'bold');
+                    statusLabel.textColor = statusColor;
+                    statusLabel.textAlign = 'center';
+                    listContainer.addChild(statusLabel);
+
+                    const startBtn = new UIButton('Start', 770, rowY + 12, 170, 60, () => {
+                        if (!online || active) return;
+                        desktop.summonStream(cfg.key, cfg.name);
+                    });
+                    startBtn.cornerRadius = 8;
+                    startBtn.backgroundColor = online && !active ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                    startBtn.borderColor = online && !active ? UITheme.colors.primary : UITheme.colors.textMuted;
+                    startBtn.textColor = online && !active ? UITheme.colors.text : UITheme.colors.textMuted;
+                    listContainer.addChild(startBtn);
+
+                    const stopBtn = new UIButton('Stop', 965, rowY + 12, 170, 60, () => {
+                        if (!active) return;
+                        desktop.stopStream(cfg.key);
+                    });
+                    stopBtn.cornerRadius = 8;
+                    stopBtn.backgroundColor = active ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                    stopBtn.borderColor = active ? UITheme.colors.secondary : UITheme.colors.textMuted;
+                    stopBtn.textColor = active ? UITheme.colors.text : UITheme.colors.textMuted;
+                    listContainer.addChild(stopBtn);
+                });
+
+                this.tablet?.ui.markDirty();
+            };
+
+            this.onDesktopUpdateHandler = () => {
+                const isVR = this.context.managers.render?.isXRPresenting();
+                if (this.context.isMenuOpen || isVR) renderList();
+            };
+
+            eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
+            desktop.requestSourceStatus();
+            renderList();
         });
     }
 

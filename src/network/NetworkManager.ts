@@ -5,6 +5,11 @@ import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 import { INetworkable } from '../interfaces/INetworkable';
 import { EntityType, IStateUpdatePacket } from '../interfaces/IEntityState';
 import {
+    IDesktopSourcesStatusResponsePayload,
+    IDesktopStreamFramePayload,
+    IDesktopStreamOfflinePayload,
+    IDesktopStreamStoppedPayload,
+    IDesktopStreamSummonedPayload,
     IFeatureSnapshotRequestPayload,
     IRoomConfigUpdatePayload,
     IOwnershipReleasePayload,
@@ -85,6 +90,11 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, new FeatureEventHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, new FeatureSnapshotHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, new FeatureSnapshotRequestHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE, new DesktopSourcesStatusHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_SUMMONED, new DesktopStreamSummonedHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_STOPPED, new DesktopStreamStoppedHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_OFFLINE, new DesktopStreamOfflineHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_FRAME, new DesktopStreamFrameHandler(this.context));
     }
 
     private getPeerConfig(): any {
@@ -507,6 +517,41 @@ class FeatureSnapshotRequestHandler implements IPacketHandler<PacketPayloadMap[t
     handle(senderId: string, payload: IFeatureSnapshotRequestPayload): void {
         if (!this.context.isHost) return;
         this.context.managers.replication.sendSnapshotToPeer(senderId);
+    }
+}
+
+class DesktopSourcesStatusHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE]> {
+    constructor(private context: GameContext) { }
+    handle(_senderId: string, payload: IDesktopSourcesStatusResponsePayload): void {
+        this.context.managers.remoteDesktop.handleSourcesStatus(payload);
+    }
+}
+
+class DesktopStreamSummonedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_SUMMONED]> {
+    constructor(private context: GameContext) { }
+    handle(_senderId: string, payload: IDesktopStreamSummonedPayload): void {
+        this.context.managers.remoteDesktop.handleStreamSummoned(payload);
+    }
+}
+
+class DesktopStreamStoppedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_STOPPED]> {
+    constructor(private context: GameContext) { }
+    handle(_senderId: string, payload: IDesktopStreamStoppedPayload): void {
+        this.context.managers.remoteDesktop.handleStreamStopped(payload);
+    }
+}
+
+class DesktopStreamOfflineHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_OFFLINE]> {
+    constructor(private context: GameContext) { }
+    handle(_senderId: string, payload: IDesktopStreamOfflinePayload): void {
+        this.context.managers.remoteDesktop.handleStreamOffline(payload);
+    }
+}
+
+class DesktopStreamFrameHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_FRAME]> {
+    constructor(private context: GameContext) { }
+    handle(_senderId: string, payload: IDesktopStreamFramePayload): void {
+        this.context.managers.remoteDesktop.handleStreamFrame(payload);
     }
 }
 

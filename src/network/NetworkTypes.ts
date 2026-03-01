@@ -1,5 +1,13 @@
 import { IStateUpdatePacket } from '../interfaces/IEntityState';
 import {
+    IDesktopSourcesStatusRequestPayload,
+    IDesktopSourcesStatusResponsePayload,
+    IDesktopStreamFramePayload,
+    IDesktopStreamOfflinePayload,
+    IDesktopStreamStopPayload,
+    IDesktopStreamStoppedPayload,
+    IDesktopStreamSummonPayload,
+    IDesktopStreamSummonedPayload,
     IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
@@ -23,6 +31,14 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.FEATURE_EVENT]: IReplicatedFeatureEventPayload;
     [PACKET_TYPES.FEATURE_SNAPSHOT]: IReplicatedFeatureSnapshotPayload;
     [PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST]: IFeatureSnapshotRequestPayload;
+    [PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST]: IDesktopSourcesStatusRequestPayload;
+    [PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE]: IDesktopSourcesStatusResponsePayload;
+    [PACKET_TYPES.DESKTOP_STREAM_SUMMON]: IDesktopStreamSummonPayload;
+    [PACKET_TYPES.DESKTOP_STREAM_STOP]: IDesktopStreamStopPayload;
+    [PACKET_TYPES.DESKTOP_STREAM_SUMMONED]: IDesktopStreamSummonedPayload;
+    [PACKET_TYPES.DESKTOP_STREAM_STOPPED]: IDesktopStreamStoppedPayload;
+    [PACKET_TYPES.DESKTOP_STREAM_OFFLINE]: IDesktopStreamOfflinePayload;
+    [PACKET_TYPES.DESKTOP_STREAM_FRAME]: IDesktopStreamFramePayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {

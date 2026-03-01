@@ -78,6 +78,51 @@ function isFeatureSnapshotRequestPayload(payload: unknown): boolean {
     return true;
 }
 
+function isDesktopSourcesStatusRequestPayload(payload: unknown): boolean {
+    return isObject(payload) && Array.isArray(payload.keys);
+}
+
+function isDesktopSourcesStatusResponsePayload(payload: unknown): boolean {
+    if (!isObject(payload) || !isObject(payload.statuses)) return false;
+    if ('activeKeys' in payload && !Array.isArray(payload.activeKeys)) return false;
+    return true;
+}
+
+function isDesktopStreamSummonPayload(payload: unknown): boolean {
+    if (!isObject(payload) || typeof payload.key !== 'string') return false;
+    if ('name' in payload && typeof payload.name !== 'string') return false;
+    return true;
+}
+
+function isDesktopStreamStopPayload(payload: unknown): boolean {
+    return isObject(payload) && typeof payload.key === 'string';
+}
+
+function isDesktopStreamSummonedPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.key === 'string' &&
+        typeof payload.roomId === 'string';
+}
+
+function isDesktopStreamStoppedPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.key === 'string' &&
+        typeof payload.roomId === 'string';
+}
+
+function isDesktopStreamOfflinePayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.key === 'string' &&
+        typeof payload.roomId === 'string';
+}
+
+function isDesktopStreamFramePayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.key === 'string' &&
+        typeof payload.roomId === 'string' &&
+        typeof payload.dataUrl === 'string';
+}
+
 export function isValidPayloadForType(type: number, payload: unknown): boolean {
     switch (type) {
         case PACKET_TYPES.STATE_UPDATE:
@@ -101,6 +146,22 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isFeatureSnapshotPayload(payload);
         case PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST:
             return isFeatureSnapshotRequestPayload(payload);
+        case PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST:
+            return isDesktopSourcesStatusRequestPayload(payload);
+        case PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE:
+            return isDesktopSourcesStatusResponsePayload(payload);
+        case PACKET_TYPES.DESKTOP_STREAM_SUMMON:
+            return isDesktopStreamSummonPayload(payload);
+        case PACKET_TYPES.DESKTOP_STREAM_STOP:
+            return isDesktopStreamStopPayload(payload);
+        case PACKET_TYPES.DESKTOP_STREAM_SUMMONED:
+            return isDesktopStreamSummonedPayload(payload);
+        case PACKET_TYPES.DESKTOP_STREAM_STOPPED:
+            return isDesktopStreamStoppedPayload(payload);
+        case PACKET_TYPES.DESKTOP_STREAM_OFFLINE:
+            return isDesktopStreamOfflinePayload(payload);
+        case PACKET_TYPES.DESKTOP_STREAM_FRAME:
+            return isDesktopStreamFramePayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

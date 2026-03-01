@@ -40,7 +40,7 @@
 
       <div class="input-group">
         <label for="room-id">Room Name:</label>
-        <div class="action-stack">
+        <div class="action-stack" id="room-controls">
           <div class="input-with-icon">
             <input type="text" id="room-id" placeholder="TestRoom" />
             <button id="copy-room-btn" class="icon-btn" title="Copy Room Link">📋</button>
@@ -57,6 +57,24 @@
         <button id="voice-btn" class="primary-btn secondary-style">Enable Voice Chat</button>
       </div>
 
+      <div class="input-group">
+        <button id="source-mode-btn" class="primary-btn secondary-style">Use as Desktop Source</button>
+      </div>
+
+      <div id="source-panel" class="source-panel" style="display: none;">
+        <h3>Desktop Source Mode</h3>
+        <p>Register a global screen key and wait for a summon command.</p>
+        <div class="input-group">
+          <label for="source-key">Key</label>
+          <input type="text" id="source-key" placeholder="bobs-macbook-2026" />
+        </div>
+        <div class="action-row">
+          <button id="source-connect-btn" class="primary-btn">Connect</button>
+          <button id="source-back-btn" class="primary-btn secondary-style">Back</button>
+        </div>
+        <div id="source-status" class="status">Disconnected</div>
+      </div>
+
 
 
       <div id="status-text" class="status"></div>
@@ -69,6 +87,11 @@
           <div class="input-group">
             <label for="avatar-color">GLOW COLOR</label>
             <input type="color" id="avatar-color" value="#00ffff">
+          </div>
+          <div class="input-group">
+            <label>MY SCREENS</label>
+            <div id="my-screens-list" class="screens-list"></div>
+            <button id="add-screen-btn" class="primary-btn secondary-style" type="button">Add Screen</button>
           </div>
           <button id="close-avatar-btn" class="primary-btn">DONE</button>
         </div>

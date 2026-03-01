@@ -15,12 +15,21 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 
 import { HeadlessRoom } from './src/server/HeadlessRoom.js';
 import { ServerNetworkManager } from './src/server/ServerNetworkManager.js';
+import { PACKET_TYPES } from './src/utils/Constants.js';
+import {
+    IDesktopSourcesStatusRequestPayload,
+    IDesktopStreamSummonPayload,
+    IDesktopStreamStopPayload
+} from './src/interfaces/INetworkPacket.js';
 
 const activeRooms = new Map<string, HeadlessRoom>(); // roomId -> HeadlessRoom
+const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket
+const desktopSourceBySocket = new WeakMap<WebSocket, string>(); // source websocket -> key
+const desktopRoutes = new Map<string, { roomId: string; name?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +81,26 @@ if (customKey && customCert) {
         key: fs.readFileSync(keyPath),
         cert: fs.readFileSync(certPath)
     };
+}
+
+function sendPacketToRoom(roomId: string, type: number, payload: unknown): void {
+    const room = activeRooms.get(roomId);
+    if (!room) return;
+    const envelope = JSON.stringify({ type, payload });
+    for (const ws of room.network.connections.values()) {
+        if (ws?.readyState === 1) ws.send(envelope);
+    }
+}
+
+function stopRoutedStreamsForRoom(roomId: string): void {
+    for (const [key, route] of Array.from(desktopRoutes.entries())) {
+        if (route.roomId !== roomId) continue;
+        const sourceWs = globalDesktopSources.get(key);
+        if (sourceWs && sourceWs.readyState === 1) {
+            sourceWs.send(JSON.stringify({ type: 'command-stop-capture', key }));
+        }
+        desktopRoutes.delete(key);
+    }
 }
 
 // --- Express App ---
@@ -177,6 +206,11 @@ const wss = new WebSocketServer({
     perMessageDeflate: false // Disable compression to avoid 'Invalid frame header' in some environments
 });
 
+const desktopSourceWss = new WebSocketServer({
+    noServer: true,
+    perMessageDeflate: false
+});
+
 // Take over 'upgrade' handling to ensure strict routing between PeerJS and Relay
 const originalUpgradeListeners = server.listeners('upgrade').slice();
 server.removeAllListeners('upgrade');
@@ -192,6 +226,12 @@ server.on('upgrade', (request, socket, head) => {
             wss.handleUpgrade(request, socket, head, (ws) => {
                 console.log('[Server] Relay Handshake Complete');
                 wss.emit('connection', ws, request);
+            });
+        } else if (pathname === '/desktop-source') {
+            console.log('[Server] Routing to Desktop Source...');
+            desktopSourceWss.handleUpgrade(request, socket, head, (ws) => {
+                console.log('[Server] Desktop Source Handshake Complete');
+                desktopSourceWss.emit('connection', ws, request);
             });
         } else {
             // Pass to PeerJS or other listeners
@@ -237,6 +277,84 @@ wss.on('connection', (ws) => {
 
             } else {
                 if (currentRoomId && currentPeerId) {
+                    if (data.type === PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST) {
+                        const payload = (data.payload || {}) as IDesktopSourcesStatusRequestPayload;
+                        const keys = Array.isArray(payload.keys) ? payload.keys : [];
+                        const statuses: Record<string, boolean> = {};
+                        for (const key of keys) {
+                            statuses[key] = globalDesktopSources.has(key);
+                        }
+
+                        const activeKeys = keys.filter((key) => {
+                            const route = desktopRoutes.get(key);
+                            return !!route && route.roomId === currentRoomId;
+                        });
+
+                        ws.send(JSON.stringify({
+                            type: PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE,
+                            payload: { statuses, activeKeys }
+                        }));
+                        return;
+                    }
+
+                    if (data.type === PACKET_TYPES.DESKTOP_STREAM_SUMMON) {
+                        const payload = (data.payload || {}) as IDesktopStreamSummonPayload;
+                        const key = typeof payload.key === 'string' ? payload.key.trim() : '';
+                        if (!key) return;
+
+                        const sourceWs = globalDesktopSources.get(key);
+                        if (!sourceWs || sourceWs.readyState !== 1) {
+                            sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
+                                key,
+                                roomId: currentRoomId
+                            });
+                            return;
+                        }
+
+                        desktopRoutes.set(key, {
+                            roomId: currentRoomId,
+                            name: payload.name,
+                            anchor: payload.anchor,
+                            quaternion: payload.quaternion
+                        });
+
+                        sourceWs.send(JSON.stringify({
+                            type: 'command-start-capture',
+                            key
+                        }));
+
+                        sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_SUMMONED, {
+                            key,
+                            name: payload.name,
+                            roomId: currentRoomId,
+                            anchor: payload.anchor,
+                            quaternion: payload.quaternion
+                        });
+                        return;
+                    }
+
+                    if (data.type === PACKET_TYPES.DESKTOP_STREAM_STOP) {
+                        const payload = (data.payload || {}) as IDesktopStreamStopPayload;
+                        const key = typeof payload.key === 'string' ? payload.key.trim() : '';
+                        if (!key) return;
+                        const route = desktopRoutes.get(key);
+                        if (!route || route.roomId !== currentRoomId) return;
+
+                        const sourceWs = globalDesktopSources.get(key);
+                        if (sourceWs && sourceWs.readyState === 1) {
+                            sourceWs.send(JSON.stringify({
+                                type: 'command-stop-capture',
+                                key
+                            }));
+                        }
+                        desktopRoutes.delete(key);
+                        sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
+                            key,
+                            roomId: currentRoomId
+                        });
+                        return;
+                    }
+
                     const room = activeRooms.get(currentRoomId);
                     if (room) {
                         room.network.handleMessage(currentPeerId, data);
@@ -256,12 +374,114 @@ wss.on('connection', (ws) => {
                 console.log(`[Relay] Peer ${currentPeerId} left room ${currentRoomId}`);
 
                 if (room.network.connections.size === 0) {
+                    stopRoutedStreamsForRoom(currentRoomId);
                     room.stop();
                     activeRooms.delete(currentRoomId);
                     console.log(`[Relay] Closed empty room ${currentRoomId}`);
                 }
             }
         }
+    });
+});
+
+desktopSourceWss.on('connection', (ws) => {
+    let registeredKey: string | null = null;
+    console.log('[DesktopSource] Connection established');
+
+    ws.on('message', (message) => {
+        try {
+            const data = typeof message === 'string' ? JSON.parse(message) : JSON.parse(message.toString());
+
+            if (data.type === 'register-global-source') {
+                const nextKey = typeof data.key === 'string' ? data.key.trim() : '';
+                if (!nextKey) {
+                    ws.send(JSON.stringify({ type: 'source-error', message: 'Missing key' }));
+                    return;
+                }
+
+                const existingWs = globalDesktopSources.get(nextKey);
+                const hadCollision = !!existingWs && existingWs !== ws;
+                if (existingWs && existingWs !== ws) {
+                    try {
+                        existingWs.send(JSON.stringify({ type: 'source-error', message: 'Replaced by a new source with same key' }));
+                        existingWs.close();
+                    } catch { }
+                }
+
+                if (registeredKey && registeredKey !== nextKey) {
+                    globalDesktopSources.delete(registeredKey);
+                }
+
+                registeredKey = nextKey;
+                globalDesktopSources.set(nextKey, ws);
+                desktopSourceBySocket.set(ws, nextKey);
+
+                ws.send(JSON.stringify({
+                    type: 'source-registered',
+                    key: nextKey,
+                    collision: hadCollision
+                }));
+                return;
+            }
+
+            if (data.type === 'source-frame') {
+                const key = typeof data.key === 'string' ? data.key.trim() : '';
+                if (!key) return;
+                const route = desktopRoutes.get(key);
+                if (!route) return;
+                if (route.roomId && !activeRooms.has(route.roomId)) {
+                    desktopRoutes.delete(key);
+                    return;
+                }
+
+                sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_FRAME, {
+                    key,
+                    name: route.name || key,
+                    roomId: route.roomId,
+                    dataUrl: data.dataUrl,
+                    width: data.width,
+                    height: data.height,
+                    ts: data.ts || Date.now(),
+                    anchor: route.anchor,
+                    quaternion: route.quaternion
+                });
+                return;
+            }
+
+            if (data.type === 'source-capture-stopped') {
+                const key = typeof data.key === 'string' ? data.key.trim() : '';
+                const route = desktopRoutes.get(key);
+                if (!route) return;
+                desktopRoutes.delete(key);
+                sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
+                    key,
+                    roomId: route.roomId
+                });
+                return;
+            }
+        } catch (e) {
+            console.error('[DesktopSource] Error processing message:', e);
+        }
+    });
+
+    ws.on('close', () => {
+        const key = registeredKey || desktopSourceBySocket.get(ws) || null;
+        if (!key) return;
+
+        if (globalDesktopSources.get(key) === ws) {
+            globalDesktopSources.delete(key);
+        }
+        desktopSourceBySocket.delete(ws);
+
+        const route = desktopRoutes.get(key);
+        if (route) {
+            desktopRoutes.delete(key);
+            sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
+                key,
+                roomId: route.roomId
+            });
+        }
+        console.log(`[DesktopSource] Disconnected source ${key}`);
     });
 });
 

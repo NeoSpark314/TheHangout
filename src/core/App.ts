@@ -24,6 +24,7 @@ import { DebugRenderManager } from '../managers/DebugRenderManager';
 import { ReplicationManager } from '../managers/ReplicationManager';
 import { ParticleSystemManager } from '../managers/ParticleSystemManager';
 import { SocialEffectsManager } from '../managers/SocialEffectsManager';
+import { RemoteDesktopManager } from '../managers/RemoteDesktopManager';
 import eventBus from './EventBus';
 import { EVENTS } from '../utils/Constants';
 
@@ -83,6 +84,7 @@ export class App {
     private initializeManagers(): void {
         this.context.setManager('entity', new EntityManager(this.context));
         this.context.setManager('replication', new ReplicationManager(this.context));
+        this.context.setManager('remoteDesktop', new RemoteDesktopManager(this.context));
         this.context.setManager('ui', new FlatUIManager(this.context));
         this.context.setManager('network', new NetworkManager(this.context));
         this.context.setManager('media', new MediaManager(this.context));
@@ -176,6 +178,7 @@ export class App {
         if (managers.room) this.engine.addSystem(managers.room as any);
         if (managers.social) this.engine.addSystem(managers.social as any);
         if (managers.particles) this.engine.addSystem(managers.particles as any);
+        if (managers.remoteDesktop) this.engine.addSystem(managers.remoteDesktop as any);
         if (managers.ui) this.engine.addSystem(managers.ui as any);
         if (managers.hud) this.engine.addSystem(managers.hud as any);
         if (managers.vrUi) this.engine.addSystem(managers.vrUi as any);

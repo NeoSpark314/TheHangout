@@ -19,6 +19,7 @@ import type { DebugRenderManager } from '../managers/DebugRenderManager';
 import type { ReplicationManager } from '../managers/ReplicationManager';
 import type { ParticleSystemManager } from '../managers/ParticleSystemManager';
 import type { SocialEffectsManager } from '../managers/SocialEffectsManager';
+import type { RemoteDesktopManager } from '../managers/RemoteDesktopManager';
 import type { LocalPlayer } from '../entities/LocalPlayer';
 
 export interface IAvatarConfig {
@@ -55,6 +56,7 @@ export interface IManagers {
     replication: ReplicationManager;
     particles: ParticleSystemManager;
     social: SocialEffectsManager;
+    remoteDesktop: RemoteDesktopManager;
 }
 
 /**
