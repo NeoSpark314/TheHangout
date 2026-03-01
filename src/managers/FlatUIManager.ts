@@ -21,24 +21,10 @@ export class FlatUIManager implements IUpdatable {
     private versionInfo: HTMLElement;
     private shaInfo: HTMLElement;
     private desktopControls: HTMLElement | null;
-    private roomControls: HTMLElement | null;
     private myScreensList: HTMLElement | null;
     private addScreenBtn: HTMLButtonElement | null;
-    private sourceModeBtn: HTMLButtonElement | null;
-    private sourcePanel: HTMLElement | null;
-    private sourceKeyInput: HTMLInputElement | null;
-    private sourceConnectBtn: HTMLButtonElement | null;
-    private sourceBackBtn: HTMLButtonElement | null;
-    private sourceStatus: HTMLElement | null;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
-    private isSourceMode: boolean = false;
-    private sourceSocket: WebSocket | null = null;
-    private sourceCaptureStream: MediaStream | null = null;
-    private sourceVideo: HTMLVideoElement | null = null;
-    private sourceCanvas: HTMLCanvasElement | null = null;
-    private sourceCaptureTimer: ReturnType<typeof setInterval> | null = null;
-    private sourceCurrentKey: string = '';
 
     constructor(private context: GameContext) {
         this.overlay = document.getElementById('ui-overlay')!;
@@ -57,15 +43,8 @@ export class FlatUIManager implements IUpdatable {
         this.versionInfo = document.getElementById('app-version')!;
         this.shaInfo = document.getElementById('git-sha')!;
         this.desktopControls = document.getElementById('desktop-controls');
-        this.roomControls = document.getElementById('room-controls');
         this.myScreensList = document.getElementById('my-screens-list');
         this.addScreenBtn = document.getElementById('add-screen-btn') as HTMLButtonElement | null;
-        this.sourceModeBtn = document.getElementById('source-mode-btn') as HTMLButtonElement | null;
-        this.sourcePanel = document.getElementById('source-panel');
-        this.sourceKeyInput = document.getElementById('source-key') as HTMLInputElement | null;
-        this.sourceConnectBtn = document.getElementById('source-connect-btn') as HTMLButtonElement | null;
-        this.sourceBackBtn = document.getElementById('source-back-btn') as HTMLButtonElement | null;
-        this.sourceStatus = document.getElementById('source-status');
         this.isMobile = isMobile;
 
         this.init();
@@ -141,28 +120,6 @@ export class FlatUIManager implements IUpdatable {
                 screens.push({ name: `Screen ${screens.length + 1}`, key: '' });
                 this.context.managers.remoteDesktop.setConfigs(screens);
                 this.renderMyScreensEditor();
-            });
-        }
-
-        if (this.sourceModeBtn) {
-            this.sourceModeBtn.addEventListener('click', () => {
-                this.enterSourceMode();
-            });
-        }
-
-        if (this.sourceBackBtn) {
-            this.sourceBackBtn.addEventListener('click', () => {
-                this.exitSourceMode();
-            });
-        }
-
-        if (this.sourceConnectBtn) {
-            this.sourceConnectBtn.addEventListener('click', () => {
-                if (this.sourceSocket && this.sourceSocket.readyState === WebSocket.OPEN) {
-                    this.disconnectSourceSocket();
-                    return;
-                }
-                this.connectSourceSocket();
             });
         }
 
@@ -245,11 +202,6 @@ export class FlatUIManager implements IUpdatable {
 
         if (this.versionInfo) this.versionInfo.textContent = `v${__APP_VERSION__}`;
         if (this.shaInfo) this.shaInfo.textContent = `build: ${__GIT_SHA__}`;
-
-        const storedSourceKey = localStorage.getItem('hangout_desktopSourceKey');
-        if (storedSourceKey && this.sourceKeyInput) {
-            this.sourceKeyInput.value = storedSourceKey;
-        }
         this.context.managers.remoteDesktop.loadConfigsFromStorage();
     }
 
@@ -267,9 +219,6 @@ export class FlatUIManager implements IUpdatable {
         localStorage.setItem('hangout_voiceEnabled', String(this.context.voiceEnabled));
         if (room) {
             localStorage.setItem('hangout_lastRoomId', room);
-        }
-        if (this.sourceKeyInput && this.sourceKeyInput.value.trim()) {
-            localStorage.setItem('hangout_desktopSourceKey', this.sourceKeyInput.value.trim());
         }
     }
 
@@ -421,194 +370,6 @@ export class FlatUIManager implements IUpdatable {
         }
     }
 
-    private enterSourceMode(): void {
-        this.isSourceMode = true;
-        if (this.roomControls) this.roomControls.style.display = 'none';
-        this.createBtn.style.display = 'none';
-        this.joinBtn.style.display = 'none';
-        if (this.voiceBtn) this.voiceBtn.style.display = 'none';
-        if (this.sourcePanel) this.sourcePanel.style.display = 'block';
-        if (this.sourceModeBtn) this.sourceModeBtn.style.display = 'none';
-        this.setSourceStatus('Disconnected');
-    }
-
-    private exitSourceMode(): void {
-        this.isSourceMode = false;
-        this.disconnectSourceSocket();
-        if (this.roomControls) this.roomControls.style.display = '';
-        if (!this.context.isLocalServer) this.createBtn.style.display = '';
-        this.joinBtn.style.display = '';
-        if (this.voiceBtn) this.voiceBtn.style.display = '';
-        if (this.sourcePanel) this.sourcePanel.style.display = 'none';
-        if (this.sourceModeBtn) this.sourceModeBtn.style.display = '';
-    }
-
-    private setSourceStatus(message: string): void {
-        if (this.sourceStatus) this.sourceStatus.textContent = message;
-    }
-
-    private connectSourceSocket(): void {
-        const key = this.sourceKeyInput?.value.trim() || '';
-        if (!key) {
-            this.setSourceStatus('Please enter a Key.');
-            return;
-        }
-
-        localStorage.setItem('hangout_desktopSourceKey', key);
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname;
-        const port = window.location.port;
-        const portPart = (port === '443' || port === '80' || port === '') ? '' : `:${port}`;
-        const url = `${protocol}//${host}${portPart}/desktop-source`;
-
-        this.sourceSocket = new WebSocket(url);
-        this.sourceCurrentKey = key;
-        this.setSourceStatus('Connecting...');
-
-        this.sourceSocket.onopen = () => {
-            if (!this.sourceSocket || this.sourceSocket.readyState !== WebSocket.OPEN) return;
-            this.sourceSocket.send(JSON.stringify({
-                type: 'register-global-source',
-                key
-            }));
-            if (this.sourceConnectBtn) this.sourceConnectBtn.textContent = 'Disconnect';
-            this.setSourceStatus(`Connected as "${key}" (standby)`);
-        };
-
-        this.sourceSocket.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                if (msg.type === 'source-registered') {
-                    const suffix = msg.collision ? ' (replaced previous source)' : '';
-                    this.setSourceStatus(`Registered: ${msg.key}${suffix}`);
-                    return;
-                }
-                if (msg.type === 'command-start-capture') {
-                    this.startDesktopCapture();
-                    return;
-                }
-                if (msg.type === 'command-stop-capture') {
-                    this.stopDesktopCapture();
-                    this.setSourceStatus(`Connected as "${key}" (standby)`);
-                    return;
-                }
-                if (msg.type === 'source-error') {
-                    this.setSourceStatus(msg.message || 'Source error');
-                    return;
-                }
-            } catch {
-                this.setSourceStatus('Received invalid source message.');
-            }
-        };
-
-        this.sourceSocket.onclose = () => {
-            this.stopDesktopCapture();
-            this.sourceSocket = null;
-            if (this.sourceConnectBtn) this.sourceConnectBtn.textContent = 'Connect';
-            this.setSourceStatus('Disconnected');
-        };
-
-        this.sourceSocket.onerror = () => {
-            this.setSourceStatus('Connection failed.');
-        };
-    }
-
-    private disconnectSourceSocket(): void {
-        this.stopDesktopCapture();
-        if (this.sourceSocket) {
-            try {
-                this.sourceSocket.close();
-            } catch { }
-            this.sourceSocket = null;
-        }
-        if (this.sourceConnectBtn) this.sourceConnectBtn.textContent = 'Connect';
-    }
-
-    private async startDesktopCapture(): Promise<void> {
-        if (!this.sourceSocket || this.sourceSocket.readyState !== WebSocket.OPEN) return;
-        if (this.sourceCaptureStream) return;
-
-        try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    frameRate: { ideal: 8, max: 12 }
-                } as MediaTrackConstraints,
-                audio: false
-            });
-
-            this.sourceCaptureStream = stream;
-            this.sourceVideo = document.createElement('video');
-            this.sourceVideo.srcObject = stream;
-            this.sourceVideo.muted = true;
-            this.sourceVideo.playsInline = true;
-            await this.sourceVideo.play();
-
-            this.sourceCanvas = document.createElement('canvas');
-            const ctx = this.sourceCanvas.getContext('2d');
-            if (!ctx) {
-                throw new Error('2D context unavailable for desktop capture');
-            }
-
-            const track = stream.getVideoTracks()[0];
-            track.addEventListener('ended', () => {
-                this.stopDesktopCapture();
-                if (this.sourceSocket && this.sourceSocket.readyState === WebSocket.OPEN) {
-                    this.sourceSocket.send(JSON.stringify({
-                        type: 'source-capture-stopped',
-                        key: this.sourceCurrentKey
-                    }));
-                }
-                this.setSourceStatus(`Connected as "${this.sourceCurrentKey}" (standby)`);
-            }, { once: true });
-
-            this.setSourceStatus('Streaming desktop...');
-            this.sourceCaptureTimer = setInterval(() => {
-                if (!this.sourceSocket || this.sourceSocket.readyState !== WebSocket.OPEN) return;
-                if (!this.sourceVideo || !this.sourceCanvas) return;
-
-                const width = Math.max(640, this.sourceVideo.videoWidth || 1280);
-                const height = Math.max(360, this.sourceVideo.videoHeight || 720);
-                const scaledWidth = 1280;
-                const scaledHeight = Math.max(720, Math.round((height / width) * scaledWidth));
-
-                this.sourceCanvas.width = scaledWidth;
-                this.sourceCanvas.height = scaledHeight;
-                ctx.drawImage(this.sourceVideo, 0, 0, scaledWidth, scaledHeight);
-
-                const dataUrl = this.sourceCanvas.toDataURL('image/jpeg', 0.62);
-                this.sourceSocket.send(JSON.stringify({
-                    type: 'source-frame',
-                    key: this.sourceCurrentKey,
-                    dataUrl,
-                    width: scaledWidth,
-                    height: scaledHeight,
-                    ts: Date.now()
-                }));
-            }, 150);
-        } catch (error) {
-            console.error('[FlatUIManager] Failed to start desktop capture:', error);
-            this.stopDesktopCapture();
-            this.setSourceStatus('Screen capture denied or unavailable.');
-        }
-    }
-
-    private stopDesktopCapture(): void {
-        if (this.sourceCaptureTimer) {
-            clearInterval(this.sourceCaptureTimer);
-            this.sourceCaptureTimer = null;
-        }
-        if (this.sourceVideo) {
-            this.sourceVideo.pause();
-            this.sourceVideo.srcObject = null;
-            this.sourceVideo = null;
-        }
-        if (this.sourceCaptureStream) {
-            this.sourceCaptureStream.getTracks().forEach(t => t.stop());
-            this.sourceCaptureStream = null;
-        }
-        this.sourceCanvas = null;
-    }
-
     private handleInlineCopy(): void {
         const roomId = this.roomInput.value.trim() || 'TestRoom';
         const url = new URL(window.location.href);
@@ -725,7 +486,6 @@ export class FlatUIManager implements IUpdatable {
     }
 
     private handleLeave(): void {
-        this.disconnectSourceSocket();
         if (this.context.managers.network) this.context.managers.network.disconnect();
         if (this.context.managers.media) this.context.managers.media.stopMicrophone();
         if (this.context.managers.entity) {

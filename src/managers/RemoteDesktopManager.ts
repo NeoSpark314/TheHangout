@@ -73,8 +73,7 @@ export class RemoteDesktopManager implements IUpdatable {
 
     public setConfigs(configs: IMyScreenConfig[]): void {
         const cleaned = configs
-            .map(c => ({ name: c.name.trim(), key: c.key.trim() }))
-            .filter(c => c.name.length > 0 && c.key.length > 0);
+            .map(c => ({ name: c.name.trim(), key: c.key.trim() }));
 
         this.configs = cleaned;
         localStorage.setItem(MY_SCREENS_STORAGE_KEY, JSON.stringify(cleaned));
@@ -83,7 +82,9 @@ export class RemoteDesktopManager implements IUpdatable {
 
     public requestSourceStatus(): void {
         if (!this.context.roomId) return;
-        const keys = this.configs.map(c => c.key);
+        const keys = this.configs
+            .map(c => c.key)
+            .filter(k => k.length > 0);
         this.context.managers.network.sendData(
             this.context.roomId,
             PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST,
@@ -93,6 +94,14 @@ export class RemoteDesktopManager implements IUpdatable {
 
     public summonStream(key: string, name?: string): void {
         if (!this.context.roomId) return;
+        if (!this.isOnline(key)) {
+            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${key}" is offline.`);
+            return;
+        }
+        if (this.isActive(key)) {
+            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active.`);
+            return;
+        }
 
         const payload: any = { key, name };
         const localPlayer: any = this.context.localPlayer;
@@ -149,6 +158,7 @@ export class RemoteDesktopManager implements IUpdatable {
     public handleStreamStopped(payload: IDesktopStreamStoppedPayload): void {
         this.activeByKey.delete(payload.key);
         this.removeSurface(payload.key);
+        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${payload.key}" stopped.`);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
@@ -156,6 +166,7 @@ export class RemoteDesktopManager implements IUpdatable {
         this.activeByKey.delete(payload.key);
         this.onlineByKey.set(payload.key, false);
         this.removeSurface(payload.key);
+        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${payload.key}" is offline.`);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 

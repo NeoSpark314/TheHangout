@@ -32,3 +32,16 @@ default starts on port 443 (tries to generate self-signed certs; give your own v
 npm run build        # Build the client
 npm run serve        # Start 
 ```
+
+### Desktop Sharing Page (`/share`)
+
+When running the local server, open this URL on the desktop machine you want to stream:
+
+```bash
+https://<server-ip>/share
+```
+
+Steps:
+- Enter your global share key (for example `bobs-macbook-2026`)
+- Click **Connect**
+- Keep the page open (it will start/stop capture when summoned from VR Room tab)

@@ -164,6 +164,10 @@ app.post('/api/admin/room/:id/command', (req, res) => {
 const adminPath = path.join(__dirname, 'src', 'server', 'admin');
 app.use('/admin', express.static(adminPath));
 
+// Serve dedicated desktop sharing page
+const sharePath = path.join(__dirname, 'src', 'server', 'share');
+app.use('/share', express.static(sharePath));
+
 // Serve the built client
 const distPath = path.join(__dirname, 'dist');
 if (!fs.existsSync(distPath)) {

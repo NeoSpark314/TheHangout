@@ -355,7 +355,15 @@ export class PropManager implements IReplicatedFeature {
     }
 
     private updateHandDrumHits(delta: number): void {
-        const tracking = this.context.managers.tracking.getState();
+        const trackingMgr = (this.context.managers as any).tracking;
+        if (!trackingMgr || typeof trackingMgr.getState !== 'function') {
+            // Headless dedicated server has no local tracking provider.
+            this.handLastPos.left = null;
+            this.handLastPos.right = null;
+            return;
+        }
+
+        const tracking = trackingMgr.getState();
         const dt = Math.max(0.0001, delta);
         const now = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
         const padRadius = 0.27;
@@ -414,7 +422,9 @@ export class PropManager implements IReplicatedFeature {
     }
 
     private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
-        const trackingState = this.context.managers.tracking.getState().hands[hand];
+        const trackingMgr = (this.context.managers as any).tracking;
+        if (!trackingMgr || typeof trackingMgr.getState !== 'function') return null;
+        const trackingState = trackingMgr.getState().hands[hand];
         const localHumanoidJoints = this.context.localPlayer?.humanoid?.joints;
 
         if (trackingState.hasJoints) {

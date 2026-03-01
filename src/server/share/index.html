@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Hangout - Share Desktop</title>
+    <link rel="stylesheet" href="./share.css" />
+</head>
+<body>
+    <main class="wrap">
+        <section class="card">
+            <h1>Desktop Share</h1>
+            <p class="lead">Register your global key and wait for a VR user to summon your screen.</p>
+
+            <label for="share-key">Share Key</label>
+            <input id="share-key" type="text" placeholder="bobs-macbook-2026" />
+
+            <div class="row">
+                <button id="connect-btn">Connect</button>
+                <button id="start-btn" class="muted" disabled>Start Capture</button>
+                <button id="stop-btn" class="danger" disabled>Stop Capture</button>
+            </div>
+
+            <div class="status">
+                <strong>Status:</strong>
+                <span id="status-text">Disconnected</span>
+            </div>
+
+            <div class="status">
+                <strong>Codec:</strong>
+                <span id="codec-text">unknown</span>
+            </div>
+
+            <ul class="notes">
+                <li>Keep this page open while sharing.</li>
+                <li>You can run this on a separate PC than your VR headset.</li>
+                <li>Route: <code>/desktop-source</code> WebSocket on the local server.</li>
+            </ul>
+        </section>
+    </main>
+
+    <script type="module" src="./share.js"></script>
+</body>
+</html>

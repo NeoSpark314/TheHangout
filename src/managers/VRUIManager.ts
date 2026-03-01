@@ -519,12 +519,13 @@ export class VRUIManager implements IUpdatable {
 
                 configs.slice(0, 5).forEach((cfg, index) => {
                     const rowY = index * 95;
+                    const hasKey = cfg.key.trim().length > 0;
                     const online = desktop.isOnline(cfg.key);
                     const active = desktop.isActive(cfg.key);
-                    const statusText = active ? 'Active' : (online ? 'Online' : 'Offline');
+                    const statusText = !hasKey ? 'Missing Key' : (active ? 'Active' : (online ? 'Online' : 'Offline'));
                     const statusColor = active
                         ? UITheme.colors.accent
-                        : (online ? UITheme.colors.primary : UITheme.colors.textMuted);
+                        : (!hasKey ? UITheme.colors.secondary : (online ? UITheme.colors.primary : UITheme.colors.textMuted));
 
                     const nameLabel = new UILabel(cfg.name, 20, rowY + 8, 360, 40);
                     nameLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
@@ -545,13 +546,13 @@ export class VRUIManager implements IUpdatable {
                     listContainer.addChild(statusLabel);
 
                     const startBtn = new UIButton('Start', 770, rowY + 12, 170, 60, () => {
-                        if (!online || active) return;
+                        if (!hasKey || active) return;
                         desktop.summonStream(cfg.key, cfg.name);
                     });
                     startBtn.cornerRadius = 8;
-                    startBtn.backgroundColor = online && !active ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
-                    startBtn.borderColor = online && !active ? UITheme.colors.primary : UITheme.colors.textMuted;
-                    startBtn.textColor = online && !active ? UITheme.colors.text : UITheme.colors.textMuted;
+                    startBtn.backgroundColor = hasKey && online && !active ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                    startBtn.borderColor = hasKey && online && !active ? UITheme.colors.primary : UITheme.colors.textMuted;
+                    startBtn.textColor = hasKey && online && !active ? UITheme.colors.text : UITheme.colors.textMuted;
                     listContainer.addChild(startBtn);
 
                     const stopBtn = new UIButton('Stop', 965, rowY + 12, 170, 60, () => {
