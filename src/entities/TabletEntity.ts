@@ -202,6 +202,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
 
     public setVisible(visible: boolean): void {
         this.mesh.visible = visible;
+        this.isGrabbable = visible;
         // Also hide handles
         this.leftHandle.visible = visible;
         this.rightHandle.visible = visible;
