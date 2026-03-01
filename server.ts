@@ -30,7 +30,7 @@ import {
 const activeRooms = new Map<string, HeadlessRoom>(); // roomId -> HeadlessRoom
 const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket
 const desktopSourceBySocket = new WeakMap<WebSocket, string>(); // source websocket -> key
-const desktopRoutes = new Map<string, { roomId: string; name?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
+const desktopRoutes = new Map<string, { roomId: string; name?: string; summonedBy: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
 const capturingKeys = new Set<string>(); // key -> currently broadcasting
 const relaySourceSubscriptions = new Map<WebSocket, { roomId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
 
@@ -379,6 +379,7 @@ wss.on('connection', (ws) => {
                         desktopRoutes.set(key, {
                             roomId: currentRoomId,
                             name: payload.name,
+                            summonedBy: currentPeerId,
                             anchor: payload.anchor,
                             quaternion: payload.quaternion
                         });
@@ -439,6 +440,30 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         relaySourceSubscriptions.delete(ws);
+
+        // Auto-Cleanup Desktop Streams owned by this peer
+        if (currentPeerId && currentRoomId) {
+            for (const [key, route] of desktopRoutes.entries()) {
+                if (route.summonedBy === currentPeerId && route.roomId === currentRoomId) {
+                    desktopRoutes.delete(key);
+                    notifySubscribedClientsForKey(key);
+                    sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
+                        key,
+                        roomId: currentRoomId
+                    });
+
+                    sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                        kind: 'desktop_stream_stopped',
+                        actorPeerId: 'system',
+                        actorName: 'System',
+                        subjectName: route.name || key,
+                        message: `Screen stopped because the owner left the room.`,
+                        sentAt: Date.now()
+                    });
+                }
+            }
+        }
+
         if (currentRoomId && currentPeerId) {
             const room = activeRooms.get(currentRoomId);
             if (room) {
