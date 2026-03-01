@@ -123,16 +123,20 @@ export class NonVRReachAssistController {
         }
 
         if (this.phase[hand] === 'extending') {
-            this.reach[hand] = Math.min(this.maxReach, this.reach[hand] + this.extendSpeed * delta);
-            if (!isHolding) {
-                eventBus.emit(EVENTS.INTENT_GRAB_START, { hand } as IHandIntentPayload);
-            }
-            if (this.isHolding(hand)) {
+            // Only transition into holding based on the state that existed at the
+            // start of this frame. This keeps the reach animation visually aligned
+            // with the actual hand pose instead of reacting to same-frame pulses.
+            if (isHolding) {
                 if (hand === 'right' && this.mobilePressing) {
                     this.mobileLatched = true;
                     this.mobilePressing = false;
                 }
                 this.phase[hand] = 'holding';
+            } else {
+                // Pulse the official grab intent at the hand pose from the previous
+                // frame, then advance the reach for the next frame's visible pose.
+                eventBus.emit(EVENTS.INTENT_GRAB_START, { hand } as IHandIntentPayload);
+                this.reach[hand] = Math.min(this.maxReach, this.reach[hand] + this.extendSpeed * delta);
             }
         } else if (this.phase[hand] === 'holding') {
             if (!this.isHolding(hand)) {

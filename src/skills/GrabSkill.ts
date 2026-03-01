@@ -30,6 +30,7 @@ export class GrabSkill extends Skill {
         super.activate(player);
 
         const onGrabStart = (payload: IHandIntentPayload) => {
+            if (this.heldObjects.has(payload.hand)) return;
             const nearest = this.highlightedEntities[payload.hand];
             if (isGrabbable(nearest)) {
 
