@@ -13,9 +13,14 @@
         <section class="card share-container">
             <div class="settings-pane">
                 <h1>Desktop Share</h1>
-                <p class="lead">Register your key and wait for a VR user to summon your screen.</p>
+                <p class="lead">Register your secret key and connect. Start the capture and then summon your screen in
+                    The Hangout app (configure same secret key in avatar config)</p>
 
-                <input id="share-key" type="text" placeholder="bobs-macbook-2026" />
+                <div class="control-group">
+                    <label for="share-key">Secret Key</label>
+                    <input id="share-key" type="text"
+                        placeholder="a secret key that you will use in the avatar config" />
+                </div>
 
                 <div class="row">
                     <button id="connect-btn">Connect</button>

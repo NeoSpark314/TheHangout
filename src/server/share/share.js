@@ -12,7 +12,7 @@ const previewCanvas = document.getElementById('preview-canvas');
 const bandwidthText = document.getElementById('bandwidth-text');
 const resText = document.getElementById('res-text');
 
-const STORAGE_KEY = 'hangout_desktopSourceKey';
+const STORAGE_KEY = 'th_DesktopShapre_SecretKey';
 
 let socket = null;
 let activeKey = '';
