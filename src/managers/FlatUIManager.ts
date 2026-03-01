@@ -499,10 +499,10 @@ export class FlatUIManager implements IUpdatable {
     private updateVoiceButton(enabled: boolean): void {
         if (!this.voiceBtn) return;
         if (enabled) {
-            this.voiceBtn.textContent = 'Voice: ON';
+            this.voiceBtn.textContent = 'Auto Voice: ON';
             this.voiceBtn.classList.add('ready');
         } else {
-            this.voiceBtn.textContent = 'Voice: OFF';
+            this.voiceBtn.textContent = 'Auto Voice: OFF';
             this.voiceBtn.classList.remove('ready');
         }
     }
