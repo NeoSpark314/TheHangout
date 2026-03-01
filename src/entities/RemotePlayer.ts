@@ -49,6 +49,12 @@ export class RemotePlayer extends PlayerEntity {
             }
         };
         eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this._onVoiceStream);
+
+        const cachedStream = this.context.managers.media?.getRemoteStream(this.peerId);
+        if (cachedStream && (this.view as any).attachVoiceStream) {
+            console.log(`[RemotePlayer] Attaching cached voice stream for ${this.peerId}`);
+            (this.view as any).attachVoiceStream(cachedStream);
+        }
     }
 
     public onAudioChunk(payload: any): void {

@@ -12,6 +12,7 @@ try {
 }
 
 export default defineConfig({
+    base: './',
     plugins: [
         basicSsl()
     ],

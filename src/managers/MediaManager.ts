@@ -6,6 +6,7 @@ import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 export class MediaManager {
     private localStream: MediaStream | null = null;
     private calls: Map<string, MediaConnection> = new Map();
+    private remoteStreams: Map<string, MediaStream> = new Map();
     private audioContext: AudioContext | null = null;
     private localSource: MediaStreamAudioSourceNode | null = null;
     private localAnalyser: AnalyserNode | null = null;
@@ -17,7 +18,18 @@ export class MediaManager {
 
     constructor(private context: GameContext) {
         eventBus.on(EVENTS.PEER_CONNECTED, (peerId: string) => {
-            if (this.localStream && this.context.managers.network && this.context.managers.network.peer) {
+            const network = this.context.managers.network;
+            const localId = network?.peer?.id || network?.localPeerId;
+            const isRemoteNetworkPeer = !!network?.connections?.has(peerId);
+
+            if (
+                this.localStream &&
+                network &&
+                network.peer &&
+                isRemoteNetworkPeer &&
+                peerId !== localId &&
+                !this.calls.has(peerId)
+            ) {
                 this.callPeer(peerId);
             }
         });
@@ -28,6 +40,7 @@ export class MediaManager {
                 call.close();
                 this.calls.delete(peerId);
             }
+            this.remoteStreams.delete(peerId);
         });
 
         eventBus.on(EVENTS.PEER_JOINED_ROOM, (peerId: string) => {
@@ -49,6 +62,22 @@ export class MediaManager {
             return false;
         }
 
+        return this.enableMicrophone();
+    }
+
+    public async ensureMicrophoneEnabled(): Promise<boolean> {
+        if (this.localStream) {
+            return true;
+        }
+
+        return this.enableMicrophone();
+    }
+
+    public getRemoteStream(peerId: string): MediaStream | null {
+        return this.remoteStreams.get(peerId) || null;
+    }
+
+    private async enableMicrophone(): Promise<boolean> {
         try {
             this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             console.log('[MediaManager] Microphone access granted.');
@@ -83,7 +112,9 @@ export class MediaManager {
                 const network = this.context.managers.network;
                 if (network && network.peer) {
                     for (const peerId of network.connections.keys()) {
-                        this.callPeer(peerId);
+                        if (!this.calls.has(peerId)) {
+                            this.callPeer(peerId);
+                        }
                     }
                 }
             }
@@ -187,7 +218,8 @@ export class MediaManager {
     public callPeer(targetPeerId: string): void {
         const network = this.context.managers.network;
         const peer = network ? network.peer : null;
-        if (!peer || !this.localStream) return;
+        const localId = peer?.id || network?.localPeerId;
+        if (!peer || !this.localStream || !network?.connections.has(targetPeerId) || targetPeerId === localId || this.calls.has(targetPeerId)) return;
 
         console.log(`[MediaManager] Calling ${targetPeerId} for voice chat...`);
         const call = peer.call(targetPeerId, this.localStream);
@@ -195,18 +227,29 @@ export class MediaManager {
     }
 
     private setupCall(call: MediaConnection): void {
+        const existingCall = this.calls.get(call.peer);
+        if (existingCall && existingCall !== call) {
+            existingCall.close();
+        }
         this.calls.set(call.peer, call);
         call.on('stream', (remoteStream: MediaStream) => {
             console.log(`[MediaManager] Received voice stream from ${call.peer}`);
+            this.remoteStreams.set(call.peer, remoteStream);
             eventBus.emit(EVENTS.VOICE_STREAM_RECEIVED, {
                 peerId: call.peer,
                 stream: remoteStream
             });
         });
-        call.on('close', () => { this.calls.delete(call.peer); });
+        call.on('close', () => {
+            if (this.calls.get(call.peer) === call) {
+                this.calls.delete(call.peer);
+            }
+        });
         call.on('error', (err: any) => {
             console.error(`[MediaManager] Call error with ${call.peer}:`, err);
-            this.calls.delete(call.peer);
+            if (this.calls.get(call.peer) === call) {
+                this.calls.delete(call.peer);
+            }
         });
     }
 

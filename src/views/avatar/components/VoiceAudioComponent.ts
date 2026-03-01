@@ -28,7 +28,7 @@ export class VoiceAudioComponent {
         try {
             if (!this.audioElement) {
                 this.audioElement = new Audio();
-                this.audioElement.muted = this.manuallyMuted || true;
+                this.audioElement.muted = this.manuallyMuted;
             }
             this.audioElement.srcObject = stream;
             this.audioElement.play().catch(e => console.warn('[VoiceAudioComponent] Auto-play blocked for hidden audio:', e));

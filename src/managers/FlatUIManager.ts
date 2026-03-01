@@ -285,7 +285,7 @@ export class FlatUIManager implements IUpdatable {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Guest';
             if (this.context.voiceEnabled) {
-                await this.context.managers.media.toggleMicrophone();
+                await this.context.managers.media.ensureMicrophoneEnabled();
             }
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
@@ -305,7 +305,7 @@ export class FlatUIManager implements IUpdatable {
                 this.ensureAudioContextResumed();
                 this.context.playerName = this.nameInput.value.trim() || 'Player';
                 if (this.context.voiceEnabled) {
-                    await this.context.managers.media.toggleMicrophone();
+                    await this.context.managers.media.ensureMicrophoneEnabled();
                 }
                 const targetId = this.roomInput.value.trim() || this.generateReadableRoomId();
                 this.roomInput.value = targetId; // populate if random generated
@@ -324,7 +324,7 @@ export class FlatUIManager implements IUpdatable {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Host';
             if (this.context.voiceEnabled) {
-                await this.context.managers.media.toggleMicrophone();
+                await this.context.managers.media.ensureMicrophoneEnabled();
             }
             const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
             this.disableAllButtons();
@@ -340,7 +340,7 @@ export class FlatUIManager implements IUpdatable {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Player';
             if (this.context.voiceEnabled) {
-                await this.context.managers.media.toggleMicrophone();
+                await this.context.managers.media.ensureMicrophoneEnabled();
             }
             const targetId = this.roomInput.value.trim();
             if (!targetId) {

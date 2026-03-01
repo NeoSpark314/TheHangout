@@ -165,7 +165,7 @@ export class PropManager implements IReplicatedFeature {
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
 
-        this.context.managers.assets.getNormalizedModel('/models/duck.glb', 0.25).then(duck => {
+        this.context.managers.assets.getNormalizedModel('models/duck.glb', 0.25).then(duck => {
             if (this.hologram) {
                 this.duckModel = duck;
                 this.duckModel.visible = this.desiredHologramVisible;
