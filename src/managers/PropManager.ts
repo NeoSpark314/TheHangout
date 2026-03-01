@@ -22,6 +22,7 @@ export class PropManager implements IReplicatedFeature {
     private table: THREE.Mesh | null = null;
     private hologram: THREE.Mesh | null = null;
     private duckModel: THREE.Object3D | null = null;
+    private desiredHologramVisible: boolean = true;
     private podest: THREE.Group | null = null;
     private decorations: THREE.Group | null = null;
     private hasSpawnedGrabbables: boolean = false;
@@ -167,7 +168,9 @@ export class PropManager implements IReplicatedFeature {
         this.context.managers.assets.getNormalizedModel('/models/duck.glb', 0.25).then(duck => {
             if (this.hologram) {
                 this.duckModel = duck;
+                this.duckModel.visible = this.desiredHologramVisible;
                 this.hologram.add(duck);
+                this.hologram.visible = this.desiredHologramVisible;
             }
         });
 
@@ -530,6 +533,7 @@ export class PropManager implements IReplicatedFeature {
     }
 
     public setHologramVisible(visible: boolean): void {
+        this.desiredHologramVisible = visible;
         if (this.duckModel) {
             this.duckModel.visible = visible;
         }

@@ -181,7 +181,7 @@ export class RemoteDesktopManager implements IUpdatable {
                 this.removeSurface(key);
             }
         }
-
+        this.refreshActiveLayouts();
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
