@@ -5,6 +5,7 @@ import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { IReplicatedFeature } from './ReplicationManager';
+import { IDesktopScreenLayout } from '../interfaces/IDesktopScreenLayout';
 
 interface IDrumPadHitPayload {
     padId: string;
@@ -20,6 +21,7 @@ export class PropManager implements IReplicatedFeature {
 
     private table: THREE.Mesh | null = null;
     private hologram: THREE.Mesh | null = null;
+    private duckModel: THREE.Object3D | null = null;
     private podest: THREE.Group | null = null;
     private decorations: THREE.Group | null = null;
     private hasSpawnedGrabbables: boolean = false;
@@ -163,8 +165,12 @@ export class PropManager implements IReplicatedFeature {
         this.table.add(this.hologram);
 
         this.context.managers.assets.getNormalizedModel('/models/duck.glb', 0.25).then(duck => {
-            this.hologram?.add(duck);
+            if (this.hologram) {
+                this.duckModel = duck;
+                this.hologram.add(duck);
+            }
         });
+
     }
 
     private createPodest(): void {
@@ -512,5 +518,23 @@ export class PropManager implements IReplicatedFeature {
 
         const entityId = `admin-spawn-${Date.now()}`;
         EntityFactory.createGrabbable(this.context, entityId, 0.12, pos, mesh as any);
+    }
+
+    public getDesktopLayout(index: number, _total: number): IDesktopScreenLayout {
+        // Logic for the CyperStube room: large billboard on the table
+        return {
+            position: [0, 1.8 + index * 0.15, 0],
+            scale: [1.5, 1.5, 1.5],
+            billboard: true
+        };
+    }
+
+    public setHologramVisible(visible: boolean): void {
+        if (this.duckModel) {
+            this.duckModel.visible = visible;
+        }
+        if (this.hologram) {
+            this.hologram.visible = visible;
+        }
     }
 }

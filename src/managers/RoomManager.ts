@@ -5,6 +5,7 @@ import { EnvironmentManager } from './EnvironmentManager';
 import { PropManager } from './PropManager';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
+import { IDesktopScreenLayout } from '../interfaces/IDesktopScreenLayout';
 
 export class RoomManager implements IUpdatable {
     public scene: THREE.Scene | null = null;
@@ -93,5 +94,22 @@ export class RoomManager implements IUpdatable {
             position: new THREE.Vector3(x, 0.2, z),
             yaw: yaw
         };
+    }
+
+    public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
+        if (this.props) {
+            return this.props.getDesktopLayout(index, total);
+        }
+        // Fallback
+        return {
+            position: [0, 1.5 + index * 0.1, -2.4],
+            billboard: true
+        };
+    }
+
+    public toggleHologram(visible: boolean): void {
+        if (this.props) {
+            this.props.setHologramVisible(visible);
+        }
     }
 }

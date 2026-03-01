@@ -25,6 +25,7 @@ interface IRenderSurface {
     ctx: CanvasRenderingContext2D;
     decodeImage: HTMLImageElement;
     lastFrameTs: number;
+    isBillboard: boolean;
 }
 
 const MY_SCREENS_STORAGE_KEY = 'hangout_myScreens';
@@ -40,7 +41,19 @@ export class RemoteDesktopManager implements IUpdatable {
         this.loadConfigsFromStorage();
     }
 
-    public update(_delta: number): void { }
+    public update(_delta: number): void {
+        const renderMgr = this.context.managers.render;
+        if (!renderMgr || !renderMgr.camera) return;
+
+        const camPos = new THREE.Vector3();
+        renderMgr.camera.getWorldPosition(camPos);
+
+        for (const surface of this.surfacesByKey.values()) {
+            if (this.activeByKey.has(surface.key) && surface.isBillboard) {
+                surface.group.lookAt(camPos.x, surface.group.position.y, camPos.z);
+            }
+        }
+    }
 
     public loadConfigsFromStorage(): void {
         try {
@@ -174,14 +187,16 @@ export class RemoteDesktopManager implements IUpdatable {
 
     public handleStreamSummoned(payload: IDesktopStreamSummonedPayload): void {
         this.activeByKey.add(payload.key);
-        this.ensureSurface(payload.key, payload.name || payload.key, payload.anchor, payload.quaternion);
+        this.ensureSurface(payload.key, payload.name || payload.key);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
+        this.refreshActiveLayouts();
     }
 
     public handleStreamStopped(payload: IDesktopStreamStoppedPayload): void {
         this.activeByKey.delete(payload.key);
         this.removeSurface(payload.key);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
+        this.refreshActiveLayouts();
     }
 
     public handleStreamOffline(payload: IDesktopStreamOfflinePayload): void {
@@ -189,10 +204,11 @@ export class RemoteDesktopManager implements IUpdatable {
         this.onlineByKey.set(payload.key, false);
         this.removeSurface(payload.key);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
+        this.refreshActiveLayouts();
     }
 
     public handleStreamFrame(payload: IDesktopStreamFramePayload): void {
-        const surface = this.ensureSurface(payload.key, payload.name || payload.key, payload.anchor, payload.quaternion);
+        const surface = this.ensureSurface(payload.key, payload.name || payload.key);
         this.capturingByKey.set(payload.key, true);
         this.activeByKey.add(payload.key);
 
@@ -213,9 +229,7 @@ export class RemoteDesktopManager implements IUpdatable {
 
     private ensureSurface(
         key: string,
-        name: string,
-        anchor?: [number, number, number],
-        quaternion?: [number, number, number, number]
+        name: string
     ): IRenderSurface {
         const existing = this.surfacesByKey.get(key);
         if (existing) return existing;
@@ -243,6 +257,7 @@ export class RemoteDesktopManager implements IUpdatable {
             texture,
             decodeImage,
             lastFrameTs: 0,
+            isBillboard: false,
             group: new THREE.Group() // Placeholder, will be replaced below
         };
 
@@ -264,19 +279,43 @@ export class RemoteDesktopManager implements IUpdatable {
         group.add(frameMesh);
         group.add(screenMesh);
 
-        if (anchor && quaternion) {
-            group.position.set(anchor[0], Math.max(1.2, anchor[1] - 0.1), anchor[2] - 1.4);
-            group.quaternion.set(quaternion[0], quaternion[1], quaternion[2], quaternion[3]);
-        } else {
-            group.position.set(0, 1.5, -2.4);
-        }
+        // Initial default position until layout refreshes
+        group.position.set(0, 1.5, -2.4);
 
         this.context.managers.render.scene.add(group);
 
         surface.group = group;
         this.surfacesByKey.set(key, surface);
 
+        this.refreshActiveLayouts();
         return surface;
+    }
+
+    private refreshActiveLayouts(): void {
+        // Collect and sort active keys so they stack consistently
+        const sortedActive = Array.from(this.activeByKey).sort();
+        const total = sortedActive.length;
+
+        // Hide/Show duck based on screen count
+        this.context.managers.room.toggleHologram(total === 0);
+
+        sortedActive.forEach((key, index) => {
+            const surface = this.surfacesByKey.get(key);
+            if (!surface) return;
+
+            const layout = this.context.managers.room.getDesktopLayout(index, total);
+            surface.group.position.set(layout.position[0], layout.position[1], layout.position[2]);
+
+            if (layout.rotation) {
+                surface.group.quaternion.set(layout.rotation[0], layout.rotation[1], layout.rotation[2], layout.rotation[3]);
+            }
+
+            if (layout.scale) {
+                surface.group.scale.set(layout.scale[0], layout.scale[1], layout.scale[2]);
+            }
+
+            surface.isBillboard = !!layout.billboard;
+        });
     }
 
     private drawStandby(surface: IRenderSurface): void {
