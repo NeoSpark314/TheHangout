@@ -145,11 +145,11 @@ export class FlatUIManager implements IUpdatable {
         if (this.mobileActionBtn) {
             const beginAction = (e: Event) => {
                 e.preventDefault();
-                this.context.managers.input?.toggleMobilePrimaryAction();
+                this.context.managers.input?.beginMobilePrimaryAction();
             };
             const endAction = (e: Event) => {
                 e.preventDefault();
-                this.context.managers.input?.releaseMobilePrimaryAction();
+                this.context.managers.input?.endMobilePrimaryAction();
             };
 
             this.mobileActionBtn.addEventListener('pointerdown', beginAction);
