@@ -44,11 +44,13 @@ export interface IDesktopSourcesStatusResponsePayload {
     activeKeys?: string[];
     capturingKeys?: string[];
     activeNames?: Record<string, string>;
+    activeSummonerNames?: Record<string, string>;
 }
 
 export interface IDesktopStreamSummonPayload {
     key: string;
     name?: string;
+    summonerName?: string;
     anchor?: [number, number, number];
     quaternion?: [number, number, number, number];
 }

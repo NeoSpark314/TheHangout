@@ -7,6 +7,7 @@ import {
     IDesktopStreamFramePayload,
     IDesktopStreamOfflinePayload,
     IDesktopStreamStoppedPayload,
+    IDesktopStreamSummonPayload,
     IDesktopStreamSummonedPayload
 } from '../interfaces/INetworkPacket';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
@@ -19,6 +20,7 @@ export interface IMyScreenConfig {
 interface IRenderSurface {
     key: string;
     name: string;
+    sharerName: string;
     group: THREE.Group;
     screenMesh: THREE.Mesh;
     frameMesh: THREE.Mesh;
@@ -119,12 +121,16 @@ export class RemoteDesktopManager implements IUpdatable {
             return;
         }
 
-        const payload: any = { key, name };
+        const payload: IDesktopStreamSummonPayload = {
+            key,
+            name,
+            summonerName: this.context.playerName
+        };
         const localPlayer: any = this.context.localPlayer;
         if (localPlayer?.headState) {
             const head = localPlayer.headState;
-            payload.anchor = [head.position.x, head.position.y, head.position.z] as [number, number, number];
-            payload.quaternion = [head.quaternion.x, head.quaternion.y, head.quaternion.z, head.quaternion.w] as [number, number, number, number];
+            payload.anchor = [head.position.x, head.position.y, head.position.z];
+            payload.quaternion = [head.quaternion.x, head.quaternion.y, head.quaternion.z, head.quaternion.w];
         }
 
         this.context.managers.network.sendData(
@@ -172,7 +178,9 @@ export class RemoteDesktopManager implements IUpdatable {
             this.activeByKey.add(key);
             // Ensure surface exists for all active room streams, using the name from activeNames if available
             const name = (payload.activeNames && payload.activeNames[key]) || key;
-            this.ensureSurface(key, name);
+            const sharerName = (payload.activeSummonerNames && payload.activeSummonerNames[key]) || 'Someone';
+            const surface = this.ensureSurface(key, name);
+            surface.sharerName = sharerName;
         }
 
         // Handle standby visuals for active surfaces
@@ -192,7 +200,8 @@ export class RemoteDesktopManager implements IUpdatable {
 
     public handleStreamSummoned(payload: IDesktopStreamSummonedPayload): void {
         this.activeByKey.add(payload.key);
-        this.ensureSurface(payload.key, payload.name || payload.key);
+        const surface = this.ensureSurface(payload.key, payload.name || payload.key);
+        surface.sharerName = payload.summonedByName || 'Someone';
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
         this.refreshActiveLayouts();
     }
@@ -282,6 +291,7 @@ export class RemoteDesktopManager implements IUpdatable {
                 }
 
                 surface.ctx.drawImage(bitmap, 0, 0);
+                this.drawIdentityOverlay(surface);
                 surface.texture.needsUpdate = true;
             }
             bitmap.close();
@@ -337,6 +347,7 @@ export class RemoteDesktopManager implements IUpdatable {
         const surface: IRenderSurface = {
             key,
             name,
+            sharerName: 'Someone',
             canvas,
             ctx,
             texture,
@@ -417,17 +428,49 @@ export class RemoteDesktopManager implements IUpdatable {
         ctx.fillText(name.toUpperCase(), canvas.width / 2, canvas.height / 2 - 40);
 
         ctx.shadowBlur = 0;
-        ctx.font = '300 28px Outfit, sans-serif';
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
-        ctx.fillText('STANDBY • WAITING FOR BROADCAST', canvas.width / 2, canvas.height / 2 + 30);
+        ctx.font = '300 24px Outfit, sans-serif';
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+        ctx.fillText('WAITING FOR BROADCAST', canvas.width / 2, canvas.height / 2 + 30);
 
-        // Status indicator
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2 - 140, canvas.height / 2 + 30, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffaa00'; // Amber for standby
-        ctx.fill();
+        this.drawIdentityOverlay(surface);
 
         texture.needsUpdate = true;
+    }
+
+    private drawIdentityOverlay(surface: IRenderSurface): void {
+        const { ctx, canvas, sharerName } = surface;
+
+        ctx.save();
+
+        const padding = 16;
+        const fontSize = 18;
+        ctx.font = `bold ${fontSize}px Outfit, sans-serif`;
+        const text = `SHARER: ${sharerName.toUpperCase()}`;
+        const metrics = ctx.measureText(text);
+        const rectW = metrics.width + padding * 2;
+        const rectH = fontSize + padding;
+
+        // Bottom left placement
+        const x = 40;
+        const y = canvas.height - 40 - rectH;
+
+        // Subtle dark pill background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(x, y, rectW, rectH, 8);
+            ctx.fill();
+        } else {
+            ctx.fillRect(x, y, rectW, rectH);
+        }
+
+        // Cyan label
+        ctx.fillStyle = '#00ffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x + padding, y + rectH / 2);
+
+        ctx.restore();
     }
 
     private removeSurface(key: string): void {

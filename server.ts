@@ -30,7 +30,7 @@ import {
 const activeRooms = new Map<string, HeadlessRoom>(); // roomId -> HeadlessRoom
 const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket
 const desktopSourceBySocket = new WeakMap<WebSocket, string>(); // source websocket -> key
-const desktopRoutes = new Map<string, { roomId: string; name?: string; summonedBy: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
+const desktopRoutes = new Map<string, { roomId: string; name?: string; summonedBy: string; summonerName?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
 const capturingKeys = new Set<string>(); // key -> currently broadcasting
 const relaySourceSubscriptions = new Map<WebSocket, { roomId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
 
@@ -115,11 +115,13 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
     // 2. Identify all keys currently active in THIS room
     const roomActiveKeys: string[] = [];
     const activeNames: Record<string, string> = {};
+    const activeSummonerNames: Record<string, string> = {};
 
     for (const [key, route] of desktopRoutes.entries()) {
         if (route.roomId === roomId) {
             roomActiveKeys.push(key);
             activeNames[key] = route.name || key;
+            activeSummonerNames[key] = route.summonerName || 'Someone';
             // Also ensure online status is reported for these so client knows they're available
             statuses[key] = globalDesktopSources.has(key);
         }
@@ -133,7 +135,8 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
         statuses,
         activeKeys: roomActiveKeys,
         capturingKeys: capturing,
-        activeNames
+        activeNames,
+        activeSummonerNames
     };
     return response;
 }
@@ -398,6 +401,7 @@ wss.on('connection', (ws) => {
                             roomId: currentRoomId,
                             name: payload.name,
                             summonedBy: currentPeerId,
+                            summonerName: payload.summonerName || 'Someone',
                             anchor: payload.anchor,
                             quaternion: payload.quaternion
                         });
@@ -409,7 +413,8 @@ wss.on('connection', (ws) => {
                             roomId: currentRoomId,
                             anchor: payload.anchor,
                             quaternion: payload.quaternion,
-                            summonedByPeerId: currentPeerId
+                            summonedByPeerId: currentPeerId,
+                            summonedByName: payload.summonerName || 'Someone'
                         });
 
                         sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
