@@ -44,7 +44,7 @@ export const EVENTS = {
     INTENT_GRAB_START: 'INTENT_GRAB_START',
     INTENT_GRAB_END: 'INTENT_GRAB_END',
     INTENT_VR_SNAP_TURN: 'INTENT_VR_SNAP_TURN'
-};
+} as const;
 
 export const PACKET_TYPES = {
     STATE_UPDATE: 0,
