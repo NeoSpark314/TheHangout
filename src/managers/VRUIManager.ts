@@ -24,6 +24,7 @@ export class VRUIManager implements IUpdatable {
     private onVoiceStateHandler: (() => void) | null = null;
     private scheduleRenderHandler: (() => void) | null = null;
     private onDesktopUpdateHandler: (() => void) | null = null;
+    private onDesktopResubscribeHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -104,6 +105,12 @@ export class VRUIManager implements IUpdatable {
         if (this.onDesktopUpdateHandler) {
             eventBus.off(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
             this.onDesktopUpdateHandler = null;
+        }
+
+        if (this.onDesktopResubscribeHandler) {
+            eventBus.off(EVENTS.PEER_CONNECTED, this.onDesktopResubscribeHandler);
+            eventBus.off(EVENTS.PEER_JOINED_ROOM, this.onDesktopResubscribeHandler);
+            this.onDesktopResubscribeHandler = null;
         }
     }
 
@@ -570,11 +577,16 @@ export class VRUIManager implements IUpdatable {
             };
 
             this.onDesktopUpdateHandler = () => {
-                const isVR = this.context.managers.render?.isXRPresenting();
-                if (this.context.isMenuOpen || isVR) renderList();
+                renderList();
+            };
+            this.onDesktopResubscribeHandler = () => {
+                desktop.requestSourceStatus();
+                renderList();
             };
 
             eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
+            eventBus.on(EVENTS.PEER_CONNECTED, this.onDesktopResubscribeHandler);
+            eventBus.on(EVENTS.PEER_JOINED_ROOM, this.onDesktopResubscribeHandler);
             desktop.requestSourceStatus();
             renderList();
         });

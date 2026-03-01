@@ -30,6 +30,7 @@ const activeRooms = new Map<string, HeadlessRoom>(); // roomId -> HeadlessRoom
 const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket
 const desktopSourceBySocket = new WeakMap<WebSocket, string>(); // source websocket -> key
 const desktopRoutes = new Map<string, { roomId: string; name?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
+const relaySourceSubscriptions = new Map<WebSocket, { roomId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -92,6 +93,36 @@ function sendPacketToRoom(roomId: string, type: number, payload: unknown): void 
     }
 }
 
+function buildSourceStatusPayload(roomId: string, keys: string[]): { statuses: Record<string, boolean>; activeKeys: string[] } {
+    const statuses: Record<string, boolean> = {};
+    for (const key of keys) {
+        statuses[key] = globalDesktopSources.has(key);
+    }
+
+    const activeKeys = keys.filter((key) => {
+        const route = desktopRoutes.get(key);
+        return !!route && route.roomId === roomId;
+    });
+
+    return { statuses, activeKeys };
+}
+
+function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: string[]): void {
+    if (ws.readyState !== 1) return;
+    const payload = buildSourceStatusPayload(roomId, keys);
+    ws.send(JSON.stringify({
+        type: PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE,
+        payload
+    }));
+}
+
+function notifySubscribedClientsForKey(key: string): void {
+    for (const [ws, sub] of relaySourceSubscriptions.entries()) {
+        if (!sub.keys.has(key)) continue;
+        sendSourceStatusToRelayClient(ws, sub.roomId, Array.from(sub.keys));
+    }
+}
+
 function stopRoutedStreamsForRoom(roomId: string): void {
     for (const [key, route] of Array.from(desktopRoutes.entries())) {
         if (route.roomId !== roomId) continue;
@@ -100,6 +131,7 @@ function stopRoutedStreamsForRoom(roomId: string): void {
             sourceWs.send(JSON.stringify({ type: 'command-stop-capture', key }));
         }
         desktopRoutes.delete(key);
+        notifySubscribedClientsForKey(key);
     }
 }
 
@@ -255,6 +287,7 @@ wss.on('connection', (ws) => {
     console.log('[Relay] New Connection established');
     let currentRoomId: string | null = null;
     let currentPeerId: string | null = null;
+    let currentSubscribedKeys: Set<string> = new Set();
 
     ws.on('message', (message) => {
         try {
@@ -283,21 +316,16 @@ wss.on('connection', (ws) => {
                 if (currentRoomId && currentPeerId) {
                     if (data.type === PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST) {
                         const payload = (data.payload || {}) as IDesktopSourcesStatusRequestPayload;
-                        const keys = Array.isArray(payload.keys) ? payload.keys : [];
-                        const statuses: Record<string, boolean> = {};
-                        for (const key of keys) {
-                            statuses[key] = globalDesktopSources.has(key);
-                        }
-
-                        const activeKeys = keys.filter((key) => {
-                            const route = desktopRoutes.get(key);
-                            return !!route && route.roomId === currentRoomId;
+                        const keys = Array.isArray(payload.keys)
+                            ? payload.keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
+                            : [];
+                        currentSubscribedKeys = new Set(keys);
+                        relaySourceSubscriptions.set(ws, {
+                            roomId: currentRoomId,
+                            keys: currentSubscribedKeys
                         });
 
-                        ws.send(JSON.stringify({
-                            type: PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE,
-                            payload: { statuses, activeKeys }
-                        }));
+                        sendSourceStatusToRelayClient(ws, currentRoomId, keys);
                         return;
                     }
 
@@ -321,6 +349,7 @@ wss.on('connection', (ws) => {
                             anchor: payload.anchor,
                             quaternion: payload.quaternion
                         });
+                        notifySubscribedClientsForKey(key);
 
                         sourceWs.send(JSON.stringify({
                             type: 'command-start-capture',
@@ -352,6 +381,7 @@ wss.on('connection', (ws) => {
                             }));
                         }
                         desktopRoutes.delete(key);
+                        notifySubscribedClientsForKey(key);
                         sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
                             key,
                             roomId: currentRoomId
@@ -371,6 +401,7 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
+        relaySourceSubscriptions.delete(ws);
         if (currentRoomId && currentPeerId) {
             const room = activeRooms.get(currentRoomId);
             if (room) {
@@ -414,11 +445,13 @@ desktopSourceWss.on('connection', (ws) => {
 
                 if (registeredKey && registeredKey !== nextKey) {
                     globalDesktopSources.delete(registeredKey);
+                    notifySubscribedClientsForKey(registeredKey);
                 }
 
                 registeredKey = nextKey;
                 globalDesktopSources.set(nextKey, ws);
                 desktopSourceBySocket.set(ws, nextKey);
+                notifySubscribedClientsForKey(nextKey);
 
                 ws.send(JSON.stringify({
                     type: 'source-registered',
@@ -435,6 +468,7 @@ desktopSourceWss.on('connection', (ws) => {
                 if (!route) return;
                 if (route.roomId && !activeRooms.has(route.roomId)) {
                     desktopRoutes.delete(key);
+                    notifySubscribedClientsForKey(key);
                     return;
                 }
 
@@ -457,6 +491,7 @@ desktopSourceWss.on('connection', (ws) => {
                 const route = desktopRoutes.get(key);
                 if (!route) return;
                 desktopRoutes.delete(key);
+                notifySubscribedClientsForKey(key);
                 sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
                     key,
                     roomId: route.roomId
@@ -476,10 +511,12 @@ desktopSourceWss.on('connection', (ws) => {
             globalDesktopSources.delete(key);
         }
         desktopSourceBySocket.delete(ws);
+        notifySubscribedClientsForKey(key);
 
         const route = desktopRoutes.get(key);
         if (route) {
             desktopRoutes.delete(key);
+            notifySubscribedClientsForKey(key);
             sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
                 key,
                 roomId: route.roomId
