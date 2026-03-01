@@ -29,6 +29,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
     private leftReach = 1.0;
     private rightReach = 1.0;
+    private assistedReach: { left: number | null; right: number | null } = { left: null, right: null };
 
     /** The most recently activated hand that is still held down. Used for reach adjustment. */
     private prioritizedHand: 'left' | 'right' | null = null;
@@ -65,6 +66,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.targetRightStretch.set(0, 0, 0);
         this.leftStretch.set(0, 0, 0);
         this.rightStretch.set(0, 0, 0);
+        this.assistedReach.left = null;
+        this.assistedReach.right = null;
     }
 
     private manualStatus = { left: false, right: false };
@@ -78,9 +81,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
             this.prioritizedHand = hand;
             this.updateHandTarget(hand);
         } else {
-            // Stop stretching if manually deactivated
-            if (hand === 'left') this.targetLeftStretch.set(0, 0, 0);
-            else this.targetRightStretch.set(0, 0, 0);
+            this.updateHandTarget(hand);
 
             // If we released the prioritized hand, fall back to the other MANUALLY active hand if it exists
             if (this.prioritizedHand === hand) {
@@ -95,9 +96,18 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     }
 
     private updateHandTarget(hand: 'left' | 'right'): void {
-        const reach = hand === 'left' ? this.leftReach : this.rightReach;
-        if (hand === 'left') this.targetLeftStretch.set(0, 0, -reach);
-        else this.targetRightStretch.set(0, 0, -reach);
+        const isManual = this.manualStatus[hand];
+        const reach = isManual
+            ? (hand === 'left' ? this.leftReach : this.rightReach)
+            : this.assistedReach[hand];
+
+        if (hand === 'left') {
+            if (reach !== null) this.targetLeftStretch.set(0, 0, -reach);
+            else this.targetLeftStretch.set(0, 0, 0);
+        } else {
+            if (reach !== null) this.targetRightStretch.set(0, 0, -reach);
+            else this.targetRightStretch.set(0, 0, 0);
+        }
     }
 
     public adjustReach(delta: number): void {
@@ -110,6 +120,14 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         } else {
             this.rightReach = Math.max(MIN_REACH, Math.min(MAX_REACH, this.rightReach + delta));
             this.updateHandTarget('right');
+        }
+    }
+
+    public setAssistedReach(hand: 'left' | 'right', reach: number | null): void {
+        const clamped = reach === null ? null : Math.max(0, Math.min(MAX_REACH, reach));
+        this.assistedReach[hand] = clamped;
+        if (!this.manualStatus[hand]) {
+            this.updateHandTarget(hand);
         }
     }
 

@@ -8,7 +8,7 @@ import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IVRSnapTurn
 import { KeyboardManager } from './KeyboardManager';
 import { GamepadManager } from './GamepadManager';
 import { MobileJoystickManager } from './MobileJoystickManager';
-import { NonVRReticleInteractionController } from './NonVRReticleInteractionController';
+import { NonVRReachAssistController } from './NonVRReachAssistController';
 import { XRInputManager } from './XRInputManager';
 import { GestureUtils } from '../utils/GestureUtils';
 
@@ -20,7 +20,7 @@ export class InputManager implements IUpdatable {
     public keyboard: KeyboardManager;
     public gamepad: GamepadManager;
     public mobileJoystick: MobileJoystickManager;
-    public nonVRReticle: NonVRReticleInteractionController;
+    public nonVRReachAssist: NonVRReachAssistController;
     public xrInput: XRInputManager;
     private _wheelDelta = 0;
 
@@ -28,7 +28,7 @@ export class InputManager implements IUpdatable {
         this.keyboard = new KeyboardManager();
         this.gamepad = new GamepadManager(context);
         this.mobileJoystick = new MobileJoystickManager();
-        this.nonVRReticle = new NonVRReticleInteractionController(context);
+        this.nonVRReachAssist = new NonVRReachAssistController(context);
         this.xrInput = new XRInputManager(context);
 
         this._initMouseLook();
@@ -65,19 +65,19 @@ export class InputManager implements IUpdatable {
     }
 
     public getMobilePrimaryActionLabel(): string | null {
-        return this.nonVRReticle.getMobilePrimaryActionLabel();
+        return this.nonVRReachAssist.getMobilePrimaryActionLabel();
     }
 
     public hasMobilePrimaryAction(): boolean {
-        return this.nonVRReticle.hasMobilePrimaryAction();
+        return this.nonVRReachAssist.hasMobilePrimaryAction();
     }
 
     public isMobileFocusActive(): boolean {
-        return this.nonVRReticle.isReticleFocused();
+        return this.nonVRReachAssist.isActive();
     }
 
     public toggleMobilePrimaryAction(): void {
-        this.nonVRReticle.toggleMobilePrimaryAction();
+        this.nonVRReachAssist.toggleMobileAction();
     }
 
     public isKeyPressed(key: string): boolean {
@@ -150,16 +150,18 @@ export class InputManager implements IUpdatable {
         if (render && !render.isXRPresenting() && tracking) {
             tracking.setHandActive('left', this.isKeyDown('q'));
             tracking.setHandActive('right', this.isKeyDown('e'));
+            const manualModeActive = this.isKeyDown('q') || this.isKeyDown('e');
 
             if (this._wheelDelta !== 0) {
                 tracking.adjustReach(this._wheelDelta);
                 this._wheelDelta = 0;
             }
 
-            this.nonVRReticle.update(
+            this.nonVRReachAssist.update(
+                delta,
+                manualModeActive,
                 this.isKeyDown('primary_action'),
-                !!this.gamepad.buttons[4],
-                !!this.gamepad.buttons[5]
+                !!this.gamepad.buttons[0]
             );
         }
 

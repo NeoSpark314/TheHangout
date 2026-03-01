@@ -40,6 +40,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     public rigidBody: RAPIER.RigidBody;
     public view: IView<IPhysicsPropState> | null;
     public isGrabbable: boolean;
+    private hoverSources: Set<string> = new Set();
     public spawnPosition: IVector3 | null;
     public heldBy: string | null = null;
     private grabRadius: number;
@@ -177,11 +178,13 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
     // --- IInteractable ---
     public onHoverEnter(playerId: string): void {
+        this.hoverSources.add(playerId);
         if (this.view) this.view.setHighlight(true);
     }
 
     public onHoverExit(playerId: string): void {
-        if (this.view) this.view.setHighlight(false);
+        this.hoverSources.delete(playerId);
+        if (this.view) this.view.setHighlight(this.hoverSources.size > 0);
     }
 
     public onInteraction(event: IInteractionEvent): void {

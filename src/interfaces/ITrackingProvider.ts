@@ -61,4 +61,5 @@ export interface ITrackingProvider {
     // Optional desktop-specific control methods
     setHandActive?(hand: 'left' | 'right', active: boolean): void;
     adjustReach?(delta: number): void;
+    setAssistedReach?(hand: 'left' | 'right', reach: number | null): void;
 }

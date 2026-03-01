@@ -169,11 +169,16 @@ export class GrabSkill extends Skill {
         }
     }
 
+    public isHoldingHand(hand: 'left' | 'right'): boolean {
+        return this.heldObjects.has(hand);
+    }
+
     private _updateHighlight(playerId: string, hand: 'left' | 'right', nearest: IInteractable | null): void {
         const current = this.highlightedEntities[hand];
+        const hoverSourceId = `${playerId}:${hand}`;
         if (current !== nearest) {
-            if (current) current.onHoverExit(playerId);
-            if (nearest) nearest.onHoverEnter(playerId);
+            if (current) current.onHoverExit(hoverSourceId);
+            if (nearest) nearest.onHoverEnter(hoverSourceId);
             this.highlightedEntities[hand] = nearest;
         }
     }

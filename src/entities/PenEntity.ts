@@ -14,6 +14,7 @@ import * as THREE from 'three';
  */
 export class PenEntity extends NetworkEntity implements IGrabbable, IInteractable {
     public isGrabbable = true;
+    private hoverSources: Set<string> = new Set();
     public heldBy: string | null = null;
     public view: IView<any> | null = null;
 
@@ -53,11 +54,13 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
 
     // --- IInteractable ---
     public onHoverEnter(playerId: string): void {
+        this.hoverSources.add(playerId);
         if (this.view) this.view.setHighlight(true);
     }
 
     public onHoverExit(playerId: string): void {
-        if (this.view) this.view.setHighlight(false);
+        this.hoverSources.delete(playerId);
+        if (this.view) this.view.setHighlight(this.hoverSources.size > 0);
     }
 
     public onInteraction(event: IInteractionEvent): void {

@@ -68,4 +68,10 @@ export class TrackingManager {
         }
     }
 
+    public setAssistedReach(hand: 'left' | 'right', reach: number | null): void {
+        if (this.activeProvider && this.activeProvider.setAssistedReach) {
+            this.activeProvider.setAssistedReach(hand, reach);
+        }
+    }
+
 }
