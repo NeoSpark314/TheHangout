@@ -357,7 +357,7 @@ export class FlatUIManager implements IUpdatable {
                     name: nameInput.value,
                     key: keyInput.value
                 };
-                this.context.managers.remoteDesktop.setConfigs(next);
+                this.context.managers.remoteDesktop.setConfigs(next, true); // silent update
             };
 
             nameInput.addEventListener('input', updateRow);

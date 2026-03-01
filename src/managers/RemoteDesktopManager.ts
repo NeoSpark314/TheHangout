@@ -89,13 +89,15 @@ export class RemoteDesktopManager implements IUpdatable {
         return [...this.configs];
     }
 
-    public setConfigs(configs: IMyScreenConfig[]): void {
+    public setConfigs(configs: IMyScreenConfig[], silent: boolean = false): void {
         const cleaned = configs
-            .map(c => ({ name: c.name.trim(), key: c.key.trim() }));
+            .map(c => ({ name: c.name, key: c.key }));
 
         this.configs = cleaned;
         localStorage.setItem(MY_SCREENS_STORAGE_KEY, JSON.stringify(cleaned));
-        eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
+        if (!silent) {
+            eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
+        }
     }
 
     public requestSourceStatus(): void {
@@ -240,7 +242,6 @@ export class RemoteDesktopManager implements IUpdatable {
             };
             surface.decodeImage.src = payload.dataUrl;
         }
-        eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
     public handleBinaryFrame(message: ArrayBuffer): void {
@@ -297,8 +298,6 @@ export class RemoteDesktopManager implements IUpdatable {
         }).catch(err => {
             console.error('[RemoteDesktopManager] Async decode failed:', err);
         });
-
-        eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
     private ensureSurface(
