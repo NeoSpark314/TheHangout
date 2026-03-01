@@ -337,27 +337,34 @@ export class FlatUIManager implements IUpdatable {
 
             const nameInput = document.createElement('input');
             nameInput.type = 'text';
-            nameInput.placeholder = 'Name';
+            nameInput.placeholder = 'Screen Name';
             nameInput.value = row.name;
+            nameInput.className = 'screen-input';
 
             const keyInput = document.createElement('input');
             keyInput.type = 'text';
-            keyInput.placeholder = 'Key';
+            keyInput.placeholder = 'Secret Key';
             keyInput.value = row.key;
+            keyInput.className = 'screen-input';
 
             const removeBtn = document.createElement('button');
-            removeBtn.className = 'primary-btn secondary-style';
+            removeBtn.className = 'primary-btn secondary-style screen-btn-compact';
             removeBtn.type = 'button';
             removeBtn.textContent = 'Remove';
 
             const updateRow = () => {
-                const next = this.context.managers.remoteDesktop.getConfigs();
-                if (!next[i]) return;
-                next[i] = {
-                    name: nameInput.value,
-                    key: keyInput.value
-                };
-                this.context.managers.remoteDesktop.setConfigs(next, true); // silent update
+                const name = nameInput.value;
+                const key = keyInput.value;
+
+                nameInput.classList.toggle('input-invalid', name.length > 0 && name.length < 4);
+                keyInput.classList.toggle('input-invalid', key.length > 0 && key.length < 4);
+
+                if (name.length >= 4 && key.length >= 4) {
+                    const next = this.context.managers.remoteDesktop.getConfigs();
+                    if (!next[i]) return;
+                    next[i] = { name, key };
+                    this.context.managers.remoteDesktop.setConfigs(next, true);
+                }
             };
 
             nameInput.addEventListener('input', updateRow);
