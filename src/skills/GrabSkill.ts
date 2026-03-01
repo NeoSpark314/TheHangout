@@ -31,11 +31,22 @@ export class GrabSkill extends Skill {
 
         const onGrabStart = (payload: IHandIntentPayload) => {
             if (this.heldObjects.has(payload.hand)) return;
-            const nearest = this.highlightedEntities[payload.hand];
+            const handState = player.context.managers.tracking.getState().hands[payload.hand];
+            let nearest = this.highlightedEntities[payload.hand];
+
+            // Resolve the actual proximity target at grab time from the current hand pose.
+            // Input intents can arrive before this frame's highlight refresh runs, so relying
+            // only on the cached highlighted entity can pick a stale target from last frame.
+            if (handState.active) {
+                const pos = handState.pointerPose.position || handState.pose.position;
+                const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+                const currentNearest = player.context.managers.interaction.findNearestInteractable(queryPos, this.grabRadius);
+                nearest = currentNearest?.interactable || null;
+            }
+
             if (isGrabbable(nearest)) {
 
                 // Calculate grab offset to prevent jumping
-                const handState = player.context.managers.tracking.getState().hands[payload.hand];
                 const pos = handState.pointerPose.position || handState.pose.position;
                 const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
