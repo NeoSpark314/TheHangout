@@ -175,19 +175,50 @@ export class FlatUIManager implements IUpdatable {
         }
     }
 
+    private generateRandomName(): string {
+        const adjectives = [
+            'Neon', 'Cyber', 'Chrome', 'Laser', 'Retro', 'Synth', 'Pixel', 'Vector',
+            'Static', 'Glitch', 'Binary', 'Digital', 'Atomic', 'Cosmic', 'Plasma', 'Electric'
+        ];
+        const nouns = [
+            'Rider', 'Ghost', 'Glitch', 'Runner', 'Phantom', 'Wave', 'Pulse', 'Spark',
+            'Cipher', 'Nomad', 'Drifter', 'Echo', 'Void', 'Horizon', 'Core', 'Link'
+        ];
+
+        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+        const num = Math.floor(Math.random() * 900) + 100;
+
+        return `${adj}-${noun}-${num}`;
+    }
+
     private loadFromStorage(): void {
         const storedName = localStorage.getItem('hangout_playerName');
-        this.nameInput.value = storedName || `Player-${Math.floor(Math.random() * 10000)}`;
+        if (!storedName) {
+            const randomName = this.generateRandomName();
+            this.nameInput.value = randomName;
+            localStorage.setItem('hangout_playerName', randomName);
+        } else {
+            this.nameInput.value = storedName;
+        }
 
         const storedRoom = localStorage.getItem('hangout_lastRoomId');
-        this.roomInput.value = storedRoom || 'TestRoom';
+        if (!storedRoom) {
+            const defaultRoom = 'TestRoom';
+            this.roomInput.value = defaultRoom;
+            localStorage.setItem('hangout_lastRoomId', defaultRoom);
+        } else {
+            this.roomInput.value = storedRoom;
+        }
 
         const storedVoice = localStorage.getItem('hangout_voiceEnabled');
         if (storedVoice === 'false') {
             this.context.voiceEnabled = false;
         } else {
-            // Default to true or what's stored as true
             this.context.voiceEnabled = true;
+            if (storedVoice === null) {
+                localStorage.setItem('hangout_voiceEnabled', 'true');
+            }
         }
         this.updateVoiceButton(this.context.voiceEnabled);
 
