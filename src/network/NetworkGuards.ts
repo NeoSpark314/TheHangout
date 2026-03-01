@@ -123,6 +123,17 @@ function isDesktopStreamFramePayload(payload: unknown): boolean {
         typeof payload.dataUrl === 'string';
 }
 
+function isRoomNotificationPayload(payload: unknown): boolean {
+    if (!isObject(payload) || typeof payload.kind !== 'string') return false;
+    if ('actorPeerId' in payload && typeof payload.actorPeerId !== 'string') return false;
+    if ('actorName' in payload && typeof payload.actorName !== 'string') return false;
+    if ('subjectName' in payload && typeof payload.subjectName !== 'string') return false;
+    if ('message' in payload && typeof payload.message !== 'string') return false;
+    if ('sentAt' in payload && typeof payload.sentAt !== 'number') return false;
+    if ('level' in payload && payload.level !== 'info' && payload.level !== 'warn' && payload.level !== 'error') return false;
+    return true;
+}
+
 export function isValidPayloadForType(type: number, payload: unknown): boolean {
     switch (type) {
         case PACKET_TYPES.STATE_UPDATE:
@@ -162,6 +173,8 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isDesktopStreamOfflinePayload(payload);
         case PACKET_TYPES.DESKTOP_STREAM_FRAME:
             return isDesktopStreamFramePayload(payload);
+        case PACKET_TYPES.ROOM_NOTIFICATION:
+            return isRoomNotificationPayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

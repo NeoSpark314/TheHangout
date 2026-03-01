@@ -8,6 +8,7 @@ import {
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonPayload,
     IDesktopStreamSummonedPayload,
+    IRoomNotificationPayload,
     IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
@@ -39,6 +40,7 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.DESKTOP_STREAM_STOPPED]: IDesktopStreamStoppedPayload;
     [PACKET_TYPES.DESKTOP_STREAM_OFFLINE]: IDesktopStreamOfflinePayload;
     [PACKET_TYPES.DESKTOP_STREAM_FRAME]: IDesktopStreamFramePayload;
+    [PACKET_TYPES.ROOM_NOTIFICATION]: IRoomNotificationPayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {

@@ -10,6 +10,7 @@ import {
     IDesktopStreamOfflinePayload,
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonedPayload,
+    IRoomNotificationPayload,
     IFeatureSnapshotRequestPayload,
     IRoomConfigUpdatePayload,
     IOwnershipReleasePayload,
@@ -95,6 +96,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_STOPPED, new DesktopStreamStoppedHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_OFFLINE, new DesktopStreamOfflineHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_FRAME, new DesktopStreamFrameHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.ROOM_NOTIFICATION, new RoomNotificationHandler(this.context));
     }
 
     private getPeerConfig(): any {
@@ -246,11 +248,6 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
         const managers = this.context.managers;
         for (const stateData of entityStates) {
-            if ((stateData.type as any) === 'system') {
-                console.log('[NetworkManager] System notification packet received:', (stateData.state as any).message);
-                eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, (stateData.state as any).message);
-                continue;
-            }
             let entity = managers.entity.getEntity(stateData.id);
             if (!entity) {
                 // Skip if this is actually us (should already be in entities, but be safe)
@@ -552,6 +549,39 @@ class DesktopStreamFrameHandler implements IPacketHandler<PacketPayloadMap[typeo
     constructor(private context: GameContext) { }
     handle(_senderId: string, payload: IDesktopStreamFramePayload): void {
         this.context.managers.remoteDesktop.handleStreamFrame(payload);
+    }
+}
+
+class RoomNotificationHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.ROOM_NOTIFICATION]> {
+    constructor(private context: GameContext) { }
+    handle(_senderId: string, payload: IRoomNotificationPayload): void {
+        const localPeerId = this.context.localPlayer?.id;
+        if (payload.actorPeerId && localPeerId && payload.actorPeerId === localPeerId) return;
+
+        let message = payload.message || '';
+        if (!message) {
+            const actor = payload.actorName || 'Someone';
+            const subject = payload.subjectName || 'a screen';
+
+            switch (payload.kind) {
+                case 'desktop_stream_started':
+                    message = `${actor} started sharing ${subject}.`;
+                    break;
+                case 'desktop_stream_stopped':
+                    message = `${subject} sharing stopped.`;
+                    break;
+                case 'desktop_stream_offline':
+                    message = `${subject} went offline.`;
+                    break;
+                case 'system':
+                    message = payload.message || 'System Notification';
+                    break;
+                default:
+                    message = payload.message || payload.kind;
+            }
+        }
+
+        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, message);
     }
 }
 

@@ -158,7 +158,6 @@ export class RemoteDesktopManager implements IUpdatable {
     public handleStreamStopped(payload: IDesktopStreamStoppedPayload): void {
         this.activeByKey.delete(payload.key);
         this.removeSurface(payload.key);
-        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${payload.key}" stopped.`);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
@@ -166,7 +165,6 @@ export class RemoteDesktopManager implements IUpdatable {
         this.activeByKey.delete(payload.key);
         this.onlineByKey.set(payload.key, false);
         this.removeSurface(payload.key);
-        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${payload.key}" is offline.`);
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 

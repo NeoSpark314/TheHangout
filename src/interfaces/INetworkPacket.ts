@@ -61,6 +61,8 @@ export interface IDesktopStreamSummonedPayload {
     roomId: string;
     anchor?: [number, number, number];
     quaternion?: [number, number, number, number];
+    summonedByPeerId?: string;
+    summonedByName?: string;
 }
 
 export interface IDesktopStreamStoppedPayload {
@@ -85,6 +87,16 @@ export interface IDesktopStreamFramePayload {
     quaternion?: [number, number, number, number];
 }
 
+export interface IRoomNotificationPayload {
+    kind: string;
+    actorPeerId?: string;
+    actorName?: string;
+    subjectName?: string;
+    message?: string;
+    level?: 'info' | 'warn' | 'error';
+    sentAt?: number;
+}
+
 // A discriminated union of all possible packet payloads
 export type NetworkPayload =
     | IOwnershipTransferPayload
@@ -103,4 +115,5 @@ export type NetworkPayload =
     | IDesktopStreamStoppedPayload
     | IDesktopStreamOfflinePayload
     | IDesktopStreamFramePayload
+    | IRoomNotificationPayload
     | any; // Fallback for unsupported packets

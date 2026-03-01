@@ -206,26 +206,15 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
         }
 
-        const seq = this.nextOwnershipSeq(entity.id);
-        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
     }
 
-    // --- Administrative Commands ---
     public broadcastNotification(message: string): void {
-        const payload = {
-            id: 'system',
-            type: 'system',
-            msg: message,
-            duration: 8000
-        };
-        // We use a custom event or reuse STATE_UPDATE with a system type if supported, 
-        // but for now let's just use a broadcast to a hypothetical notification handler.
-        // Actually, let's just relay it as a standard system message.
-        this.broadcast(PACKET_TYPES.STATE_UPDATE, [{
-            id: 'system_notify',
-            type: 'system',
-            state: { message }
-        }]);
+        this.broadcast(PACKET_TYPES.ROOM_NOTIFICATION, {
+            kind: 'system',
+            message: message,
+            level: 'info',
+            sentAt: this.nowMs()
+        });
     }
 
     public spawnCube(): void {

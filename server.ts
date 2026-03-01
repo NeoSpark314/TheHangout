@@ -361,7 +361,16 @@ wss.on('connection', (ws) => {
                             name: payload.name,
                             roomId: currentRoomId,
                             anchor: payload.anchor,
-                            quaternion: payload.quaternion
+                            quaternion: payload.quaternion,
+                            summonedByPeerId: currentPeerId
+                        });
+
+                        sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                            kind: 'desktop_stream_started',
+                            actorPeerId: currentPeerId,
+                            actorName: payload.name || 'Someone',
+                            subjectName: payload.name || key,
+                            sentAt: Date.now()
                         });
                         return;
                     }
@@ -385,6 +394,13 @@ wss.on('connection', (ws) => {
                         sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
                             key,
                             roomId: currentRoomId
+                        });
+
+                        sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                            kind: 'desktop_stream_stopped',
+                            actorPeerId: currentPeerId,
+                            subjectName: route?.name || key,
+                            sentAt: Date.now()
                         });
                         return;
                     }
@@ -496,6 +512,12 @@ desktopSourceWss.on('connection', (ws) => {
                     key,
                     roomId: route.roomId
                 });
+
+                sendPacketToRoom(route.roomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                    kind: 'desktop_stream_stopped',
+                    subjectName: route.name || key,
+                    sentAt: Date.now()
+                });
                 return;
             }
         } catch (e) {
@@ -520,6 +542,12 @@ desktopSourceWss.on('connection', (ws) => {
             sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
                 key,
                 roomId: route.roomId
+            });
+
+            sendPacketToRoom(route.roomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                kind: 'desktop_stream_offline',
+                subjectName: route.name || key,
+                sentAt: Date.now()
             });
         }
         console.log(`[DesktopSource] Disconnected source ${key}`);
