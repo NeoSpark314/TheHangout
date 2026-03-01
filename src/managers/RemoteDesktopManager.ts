@@ -23,6 +23,8 @@ interface IRenderSurface {
     texture: THREE.CanvasTexture;
     canvas: HTMLCanvasElement;
     ctx: CanvasRenderingContext2D;
+    decodeImage: HTMLImageElement;
+    lastFrameTs: number;
 }
 
 const MY_SCREENS_STORAGE_KEY = 'hangout_myScreens';
@@ -33,10 +35,8 @@ export class RemoteDesktopManager implements IUpdatable {
     private capturingByKey: Map<string, boolean> = new Map();
     private activeByKey: Set<string> = new Set();
     private surfacesByKey: Map<string, IRenderSurface> = new Map();
-    private decodeImage = new Image();
 
     constructor(private context: GameContext) {
-        this.decodeImage.decoding = 'async';
         this.loadConfigsFromStorage();
     }
 
@@ -159,8 +159,13 @@ export class RemoteDesktopManager implements IUpdatable {
 
         // Handle standby visuals for active surfaces
         for (const [key, surface] of this.surfacesByKey.entries()) {
-            if (this.activeByKey.has(key) && !this.isCapturing(key)) {
-                this.drawStandby(surface);
+            if (this.activeByKey.has(key)) {
+                if (!this.isCapturing(key)) {
+                    this.drawStandby(surface);
+                }
+            } else {
+                // Not active in this room anymore
+                this.removeSurface(key);
             }
         }
 
@@ -188,12 +193,21 @@ export class RemoteDesktopManager implements IUpdatable {
 
     public handleStreamFrame(payload: IDesktopStreamFramePayload): void {
         const surface = this.ensureSurface(payload.key, payload.name || payload.key, payload.anchor, payload.quaternion);
-        this.decodeImage.onload = () => {
-            surface.ctx.drawImage(this.decodeImage, 0, 0, surface.canvas.width, surface.canvas.height);
-            surface.texture.needsUpdate = true;
-        };
-        this.decodeImage.src = payload.dataUrl;
+        this.capturingByKey.set(payload.key, true);
         this.activeByKey.add(payload.key);
+
+        const incomingTs = payload.ts || Date.now();
+        if (incomingTs < surface.lastFrameTs) return; // Drop out-of-order or late frames
+        surface.lastFrameTs = incomingTs;
+
+        surface.decodeImage.onload = () => {
+            // Final check: are we still supposed to be "Live"?
+            if (this.isCapturing(payload.key) && incomingTs >= surface.lastFrameTs) {
+                surface.ctx.drawImage(surface.decodeImage, 0, 0, surface.canvas.width, surface.canvas.height);
+                surface.texture.needsUpdate = true;
+            }
+        };
+        surface.decodeImage.src = payload.dataUrl;
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
@@ -218,12 +232,17 @@ export class RemoteDesktopManager implements IUpdatable {
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.needsUpdate = true;
 
+        const decodeImage = new Image();
+        decodeImage.decoding = 'async';
+
         const surface: IRenderSurface = {
             key,
             name,
             canvas,
             ctx,
             texture,
+            decodeImage,
+            lastFrameTs: 0,
             group: new THREE.Group() // Placeholder, will be replaced below
         };
 
@@ -262,6 +281,10 @@ export class RemoteDesktopManager implements IUpdatable {
 
     private drawStandby(surface: IRenderSurface): void {
         const { ctx, canvas, texture, name } = surface;
+
+        // Block any pending frame decodes from overwriting this
+        surface.lastFrameTs = Date.now();
+        surface.decodeImage.onload = null;
 
         // Background gradient
         const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
