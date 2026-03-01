@@ -95,20 +95,38 @@ function sendPacketToRoom(roomId: string, type: number, payload: unknown): void 
     }
 }
 
-function buildSourceStatusPayload(roomId: string, keys: string[]): IDesktopSourcesStatusResponsePayload {
+function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDesktopSourcesStatusResponsePayload {
     const statuses: Record<string, boolean> = {};
-    for (const key of keys) {
+    const requestedSet = new Set(requestedKeys);
+
+    // 1. Report online status for anything the client specifically asked about
+    for (const key of requestedKeys) {
         statuses[key] = globalDesktopSources.has(key);
     }
 
-    const activeKeys = keys.filter((key) => {
-        const route = desktopRoutes.get(key);
-        return !!route && route.roomId === roomId;
-    });
+    // 2. Identify all keys currently active in THIS room
+    const roomActiveKeys: string[] = [];
+    const activeNames: Record<string, string> = {};
 
-    const capturing = keys.filter(k => capturingKeys.has(k));
+    for (const [key, route] of desktopRoutes.entries()) {
+        if (route.roomId === roomId) {
+            roomActiveKeys.push(key);
+            activeNames[key] = route.name || key;
+            // Also ensure online status is reported for these so client knows they're available
+            statuses[key] = globalDesktopSources.has(key);
+        }
+    }
 
-    return { statuses, activeKeys, capturingKeys: capturing };
+    // 3. Capturing keys (union of requested + room-active)
+    const allRelevantKeys = new Set([...requestedKeys, ...roomActiveKeys]);
+    const capturing = Array.from(allRelevantKeys).filter(k => capturingKeys.has(k));
+
+    return {
+        statuses,
+        activeKeys: roomActiveKeys,
+        capturingKeys: capturing,
+        activeNames
+    };
 }
 
 function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: string[]): void {
@@ -121,9 +139,18 @@ function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: stri
 }
 
 function notifySubscribedClientsForKey(key: string): void {
+    const route = desktopRoutes.get(key);
+
     for (const [ws, sub] of relaySourceSubscriptions.entries()) {
-        if (!sub.keys.has(key)) continue;
-        sendSourceStatusToRelayClient(ws, sub.roomId, Array.from(sub.keys));
+        // Notify if:
+        // A) User explicitly subscribed to this key (it's in their "My Screens")
+        // B) The key is active in the user's CURRENT room
+        const isRequested = sub.keys.has(key);
+        const isInRoom = route && route.roomId === sub.roomId;
+
+        if (isRequested || isInRoom) {
+            sendSourceStatusToRelayClient(ws, sub.roomId, Array.from(sub.keys));
+        }
     }
 }
 

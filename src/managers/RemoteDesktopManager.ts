@@ -168,6 +168,9 @@ export class RemoteDesktopManager implements IUpdatable {
         this.activeByKey.clear();
         for (const key of payload.activeKeys || []) {
             this.activeByKey.add(key);
+            // Ensure surface exists for all active room streams, using the name from activeNames if available
+            const name = (payload.activeNames && payload.activeNames[key]) || key;
+            this.ensureSurface(key, name);
         }
 
         // Handle standby visuals for active surfaces
