@@ -152,7 +152,7 @@ export class FlatUIManager implements IUpdatable {
         });
 
         eventBus.on(EVENTS.VOICE_STATE_UPDATED, () => {
-            this.updateVoiceButton(this.context.voiceEnabled);
+            this.updateVoiceButton(this.context.voiceAutoEnable);
         });
         eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, () => {
             this.renderMyScreensEditor();
@@ -221,7 +221,7 @@ export class FlatUIManager implements IUpdatable {
             }
         }
         this.context.voiceEnabled = this.context.managers.media?.isMicrophoneEnabled() || false;
-        this.updateVoiceButton(this.context.voiceEnabled);
+        this.updateVoiceButton(this.context.voiceAutoEnable);
 
         const storedColor = localStorage.getItem('hangout_avatarColor');
         if (storedColor) {
