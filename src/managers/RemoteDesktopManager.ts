@@ -243,13 +243,15 @@ export class RemoteDesktopManager implements IUpdatable {
         eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
     }
 
-    public handleBinaryFrame(buffer: ArrayBuffer): void {
-        // [1b Type][1b KeyLen][KeyLen bytes Key][Payload]
-        const view = new DataView(buffer);
+    public handleBinaryFrame(message: ArrayBuffer): void {
+        // [1b Type][1b KeyLen][KeyLen bytes Key][8b Timestamp][Payload]
+        const view = new DataView(message);
         const keyLen = view.getUint8(1);
-        const decoder = new TextDecoder();
-        const key = decoder.decode(new Uint8Array(buffer, 2, keyLen));
-        const imageData = new Uint8Array(buffer, 2 + keyLen);
+        const key = new TextDecoder().decode(new Uint8Array(message, 2, keyLen));
+
+        // 8-byte BigEndian Timestamp (ms)
+        const incomingTs = Number(view.getBigUint64(2 + keyLen));
+        const imageData = new Uint8Array(message, 2 + keyLen + 8);
 
         const surface = this.surfacesByKey.get(key);
         if (!surface) return;
@@ -257,14 +259,11 @@ export class RemoteDesktopManager implements IUpdatable {
         this.capturingByKey.set(key, true);
         this.activeByKey.add(key);
 
-        const incomingTs = Date.now();
-        if (incomingTs < surface.lastFrameTs) return;
-        surface.lastFrameTs = incomingTs;
-
         // Async decoding optimized for VR performance
         const blob = new Blob([imageData]);
         createImageBitmap(blob).then((bitmap) => {
             if (this.isCapturing(key) && incomingTs >= surface.lastFrameTs) {
+                surface.lastFrameTs = incomingTs;
                 // Dynamic resolution support
                 if (surface.canvas.width !== bitmap.width || surface.canvas.height !== bitmap.height) {
                     surface.canvas.width = bitmap.width;

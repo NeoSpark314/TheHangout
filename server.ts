@@ -519,9 +519,13 @@ desktopSourceWss.on('connection', (ws) => {
                 if (firstByte === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
                     const keyLen = message.readUInt8(1);
                     const key = message.toString('utf8', 2, 2 + keyLen);
-                    const route = desktopRoutes.get(key);
-                    if (route && route.roomId) {
-                        sendBinaryToRoom(route.roomId, message);
+
+                    // Only relay if this source is currently capturing
+                    if (capturingKeys.has(key)) {
+                        const route = desktopRoutes.get(key);
+                        if (route && route.roomId) {
+                            sendBinaryToRoom(route.roomId, message);
+                        }
                     }
                     return;
                 }

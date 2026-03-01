@@ -144,21 +144,27 @@ function startCaptureLoop() {
         const mime = useWebP ? 'image/webp' : 'image/jpeg';
         const quality = parseFloat(qualitySelect.value) || 0.65;
 
+        const startTime = Date.now();
         captureCanvas.toBlob(async (blob) => {
             if (!blob || !socket || socket.readyState !== WebSocket.OPEN) return;
-            if (!isWatched) return;
+            if (!isWatched || !captureStream) return; // Discard if no one is watching OR capture stopped
 
             const imageData = await blob.arrayBuffer();
             bytesSentRecent += imageData.byteLength;
 
             const keyEncoded = new TextEncoder().encode(activeKey);
 
-            // Binary Format: [Type: 1b][KeyLen: 1b][Key: Nb][Image: Mb]
-            const buffer = new Uint8Array(2 + keyEncoded.length + imageData.byteLength);
+            // Binary Format: [Type: 1b][KeyLen: 1b][Key: Nb][Timestamp: 8b][Image: Mb]
+            const buffer = new Uint8Array(2 + keyEncoded.length + 8 + imageData.byteLength);
             buffer[0] = 19; // PACKET_TYPES.DESKTOP_STREAM_FRAME
             buffer[1] = keyEncoded.length;
             buffer.set(keyEncoded, 2);
-            buffer.set(new Uint8Array(imageData), 2 + keyEncoded.length);
+
+            // 8-byte BigEndian Timestamp (ms)
+            const view = new DataView(buffer.buffer);
+            view.setBigUint64(2 + keyEncoded.length, BigInt(startTime));
+
+            buffer.set(new Uint8Array(imageData), 2 + keyEncoded.length + 8);
 
             socket.send(buffer);
         }, mime, quality);
