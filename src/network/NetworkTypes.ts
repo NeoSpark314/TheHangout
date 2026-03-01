@@ -16,6 +16,7 @@ import {
     IPeerDisconnectPayload,
     IRoomConfigUpdatePayload
 } from '../interfaces/INetworkPacket';
+import { IAudioChunkPayload } from '../interfaces/IVoice';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 import { PACKET_TYPES } from '../utils/Constants';
 
@@ -27,7 +28,7 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.OWNERSHIP_REQUEST]: IOwnershipRequestPayload;
     [PACKET_TYPES.OWNERSHIP_RELEASE]: IOwnershipReleasePayload;
     [PACKET_TYPES.OWNERSHIP_TRANSFER]: IOwnershipTransferPayload;
-    [PACKET_TYPES.AUDIO_CHUNK]: unknown;
+    [PACKET_TYPES.AUDIO_CHUNK]: IAudioChunkPayload;
     [PACKET_TYPES.PEER_JOINED]: { peerId: string };
     [PACKET_TYPES.FEATURE_EVENT]: IReplicatedFeatureEventPayload;
     [PACKET_TYPES.FEATURE_SNAPSHOT]: IReplicatedFeatureSnapshotPayload;

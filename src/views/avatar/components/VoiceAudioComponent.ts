@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { IAudioChunkPayload } from '../../../interfaces/IVoice';
 
 export class VoiceAudioComponent {
     private positionalAudio: THREE.PositionalAudio | null = null;
@@ -39,7 +40,7 @@ export class VoiceAudioComponent {
         }
     }
 
-    public attachAudioChunk(data: { chunk: string, isHeader: boolean } | string): void {
+    public attachAudioChunk(data: IAudioChunkPayload | string): void {
         if (!this.positionalAudio) return;
 
         let base64Chunk: string;

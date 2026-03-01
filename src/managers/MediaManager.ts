@@ -1,6 +1,7 @@
-import { MediaConnection } from 'peerjs';
+import Peer, { MediaConnection } from 'peerjs';
 import eventBus from '../core/EventBus';
 import { GameContext } from '../core/GameState';
+import { IVoiceStreamReceivedEvent } from '../interfaces/IVoice';
 import { EVENTS, PACKET_TYPES } from '../utils/Constants';
 
 export class MediaManager {
@@ -54,10 +55,6 @@ export class MediaManager {
                 this.startRecording();
             }
         });
-    }
-
-    public async toggleMicrophone(): Promise<boolean> {
-        return this.setMicrophoneEnabled(!this.localStream);
     }
 
     public async ensureMicrophoneEnabled(): Promise<boolean> {
@@ -159,7 +156,7 @@ export class MediaManager {
         this.syncVoiceState();
     }
 
-    public bindPeer(peer: any): void {
+    public bindPeer(peer: Peer): void {
         peer.on('call', (call: MediaConnection) => {
             console.log(`[MediaManager] Incoming voice call from ${call.peer}`);
             if (this.localStream) {
@@ -247,10 +244,11 @@ export class MediaManager {
         call.on('stream', (remoteStream: MediaStream) => {
             console.log(`[MediaManager] Received voice stream from ${call.peer}`);
             this.remoteStreams.set(call.peer, remoteStream);
-            eventBus.emit(EVENTS.VOICE_STREAM_RECEIVED, {
+            const voiceEvent: IVoiceStreamReceivedEvent = {
                 peerId: call.peer,
                 stream: remoteStream
-            });
+            };
+            eventBus.emit(EVENTS.VOICE_STREAM_RECEIVED, voiceEvent);
         });
         call.on('close', () => {
             if (this.calls.get(call.peer) === call) {
@@ -267,7 +265,7 @@ export class MediaManager {
 
     public getLocalVolume(): number {
         if (!this.localAnalyser || !this.freqData) return 0;
-        this.localAnalyser.getByteFrequencyData(this.freqData as any);
+        this.localAnalyser.getByteFrequencyData(this.freqData as Uint8Array<ArrayBuffer>);
         let sum = 0;
         for (let i = 0; i < this.freqData.length; i++) {
             sum += this.freqData[i];

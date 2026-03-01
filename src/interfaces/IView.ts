@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { IAudioChunkPayload } from './IVoice';
 
 export interface IView<TState> {
     readonly mesh: THREE.Object3D; // Only the view knows about Three.js
@@ -8,7 +9,7 @@ export interface IView<TState> {
     setColor(color: string | number): void;
     setName(name: string): void;
     attachVoiceStream(stream: MediaStream): void;
-    attachAudioChunk(data: { chunk: string, isHeader: boolean } | string): void;
+    attachAudioChunk(data: IAudioChunkPayload | string): void;
     getAudioLevel(): number;
     addToScene(scene: THREE.Scene): void;
     addToInteractionGroup(group: THREE.Group): void;

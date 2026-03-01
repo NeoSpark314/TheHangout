@@ -5,6 +5,7 @@ import { StickFigureView, IPlayerViewState } from '../views/avatar/stickfigure/S
 import { IPlayerEntityState, EntityType } from '../interfaces/IEntityState';
 import { HumanoidState } from '../models/HumanoidState';
 import { HumanoidJointName } from '../interfaces/IHumanoid';
+import { IAudioChunkPayload, IVoiceStreamReceivedEvent, IVoiceStreamReceiver } from '../interfaces/IVoice';
 import { GameContext } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
@@ -34,7 +35,7 @@ export class RemotePlayer extends PlayerEntity {
     public avatarColor: string | number | undefined;
     public humanoid = new HumanoidState();
     private lastNetworkUpdateTime: number = performance.now();
-    private _onVoiceStream: (data: any) => void;
+    private _onVoiceStream: (data?: IVoiceStreamReceivedEvent) => void;
 
     constructor(protected context: GameContext, peerId: string, view: IView<IPlayerViewState>) {
         super(context, peerId, EntityType.REMOTE_PLAYER, false);
@@ -42,24 +43,25 @@ export class RemotePlayer extends PlayerEntity {
         this.view = view;
         this.name = 'Player'; // Default
 
-        this._onVoiceStream = (data: any) => {
-            if (data.peerId === this.peerId && data.stream && (this.view as any).attachVoiceStream) {
+        this._onVoiceStream = (data) => {
+            const voiceView = this.view as unknown as Partial<IVoiceStreamReceiver>;
+            if (data && data.peerId === this.peerId && data.stream && voiceView.attachVoiceStream) {
                 console.log(`[RemotePlayer] Attaching voice stream for ${this.peerId}`);
-                (this.view as any).attachVoiceStream(data.stream);
+                voiceView.attachVoiceStream(data.stream);
             }
         };
         eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this._onVoiceStream);
 
         const cachedStream = this.context.managers.media?.getRemoteStream(this.peerId);
-        if (cachedStream && (this.view as any).attachVoiceStream) {
+        const voiceView = this.view as unknown as Partial<IVoiceStreamReceiver>;
+        if (cachedStream && voiceView.attachVoiceStream) {
             console.log(`[RemotePlayer] Attaching cached voice stream for ${this.peerId}`);
-            (this.view as any).attachVoiceStream(cachedStream);
+            voiceView.attachVoiceStream(cachedStream);
         }
     }
 
-    public onAudioChunk(payload: any): void {
-        const chunk = typeof payload === 'string' ? payload : payload.chunk;
-        const isHeader = !!payload.isHeader;
+    public onAudioChunk(payload: IAudioChunkPayload): void {
+        const { chunk, isHeader } = payload;
 
         if (isHeader) {
             console.log(`[RemotePlayer] Receiving audio header chunk from ${this.peerId} (${chunk?.length} chars)`);

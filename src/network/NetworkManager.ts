@@ -22,8 +22,9 @@ import { RelayConnection } from '../utils/RelayConnection';
 import { NetworkDispatcher } from './NetworkDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from './NetworkSynchronizer';
 import { IPacketHandler } from './PacketHandler';
-import { PacketPayloadMap } from './NetworkTypes';
+import { NetworkEnvelope, PacketPayloadMap } from './NetworkTypes';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
+import { IAudioChunkPayload, IAudioChunkReceiver } from '../interfaces/IVoice';
 
 /**
  * Architectural Role: Responsible for establishing and managing peer-to-peer WebRTC connections.
@@ -129,7 +130,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             this.context.roomId = id;
 
             if (this.context.managers.media) {
-                this.context.managers.media.bindPeer(this.peer);
+                this.context.managers.media.bindPeer(this.peer!);
             }
 
             eventBus.emit(EVENTS.HOST_READY, id);
@@ -154,7 +155,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
             this.context.roomId = hostId;
             if (this.context.managers.media) {
-                this.context.managers.media.bindPeer(this.peer);
+                this.context.managers.media.bindPeer(this.peer!);
             }
 
             const conn = this.peer!.connect(hostId, { reliable: true });
@@ -187,8 +188,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 // Wait to emit connection until server responds to match PeerJS behavior
 
                 // MediaManager integration hook
-                if (this.context.managers.media && (this.context.managers.media as any).bindWebSocket) {
-                    (this.context.managers.media as any).bindWebSocket(this.relaySocket!);
+                if (this.context.managers.media) {
+                    this.context.managers.media.bindWebSocket(this.relaySocket!);
                 }
 
                 resolve();
@@ -218,7 +219,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             }
         });
 
-        conn.on('data', (data: any) => {
+        conn.on('data', (data: unknown) => {
             if (data instanceof ArrayBuffer) {
                 const view = new DataView(data);
                 if (view.getUint8(0) === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
@@ -227,11 +228,12 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 return;
             }
 
-            if (data && data.type === PACKET_TYPES.AUDIO_CHUNK) {
+            if (isAudioChunkEnvelope(data)) {
                 const senderId = data.senderId || conn.peer;
                 const entity = this.context.managers.entity.getEntity(senderId);
-                if (entity && (entity as any).onAudioChunk) {
-                    (entity as any).onAudioChunk(data.payload);
+                const audioEntity = entity as (IAudioChunkReceiver | undefined);
+                if (audioEntity && typeof audioEntity.onAudioChunk === 'function') {
+                    audioEntity.onAudioChunk(data.payload);
                 }
             } else {
                 this.dispatcher.dispatch(conn.peer, data);
@@ -423,6 +425,18 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             this.disconnect();
         }
     }
+}
+
+function isAudioChunkEnvelope(data: unknown): data is NetworkEnvelope<typeof PACKET_TYPES.AUDIO_CHUNK> {
+    if (!data || typeof data !== 'object') return false;
+
+    const candidate = data as Partial<NetworkEnvelope<typeof PACKET_TYPES.AUDIO_CHUNK>>;
+    const payload = candidate.payload as Partial<IAudioChunkPayload> | undefined;
+
+    return candidate.type === PACKET_TYPES.AUDIO_CHUNK &&
+        !!payload &&
+        typeof payload.chunk === 'string' &&
+        typeof payload.isHeader === 'boolean';
 }
 
 /**
