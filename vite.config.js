@@ -17,7 +17,8 @@ export default defineConfig({
     ],
     define: {
         __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0alpha'),
-        __GIT_SHA__: JSON.stringify(gitSha)
+        __GIT_SHA__: JSON.stringify(gitSha),
+        __BUILD_TIME__: JSON.stringify(new Date().toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }))
     },
     server: {
         https: true,

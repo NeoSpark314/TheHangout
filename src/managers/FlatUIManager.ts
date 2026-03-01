@@ -207,7 +207,7 @@ export class FlatUIManager implements IUpdatable {
         this.context.playerName = this.nameInput.value.trim();
 
         if (this.versionInfo) this.versionInfo.textContent = `v${__APP_VERSION__}`;
-        if (this.shaInfo) this.shaInfo.textContent = `build: ${__GIT_SHA__}`;
+        if (this.shaInfo) this.shaInfo.textContent = `build: ${__GIT_SHA__} (${__BUILD_TIME__})`;
         this.context.managers.remoteDesktop.loadConfigsFromStorage();
     }
 
