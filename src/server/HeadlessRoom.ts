@@ -1,11 +1,11 @@
-import { GameContext } from '../core/GameState';
-import { GameEngine } from '../core/GameEngine';
-import { EntityManager } from '../managers/EntityManager';
-import { PhysicsManager } from '../managers/PhysicsManager';
-import { SessionManager } from '../managers/SessionManager';
+import { GameContext } from '../app/AppContext';
+import { GameEngine } from '../app/Engine';
+import { EntityManager } from '../world/entities/EntityRegistry';
+import { PhysicsManager } from '../physics/runtime/PhysicsRuntime';
+import { SessionManager } from '../world/session/SessionRuntime';
 import { ServerNetworkManager } from './ServerNetworkManager';
-import { ReplicationManager } from '../managers/ReplicationManager';
-import { DrawingManager } from '../managers/DrawingManager';
+import { ReplicationManager } from '../network/replication/FeatureReplicationService';
+import { DrawingManager } from '../features/drawing/DrawingFeature';
 
 export class HeadlessSession {
     public context: GameContext;

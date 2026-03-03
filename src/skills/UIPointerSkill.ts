@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
-import { LocalPlayer } from '../entities/LocalPlayer';
-import type { IManagers } from '../core/GameState';
-import eventBus from '../core/EventBus';
-import { EVENTS } from '../utils/Constants';
-import { IHandIntentPayload } from '../interfaces/IIntents';
+import { LocalPlayer } from '../world/entities/LocalPlayer';
+import type { IManagers } from '../app/AppContext';
+import eventBus from '../app/events/EventBus';
+import { EVENTS } from '../shared/constants/Constants';
+import { IHandIntentPayload } from '../shared/contracts/IIntents';
 
 export class UIPointerSkill extends Skill {
     private raycaster: THREE.Raycaster;

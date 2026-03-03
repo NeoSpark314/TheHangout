@@ -1,5 +1,5 @@
 import '../style.css';
-import { App } from './core/App';
+import { App } from './app/App';
 
 /**
  * Entry point of the application.

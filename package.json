@@ -8,6 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "tsx server.ts",
+    "refactor:arch:dry-run": "node scripts/migrate-architecture.mjs",
+    "refactor:arch:apply": "node scripts/migrate-architecture.mjs --apply",
+    "refactor:arch:rewrite": "node scripts/migrate-architecture.mjs --rewrite-only",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test"

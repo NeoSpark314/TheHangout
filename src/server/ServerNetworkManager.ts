@@ -1,16 +1,16 @@
-import { GameContext } from '../core/GameState';
-import { IUpdatable } from '../interfaces/IUpdatable';
-import { PACKET_TYPES } from '../utils/Constants';
-import { NetworkDispatcher } from '../network/NetworkDispatcher';
-import { NetworkSynchronizer, INetworkTransport } from '../network/NetworkSynchronizer';
-import { IStateUpdatePacket, EntityType } from '../interfaces/IEntityState';
-import { PacketPayloadMap } from '../network/NetworkTypes';
+import { GameContext } from '../app/AppContext';
+import { IUpdatable } from '../shared/contracts/IUpdatable';
+import { PACKET_TYPES } from '../shared/constants/Constants';
+import { NetworkDispatcher } from '../network/protocol/PacketDispatcher';
+import { NetworkSynchronizer, INetworkTransport } from '../network/replication/StateSynchronizer';
+import { IStateUpdatePacket, EntityType } from '../shared/contracts/IEntityState';
+import { PacketPayloadMap } from '../network/protocol/PacketTypes';
 import {
     IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload
-} from '../interfaces/INetworkPacket';
-import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
+} from '../shared/contracts/INetworkPacket';
+import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../network/replication/FeatureReplicationService';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private context!: GameContext;

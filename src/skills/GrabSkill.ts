@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
-import { LocalPlayer } from '../entities/LocalPlayer';
-import { IInteractable } from '../interfaces/IInteractable';
-import { IGrabbable } from '../interfaces/IGrabbable';
-import { isGrabbable, isInteractable } from '../utils/TypeGuards';
-import type { IManagers } from '../core/GameState';
-import eventBus from '../core/EventBus';
-import { EVENTS } from '../utils/Constants';
-import { IHandIntentPayload } from '../interfaces/IIntents';
+import { LocalPlayer } from '../world/entities/LocalPlayer';
+import { IInteractable } from '../shared/contracts/IInteractable';
+import { IGrabbable } from '../shared/contracts/IGrabbable';
+import { isGrabbable, isInteractable } from '../shared/utils/TypeGuards';
+import type { IManagers } from '../app/AppContext';
+import eventBus from '../app/events/EventBus';
+import { EVENTS } from '../shared/constants/Constants';
+import { IHandIntentPayload } from '../shared/contracts/IIntents';
 
 /**
  * Unified skill for picking up and interacting with objects.

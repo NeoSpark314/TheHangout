@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
-import { LocalPlayer } from '../entities/LocalPlayer';
-import { IVector3 } from '../interfaces/IMath';
-import type { IManagers } from '../core/GameState';
-import eventBus from '../core/EventBus';
-import { EVENTS } from '../utils/Constants';
-import { IMoveIntentPayload, ILookIntentPayload, IVRSnapTurnPayload } from '../interfaces/IIntents';
+import { LocalPlayer } from '../world/entities/LocalPlayer';
+import { IVector3 } from '../shared/contracts/IMath';
+import type { IManagers } from '../app/AppContext';
+import eventBus from '../app/events/EventBus';
+import { EVENTS } from '../shared/constants/Constants';
+import { IMoveIntentPayload, ILookIntentPayload, IVRSnapTurnPayload } from '../shared/contracts/IIntents';
 
 export class MovementSkill extends Skill {
     public speed: number = 5.0;

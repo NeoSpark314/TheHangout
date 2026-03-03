@@ -1,5 +1,5 @@
-import { LocalPlayer } from '../entities/LocalPlayer';
-import type { IManagers } from '../core/GameState';
+import { LocalPlayer } from '../world/entities/LocalPlayer';
+import type { IManagers } from '../app/AppContext';
 
 export abstract class Skill {
     public id: string;
