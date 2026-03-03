@@ -8,7 +8,8 @@ import { PacketPayloadMap } from '../network/protocol/PacketTypes';
 import {
     IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
-    IOwnershipRequestPayload
+    IOwnershipRequestPayload,
+    ISessionConfigUpdatePayload
 } from '../shared/contracts/INetworkPacket';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../network/replication/FeatureReplicationService';
 
@@ -76,6 +77,12 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, {
             handle: (_senderId: string, _payload: IReplicatedFeatureSnapshotPayload) => {
                 // Host-owned source of truth; clients should not push snapshots upstream.
+            }
+        });
+
+        this.dispatcher.registerHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, {
+            handle: (_senderId: string, payload: ISessionConfigUpdatePayload) => {
+                this.applySessionConfigUpdate(payload);
             }
         });
     }
@@ -170,6 +177,11 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                 if (networkable.applyNetworkState) networkable.applyNetworkState(stateData.state);
             }
         }
+    }
+
+    public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+        this.context.runtime.session.updateConfig(payload);
+        this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
     }
 
     public reclaimOwnership(peerId: string): void {

@@ -27,6 +27,7 @@ export interface IAvatarConfig {
 }
 
 export interface ISessionConfig {
+    activeScenarioId: string;
     environment: string;
     skyColor: string;
     fogNear: number;
@@ -76,6 +77,7 @@ export class AppContext {
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;
     public sessionConfig: ISessionConfig = {
+        activeScenarioId: 'default-hangout',
         environment: 'cyber-stube',
         skyColor: '#0b0c10',
         fogNear: 5,

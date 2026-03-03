@@ -1,15 +1,12 @@
 import type { AppContext } from '../../../app/AppContext';
-import { DebugBeaconObject } from '../../objects/DebugBeaconObject';
-import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 
-export class DefaultHangoutScenario implements IScenarioModule {
-    public readonly id = 'default-hangout';
-    public readonly displayName = 'Default Hangout';
+export class WideCircleScenario implements IScenarioModule {
+    public readonly id = 'wide-circle';
+    public readonly displayName = 'Wide Circle';
     public readonly kind = 'social' as const;
     public readonly maxPlayers = 16;
-    private readonly objectModules: IObjectModule[] = [new DebugBeaconObject()];
 
     constructor(private session: SessionRuntime) { }
 
@@ -20,7 +17,7 @@ export class DefaultHangoutScenario implements IScenarioModule {
             context.sessionConfig = { ...context.sessionConfig, seed };
         }
         this.session.applyConfig(context.sessionConfig);
-        this.session.toggleHologram(true);
+        this.session.toggleHologram(false);
     }
 
     public unload(_context: AppContext): void {
@@ -33,8 +30,8 @@ export class DefaultHangoutScenario implements IScenarioModule {
     }
 
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
-        const radius = 2.5;
-        const angle = (index * (Math.PI / 4)) + Math.PI;
+        const radius = 4.2;
+        const angle = (index * (Math.PI / 8)) + Math.PI;
         const x = Math.sin(angle) * radius;
         const z = Math.cos(angle) * radius;
 
@@ -42,9 +39,5 @@ export class DefaultHangoutScenario implements IScenarioModule {
             position: { x, y: 0.2, z },
             yaw: angle
         };
-    }
-
-    public getObjectModules(): IObjectModule[] {
-        return this.objectModules;
     }
 }

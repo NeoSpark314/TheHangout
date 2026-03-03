@@ -257,6 +257,22 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.synchronizer.syncEntityNow(entityId, forceFullState);
     }
 
+    public requestSessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+        if (this.context.isHost) {
+            this.applySessionConfigUpdate(payload);
+            return;
+        }
+
+        if (this.context.sessionId) {
+            this.sendData(this.context.sessionId, PACKET_TYPES.SESSION_CONFIG_UPDATE, payload);
+        }
+    }
+
+    public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+        this.context.runtime.session.updateConfig(payload);
+        this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
+    }
+
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
         const runtime = this.context.runtime;
         for (const stateData of entityStates) {
@@ -473,13 +489,16 @@ class PeerDisconnectHandler implements IPacketHandler<PacketPayloadMap[typeof PA
 class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]> {
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: ISessionConfigUpdatePayload): void {
-        if (!this.context.isHost) {
-            this.context.runtime.session.updateConfig(payload);
-            const network = this.context.runtime.network as any;
-            const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
-            if (localId && !this.context.localPlayer) {
-                eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
-            }
+        if (this.context.isHost) {
+            this.context.runtime.network.applySessionConfigUpdate(payload);
+            return;
+        }
+
+        this.context.runtime.session.updateConfig(payload);
+        const network = this.context.runtime.network as any;
+        const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
+        if (localId && !this.context.localPlayer) {
+            eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
         }
     }
 }

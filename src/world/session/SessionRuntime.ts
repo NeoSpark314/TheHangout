@@ -9,6 +9,7 @@ import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioRegistry } from '../../content/runtime/ScenarioRegistry';
+import { WideCircleScenario } from '../../content/scenarios/wideCircle/WideCircleScenario';
 
 export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
@@ -16,6 +17,7 @@ export class SessionRuntime implements IUpdatable {
     public environment: EnvironmentBuilder | null = null;
     public props: PropBuilder | null = null;
     private hasGroundPhysics: boolean = false;
+    private readonly scenarioEntityIds = new Set<string>();
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
     private readonly scenarioRegistry = new ScenarioRegistry();
     private activeScenario: IScenarioModule;
@@ -23,7 +25,9 @@ export class SessionRuntime implements IUpdatable {
 
     constructor(private context: AppContext) {
         const defaultScenario = new DefaultHangoutScenario(this);
+        const wideCircleScenario = new WideCircleScenario(this);
         this.scenarioRegistry.register(defaultScenario);
+        this.scenarioRegistry.register(wideCircleScenario);
         this.activeScenario = defaultScenario;
         this.refreshActiveObjectModules();
     }
@@ -39,6 +43,10 @@ export class SessionRuntime implements IUpdatable {
     public init(scene: THREE.Scene): void {
         try {
             this.scene = scene;
+            const configuredScenario = this.scenarioRegistry.get(this.context.sessionConfig.activeScenarioId);
+            if (configuredScenario) {
+                this.activeScenario = configuredScenario;
+            }
             this.activeScenario.load(this.context, {
                 isHost: this.context.isHost,
                 seed: this.context.sessionConfig.seed,
@@ -83,6 +91,7 @@ export class SessionRuntime implements IUpdatable {
 
     public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): void {
         const oldSeed = this.context.sessionConfig.seed;
+        const oldScenarioId = this.context.sessionConfig.activeScenarioId;
 
         if (newConfig.assignedSpawnIndex !== undefined) {
             this.assignedSpawnIndex = newConfig.assignedSpawnIndex;
@@ -90,6 +99,15 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.context.sessionConfig = { ...this.context.sessionConfig, ...newConfig as ISessionConfig };
+        const scenarioChanged = this.context.sessionConfig.activeScenarioId !== oldScenarioId;
+
+        if (scenarioChanged) {
+            this.switchScenario(this.context.sessionConfig.activeScenarioId, {
+                seed: this.context.sessionConfig.seed,
+                reason: 'scenario_switch'
+            });
+            return;
+        }
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this.clearProceduralElements();
@@ -132,6 +150,7 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.context.runtime.entity.addEntity(entity);
+        this.scenarioEntityIds.add(entity.id);
         return entity;
     }
 
@@ -159,7 +178,9 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.activeScenario.unload(this.context);
+        this.clearScenarioEntities();
         this.activeScenario = nextScenario;
+        this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
 
         if (this.scene) {
             this.activeScenario.load(this.context, {
@@ -170,6 +191,7 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.refreshActiveObjectModules();
+        this.repositionLocalPlayerForActiveScenario();
 
         return true;
     }
@@ -193,5 +215,21 @@ export class SessionRuntime implements IUpdatable {
 
     private refreshActiveObjectModules(): void {
         this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
+    }
+
+    private clearScenarioEntities(): void {
+        for (const entityId of this.scenarioEntityIds) {
+            this.context.runtime.entity.removeEntity(entityId);
+        }
+        this.scenarioEntityIds.clear();
+    }
+
+    private repositionLocalPlayerForActiveScenario(): void {
+        const localPlayer = this.context.localPlayer;
+        if (!localPlayer || !localPlayer.teleportTo) return;
+
+        const spawnIndex = this.context.isHost ? 0 : (this.assignedSpawnIndex ?? 0);
+        const spawn = this.getSpawnPoint(spawnIndex);
+        localPlayer.teleportTo(spawn.position, spawn.yaw, { targetSpace: 'player' });
     }
 }
