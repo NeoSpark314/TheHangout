@@ -109,6 +109,10 @@ class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
     public getGrabRadius(): number {
         return 0.45;
     }
+
+    public getHoldReleaseDistance(): number {
+        return 0.28;
+    }
 }
 
 class ChairInstance extends BaseReplicatedObjectInstance implements IMountableObject {
@@ -143,6 +147,8 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
                 interactionGroup.remove(this.seatEntity.mesh);
             });
         }
+
+        this.createPhysicsColliders();
     }
 
     public getPrimaryEntity(): IEntity {
@@ -273,6 +279,48 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
         if (backMat) {
             backMat.emissive.setHex(emissiveColor);
             backMat.emissiveIntensity = emissiveIntensity;
+        }
+    }
+
+    private createPhysicsColliders(): void {
+        const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.seatYaw);
+        const rotationPose = {
+            x: rotation.x,
+            y: rotation.y,
+            z: rotation.z,
+            w: rotation.w
+        };
+
+        const colliderSpecs = [
+            { half: new THREE.Vector3(0.23, 0.04, 0.23), local: new THREE.Vector3(0, 0.46, 0) },
+            { half: new THREE.Vector3(0.23, 0.28, 0.04), local: new THREE.Vector3(0, 0.78, -0.19) },
+            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(-0.18, 0.22, -0.18) },
+            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(0.18, 0.22, -0.18) },
+            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(-0.18, 0.22, 0.18) },
+            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(0.18, 0.22, 0.18) }
+        ];
+
+        for (const spec of colliderSpecs) {
+            const worldOffset = spec.local.clone().applyQuaternion(rotation);
+            const worldPosition = this.seatPosition.clone().add(worldOffset);
+            const collider = this.context.physics.createStaticCuboidCollider(
+                spec.half.x,
+                spec.half.y,
+                spec.half.z,
+                { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z },
+                rotationPose
+            );
+            if (!collider) continue;
+
+            this.context.physics.registerInteractionCollider(collider, this.seatEntity);
+            this.addCleanup(() => {
+                this.context.physics.unregisterInteractionCollider(collider);
+            });
+
+            const body = collider.parent();
+            if (body) {
+                this.ownPhysicsBody(body);
+            }
         }
     }
 }

@@ -8,6 +8,8 @@ import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { EntityType } from '../../shared/contracts/IEntityState';
+import { IHoldable } from '../../shared/contracts/IHoldable';
+import { IInteractable } from '../../shared/contracts/IInteractable';
 
 export interface IPhysicsDebugBody {
     id: string;
@@ -33,6 +35,8 @@ interface IPhysicsDebugBodyEntry {
     getLastTransferSeq?: () => number;
 }
 
+type PhysicsInteractionTarget = IHoldable & IInteractable;
+
 export class PhysicsRuntime {
     public world: RAPIER.World | null = null;
     private nextPhysicsId: number = 0;
@@ -41,6 +45,7 @@ export class PhysicsRuntime {
     private debugBodies: Map<number, IPhysicsDebugBodyEntry> = new Map();
     private eventQueue: RAPIER.EventQueue | null = null;
     private colliderToEntity: Map<number, PhysicsPropEntity> = new Map();
+    private interactionColliders: Map<number, PhysicsInteractionTarget> = new Map();
     private entityToPrimaryCollider: Map<string, RAPIER.Collider> = new Map();
     private activePropContacts: Map<string, { a: number; b: number }> = new Map();
     private lastTouchClaimAtMsByEntity: Map<string, number> = new Map();
@@ -294,17 +299,79 @@ export class PhysicsRuntime {
         return { entity: nearestEntity, distance: minDistance };
     }
 
-    public createStaticCuboidCollider(hx: number, hy: number, hz: number, position: IVector3): RAPIER.Collider | null {
+    public queryNearestPhysicsInteractable(
+        point: IVector3,
+        gripRadius: number
+    ): { target: PhysicsInteractionTarget; distance: number; point: IVector3 } | null {
         if (!this.world) return null;
-        const body = this.world.createRigidBody(
-            RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
+        this.grabQueryShape.radius = Math.max(0.01, gripRadius);
+
+        let nearestTarget: PhysicsInteractionTarget | null = null;
+        let minDistance = Number.POSITIVE_INFINITY;
+        let nearestPoint: IVector3 | null = null;
+
+        this.world.intersectionsWithShape(
+            { x: point.x, y: point.y, z: point.z },
+            this.identityRotation,
+            this.grabQueryShape,
+            (collider) => {
+                const target = this.interactionColliders.get(collider.handle);
+                if (!target || !!target.heldBy) return true;
+
+                const projection = collider.projectPoint({ x: point.x, y: point.y, z: point.z }, true);
+                if (!projection) return true;
+
+                const dx = projection.point.x - point.x;
+                const dy = projection.point.y - point.y;
+                const dz = projection.point.z - point.z;
+                const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestTarget = target;
+                    nearestPoint = {
+                        x: projection.point.x,
+                        y: projection.point.y,
+                        z: projection.point.z
+                    };
+                }
+                return true;
+            }
         );
+
+        if (!nearestTarget || !nearestPoint || minDistance > gripRadius) return null;
+        return { target: nearestTarget, distance: minDistance, point: nearestPoint };
+    }
+
+    public createStaticCuboidCollider(
+        hx: number,
+        hy: number,
+        hz: number,
+        position: IVector3,
+        rotation?: { x: number; y: number; z: number; w: number }
+    ): RAPIER.Collider | null {
+        if (!this.world) return null;
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z);
+        if (rotation) {
+            bodyDesc.setRotation(rotation);
+        }
+        const body = this.world.createRigidBody(bodyDesc);
         const collider = this.world.createCollider(
             RAPIER.ColliderDesc.cuboid(hx, hy, hz).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
             body
         );
         this.registerDebugBody(`static-cuboid-${this.nextPhysicsId++}`, body, collider);
         return collider;
+    }
+
+    public registerInteractionCollider(collider: RAPIER.Collider | null | undefined, target: PhysicsInteractionTarget): void {
+        if (!collider) return;
+        this.interactionColliders.set(collider.handle, target);
+    }
+
+    public unregisterInteractionCollider(collider: RAPIER.Collider | null | undefined): void {
+        if (!collider) return;
+        this.interactionColliders.delete(collider.handle);
     }
 
     public removeRigidBody(rigidBody: RAPIER.RigidBody | null | undefined): void {
@@ -314,6 +381,7 @@ export class PhysicsRuntime {
         if (entry) {
             for (const collider of entry.colliders) {
                 this.colliderToEntity.delete(collider.handle);
+                this.interactionColliders.delete(collider.handle);
             }
 
             for (const [entityId, collider] of this.entityToPrimaryCollider.entries()) {
@@ -358,6 +426,9 @@ export class PhysicsRuntime {
             entry.getSnapshotBufferSize = () => entity.getSnapshotBufferSize?.() ?? 0;
             entry.getLastTransferSeq = () => entity.getLastOwnershipTransferSeq?.() ?? 0;
             this.colliderToEntity.set(collider.handle, entity);
+            if (entity.isHoldable) {
+                this.interactionColliders.set(collider.handle, entity);
+            }
             if (!this.entityToPrimaryCollider.has(entity.id)) {
                 this.entityToPrimaryCollider.set(entity.id, collider);
             }

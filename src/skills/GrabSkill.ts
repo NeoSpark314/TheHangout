@@ -15,8 +15,16 @@ import { IHandIntentPayload } from '../shared/contracts/IIntents';
  */
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.05;
+    private fixedHoldReleaseDistance = 0.22;
 
-    private heldObjects: Map<string, { entity: IHoldable, offsetPos: THREE.Vector3, offsetQuat: THREE.Quaternion, movable: boolean }> = new Map();
+    private heldObjects: Map<string, {
+        entity: IHoldable,
+        offsetPos: THREE.Vector3,
+        offsetQuat: THREE.Quaternion,
+        movable: boolean,
+        holdPose: THREE.Object3D | null,
+        releaseDistance: number
+    }> = new Map();
     private history: Map<string, { pos: THREE.Vector3, time: number }[]> = new Map();
     private highlightedEntities: { left: IInteractable | null, right: IInteractable | null } = { left: null, right: null };
 
@@ -33,6 +41,7 @@ export class GrabSkill extends Skill {
             if (this.heldObjects.has(payload.hand)) return;
             const handState = player.appContext.runtime.tracking.getState().hands[payload.hand];
             let nearest = this.highlightedEntities[payload.hand];
+            let nearestContactPoint: THREE.Vector3 | null = null;
 
             // Resolve the actual proximity target at grab time from the current hand pose.
             // Input intents can arrive before this frame's highlight refresh runs, so relying
@@ -42,6 +51,7 @@ export class GrabSkill extends Skill {
                 const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
                 const currentNearest = player.appContext.runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 nearest = currentNearest?.interactable || null;
+                nearestContactPoint = currentNearest?.contactPoint || null;
             }
 
             if (isHoldable(nearest)) {
@@ -75,8 +85,29 @@ export class GrabSkill extends Skill {
                     offsetTransform.decompose(offsetPos, offsetQuat, new THREE.Vector3());
                 }
 
+                let holdPose: THREE.Object3D | null = null;
+                let releaseDistance = this.fixedHoldReleaseDistance;
+                if (!movable) {
+                    holdPose = new THREE.Object3D();
+                    const holdPosition = nearestContactPoint || handPos;
+                    holdPose.position.copy(holdPosition);
+                    holdPose.quaternion.copy(handQuat);
+
+                    const customReleaseDistance = nearest.getHoldReleaseDistance?.();
+                    if (typeof customReleaseDistance === 'number' && Number.isFinite(customReleaseDistance)) {
+                        releaseDistance = Math.max(0.05, customReleaseDistance);
+                    }
+                }
+
                 nearest.onGrab(player.id, payload.hand);
-                this.heldObjects.set(payload.hand, { entity: nearest, offsetPos, offsetQuat, movable });
+                this.heldObjects.set(payload.hand, {
+                    entity: nearest,
+                    offsetPos,
+                    offsetQuat,
+                    movable,
+                    holdPose,
+                    releaseDistance
+                });
                 if (movable) {
                     this.history.set(payload.hand, []);
                 } else {
@@ -169,6 +200,31 @@ export class GrabSkill extends Skill {
                     });
 
                     this._recordPosition(hand, handPos);
+                } else {
+                    const anchor = held.holdPose;
+                    if (anchor) {
+                        const handJoint = hand === 'left' ? 'leftHand' : 'rightHand';
+                        const worldPos = anchor.position;
+                        const worldQuat = anchor.quaternion;
+                        player.humanoid.setJointPose(
+                            handJoint,
+                            { x: worldPos.x, y: worldPos.y, z: worldPos.z },
+                            { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w }
+                        );
+
+                        const liveHandPos = handState.pointerPose.position || handState.pose.position;
+                        const drift = Math.hypot(
+                            liveHandPos.x - worldPos.x,
+                            liveHandPos.y - worldPos.y,
+                            liveHandPos.z - worldPos.z
+                        );
+
+                        if (drift > held.releaseDistance) {
+                            held.entity.onRelease();
+                            this.heldObjects.delete(hand);
+                            this.history.delete(hand);
+                        }
+                    }
                 }
 
                 // Clear highlight if we are holding something

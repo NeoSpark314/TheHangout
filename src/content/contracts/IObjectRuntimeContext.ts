@@ -14,7 +14,15 @@ export interface IObjectRuntimeContext {
     };
 
     physics: {
-        createStaticCuboidCollider(hx: number, hy: number, hz: number, position: IVector3): any | null;
+        createStaticCuboidCollider(
+            hx: number,
+            hy: number,
+            hz: number,
+            position: IVector3,
+            rotation?: { x: number; y: number; z: number; w: number }
+        ): any | null;
+        registerInteractionCollider(collider: any, target: unknown): void;
+        unregisterInteractionCollider(collider: any): void;
         removeRigidBody(body: any): void;
     };
 

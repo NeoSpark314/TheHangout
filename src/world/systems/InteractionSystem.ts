@@ -58,17 +58,29 @@ export class InteractionSystem {
      * Finds the absolute nearest interactable to a world point.
      * Best for VR near-grab.
      */
-    public findNearestInteractable(point: THREE.Vector3, maxDist: number): { interactable: IInteractable, distance: number } | null {
+    public findNearestInteractable(
+        point: THREE.Vector3,
+        maxDist: number
+    ): { interactable: IInteractable, distance: number, contactPoint?: THREE.Vector3 } | null {
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
-        const physicsHit = this.context.runtime.physics?.queryNearestPhysicsGrabbable(
+        const interactionHit = this.context.runtime.physics?.queryNearestPhysicsInteractable(
             { x: point.x, y: point.y, z: point.z },
             maxDist
         );
-        if (physicsHit && isInteractable(physicsHit.entity)) {
-            nearest = physicsHit.entity as unknown as IInteractable;
-            minDist = physicsHit.distance;
+        if (interactionHit && isInteractable(interactionHit.target)) {
+            nearest = interactionHit.target as unknown as IInteractable;
+            minDist = interactionHit.distance;
+            return {
+                interactable: nearest,
+                distance: minDist,
+                contactPoint: new THREE.Vector3(
+                    interactionHit.point.x,
+                    interactionHit.point.y,
+                    interactionHit.point.z
+                )
+            };
         }
 
         for (const entity of this.context.runtime.entity.entities.values()) {

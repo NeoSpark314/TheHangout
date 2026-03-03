@@ -31,8 +31,14 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.physics = {
-            createStaticCuboidCollider: (hx, hy, hz, position) =>
-                this.app.runtime.physics.createStaticCuboidCollider(hx, hy, hz, position),
+            createStaticCuboidCollider: (hx, hy, hz, position, rotation) =>
+                this.app.runtime.physics.createStaticCuboidCollider(hx, hy, hz, position, rotation),
+            registerInteractionCollider: (collider, target) => {
+                this.app.runtime.physics.registerInteractionCollider(collider, target as any);
+            },
+            unregisterInteractionCollider: (collider) => {
+                this.app.runtime.physics.unregisterInteractionCollider(collider);
+            },
             removeRigidBody: (body) => {
                 this.app.runtime.physics.removeRigidBody(body);
             }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { IVector3 } from './IMath';
+import { IPose, IVector3 } from './IMath';
 
 /**
  * Capability interface for objects that can be claimed by a hand.
@@ -21,4 +21,14 @@ export interface IHoldable {
      * Optional approximate radius (meters) used for near-grab sphere overlap tests.
      */
     getGrabRadius?(): number;
+
+    /**
+     * Optional fixed hand pose to use while the object is held without moving.
+     */
+    getHoldPose?(hand: 'left' | 'right'): IPose;
+
+    /**
+     * Optional release distance for fixed holds. If the hand drifts farther away, the hold is released.
+     */
+    getHoldReleaseDistance?(): number;
 }
