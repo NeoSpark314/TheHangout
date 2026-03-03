@@ -26,7 +26,6 @@ export class PropBuilder implements IReplicatedFeature {
     private desiredHologramVisible: boolean = true;
     private podest: THREE.Group | null = null;
     private decorations: THREE.Group | null = null;
-    private hasSpawnedGrabbables: boolean = false;
     private hasSpawnedDominoes: boolean = false;
     private readonly spawnedEntityIds: string[] = [];
     private readonly staticPhysicsBodies: unknown[] = [];
@@ -79,7 +78,6 @@ export class PropBuilder implements IReplicatedFeature {
             if (!this.podest) this.createPodest();
             if (!this.decorations) this.createDecorations();
             if (!this.drumPads) this.createDrumPads();
-            if (!this.hasSpawnedGrabbables) this.createGrabbables();
             // Domino run disabled for now until grab/interaction shape tuning is improved.
             // if (!this.hasSpawnedDominoes) this.createDominoRun();
         } catch (e) {
@@ -232,32 +230,6 @@ export class PropBuilder implements IReplicatedFeature {
             }
         }
         if (this.scene) this.scene.add(this.decorations);
-    }
-
-    private createGrabbables(): void {
-        console.log('[PropBuilder] createGrabbables running...');
-        this.hasSpawnedGrabbables = true;
-
-        const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            const position = { x: Math.sin(angle), y: 1.15, z: Math.cos(angle) };
-
-            let mesh = undefined;
-            if (this.scene) {
-                const geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-                const mat = new THREE.MeshStandardMaterial({
-                    color: colors[i], emissive: colors[i], emissiveIntensity: 0.3, metalness: 0.6, roughness: 0.3
-                });
-                mesh = new THREE.Mesh(geo, mat);
-                mesh.position.set(position.x, position.y, position.z);
-                mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })));
-            }
-
-            const entityId = `grabbable-${i}`;
-            EntityFactory.createGrabbable(this.context, entityId, 0.12, position, mesh as any);
-            this.spawnedEntityIds.push(entityId);
-        }
     }
 
     private createDominoRun(): void {
@@ -518,7 +490,6 @@ export class PropBuilder implements IReplicatedFeature {
         this.duckModel = null;
         this.podest = null;
         this.decorations = null;
-        this.hasSpawnedGrabbables = false;
         this.hasSpawnedDominoes = false;
         this.drumPads = null;
         this.drumPadMeshes = [];

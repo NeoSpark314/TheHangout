@@ -9,6 +9,7 @@ export class DefaultHangoutWorld {
     private props: PropBuilder | null = null;
     private readonly drawingSurfaceId = 'default-drawing-surface';
     private readonly defaultPenId = 'default-pen';
+    private readonly defaultCubeColors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
 
     constructor(
         private session: SessionRuntime,
@@ -25,6 +26,7 @@ export class DefaultHangoutWorld {
                 position: { x: 0.5, y: 1.15, z: 0.5 }
             });
         }
+        this.ensureDefaultCubes();
 
         const scene = this.session.scene;
         if (!scene) return;
@@ -79,5 +81,22 @@ export class DefaultHangoutWorld {
 
     public setHologramVisible(visible: boolean): void {
         this.props?.setHologramVisible(visible);
+    }
+
+    private ensureDefaultCubes(): void {
+        for (let i = 0; i < this.defaultCubeColors.length; i++) {
+            const cubeId = `default-cube-${i}`;
+            if (this.session.getObjectInstance(cubeId)) {
+                continue;
+            }
+
+            const angle = (i / this.defaultCubeColors.length) * Math.PI * 2;
+            this.session.spawnObjectModule('grabbable-cube', {
+                id: cubeId,
+                position: { x: Math.sin(angle), y: 1.15, z: Math.cos(angle) },
+                color: this.defaultCubeColors[i],
+                size: 0.12
+            });
+        }
     }
 }
