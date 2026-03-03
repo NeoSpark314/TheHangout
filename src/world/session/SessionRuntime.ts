@@ -5,7 +5,8 @@ import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
 import { PropBuilder } from '../../assets/procedural/PropBuilder';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
-import type { IScenarioModule } from '../../content/contracts/IScenarioModule';
+import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
+import { ScenarioRegistry } from '../../content/runtime/ScenarioRegistry';
 
 export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
@@ -13,11 +14,14 @@ export class SessionRuntime implements IUpdatable {
     public environment: EnvironmentBuilder | null = null;
     public props: PropBuilder | null = null;
     private hasGroundPhysics: boolean = false;
+    private readonly scenarioRegistry = new ScenarioRegistry();
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
 
     constructor(private context: AppContext) {
-        this.activeScenario = new DefaultHangoutScenario(this);
+        const defaultScenario = new DefaultHangoutScenario(this);
+        this.scenarioRegistry.register(defaultScenario);
+        this.activeScenario = defaultScenario;
     }
 
     private random(): number {
@@ -105,6 +109,43 @@ export class SessionRuntime implements IUpdatable {
 
     public getActiveScenario(): IScenarioModule {
         return this.activeScenario;
+    }
+
+    public registerScenario(scenario: IScenarioModule): void {
+        this.scenarioRegistry.register(scenario);
+    }
+
+    public getAvailableScenarios(): IScenarioModule[] {
+        return this.scenarioRegistry.list();
+    }
+
+    public getAvailableScenarioIds(): string[] {
+        return this.scenarioRegistry.listIds();
+    }
+
+    public switchScenario(id: string, options: Partial<IScenarioLoadOptions> = {}): boolean {
+        const nextScenario = this.scenarioRegistry.get(id);
+        if (!nextScenario) {
+            console.warn(`[SessionRuntime] Cannot switch to unknown scenario: ${id}`);
+            return false;
+        }
+
+        if (nextScenario.id === this.activeScenario.id) {
+            return true;
+        }
+
+        this.activeScenario.unload(this.context);
+        this.activeScenario = nextScenario;
+
+        if (this.scene) {
+            this.activeScenario.load(this.context, {
+                isHost: this.context.isHost,
+                seed: options.seed ?? this.context.sessionConfig.seed,
+                reason: options.reason ?? 'scenario_switch'
+            });
+        }
+
+        return true;
     }
 
     public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
