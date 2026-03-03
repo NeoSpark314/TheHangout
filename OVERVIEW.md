@@ -68,6 +68,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - Content modules can also wrap low-level engine entities. For example, [PenToolObject.ts](/c:/programming/TheHangout/src/content/objects/PenToolObject.ts) is the content-facing module, while [PenToolEntity.ts](/c:/programming/TheHangout/src/world/entities/PenToolEntity.ts) remains the low-level replicated primitive it spawns.
 - The same pattern now applies to default physics props: [GrabbableCubeObject.ts](/c:/programming/TheHangout/src/content/objects/GrabbableCubeObject.ts) wraps the low-level grabbable physics-entity spawn path for scenario-owned cubes.
 - Shared drawing is now content-owned: [DrawingSurfaceObject.ts](/c:/programming/TheHangout/src/content/objects/DrawingSurfaceObject.ts) is a replicated object instance that owns stroke state and late-join snapshots.
+- The drum pads now follow the same content-owned model: [DrumPadArcObject.ts](/c:/programming/TheHangout/src/content/objects/DrumPadArcObject.ts) is a self-contained replicated object that owns its own meshes, colliders, hit detection, audio, and sync.
 
 ### Networking
 

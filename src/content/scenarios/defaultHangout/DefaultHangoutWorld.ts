@@ -9,6 +9,7 @@ export class DefaultHangoutWorld {
     private props: PropBuilder | null = null;
     private readonly drawingSurfaceId = 'default-drawing-surface';
     private readonly defaultPenId = 'default-pen';
+    private readonly drumPadArcId = 'default-drum-pad-arc';
     private readonly defaultCubeColors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
 
     constructor(
@@ -25,6 +26,9 @@ export class DefaultHangoutWorld {
                 id: this.defaultPenId,
                 position: { x: 0.5, y: 1.15, z: 0.5 }
             });
+        }
+        if (!this.session.getObjectInstance(this.drumPadArcId)) {
+            this.session.spawnObjectModule('drum-pad-arc', { id: this.drumPadArcId });
         }
         this.ensureDefaultCubes();
 

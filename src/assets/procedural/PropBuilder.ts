@@ -1,21 +1,9 @@
 import * as THREE from 'three';
 import { EntityFactory } from '../../world/spawning/EntityFactory';
 import { AppContext, ISessionConfig } from '../../app/AppContext';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
-import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
-import { IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 
-interface IDrumPadHitPayload {
-    padId: string;
-    frequency: number;
-    intensity: number;
-    position?: { x: number; y: number; z: number };
-}
-
-export class PropBuilder implements IReplicatedFeature {
-    public readonly featureId: string = 'feature:drumPads';
+export class PropBuilder {
     private scene: THREE.Scene;
     private random: () => number;
 
@@ -29,44 +17,10 @@ export class PropBuilder implements IReplicatedFeature {
     private hasSpawnedDominoes: boolean = false;
     private readonly spawnedEntityIds: string[] = [];
     private readonly staticPhysicsBodies: unknown[] = [];
-    private drumPads: THREE.Group | null = null;
-    private drumPadMeshes: THREE.Mesh[] = [];
-    private drumPadPositions: THREE.Vector3[] = [];
-    private drumPadFlash: number[] = [];
-    private drumPadFreqByHandle: Map<number, { padId: string; frequency: number }> = new Map();
-    private drumPadById: Map<string, { index: number; frequency: number; position: THREE.Vector3 }> = new Map();
-    private handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
-    private lastHandPadHitAtMs: Map<string, number> = new Map();
-    private onPhysicsCollisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
 
     constructor(scene: THREE.Scene, randomFunc: () => number, private context: AppContext) {
         this.scene = scene;
         this.random = randomFunc;
-        this.context.runtime.replication.registerFeature(this);
-
-        this.onPhysicsCollisionStartedHandler = (data) => {
-            const padA = this.drumPadFreqByHandle.get(data.handleA);
-            const padB = this.drumPadFreqByHandle.get(data.handleB);
-            if (!padA && !padB) return;
-
-            const hit = padA || padB!;
-            const entityId = padA ? data.entityBId : data.entityAId;
-            if (!entityId) return;
-            const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
-            if (!entity || entity.type !== 'PHYSICS_PROP') return;
-
-            const v = entity.rigidBody.linvel();
-            const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
-            const intensity = Math.max(0.08, Math.min(1.0, speed * 0.22));
-            const padInfo = this.drumPadById.get(hit.padId);
-            this.applyDrumHit({
-                padId: hit.padId,
-                frequency: hit.frequency,
-                intensity,
-                position: padInfo ? { x: padInfo.position.x, y: padInfo.position.y, z: padInfo.position.z } : undefined
-            }, true);
-        };
-        eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
     }
 
     public applyConfig(config: ISessionConfig): void {
@@ -77,7 +31,6 @@ export class PropBuilder implements IReplicatedFeature {
             if (!this.hologram) this.createHologram();
             if (!this.podest) this.createPodest();
             if (!this.decorations) this.createDecorations();
-            if (!this.drumPads) this.createDrumPads();
             // Domino run disabled for now until grab/interaction shape tuning is improved.
             // if (!this.hasSpawnedDominoes) this.createDominoRun();
         } catch (e) {
@@ -91,17 +44,6 @@ export class PropBuilder implements IReplicatedFeature {
             this.hologram.rotation.z += delta * 0.5;
             this.hologram.position.y = 0.5 + Math.sin(Date.now() * 0.002) * 0.05;
         }
-
-        for (let i = 0; i < this.drumPadMeshes.length; i++) {
-            const mesh = this.drumPadMeshes[i];
-            const mat = mesh.material as THREE.MeshStandardMaterial;
-            const flash = this.drumPadFlash[i] || 0;
-            const target = 0.18 + flash * 1.3;
-            mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.25;
-            this.drumPadFlash[i] = Math.max(0, flash - delta * 2.2);
-        }
-
-        this.updateHandDrumHits(delta);
     }
 
     private createTable(): void {
@@ -280,183 +222,6 @@ export class PropBuilder implements IReplicatedFeature {
         }
     }
 
-    private createDrumPads(): void {
-        this.drumPads = new THREE.Group();
-        this.drumPads.position.set(0, 0, 0);
-
-        const notes = [220, 247, 277, 294, 330, 370, 415, 440];
-        const padCount = notes.length;
-        const radius = 1.85;
-        const center = new THREE.Vector3(6.2, 1.1, -1.8);
-
-        for (let i = 0; i < padCount; i++) {
-            const t = (i / (padCount - 1));
-            const angle = THREE.MathUtils.lerp(-0.95, 0.95, t);
-            const px = center.x - Math.cos(angle) * radius;
-            const pz = center.z + Math.sin(angle) * radius;
-            const padY = center.y;
-
-            const color = new THREE.Color().setHSL(0.72 - t * 0.6, 1.0, 0.54);
-            const geo = new THREE.BoxGeometry(0.42, 0.08, 0.42);
-            const mat = new THREE.MeshStandardMaterial({
-                color,
-                emissive: color.clone().multiplyScalar(0.8),
-                emissiveIntensity: 0.18,
-                metalness: 0.2,
-                roughness: 0.38
-            });
-            const pad = new THREE.Mesh(geo, mat);
-            pad.position.set(px, padY, pz);
-            pad.add(new THREE.LineSegments(
-                new THREE.EdgesGeometry(geo),
-                new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.45 })
-            ));
-            this.drumPads.add(pad);
-            this.drumPadMeshes.push(pad);
-            this.drumPadPositions.push(new THREE.Vector3(px, padY, pz));
-            this.drumPadFlash.push(0);
-            this.drumPadById.set(`pad-${i}`, { index: i, frequency: notes[i], position: new THREE.Vector3(px, padY, pz) });
-
-            const collider = this.context.runtime.physics.createStaticCuboidCollider(
-                0.21, 0.04, 0.21,
-                { x: px, y: padY, z: pz }
-            );
-            if (collider) {
-                this.drumPadFreqByHandle.set(collider.handle, { padId: `pad-${i}`, frequency: notes[i] });
-                const body = collider.parent();
-                if (body) this.staticPhysicsBodies.push(body);
-            }
-        }
-
-        if (this.scene) this.scene.add(this.drumPads);
-    }
-
-    private updateHandDrumHits(delta: number): void {
-        const trackingMgr = (this.context.runtime as any).tracking;
-        if (!trackingMgr || typeof trackingMgr.getState !== 'function') {
-            // Headless dedicated server has no local tracking provider.
-            this.handLastPos.left = null;
-            this.handLastPos.right = null;
-            return;
-        }
-
-        const tracking = trackingMgr.getState();
-        const dt = Math.max(0.0001, delta);
-        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
-        const padRadius = 0.27;
-        const strikeCooldownMs = 120;
-
-        for (const hand of ['left', 'right'] as const) {
-            const state = tracking.hands[hand];
-            if (!state.active || this.drumPadPositions.length === 0) {
-                this.handLastPos[hand] = null;
-                continue;
-            }
-
-            const strikePose = this.getAvatarHandStrikePosition(hand);
-            if (!strikePose) {
-                this.handLastPos[hand] = null;
-                continue;
-            }
-            const pos = new THREE.Vector3(strikePose.x, strikePose.y, strikePose.z);
-            const prev = this.handLastPos[hand];
-            this.handLastPos[hand] = pos;
-            if (!prev) continue;
-
-            const vx = (pos.x - prev.x) / dt;
-            const vy = (pos.y - prev.y) / dt;
-            const vz = (pos.z - prev.z) / dt;
-            const speed = Math.hypot(vx, vy, vz);
-            if (vy > -0.08 || speed < 0.28) continue;
-
-            for (let i = 0; i < this.drumPadPositions.length; i++) {
-                const padPos = this.drumPadPositions[i];
-                const dx = pos.x - padPos.x;
-                const dz = pos.z - padPos.z;
-                const distXZ = Math.hypot(dx, dz);
-                if (distXZ > padRadius) continue;
-
-                const crossedTop = prev.y > (padPos.y + 0.1) && pos.y <= (padPos.y + 0.12);
-                const nearTop = Math.abs(pos.y - padPos.y) <= 0.14;
-                if (!crossedTop && !nearTop) continue;
-
-                const key = `${hand}:${i}`;
-                const lastHit = this.lastHandPadHitAtMs.get(key) ?? 0;
-                if ((now - lastHit) < strikeCooldownMs) continue;
-                this.lastHandPadHitAtMs.set(key, now);
-
-                const strikeSpeed = Math.max(0, -vy) + speed * 0.22;
-                const intensity = Math.min(1.0, Math.max(0.12, strikeSpeed * 0.12));
-                const freq = this.drumPadById.get(`pad-${i}`)?.frequency ?? 220;
-                this.applyDrumHit({
-                    padId: `pad-${i}`,
-                    frequency: freq,
-                    intensity,
-                    position: { x: padPos.x, y: padPos.y, z: padPos.z }
-                }, true);
-            }
-        }
-    }
-
-    private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
-        const trackingMgr = (this.context.runtime as any).tracking;
-        if (!trackingMgr || typeof trackingMgr.getState !== 'function') return null;
-        const trackingState = trackingMgr.getState().hands[hand];
-        const localHumanoidJoints = this.context.localPlayer?.humanoid?.joints;
-
-        if (trackingState.hasJoints) {
-            const tipPose = trackingState.joints[9]?.pose?.position;
-            if (tipPose && (tipPose.x !== 0 || tipPose.y !== 0 || tipPose.z !== 0)) {
-                return tipPose;
-            }
-        }
-
-        const wristName = hand === 'left' ? 'leftHand' : 'rightHand';
-        const wristPose = localHumanoidJoints?.[wristName]?.position;
-        if (wristPose && (wristPose.x !== 0 || wristPose.y !== 0 || wristPose.z !== 0)) {
-            return wristPose;
-        }
-
-        const handPose = trackingState.pose.position;
-        if (handPose && (handPose.x !== 0 || handPose.y !== 0 || handPose.z !== 0)) {
-            return handPose;
-        }
-
-        return null;
-    }
-
-    public onEvent(eventType: string, data: unknown): void {
-        if (eventType !== 'hit') return;
-        const hit = data as IDrumPadHitPayload;
-        if (!hit || typeof hit.padId !== 'string') return;
-        if (typeof hit.frequency !== 'number' || typeof hit.intensity !== 'number') return;
-        this.applyDrumHit(hit, false);
-    }
-
-    /**
-     * Feature-local drum hit pipeline.
-     *
-     * Drum pads are session-specific behavior, so we keep the flash/audio logic and
-     * replication trigger inside the session feature instead of publishing a global
-     * app event. This keeps the global EventBus focused on shared infrastructure.
-     */
-    private applyDrumHit(hit: IDrumPadHitPayload, replicate: boolean): void {
-        const idx = this.parsePadIndex(hit.padId);
-        if (idx >= 0 && idx < this.drumPadFlash.length) {
-            this.drumPadFlash[idx] = Math.max(this.drumPadFlash[idx], Math.min(1.0, hit.intensity * 1.2));
-        }
-
-        this.context.runtime.audio?.playDrumPadHit({
-            frequency: hit.frequency,
-            intensity: hit.intensity,
-            position: hit.position
-        });
-
-        if (replicate) {
-            this.context.runtime.replication.emitFeatureEvent(this.featureId, 'hit', hit);
-        }
-    }
-
     public clearProcedural(): void {
         const remove = (obj: THREE.Object3D | null) => {
             if (!obj || !this.scene) return;
@@ -483,7 +248,6 @@ export class PropBuilder implements IReplicatedFeature {
         remove(this.tableGroup);
         remove(this.podest);
         remove(this.decorations);
-        remove(this.drumPads);
         this.tableGroup = null;
         this.table = null;
         this.hologram = null;
@@ -491,30 +255,10 @@ export class PropBuilder implements IReplicatedFeature {
         this.podest = null;
         this.decorations = null;
         this.hasSpawnedDominoes = false;
-        this.drumPads = null;
-        this.drumPadMeshes = [];
-        this.drumPadPositions = [];
-        this.drumPadFlash = [];
-        this.drumPadFreqByHandle.clear();
-        this.drumPadById.clear();
-        this.handLastPos.left = null;
-        this.handLastPos.right = null;
-        this.lastHandPadHitAtMs.clear();
     }
 
     public dispose(): void {
         this.clearProcedural();
-        if (this.onPhysicsCollisionStartedHandler) {
-            eventBus.off(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
-            this.onPhysicsCollisionStartedHandler = null;
-        }
-        this.context.runtime.replication.unregisterFeature(this.featureId);
-    }
-
-    private parsePadIndex(padId: string): number {
-        if (!padId.startsWith('pad-')) return -1;
-        const v = Number.parseInt(padId.slice(4), 10);
-        return Number.isFinite(v) ? v : -1;
     }
 
     public spawnGrabbableCube(position?: { x: number, y: number, z: number }): void {

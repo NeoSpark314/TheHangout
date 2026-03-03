@@ -235,8 +235,8 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
     public spawnCube(): void {
         const sessionMgr = this.context.runtime.session;
-        if (sessionMgr && sessionMgr.props) {
-            sessionMgr.props.spawnGrabbableCube();
+        if (sessionMgr) {
+            sessionMgr.spawnObjectModule('grabbable-cube');
         }
     }
 
