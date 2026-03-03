@@ -11,20 +11,20 @@ export class PlayerPresenceService {
     }
 
     public init(id: string): void {
-        const managers = this.context.managers;
+        const runtime = this.context.runtime;
 
         console.log('[PlayerPresenceService] Initializing Local Player with ID:', id);
 
         let spawnIndex = 0;
         if (!this.context.isHost) {
-            if (managers.session && (managers.session as any).assignedSpawnIndex !== undefined) {
-                spawnIndex = (managers.session as any).assignedSpawnIndex;
-            } else if (managers.network) {
-                spawnIndex = managers.network.connections.size;
+            if (runtime.session && (runtime.session as any).assignedSpawnIndex !== undefined) {
+                spawnIndex = (runtime.session as any).assignedSpawnIndex;
+            } else if (runtime.network) {
+                spawnIndex = runtime.network.connections.size;
             }
         }
 
-        const spawn = (managers.session as any).getSpawnPoint ? (managers.session as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
+        const spawn = (runtime.session as any).getSpawnPoint ? (runtime.session as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
 
         this.context.localPlayer = EntityFactory.createPlayer(this.context, id, {
             isLocal: true,
@@ -37,14 +37,14 @@ export class PlayerPresenceService {
             (this.context.localPlayer as any).name = this.context.playerName || 'Player';
         }
 
-        managers.animation.setLocalPlayer(this.context.localPlayer as any, managers);
-        managers.entity.addEntity(this.context.localPlayer as any);
+        runtime.animation.setLocalPlayer(this.context.localPlayer as any, runtime);
+        runtime.entity.addEntity(this.context.localPlayer as any);
         this.isInitialized = true;
     }
 
     public onPeerDisconnected(peerId: string): void {
-        const managers = this.context.managers;
-        const entity = managers.entity.getEntity(peerId);
+        const runtime = this.context.runtime;
+        const entity = runtime.entity.getEntity(peerId);
 
         if (!entity) {
             console.warn(`[PlayerPresenceService] Received disconnect for unknown peer: ${peerId}`);
@@ -57,10 +57,10 @@ export class PlayerPresenceService {
         const isPlayer = entity.type === 'REMOTE_PLAYER' || entity.type === 'LOCAL_PLAYER';
 
         // Critical: Always trigger destruction and removal
-        managers.entity.removeEntity(peerId);
+        runtime.entity.removeEntity(peerId);
 
-        if (isPlayer && managers.hud) {
-            managers.hud.showNotification(`${name || 'A player'} left the hangout.`);
+        if (isPlayer && runtime.hud) {
+            runtime.hud.showNotification(`${name || 'A player'} left the hangout.`);
         }
     }
 }

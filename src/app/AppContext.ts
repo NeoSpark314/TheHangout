@@ -34,7 +34,7 @@ export interface ISessionConfig {
     seed: number;
 }
 
-export interface IManagers {
+export interface IRuntimeRegistry {
     entity: EntityRegistry;
     ui: FlatUiRuntime;
     network: NetworkRuntime;
@@ -86,14 +86,14 @@ export class AppContext {
     public localPlayer: LocalPlayer | null = null;
     public isMenuOpen: boolean = false;
 
-    private _managers: Partial<IManagers> = {};
+    private _runtime: Partial<IRuntimeRegistry> = {};
 
-    public get managers(): IManagers {
-        return this._managers as IManagers;
+    public get runtime(): IRuntimeRegistry {
+        return this._runtime as IRuntimeRegistry;
     }
 
-    public setManager<K extends keyof IManagers>(key: K, instance: IManagers[K]): void {
-        this._managers[key] = instance;
+    public setRuntime<K extends keyof IRuntimeRegistry>(key: K, instance: IRuntimeRegistry[K]): void {
+        this._runtime[key] = instance;
     }
 
     public deltaTime: number = 0;

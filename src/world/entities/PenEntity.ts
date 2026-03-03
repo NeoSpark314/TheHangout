@@ -102,7 +102,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
                         endPos: [tipPos.x, tipPos.y, tipPos.z],
                         color: this.color
                     };
-                    this.context.managers.drawing.addSegment(segment);
+                    this.context.runtime.drawing.addSegment(segment);
                     this.lastDrawPosition = { x: tipPos.x, y: tipPos.y, z: tipPos.z };
                 }
             } else {

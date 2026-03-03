@@ -11,7 +11,7 @@ import type { IVoiceStreamReceivedEvent } from '../../shared/contracts/IVoice';
  * - Keep cross-cutting infrastructure here (session lifecycle, input intents,
  *   ownership requests, shared UI/system notifications, voice plumbing).
  * - Do not add session-specific or item-specific domain events here. Those belong
- *   inside feature/session managers and should use feature-local APIs plus
+ *   inside feature/session runtime and should use feature-local APIs plus
  *   FeatureReplicationService for network fan-out.
  */
 export interface AppEventMap {

@@ -35,7 +35,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
     private pairLastTriggerAt: Map<string, number> = new Map();
 
     constructor(private context: AppContext, private particles: ParticleEffectSystem) {
-        this.context.managers.replication.registerFeature(this);
+        this.context.runtime.replication.registerFeature(this);
     }
 
     public update(delta: number): void {
@@ -49,7 +49,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
 
         if (!localLeft && !localRight) return;
 
-        const entities = this.context.managers.entity.entities;
+        const entities = this.context.runtime.entity.entities;
         for (const entity of entities.values()) {
             if (entity.type !== EntityType.REMOTE_PLAYER) continue;
             const remote = entity as RemotePlayer;
@@ -115,7 +115,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
             p: [this.tmpMid.x, this.tmpMid.y, this.tmpMid.z],
             i: intensity
         };
-        this.context.managers.replication.emitFeatureEvent(this.featureId, 'highfive', payload);
+        this.context.runtime.replication.emitFeatureEvent(this.featureId, 'highfive', payload);
     }
 
     private playHighFive(hit: IHighFiveEventPayload): void {
@@ -154,7 +154,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
     }
 
     private getLocalHandPosition(hand: Handedness): THREE.Vector3 | null {
-        const tracking = this.context.managers.tracking.getState().hands[hand];
+        const tracking = this.context.runtime.tracking.getState().hands[hand];
         if (!tracking.active) return null;
 
         if (tracking.hasJoints) {

@@ -95,8 +95,8 @@ export class XRTrackingProvider implements ITrackingProvider {
 
 
     public update(delta: number, frame?: XRFrame): void {
-        const managers = this.context.managers;
-        const render = managers.render;
+        const runtime = this.context.runtime;
+        const render = runtime.render;
 
         if (!render.isXRPresenting()) return;
 

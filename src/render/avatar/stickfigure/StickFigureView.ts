@@ -95,7 +95,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
         this._buildGeometry();
         this.nameTagComponent = new NameTagComponent(this.mesh, () => this.headMesh.position.y, this.color);
-        this.voiceAudio = new VoiceAudioComponent(this.headMesh, this.context.managers.render?.audioListener, this.isLocal);
+        this.voiceAudio = new VoiceAudioComponent(this.headMesh, this.context.runtime.render?.audioListener, this.isLocal);
         this.rig = new StickFigureRig(
             this.mesh,
             this.bones as unknown as StickFigureBones,
@@ -456,7 +456,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     }
 
     private _billboardNameTag(): void {
-        this.nameTagComponent.faceCamera(this.context.managers.render?.camera);
+        this.nameTagComponent.faceCamera(this.context.runtime.render?.camera);
     }
 
     public setColor(color: string | number): void {

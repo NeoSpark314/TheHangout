@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Skill } from './Skill';
 import { LocalPlayer } from '../world/entities/LocalPlayer';
 import { IVector3 } from '../shared/contracts/IMath';
-import type { IManagers } from '../app/AppContext';
+import type { IRuntimeRegistry } from '../app/AppContext';
 import eventBus from '../app/events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { IMoveIntentPayload, ILookIntentPayload, IVRSnapTurnPayload } from '../shared/contracts/IIntents';
@@ -38,7 +38,7 @@ export class MovementSkill extends Skill {
             this.yaw -= payload.delta.x * this.turnSpeed * 15;
         };
         const onVRSnapTurn = (payload: IVRSnapTurnPayload) => {
-            this.applyVRTurn(player, payload.angle, player.context.managers);
+            this.applyVRTurn(player, payload.angle, player.context.runtime);
         };
 
         eventBus.on(EVENTS.INTENT_MOVE, onMove);
@@ -59,23 +59,23 @@ export class MovementSkill extends Skill {
         this._currentMove = { x: 0, y: 0 };
     }
 
-    private _attachInputListeners(player: LocalPlayer, managers: IManagers): void {
+    private _attachInputListeners(player: LocalPlayer, runtime: IRuntimeRegistry): void {
         const canvas = document.getElementById('app');
         if (!canvas) return;
 
         canvas.addEventListener('click', () => {
-            const render = managers.render;
+            const render = runtime.render;
             if (render && !render.isXRPresenting()) {
                 canvas.requestPointerLock();
             }
         });
     }
 
-    public update(delta: number, player: LocalPlayer, managers: IManagers): void {
-        const render = managers.render;
+    public update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void {
+        const render = runtime.render;
 
         if (!this._inputListenersAttached) {
-            this._attachInputListeners(player, managers);
+            this._attachInputListeners(player, runtime);
             this._inputListenersAttached = true;
         }
 
@@ -117,8 +117,8 @@ export class MovementSkill extends Skill {
         player._lastMoveVector = { x: moveVector.x, y: moveVector.y, z: moveVector.z };
     }
 
-    private applyVRTurn(player: LocalPlayer, deltaYaw: number, managers: IManagers): void {
-        const render = managers.render;
+    private applyVRTurn(player: LocalPlayer, deltaYaw: number, runtime: IRuntimeRegistry): void {
+        const render = runtime.render;
 
         // Pivot around camera world position
         const pivot = new THREE.Vector3();

@@ -32,7 +32,7 @@ export class NonVRReachAssistController {
         gamepadLeftGrabHeld: boolean,
         gamepadRightGrabHeld: boolean
     ): void {
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
         if (!render || render.isXRPresenting() || this.context.isMenuOpen || manualModeActive) {
             this.cancelAll();
             this.applyReachAll();
@@ -74,7 +74,7 @@ export class NonVRReachAssistController {
 
     public hasMobilePrimaryAction(): boolean {
         return this.isMobileMode &&
-            !this.context.managers.render.isXRPresenting() &&
+            !this.context.runtime.render.isXRPresenting() &&
             !this.context.isMenuOpen;
     }
 
@@ -152,8 +152,8 @@ export class NonVRReachAssistController {
     }
 
     private applyReachAll(): void {
-        this.context.managers.tracking.setAssistedReach('left', this.reach.left > 0 ? this.reach.left : null);
-        this.context.managers.tracking.setAssistedReach('right', this.reach.right > 0 ? this.reach.right : null);
+        this.context.runtime.tracking.setAssistedReach('left', this.reach.left > 0 ? this.reach.left : null);
+        this.context.runtime.tracking.setAssistedReach('right', this.reach.right > 0 ? this.reach.right : null);
     }
 
     private isHolding(hand: HandId): boolean {

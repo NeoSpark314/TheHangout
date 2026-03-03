@@ -37,7 +37,7 @@ export class GamepadManager {
     }
 
     private handleUINavigation(delta: number, gp: Gamepad): void {
-        const ui = this.context.managers.ui;
+        const ui = this.context.runtime.ui;
         if (!ui || !(ui as any).overlay || (ui as any).overlay.style.display === 'none') {
             this.navIndex = -1;
             return;

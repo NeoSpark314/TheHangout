@@ -52,7 +52,7 @@ export class RemotePlayer extends PlayerEntity {
         };
         eventBus.on(EVENTS.VOICE_STREAM_RECEIVED, this._onVoiceStream);
 
-        const cachedStream = this.context.managers.media?.getRemoteStream(this.peerId);
+        const cachedStream = this.context.runtime.media?.getRemoteStream(this.peerId);
         const voiceView = this.view as unknown as Partial<IVoiceStreamReceiver>;
         if (cachedStream && voiceView.attachVoiceStream) {
             console.log(`[RemotePlayer] Attaching cached voice stream for ${this.peerId}`);
@@ -162,7 +162,7 @@ export class RemotePlayer extends PlayerEntity {
         super.destroy();
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this._onVoiceStream);
 
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
         if (render && this.view) {
             this.view.removeFromScene(render.scene);
             this.view.destroy();

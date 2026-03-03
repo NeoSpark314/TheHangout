@@ -97,14 +97,14 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public update(delta: number, frame?: XRFrame): void {
-        const managers = this.context.managers;
-        const render = managers.render;
+        const runtime = this.context.runtime;
+        const render = runtime.render;
 
         // 1. PHASE 1: Update Movement Only
         // This ensures the origin (xrOrigin) is at the latest position before we calculate world poses
         const movementSkill = this.getSkill('movement');
         if (movementSkill && (movementSkill.isAlwaysActive || movementSkill === this.activeSkill)) {
-            movementSkill.update(delta, this, managers);
+            movementSkill.update(delta, this, runtime);
         }
 
         // 2. PHASE 2: Sync Origin to Render Objects
@@ -118,15 +118,15 @@ export class LocalPlayer extends PlayerEntity {
 
         // 3. PHASE 3: Update Tracking
         // Poll tracking data NOW, using the fresh matrix.
-        const providerId = managers.tracking.getActiveProviderId();
+        const providerId = runtime.tracking.getActiveProviderId();
         if (this._lastProviderId !== providerId) {
             this._lastProviderId = providerId;
             this.humanoid.clearAll();
         }
 
-        managers.tracking.update(delta, frame);
+        runtime.tracking.update(delta, frame);
 
-        const trackingState = managers.tracking.getState();
+        const trackingState = runtime.tracking.getState();
         const worldHeadPos = trackingState.head.pose.position;
         const worldHeadQuat = trackingState.head.pose.quaternion;
         const bodyYaw = trackingState.head.yaw;
@@ -144,8 +144,8 @@ export class LocalPlayer extends PlayerEntity {
         this.headHeight = trackingState.head.pose.position.y;
 
         // Refine state with procedural desktop animations after tracking has updated.
-        if (managers.animation) {
-            managers.animation.update(delta);
+        if (runtime.animation) {
+            runtime.animation.update(delta);
         }
 
         // 4. PHASE 4: Update All Other Skills (Grab, etc.)
@@ -153,12 +153,12 @@ export class LocalPlayer extends PlayerEntity {
         for (const skill of this.skills) {
             if (skill.id === 'movement') continue; // Already updated in Phase 1
             if (skill.isAlwaysActive || skill === this.activeSkill) {
-                skill.update(delta, this, managers);
+                skill.update(delta, this, runtime);
             }
         }
 
         // 5. PHASE 5: Apply to View
-        this.audioLevel = managers.media ? managers.media.getLocalVolume() : 0;
+        this.audioLevel = runtime.media ? runtime.media.getLocalVolume() : 0;
         this.micEnabled = this.context.voiceEnabled;
 
         this.view.applyState({
@@ -177,8 +177,8 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public getNetworkState(fullSync: boolean = false): IPlayerEntityState {
-        const managers = this.context.managers;
-        const trackingState = managers.tracking.getState();
+        const runtime = this.context.runtime;
+        const trackingState = runtime.tracking.getState();
         const bodyYaw = trackingState.head.yaw;
 
         return {
@@ -217,11 +217,11 @@ export class LocalPlayer extends PlayerEntity {
     }
 
     public teleportTo(position: THREE.Vector3, yaw: number, options: ILocalPlayerTeleportOptions = {}): void {
-        const managers = this.context.managers;
+        const runtime = this.context.runtime;
         const targetSpace = options.targetSpace || 'player';
 
-        const localHeadOffset = new THREE.Vector3().copy(managers.render.camera.position);
-        const localHeadEuler = new THREE.Euler().setFromQuaternion(managers.render.camera.quaternion, 'YXZ');
+        const localHeadOffset = new THREE.Vector3().copy(runtime.render.camera.position);
+        const localHeadEuler = new THREE.Euler().setFromQuaternion(runtime.render.camera.quaternion, 'YXZ');
         const localHeadYaw = localHeadEuler.y;
 
         // To make the user's actual headset face `yaw`, rotate the origin by the remaining yaw.
@@ -259,7 +259,7 @@ export class LocalPlayer extends PlayerEntity {
         this.skills = [];
         this.activeSkill = null;
 
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
         if (render && this.view) {
             this.view.removeFromScene(render.scene);
             this.view.destroy();

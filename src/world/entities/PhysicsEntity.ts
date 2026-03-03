@@ -199,7 +199,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
         this.pendingReleaseArmed = false;
         this.heldBy = playerId;
         this.refreshSimMode();
-        this.context.managers.network?.syncEntityNow(this.id);
+        this.context.runtime.network?.syncEntityNow(this.id);
     }
 
     public onRelease(velocity?: IVector3): void {
@@ -578,7 +578,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
 
     public destroy(): void {
         super.destroy();
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
         if (render && this.view) {
             this.view.removeFromScene(render.scene);
             this.view.destroy();

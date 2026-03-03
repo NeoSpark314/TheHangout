@@ -21,7 +21,7 @@ export class DrawingFeature implements IReplicatedFeature {
             this.lineGroup = new THREE.Group();
             this.scene.add(this.lineGroup);
         }
-        this.context.managers.replication.registerFeature(this);
+        this.context.runtime.replication.registerFeature(this);
     }
 
     /**
@@ -35,7 +35,7 @@ export class DrawingFeature implements IReplicatedFeature {
         if (!this.isValidSegment(segment)) return;
 
         if (replicate) {
-            this.context.managers.replication.emitFeatureEvent(this.featureId, 'segment', segment);
+            this.context.runtime.replication.emitFeatureEvent(this.featureId, 'segment', segment);
             return;
         }
 

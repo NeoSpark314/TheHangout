@@ -44,7 +44,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private _lookHandler = (payload: any) => {
         // We only care about Y (pitch) here. 
         // Horizontal look (yaw) is handled by MovementSkill rotating the origin.
-        if (this.context.managers.render.isXRPresenting()) return;
+        if (this.context.runtime.render.isXRPresenting()) return;
         this.pitch -= payload.delta.y * this.turnSpeed * TURN_SENSITIVITY;
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
@@ -153,8 +153,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
 
     public update(delta: number): void {
-        const managers = this.context.managers;
-        const render = managers.render;
+        const runtime = this.context.runtime;
+        const render = runtime.render;
 
         if (render.isXRPresenting()) return;
 

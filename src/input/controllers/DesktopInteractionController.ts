@@ -32,8 +32,8 @@ export class NonVRInteractionController {
 
     public hasMobileSecondaryAction(): boolean {
         return !this.context.isMenuOpen &&
-            !!this.context.managers.render &&
-            !this.context.managers.render.isXRPresenting() &&
+            !!this.context.runtime.render &&
+            !this.context.runtime.render.isXRPresenting() &&
             this.isHoldingHand('right');
     }
 

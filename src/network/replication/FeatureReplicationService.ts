@@ -77,7 +77,7 @@ export class FeatureReplicationService {
 
         this.applyEvent(payload, null, true);
 
-        const network = this.context.managers.network as unknown as {
+        const network = this.context.runtime.network as unknown as {
             sendData: (targetId: string, type: number, payload: unknown) => void;
             broadcast: (type: number, payload: unknown) => void;
         } | undefined;
@@ -96,7 +96,7 @@ export class FeatureReplicationService {
 
     public handleIncomingFeatureEvent(senderId: string, payload: IReplicatedFeatureEventPayload): void {
         if (this.context.isHost) {
-            const network = this.context.managers.network as unknown as {
+            const network = this.context.runtime.network as unknown as {
                 relayToOthers?: (senderId: string, type: number, payload: unknown) => void;
             } | undefined;
             network?.relayToOthers?.(senderId, PACKET_TYPES.FEATURE_EVENT, payload);
@@ -127,7 +127,7 @@ export class FeatureReplicationService {
     }
 
     public sendSnapshotToPeer(peerId: string): void {
-        const network = this.context.managers.network as unknown as {
+        const network = this.context.runtime.network as unknown as {
             sendData: (targetId: string, type: number, payload: unknown) => void;
         } | undefined;
         if (!network) return;
@@ -139,7 +139,7 @@ export class FeatureReplicationService {
         const hostId = this.context.sessionId;
         if (!hostId) return;
 
-        const network = this.context.managers.network as unknown as {
+        const network = this.context.runtime.network as unknown as {
             sendData: (targetId: string, type: number, payload: unknown) => void;
         } | undefined;
         if (!network) return;

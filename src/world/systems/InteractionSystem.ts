@@ -17,12 +17,12 @@ export class InteractionSystem {
         ray: { origin: THREE.Vector3, direction: THREE.Vector3 },
         maxDist: number
     ): { interactable: IInteractable; distance: number; point: THREE.Vector3 } | null {
-        if (!this.context.managers.render) return null;
+        if (!this.context.runtime.render) return null;
 
-        const hits = this.context.managers.render.raycast(ray.origin, ray.direction, maxDist);
+        const hits = this.context.runtime.render.raycast(ray.origin, ray.direction, maxDist);
         if (hits.length === 0) return null;
 
-        const entityManager = this.context.managers.entity;
+        const entityManager = this.context.runtime.entity;
 
         for (const hit of hits) {
             let hitObj: THREE.Object3D | null = hit.object;
@@ -62,7 +62,7 @@ export class InteractionSystem {
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
-        const physicsHit = this.context.managers.physics?.queryNearestPhysicsGrabbable(
+        const physicsHit = this.context.runtime.physics?.queryNearestPhysicsGrabbable(
             { x: point.x, y: point.y, z: point.z },
             maxDist
         );
@@ -71,7 +71,7 @@ export class InteractionSystem {
             minDist = physicsHit.distance;
         }
 
-        for (const entity of this.context.managers.entity.entities.values()) {
+        for (const entity of this.context.runtime.entity.entities.values()) {
             if (entity.type === EntityType.PHYSICS_PROP) continue;
             // Check if it's grabbable, interactable and NOT currently held
             if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {

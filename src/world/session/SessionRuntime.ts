@@ -33,8 +33,8 @@ export class SessionRuntime implements IUpdatable {
             this.props = new PropBuilder(scene, randomBound, this.context);
 
             // Ground is created strictly during applyConfig or init via master orchestrator
-            if (this.context.managers.physics) {
-                this.context.managers.physics.createGround(25);
+            if (this.context.runtime.physics) {
+                this.context.runtime.physics.createGround(25);
                 this.hasGroundPhysics = true;
             }
 

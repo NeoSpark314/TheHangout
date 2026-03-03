@@ -33,18 +33,18 @@ export class NetworkSynchronizer {
     }
 
     public syncState(forceAll: boolean = false): void {
-        const managers = this.context.managers;
-        if (!managers.entity) return;
+        const runtime = this.context.runtime;
+        if (!runtime.entity) return;
 
         // If forceAll is true, we send a full snapshot to keep connections alive and names synced
         if (forceAll || this.context.isHost) {
-            const allStates = managers.entity.getWorldSnapshot();
+            const allStates = runtime.entity.getWorldSnapshot();
             if (allStates.length > 0) {
                 this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
             }
         } else {
             // For guests, heartbeat sends a fuller snapshot to recover from missed deltas.
-            const authoritativeStates = managers.entity.getAuthoritativeStates(forceAll);
+            const authoritativeStates = runtime.entity.getAuthoritativeStates(forceAll);
             if (authoritativeStates.length > 0) {
                 if (this.context.sessionId) {
                     this.transport.sendData(this.context.sessionId, PACKET_TYPES.PLAYER_INPUT, authoritativeStates);
@@ -54,8 +54,8 @@ export class NetworkSynchronizer {
     }
 
     public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
-        const managers = this.context.managers;
-        const entity = managers.entity?.getEntity(entityId);
+        const runtime = this.context.runtime;
+        const entity = runtime.entity?.getEntity(entityId);
         if (!entity || entity.isDestroyed) return;
 
         const networkable = entity as unknown as INetworkable<unknown>;

@@ -16,7 +16,7 @@ export class AudioRuntime {
     }
 
     public async resume(): Promise<void> {
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
         if (render && render.audioListener) {
             this.ctx = render.audioListener.context as AudioContext;
         }
@@ -57,7 +57,7 @@ export class AudioRuntime {
 
         eventBus.on(EVENTS.SOCIAL_HIGH_FIVE, (data: { position?: IVector3; intensity: number }) => {
             if (this.isInitialized && this.ctx) {
-                const headPos = this.context.managers.tracking.getState().head.pose.position;
+                const headPos = this.context.runtime.tracking.getState().head.pose.position;
                 const hitPos = data.position;
                 let distance = 0;
                 let pan = 0;
@@ -86,7 +86,7 @@ export class AudioRuntime {
     public playDrumPadHit(data: { frequency: number; intensity: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
 
-        const headPos = this.context.managers.tracking.getState().head.pose.position;
+        const headPos = this.context.runtime.tracking.getState().head.pose.position;
         const hitPos = data.position;
         let distance = 0;
         let pan = 0;

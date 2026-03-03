@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { LocalPlayer } from '../../world/entities/LocalPlayer';
-import type { IManagers } from '../../app/AppContext';
+import type { IRuntimeRegistry } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IMoveIntentPayload } from '../../shared/contracts/IIntents';
@@ -13,7 +13,7 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
  */
 export class AnimationSystem implements IUpdatable {
     private localPlayer: LocalPlayer | null = null;
-    private managers: IManagers | null = null;
+    private runtime: IRuntimeRegistry | null = null;
 
     private _isMoving: boolean = false;
     private _bobTime: number = 0;
@@ -22,9 +22,9 @@ export class AnimationSystem implements IUpdatable {
         eventBus.on(EVENTS.INTENT_MOVE, this._onMove.bind(this));
     }
 
-    public setLocalPlayer(player: LocalPlayer, managers: IManagers): void {
+    public setLocalPlayer(player: LocalPlayer, runtime: IRuntimeRegistry): void {
         this.localPlayer = player;
-        this.managers = managers;
+        this.runtime = runtime;
     }
 
     private _onMove(payload: IMoveIntentPayload): void {
@@ -32,8 +32,8 @@ export class AnimationSystem implements IUpdatable {
     }
 
     public update(delta: number): void {
-        if (!this.localPlayer || !this.managers) return;
-        const render = this.managers.render;
+        if (!this.localPlayer || !this.runtime) return;
+        const render = this.runtime.render;
 
         // If VR is active, XR tracking provider already owns hand state updates.
         if (render.isXRPresenting()) {

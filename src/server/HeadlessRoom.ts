@@ -26,17 +26,17 @@ export class HeadlessSession {
         this.network.setContext(this.context);
 
         const entityMgr = new EntityRegistry(this.context);
-        this.context.setManager('entity', entityMgr);
-        this.context.setManager('replication', new FeatureReplicationService(this.context));
+        this.context.setRuntime('entity', entityMgr);
+        this.context.setRuntime('replication', new FeatureReplicationService(this.context));
 
         const physicsMgr = new PhysicsRuntime(this.context);
-        this.context.setManager('physics', physicsMgr);
+        this.context.setRuntime('physics', physicsMgr);
 
         const sessionMgr = new SessionRuntime(this.context);
-        this.context.setManager('session', sessionMgr);
-        this.context.setManager('drawing', new DrawingFeature(null, this.context));
+        this.context.setRuntime('session', sessionMgr);
+        this.context.setRuntime('drawing', new DrawingFeature(null, this.context));
 
-        this.context.setManager('network', this.network as any);
+        this.context.setRuntime('network', this.network as any);
 
         this.engine = new Engine(this.context);
         this.engine.addSystem({
@@ -50,12 +50,12 @@ export class HeadlessSession {
     public async start(): Promise<void> {
         console.log(`[HeadlessSession] Initializing Session: ${this.sessionId}`);
 
-        await this.context.managers.physics.init();
+        await this.context.runtime.physics.init();
 
         // Pass null for scene in headless environment
-        this.context.managers.session.init(null as any);
+        this.context.runtime.session.init(null as any);
 
-        console.log(`[HeadlessSession] Entity List AFTER Session Init:`, Array.from(this.context.managers.entity.entities.keys()));
+        console.log(`[HeadlessSession] Entity List AFTER Session Init:`, Array.from(this.context.runtime.entity.entities.keys()));
 
         this.engine.start();
         console.log(`[HeadlessSession] Simulation Loop Started for ${this.sessionId} at 60Hz`);
@@ -67,8 +67,8 @@ export class HeadlessSession {
     }
 
     public getStats() {
-        const entityMgr = this.context.managers.entity;
-        const physicsMgr = this.context.managers.physics;
+        const entityMgr = this.context.runtime.entity;
+        const physicsMgr = this.context.runtime.physics;
         const entities = Array.from(entityMgr.entities.values());
 
         const players = entities.filter(e => e.type === 'REMOTE_PLAYER');

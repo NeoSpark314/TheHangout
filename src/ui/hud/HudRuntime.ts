@@ -91,7 +91,7 @@ export class HudRuntime implements IUpdatable {
     public update(delta: number): void {
         const now = performance.now();
         if (this.crosshair) {
-            const isXR = this.context.managers.render?.isXRPresenting();
+            const isXR = this.context.runtime.render?.isXRPresenting();
             this.crosshair.visible = !isXR;
         }
 

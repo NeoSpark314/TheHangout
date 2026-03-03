@@ -127,8 +127,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             console.log(`[NetworkRuntime] Host Peer ID: ${id}`);
             this.context.sessionId = id;
 
-            if (this.context.managers.media) {
-                this.context.managers.media.bindPeer(this.peer!);
+            if (this.context.runtime.media) {
+                this.context.runtime.media.bindPeer(this.peer!);
             }
 
             eventBus.emit(EVENTS.HOST_READY, id);
@@ -152,8 +152,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.peer.on('open', async (id) => {
             console.log(`[NetworkRuntime] Guest Peer ID: ${id}`);
             this.context.sessionId = hostId;
-            if (this.context.managers.media) {
-                this.context.managers.media.bindPeer(this.peer!);
+            if (this.context.runtime.media) {
+                this.context.runtime.media.bindPeer(this.peer!);
             }
 
             const conn = this.peer!.connect(hostId, { reliable: true });
@@ -186,8 +186,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 // Wait to emit connection until server responds to match PeerJS behavior
 
                 // VoiceRuntime integration hook
-                if (this.context.managers.media) {
-                    this.context.managers.media.bindWebSocket(this.relaySocket!);
+                if (this.context.runtime.media) {
+                    this.context.runtime.media.bindWebSocket(this.relaySocket!);
                 }
 
                 resolve();
@@ -203,9 +203,9 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             if (this.context.isHost) {
                 const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
                 this.sendData(conn.peer, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
-                const snapshot = this.context.managers.entity.getWorldSnapshot();
+                const snapshot = this.context.runtime.entity.getWorldSnapshot();
                 this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
-                this.context.managers.replication.sendSnapshotToPeer(conn.peer);
+                this.context.runtime.replication.sendSnapshotToPeer(conn.peer);
             } else {
                 if (!this.context.isLocalServer) {
                     const localId = this.peer?.id;
@@ -213,7 +213,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                         eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
                     }
                 }
-                this.context.managers.replication.requestSnapshotFromHost();
+                this.context.runtime.replication.requestSnapshotFromHost();
             }
         });
 
@@ -221,14 +221,14 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             if (data instanceof ArrayBuffer) {
                 const view = new DataView(data);
                 if (view.getUint8(0) === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
-                    this.context.managers.remoteDesktop.handleBinaryFrame(data);
+                    this.context.runtime.remoteDesktop.handleBinaryFrame(data);
                 }
                 return;
             }
 
             if (isAudioChunkEnvelope(data)) {
                 const senderId = data.senderId || conn.peer;
-                const entity = this.context.managers.entity.getEntity(senderId);
+                const entity = this.context.runtime.entity.getEntity(senderId);
                 const audioEntity = entity as (IAudioChunkReceiver | undefined);
                 if (audioEntity && typeof audioEntity.onAudioChunk === 'function') {
                     audioEntity.onAudioChunk(data.payload);
@@ -264,9 +264,9 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
-        const managers = this.context.managers;
+        const runtime = this.context.runtime;
         for (const stateData of entityStates) {
-            let entity = managers.entity.getEntity(stateData.id);
+            let entity = runtime.entity.getEntity(stateData.id);
             if (!entity) {
                 // Skip if this is actually us (should already be in entities, but be safe)
                 if (this.context.localPlayer && stateData.id === this.context.localPlayer.id) continue;
@@ -279,7 +279,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                     spawnYaw: 0,
                     isAuthority: false
                 };
-                entity = managers.entity.discover(stateData.id, spawnType, config) || undefined;
+                entity = runtime.entity.discover(stateData.id, spawnType, config) || undefined;
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as unknown as INetworkable<unknown>;
@@ -296,7 +296,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public reclaimOwnership(peerId: string): void {
-        for (const entity of this.context.managers.entity.entities.values()) {
+        for (const entity of this.context.runtime.entity.entities.values()) {
             const logicEntity = entity as any;
             if (logicEntity.ownerId === peerId && !logicEntity.isLocallyControlled) {
                 logicEntity.ownerId = null;
@@ -315,7 +315,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             return;
         }
 
-        const entity = this.context.managers.entity.getEntity(payload.entityId);
+        const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         if (incomingSeq !== 0) {
             this.lastAppliedOwnershipSeqByEntity.set(payload.entityId, incomingSeq);
@@ -331,7 +331,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {
-        const entity = this.context.managers.entity.getEntity(payload.entityId);
+        const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
@@ -343,7 +343,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
-        const entity = this.context.managers.entity.getEntity(payload.entityId);
+        const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (logicEntity.ownerId !== senderId) return;
@@ -448,7 +448,7 @@ class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         if (!this.context.isHost) {
-            this.context.managers.network.applyStateUpdate(payload);
+            this.context.runtime.network.applyStateUpdate(payload);
         }
     }
 }
@@ -461,7 +461,7 @@ class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
             // Only relay player avatars and objects the host is NOT authoritative over
             const relayPackets = payload.filter(p => {
                 if (p.type === EntityType.LOCAL_PLAYER) return true;
-                const entity = this.context.managers.entity.getEntity(p.id);
+                const entity = this.context.runtime.entity.getEntity(p.id);
                 return entity && !entity.isAuthority;
             });
             if (relayPackets.length > 0) {
@@ -482,11 +482,11 @@ class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PAC
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: ISessionConfigUpdatePayload): void {
         if (!this.context.isHost) {
-            this.context.managers.session.updateConfig(payload);
+            this.context.runtime.session.updateConfig(payload);
 
             // If we are in local server mode, this is our cue that we are "connected" and ready to spawn
             if (this.context.isLocalServer) {
-                const network = this.context.managers.network as any;
+                const network = this.context.runtime.network as any;
                 if (network.localPeerId) {
                     eventBus.emit(EVENTS.SESSION_CONNECTED, network.localPeerId);
                 }
@@ -512,7 +512,7 @@ class OwnershipReleaseHandler implements IPacketHandler<PacketPayloadMap[typeof 
 class OwnershipTransferHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_TRANSFER]> {
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: IOwnershipTransferPayload): void {
-        if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
+        if (!this.context.isHost) this.context.runtime.network.applyOwnershipTransfer(payload);
     }
 }
 
@@ -528,14 +528,14 @@ class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET
 class FeatureEventHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_EVENT]> {
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: IReplicatedFeatureEventPayload): void {
-        this.context.managers.replication.handleIncomingFeatureEvent(senderId, payload);
+        this.context.runtime.replication.handleIncomingFeatureEvent(senderId, payload);
     }
 }
 
 class FeatureSnapshotHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT]> {
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: IReplicatedFeatureSnapshotPayload): void {
-        this.context.managers.replication.applySnapshotPayload(payload);
+        this.context.runtime.replication.applySnapshotPayload(payload);
     }
 }
 
@@ -543,42 +543,42 @@ class FeatureSnapshotRequestHandler implements IPacketHandler<PacketPayloadMap[t
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: IFeatureSnapshotRequestPayload): void {
         if (!this.context.isHost) return;
-        this.context.managers.replication.sendSnapshotToPeer(senderId);
+        this.context.runtime.replication.sendSnapshotToPeer(senderId);
     }
 }
 
 class DesktopSourcesStatusHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE]> {
     constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopSourcesStatusResponsePayload): void {
-        this.context.managers.remoteDesktop.handleSourcesStatus(payload);
+        this.context.runtime.remoteDesktop.handleSourcesStatus(payload);
     }
 }
 
 class DesktopStreamSummonedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_SUMMONED]> {
     constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamSummonedPayload): void {
-        this.context.managers.remoteDesktop.handleStreamSummoned(payload);
+        this.context.runtime.remoteDesktop.handleStreamSummoned(payload);
     }
 }
 
 class DesktopStreamStoppedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_STOPPED]> {
     constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamStoppedPayload): void {
-        this.context.managers.remoteDesktop.handleStreamStopped(payload);
+        this.context.runtime.remoteDesktop.handleStreamStopped(payload);
     }
 }
 
 class DesktopStreamOfflineHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_OFFLINE]> {
     constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamOfflinePayload): void {
-        this.context.managers.remoteDesktop.handleStreamOffline(payload);
+        this.context.runtime.remoteDesktop.handleStreamOffline(payload);
     }
 }
 
 class DesktopStreamFrameHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_FRAME]> {
     constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamFramePayload): void {
-        this.context.managers.remoteDesktop.handleStreamFrame(payload);
+        this.context.runtime.remoteDesktop.handleStreamFrame(payload);
     }
 }
 

@@ -46,7 +46,7 @@ export class EntityFactory {
     }
 
     public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
-        const render = context.managers.render;
+        const render = context.runtime.render;
         const view = render
             ? new StickFigureView(context, {
                 color: color || (isLocal ? context.avatarConfig.color : 0xff00ff),
@@ -74,13 +74,13 @@ export class EntityFactory {
         mesh: THREE.Mesh,
         halfExtents?: IVector3
     ): PhysicsEntity | null {
-        const managers = context.managers;
-        const render = managers.render;
+        const runtime = context.runtime;
+        const render = runtime.render;
 
         // Ensure PhysicsPropView isn't created if there's no mesh or render context
         const view = render && mesh ? new PhysicsPropView(mesh, id) : new NullView(id);
 
-        if (!managers.physics) {
+        if (!runtime.physics) {
             console.error('[EntityFactory] Physics manager not found');
             return null;
         }
@@ -90,11 +90,11 @@ export class EntityFactory {
             view.addToInteractionGroup(render.interactionGroup);
         }
 
-        return managers.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
+        return runtime.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
     }
 
     public static createPen(context: AppContext, id: string, config: any): PenEntity {
-        const render = context.managers.render;
+        const render = context.runtime.render;
         const view = render ? new PenView(id) : new NullView(id);
         const entity = new PenEntity(context, id, !!config.isAuthority, view);
 

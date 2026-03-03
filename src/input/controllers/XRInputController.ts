@@ -10,7 +10,7 @@ export class XRInputManager {
         this.move = { x: 0, y: 0 };
         this.turn = 0;
 
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
         if (!render || !render.isXRPresenting()) return;
 
         const session = render.getXRSession();

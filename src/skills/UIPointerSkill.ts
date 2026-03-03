@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
 import { LocalPlayer } from '../world/entities/LocalPlayer';
-import type { IManagers } from '../app/AppContext';
+import type { IRuntimeRegistry } from '../app/AppContext';
 import eventBus from '../app/events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { IHandIntentPayload } from '../shared/contracts/IIntents';
@@ -59,7 +59,7 @@ export class UIPointerSkill extends Skill {
 
     public activate(player: LocalPlayer): void {
         super.activate(player);
-        const render = player.context.managers.render;
+        const render = player.context.runtime.render;
         if (render) {
             render.scene.add(this.pointerLines.left);
             render.scene.add(this.pointerLines.right);
@@ -86,7 +86,7 @@ export class UIPointerSkill extends Skill {
         }
         this._handlers = [];
 
-        const render = player.context.managers.render;
+        const render = player.context.runtime.render;
         if (render) {
             render.scene.remove(this.pointerLines.left);
             render.scene.remove(this.pointerLines.right);
@@ -97,9 +97,9 @@ export class UIPointerSkill extends Skill {
         }
     }
 
-    public update(delta: number, player: LocalPlayer, managers: IManagers): void {
-        const render = managers.render;
-        const vrUi = managers.vrUi;
+    public update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void {
+        const render = runtime.render;
+        const vrUi = runtime.vrUi;
         if (!render || !vrUi || !vrUi.tablet) return;
 
         const isXR = render.isXRPresenting();
@@ -108,7 +108,7 @@ export class UIPointerSkill extends Skill {
         if (isXR) {
             this.mouseLine.visible = false;
             this.mouseDot.visible = false;
-            const trackingHands = managers.tracking.getState().hands;
+            const trackingHands = runtime.tracking.getState().hands;
 
             for (const hand of ['left', 'right'] as const) {
                 const handState = trackingHands[hand];
@@ -198,15 +198,15 @@ export class UIPointerSkill extends Skill {
     }
 
     private handlePointerClick(player: LocalPlayer, hand: 'left' | 'right'): void {
-        const render = player.context.managers.render;
-        const vrUi = player.context.managers.vrUi;
+        const render = player.context.runtime.render;
+        const vrUi = player.context.runtime.vrUi;
         if (!render || !vrUi || !vrUi.tablet) return;
 
         const isXR = render.isXRPresenting();
         const tabletMesh = vrUi.tablet.mesh;
 
         if (isXR) {
-            const handState = player.context.managers.tracking.getState().hands[hand];
+            const handState = player.context.runtime.tracking.getState().hands[hand];
             if (!handState.active) return;
 
             const pos = handState.pointerPose.position || handState.pose.position;

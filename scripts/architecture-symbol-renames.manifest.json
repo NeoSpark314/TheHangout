@@ -2,6 +2,10 @@
   "version": 1,
   "description": "Phase 2 architecture refactor: high-confidence symbol renames after the phase-1 file moves.",
   "renames": [
+    { "from": "IManagers", "to": "IRuntimeRegistry" },
+    { "from": "setManager", "to": "setRuntime" },
+    { "from": "_managers", "to": "_runtime" },
+    { "from": "managers", "to": "runtime" },
     { "from": "GameContext", "to": "AppContext" },
     { "from": "GameEngine", "to": "Engine" },
     { "from": "NetworkManager", "to": "NetworkRuntime" },

@@ -44,7 +44,7 @@ export class DebugRenderRuntime implements IUpdatable {
     }
 
     public init(): void {
-        const scene = this.context.managers.render?.scene;
+        const scene = this.context.runtime.render?.scene;
         if (scene) {
             scene.add(this.root);
             this.root.visible = false;
@@ -81,7 +81,7 @@ export class DebugRenderRuntime implements IUpdatable {
             this.syncVisuals();
         }
 
-        const debugBodies = this.context.managers.physics?.getDebugBodies() || [];
+        const debugBodies = this.context.runtime.physics?.getDebugBodies() || [];
         for (const body of debugBodies) {
             const visual = this.visuals.get(body.id);
             if (!visual) continue;
@@ -98,7 +98,7 @@ export class DebugRenderRuntime implements IUpdatable {
     }
 
     private syncVisuals(): void {
-        const debugBodies = this.context.managers.physics?.getDebugBodies() || [];
+        const debugBodies = this.context.runtime.physics?.getDebugBodies() || [];
         const incomingIds = new Set<string>(debugBodies.map((b) => b.id));
 
         for (const body of debugBodies) {
@@ -197,7 +197,7 @@ export class DebugRenderRuntime implements IUpdatable {
             const t = body.rigidBody.translation();
             visual.label.position.set(t.x, t.y + 0.35, t.z);
 
-            const camera = this.context.managers.render?.camera;
+            const camera = this.context.runtime.render?.camera;
             if (camera) {
                 visual.label.quaternion.copy(camera.quaternion);
             }

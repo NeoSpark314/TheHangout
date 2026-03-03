@@ -100,7 +100,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
         const lp = this.context.localPlayer as any;
         if (this.isRelative && lp && lp.headState) {
             const head = lp.headState;
-            const tracking = this.context.managers.tracking.getState();
+            const tracking = this.context.runtime.tracking.getState();
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
 
             const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
@@ -171,7 +171,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
 
         if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
             const head = (this.context.localPlayer as any).headState;
-            const tracking = this.context.managers.tracking.getState();
+            const tracking = this.context.runtime.tracking.getState();
 
             // Store the dropped transform relative to the user's current head yaw
             const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);

@@ -1,5 +1,5 @@
 import { LocalPlayer } from '../world/entities/LocalPlayer';
-import type { IManagers } from '../app/AppContext';
+import type { IRuntimeRegistry } from '../app/AppContext';
 
 export abstract class Skill {
     public id: string;
@@ -21,7 +21,7 @@ export abstract class Skill {
         this.isActive = false;
     }
 
-    public abstract update(delta: number, player: LocalPlayer, managers: IManagers): void;
+    public abstract update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void;
 
     public getNetworkState(): any {
         return null;

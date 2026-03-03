@@ -142,8 +142,8 @@ export class PhysicsRuntime {
             defaultMesh.position.set(position.x, position.y, position.z);
             finalView = new PhysicsPropView(defaultMesh, entityId);
 
-            if (this.context.managers.render) {
-                finalView.addToScene(this.context.managers.render.scene);
+            if (this.context.runtime.render) {
+                finalView.addToScene(this.context.runtime.render.scene);
             }
         }
 
@@ -173,7 +173,7 @@ export class PhysicsRuntime {
         physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
-        const entityManager = this.context.managers.entity;
+        const entityManager = this.context.runtime.entity;
         if (entityManager) {
             entityManager.addEntity(physicsEntity);
         }
@@ -427,7 +427,7 @@ export class PhysicsRuntime {
 
         const heldAuthoritative: PhysicsEntity[] = [];
         const dedupe = new Set<string>();
-        for (const entity of this.context.managers.entity.entities.values()) {
+        for (const entity of this.context.runtime.entity.entities.values()) {
             if (entity.type !== EntityType.PHYSICS_PROP) continue;
             const prop = entity as PhysicsEntity;
             if (prop.heldBy === localId && prop.isAuthority && !dedupe.has(prop.id)) {

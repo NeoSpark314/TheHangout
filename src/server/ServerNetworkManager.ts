@@ -39,7 +39,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                 // We must relay avatars AND any objects the server has given ownership to!
                 const relayPackets = payload.filter(p => {
                     if (p.type === EntityType.LOCAL_PLAYER) return true;
-                    const entity = this.context.managers.entity.getEntity(p.id);
+                    const entity = this.context.runtime.entity.getEntity(p.id);
                     return entity && !entity.isAuthority;
                 });
 
@@ -63,13 +63,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, {
             handle: (senderId: string, payload: IReplicatedFeatureEventPayload) => {
-                this.context.managers.replication.handleIncomingFeatureEvent(senderId, payload);
+                this.context.runtime.replication.handleIncomingFeatureEvent(senderId, payload);
             }
         });
 
         this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {
             handle: (senderId: string, payload: IFeatureSnapshotRequestPayload) => {
-                this.context.managers.replication.sendSnapshotToPeer(senderId);
+                this.context.runtime.replication.sendSnapshotToPeer(senderId);
             }
         });
 
@@ -92,9 +92,9 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
         this.sendData(peerId, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
 
-        const snapshot = this.context.managers.entity.getWorldSnapshot();
+        const snapshot = this.context.runtime.entity.getWorldSnapshot();
         this.sendData(peerId, PACKET_TYPES.STATE_UPDATE, snapshot);
-        this.context.managers.replication.sendSnapshotToPeer(peerId);
+        this.context.runtime.replication.sendSnapshotToPeer(peerId);
 
         // Broadcast to everyone else that a new peer joined, so they can restart their media recorders to generate a fresh audio header
         this.relayToOthers(peerId, PACKET_TYPES.PEER_JOINED, { peerId });
@@ -103,8 +103,8 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     public removeClient(peerId: string): void {
         this.connections.delete(peerId);
         this.reclaimOwnership(peerId);
-        if (this.context.managers.entity) {
-            this.context.managers.entity.removeEntity(peerId);
+        if (this.context.runtime.entity) {
+            this.context.runtime.entity.removeEntity(peerId);
         }
         this.broadcast(PACKET_TYPES.PEER_DISCONNECT, peerId);
     }
@@ -153,13 +153,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
     // --- State and Ownership Methods ---
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
-        const managers = this.context.managers;
+        const runtime = this.context.runtime;
         for (const stateData of entityStates) {
-            let entity = managers.entity.getEntity(stateData.id);
+            let entity = runtime.entity.getEntity(stateData.id);
             if (!entity) {
                 const spawnType = stateData.type === EntityType.LOCAL_PLAYER ? EntityType.REMOTE_PLAYER : stateData.type;
                 const config = { spawnPos: { x: 0, y: 0, z: 0 }, spawnYaw: 0, isAuthority: false };
-                entity = managers.entity.discover(stateData.id, spawnType, config) || undefined;
+                entity = runtime.entity.discover(stateData.id, spawnType, config) || undefined;
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as any;
@@ -169,7 +169,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public reclaimOwnership(peerId: string): void {
-        for (const entity of this.context.managers.entity.entities.values()) {
+        for (const entity of this.context.runtime.entity.entities.values()) {
             const logicEntity = entity as any;
             if (logicEntity.ownerId === peerId) {
                 logicEntity.ownerId = null;
@@ -182,7 +182,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {
-        const entity = this.context.managers.entity.getEntity(payload.entityId);
+        const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
@@ -194,7 +194,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
-        const entity = this.context.managers.entity.getEntity(payload.entityId);
+        const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
         if (logicEntity.ownerId !== senderId) return;
@@ -218,14 +218,14 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public spawnCube(): void {
-        const sessionMgr = this.context.managers.session;
+        const sessionMgr = this.context.runtime.session;
         if (sessionMgr && sessionMgr.props) {
             sessionMgr.props.spawnGrabbableCube();
         }
     }
 
     public resetSession(): void {
-        const entityMgr = this.context.managers.entity;
+        const entityMgr = this.context.runtime.entity;
         const entities = Array.from(entityMgr.entities.values());
         entities.forEach(entity => {
             if (entity.type === EntityType.PHYSICS_PROP) {
@@ -233,7 +233,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             }
         });
         // Re-init the session props
-        this.context.managers.session.init(null as any);
+        this.context.runtime.session.init(null as any);
         this.broadcast(PACKET_TYPES.STATE_UPDATE, entityMgr.getWorldSnapshot());
     }
 

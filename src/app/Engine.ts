@@ -46,8 +46,8 @@ export class Engine {
         this.lastTime = performance.now();
         console.log('[Engine] Engine started.');
 
-        if (this.context.managers.render) {
-            this.context.managers.render.setAnimationLoop((time, frame) => this.loop(time, frame));
+        if (this.context.runtime.render) {
+            this.context.runtime.render.setAnimationLoop((time, frame) => this.loop(time, frame));
         } else if (typeof requestAnimationFrame !== 'undefined') {
             const wrap = (time: number) => {
                 this.loop(time);

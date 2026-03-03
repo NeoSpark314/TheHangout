@@ -19,7 +19,7 @@ export class VoiceRuntime {
 
     constructor(private context: AppContext) {
         eventBus.on(EVENTS.ENTITY_DISCOVERED, (peerId: string) => {
-            const network = this.context.managers.network;
+            const network = this.context.runtime.network;
             const localId = network?.peer?.id || network?.localPeerId;
             const isRemoteNetworkPeer = !!network?.connections?.has(peerId);
 
@@ -88,7 +88,7 @@ export class VoiceRuntime {
             this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             console.log('[VoiceRuntime] Microphone access granted.');
 
-            const render = this.context.managers.render;
+            const render = this.context.runtime.render;
             if (render && render.audioListener) {
                 this.audioContext = render.audioListener.context as AudioContext;
             }
@@ -115,7 +115,7 @@ export class VoiceRuntime {
             if (this.context.isLocalServer) {
                 this.startRecording();
             } else {
-                const network = this.context.managers.network;
+                const network = this.context.runtime.network;
                 if (network && network.peer) {
                     for (const peerId of network.connections.keys()) {
                         if (!this.calls.has(peerId)) {
@@ -225,7 +225,7 @@ export class VoiceRuntime {
     }
 
     public callPeer(targetPeerId: string): void {
-        const network = this.context.managers.network;
+        const network = this.context.runtime.network;
         const peer = network ? network.peer : null;
         const localId = peer?.id || network?.localPeerId;
         if (!peer || !this.localStream || !network?.connections.has(targetPeerId) || targetPeerId === localId || this.calls.has(targetPeerId)) return;

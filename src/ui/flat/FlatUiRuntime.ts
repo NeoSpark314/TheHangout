@@ -127,9 +127,9 @@ export class FlatUiRuntime implements IUpdatable {
 
         if (this.addScreenBtn) {
             this.addScreenBtn.addEventListener('click', () => {
-                const screens = this.context.managers.remoteDesktop.getConfigs();
+                const screens = this.context.runtime.remoteDesktop.getConfigs();
                 screens.push({ name: `Screen ${screens.length + 1}`, key: '' });
-                this.context.managers.remoteDesktop.setConfigs(screens);
+                this.context.runtime.remoteDesktop.setConfigs(screens);
                 this.renderMyScreensEditor();
             });
         }
@@ -137,7 +137,7 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.mobileMenuBtn) {
             this.mobileMenuBtn.addEventListener('click', () => {
                 if (this._mobileHudEnabled) {
-                    this.context.managers.vrUi?.toggle2DMenu();
+                    this.context.runtime.vrUi?.toggle2DMenu();
                 }
             });
         }
@@ -145,11 +145,11 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.mobileActionBtn) {
             const beginAction = (e: Event) => {
                 e.preventDefault();
-                this.context.managers.input?.beginMobilePrimaryAction();
+                this.context.runtime.input?.beginMobilePrimaryAction();
             };
             const endAction = (e: Event) => {
                 e.preventDefault();
-                this.context.managers.input?.endMobilePrimaryAction();
+                this.context.runtime.input?.endMobilePrimaryAction();
             };
 
             this.mobileActionBtn.addEventListener('pointerdown', beginAction);
@@ -161,7 +161,7 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.mobileInteractBtn) {
             this.mobileInteractBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.context.managers.input?.toggleMobileSecondaryAction();
+                this.context.runtime.input?.toggleMobileSecondaryAction();
             });
         }
 
@@ -212,7 +212,7 @@ export class FlatUiRuntime implements IUpdatable {
 
     public update(delta: number): void {
         if (this.overlay.style.display === 'none' && this.isMobile && !this._joysticksInitialized) {
-            this.context.managers.input?.initMobileJoysticks();
+            this.context.runtime.input?.initMobileJoysticks();
             this._joysticksInitialized = true;
         }
 
@@ -266,7 +266,7 @@ export class FlatUiRuntime implements IUpdatable {
                 localStorage.setItem('hangout_voiceEnabled', 'true');
             }
         }
-        this.context.voiceEnabled = this.context.managers.media?.isMicrophoneEnabled() || false;
+        this.context.voiceEnabled = this.context.runtime.media?.isMicrophoneEnabled() || false;
         this.updateVoiceButton(this.context.voiceAutoEnable);
 
         const storedColor = localStorage.getItem('hangout_avatarColor');
@@ -286,7 +286,7 @@ export class FlatUiRuntime implements IUpdatable {
 
         if (this.versionInfo) this.versionInfo.textContent = `v${__APP_VERSION__}`;
         if (this.shaInfo) this.shaInfo.textContent = `build: ${__GIT_SHA__} (${__BUILD_TIME__})`;
-        this.context.managers.remoteDesktop.loadConfigsFromStorage();
+        this.context.runtime.remoteDesktop.loadConfigsFromStorage();
     }
 
     private saveToStorage(): void {
@@ -332,7 +332,7 @@ export class FlatUiRuntime implements IUpdatable {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Guest';
             if (this.context.voiceAutoEnable) {
-                await this.context.managers.media.ensureMicrophoneEnabled();
+                await this.context.runtime.media.ensureMicrophoneEnabled();
             }
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
@@ -352,7 +352,7 @@ export class FlatUiRuntime implements IUpdatable {
                 this.ensureAudioContextResumed();
                 this.context.playerName = this.nameInput.value.trim() || 'Player';
                 if (this.context.voiceAutoEnable) {
-                    await this.context.managers.media.ensureMicrophoneEnabled();
+                    await this.context.runtime.media.ensureMicrophoneEnabled();
                 }
                 const targetId = this.sessionInput.value.trim() || this.generateReadableSessionId();
                 this.sessionInput.value = targetId; // populate if random generated
@@ -371,7 +371,7 @@ export class FlatUiRuntime implements IUpdatable {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Host';
             if (this.context.voiceAutoEnable) {
-                await this.context.managers.media.ensureMicrophoneEnabled();
+                await this.context.runtime.media.ensureMicrophoneEnabled();
             }
             const customId = this.sessionInput.value.trim() || this.generateReadableSessionId();
             this.disableAllButtons();
@@ -387,7 +387,7 @@ export class FlatUiRuntime implements IUpdatable {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Player';
             if (this.context.voiceAutoEnable) {
-                await this.context.managers.media.ensureMicrophoneEnabled();
+                await this.context.runtime.media.ensureMicrophoneEnabled();
             }
             const targetId = this.sessionInput.value.trim();
             if (!targetId) {
@@ -407,7 +407,7 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.myScreensList) return;
         this.myScreensList.innerHTML = '';
 
-        const screens = this.context.managers.remoteDesktop.getConfigs();
+        const screens = this.context.runtime.remoteDesktop.getConfigs();
         for (let i = 0; i < screens.length; i++) {
             const row = screens[i];
             const rowEl = document.createElement('div');
@@ -438,19 +438,19 @@ export class FlatUiRuntime implements IUpdatable {
                 keyInput.classList.toggle('input-invalid', key.length > 0 && key.length < 4);
 
                 if (name.length >= 4 && key.length >= 4) {
-                    const next = this.context.managers.remoteDesktop.getConfigs();
+                    const next = this.context.runtime.remoteDesktop.getConfigs();
                     if (!next[i]) return;
                     next[i] = { name, key };
-                    this.context.managers.remoteDesktop.setConfigs(next, true);
+                    this.context.runtime.remoteDesktop.setConfigs(next, true);
                 }
             };
 
             nameInput.addEventListener('input', updateRow);
             keyInput.addEventListener('input', updateRow);
             removeBtn.addEventListener('click', () => {
-                const next = this.context.managers.remoteDesktop.getConfigs();
+                const next = this.context.runtime.remoteDesktop.getConfigs();
                 next.splice(i, 1);
-                this.context.managers.remoteDesktop.setConfigs(next);
+                this.context.runtime.remoteDesktop.setConfigs(next);
                 this.renderMyScreensEditor();
             });
 
@@ -505,7 +505,7 @@ export class FlatUiRuntime implements IUpdatable {
                     this._mobileHudEnabled = true;
                     if (this.mobileHud) this.mobileHud.style.display = 'block';
                     if (this.mobileMenuBtn) this.mobileMenuBtn.style.display = 'block';
-                    this.context.managers.input?.initMobileJoysticks();
+                    this.context.runtime.input?.initMobileJoysticks();
                     this._joysticksInitialized = true;
                     this.updateMobileHudState();
                 }
@@ -514,9 +514,9 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     private ensureAudioContextResumed(): void {
-        if (this.context.managers.render && this.context.managers.render.audioListener) {
-            if (this.context.managers.render.audioListener.context.state === 'suspended') {
-                this.context.managers.render.audioListener.context.resume();
+        if (this.context.runtime.render && this.context.runtime.render.audioListener) {
+            if (this.context.runtime.render.audioListener.context.state === 'suspended') {
+                this.context.runtime.render.audioListener.context.resume();
             }
         }
     }
@@ -535,7 +535,7 @@ export class FlatUiRuntime implements IUpdatable {
 
     private async setVoicePreference(enabled: boolean): Promise<void> {
         this.context.voiceAutoEnable = enabled;
-        const actualState = await this.context.managers.media.setMicrophoneEnabled(enabled);
+        const actualState = await this.context.runtime.media.setMicrophoneEnabled(enabled);
         if (!enabled) {
             this.context.voiceEnabled = false;
         } else {
@@ -584,13 +584,13 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     private handleLeave(): void {
-        if (this.context.managers.network) this.context.managers.network.disconnect();
-        if (this.context.managers.media) this.context.managers.media.stopMicrophone();
-        if (this.context.managers.entity) {
-            const entities = Array.from(this.context.managers.entity.entities.values());
+        if (this.context.runtime.network) this.context.runtime.network.disconnect();
+        if (this.context.runtime.media) this.context.runtime.media.stopMicrophone();
+        if (this.context.runtime.entity) {
+            const entities = Array.from(this.context.runtime.entity.entities.values());
             entities.forEach(entity => {
                 if (entity.type !== 'LOCAL_PLAYER') {
-                    this.context.managers.entity!.removeEntity(entity.id);
+                    this.context.runtime.entity!.removeEntity(entity.id);
                 }
             });
         }
@@ -605,7 +605,7 @@ export class FlatUiRuntime implements IUpdatable {
     private updateMobileHudState(): void {
         if (!this.isMobile || !this._mobileHudEnabled) return;
 
-        const input = this.context.managers.input;
+        const input = this.context.runtime.input;
         const showAction = this.overlay.style.display === 'none' && !!input?.hasMobilePrimaryAction();
         const showInteract = this.overlay.style.display === 'none' && !!input?.hasMobileSecondaryAction();
 

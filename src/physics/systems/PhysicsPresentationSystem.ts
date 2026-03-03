@@ -11,7 +11,7 @@ export class PhysicsPresentationSystem implements IUpdatable {
     constructor(private context: AppContext) { }
 
     public update(delta: number, _frame?: XRFrame): void {
-        const entityManager = this.context.managers.entity;
+        const entityManager = this.context.runtime.entity;
         if (!entityManager) return;
 
         for (const entity of entityManager.entities.values()) {

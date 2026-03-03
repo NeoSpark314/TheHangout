@@ -49,7 +49,7 @@ export class App {
             this.setupGlobalEventListeners();
 
             // 1. Infrastructure (Physics must be first)
-            await this.context.managers.physics.init();
+            await this.context.runtime.physics.init();
 
             // 2. World (Requires Physics)
             await this.initSystems();
@@ -82,42 +82,42 @@ export class App {
     }
 
     private initializeManagers(): void {
-        this.context.setManager('entity', new EntityRegistry(this.context));
-        this.context.setManager('replication', new FeatureReplicationService(this.context));
-        this.context.setManager('remoteDesktop', new RemoteDesktopFeature(this.context));
-        this.context.setManager('ui', new FlatUiRuntime(this.context));
-        this.context.setManager('network', new NetworkRuntime(this.context));
-        this.context.setManager('media', new VoiceRuntime(this.context));
-        this.context.setManager('render', new RenderRuntime(this.context));
-        this.context.setManager('physics', new PhysicsRuntime(this.context));
-        this.context.setManager('player', new PlayerPresenceService(this.context));
-        this.context.setManager('input', new InputRuntime(this.context));
-        this.context.setManager('hud', new HudRuntime(this.context));
-        this.context.setManager('session', new SessionRuntime(this.context));
-        this.context.setManager('audio', new AudioRuntime(this.context));
-        this.context.setManager('assets', new AssetRuntime(this.context));
-        this.context.setManager('drawing', new DrawingFeature(this.context.managers.render.scene, this.context));
-        this.context.setManager('animation', new AnimationSystem());
-        this.context.setManager('interaction', new InteractionSystem(this.context));
-        this.context.setManager('vrUi', new VrUiRuntime(this.context));
-        this.context.setManager('debugRender', new DebugRenderRuntime(this.context));
-        this.context.setManager('particles', new ParticleEffectSystem(this.context.managers.render.scene));
-        this.context.setManager('social', new SocialFeature(this.context, this.context.managers.particles));
+        this.context.setRuntime('entity', new EntityRegistry(this.context));
+        this.context.setRuntime('replication', new FeatureReplicationService(this.context));
+        this.context.setRuntime('remoteDesktop', new RemoteDesktopFeature(this.context));
+        this.context.setRuntime('ui', new FlatUiRuntime(this.context));
+        this.context.setRuntime('network', new NetworkRuntime(this.context));
+        this.context.setRuntime('media', new VoiceRuntime(this.context));
+        this.context.setRuntime('render', new RenderRuntime(this.context));
+        this.context.setRuntime('physics', new PhysicsRuntime(this.context));
+        this.context.setRuntime('player', new PlayerPresenceService(this.context));
+        this.context.setRuntime('input', new InputRuntime(this.context));
+        this.context.setRuntime('hud', new HudRuntime(this.context));
+        this.context.setRuntime('session', new SessionRuntime(this.context));
+        this.context.setRuntime('audio', new AudioRuntime(this.context));
+        this.context.setRuntime('assets', new AssetRuntime(this.context));
+        this.context.setRuntime('drawing', new DrawingFeature(this.context.runtime.render.scene, this.context));
+        this.context.setRuntime('animation', new AnimationSystem());
+        this.context.setRuntime('interaction', new InteractionSystem(this.context));
+        this.context.setRuntime('vrUi', new VrUiRuntime(this.context));
+        this.context.setRuntime('debugRender', new DebugRenderRuntime(this.context));
+        this.context.setRuntime('particles', new ParticleEffectSystem(this.context.runtime.render.scene));
+        this.context.setRuntime('social', new SocialFeature(this.context, this.context.runtime.particles));
 
         // Tracking Initialization
         const tracking = new TrackingRuntime(this.context);
         tracking.registerProvider(new XRTrackingProvider(this.context));
         tracking.registerProvider(new DesktopTrackingProvider(this.context));
         tracking.setProvider('desktop'); // Default
-        this.context.setManager('tracking', tracking);
+        this.context.setRuntime('tracking', tracking);
     }
 
     private setupGlobalEventListeners(): void {
-        const managers = this.context.managers;
+        const runtime = this.context.runtime;
 
         // Audio Activation
         const resumeAudio = () => {
-            managers.audio.resume();
+            runtime.audio.resume();
             window.removeEventListener('pointerdown', resumeAudio);
             window.removeEventListener('keydown', resumeAudio);
         };
@@ -126,15 +126,15 @@ export class App {
 
         // Tracking Provider Switching
         eventBus.on(EVENTS.XR_SESSION_STARTED, () => {
-            managers.tracking.setProvider('xr');
+            runtime.tracking.setProvider('xr');
         });
         eventBus.on(EVENTS.XR_SESSION_ENDED, () => {
-            managers.tracking.setProvider('desktop');
+            runtime.tracking.setProvider('desktop');
         });
 
         // HUD/Camera integration
-        if (managers.render && managers.hud) {
-            managers.render.camera.add(managers.hud.group);
+        if (runtime.render && runtime.hud) {
+            runtime.render.camera.add(runtime.hud.group);
         }
 
         // Network/Player Initialization
@@ -147,53 +147,53 @@ export class App {
     }
 
     private async initSystems(): Promise<void> {
-        const managers = this.context.managers;
+        const runtime = this.context.runtime;
 
-        if (managers.render && managers.session) {
-            managers.session.init(managers.render.scene);
+        if (runtime.render && runtime.session) {
+            runtime.session.init(runtime.render.scene);
         }
 
-        if (managers.vrUi) {
-            managers.vrUi.init();
+        if (runtime.vrUi) {
+            runtime.vrUi.init();
         }
-        if (managers.debugRender) {
-            managers.debugRender.init();
+        if (runtime.debugRender) {
+            runtime.debugRender.init();
         }
 
         // Register systems to Engine in the exact desired execution order
-        if (managers.network) this.engine.addSystem(managers.network as any);
-        if (managers.input) this.engine.addSystem(managers.input as any);
-        if (managers.entity) this.engine.addSystem(managers.entity as any);
+        if (runtime.network) this.engine.addSystem(runtime.network as any);
+        if (runtime.input) this.engine.addSystem(runtime.input as any);
+        if (runtime.entity) this.engine.addSystem(runtime.entity as any);
 
         // Physics needs a small wrapper because its update method is called 'step' and only takes delta
-        if (managers.physics) {
+        if (runtime.physics) {
             this.engine.addSystem({
-                update: (delta) => managers.physics!.step(delta)
+                update: (delta) => runtime.physics!.step(delta)
             });
         }
         this.engine.addSystem(new PhysicsPresentationSystem(this.context));
 
-        if (managers.session) this.engine.addSystem(managers.session as any);
-        if (managers.social) this.engine.addSystem(managers.social as any);
-        if (managers.particles) this.engine.addSystem(managers.particles as any);
-        if (managers.remoteDesktop) this.engine.addSystem(managers.remoteDesktop as any);
-        if (managers.ui) this.engine.addSystem(managers.ui as any);
-        if (managers.hud) this.engine.addSystem(managers.hud as any);
-        if (managers.vrUi) this.engine.addSystem(managers.vrUi as any);
-        if (managers.debugRender) this.engine.addSystem(managers.debugRender as any);
+        if (runtime.session) this.engine.addSystem(runtime.session as any);
+        if (runtime.social) this.engine.addSystem(runtime.social as any);
+        if (runtime.particles) this.engine.addSystem(runtime.particles as any);
+        if (runtime.remoteDesktop) this.engine.addSystem(runtime.remoteDesktop as any);
+        if (runtime.ui) this.engine.addSystem(runtime.ui as any);
+        if (runtime.hud) this.engine.addSystem(runtime.hud as any);
+        if (runtime.vrUi) this.engine.addSystem(runtime.vrUi as any);
+        if (runtime.debugRender) this.engine.addSystem(runtime.debugRender as any);
 
-        if (managers.render) {
+        if (runtime.render) {
             this.engine.addSystem({
                 update: (delta) => {
-                    managers.render!.update(delta, this.context.localPlayer);
-                    managers.render!.render();
+                    runtime.render!.update(delta, this.context.localPlayer);
+                    runtime.render!.render();
                 }
             });
         }
 
         // Tasks at the end of the frame
-        if (managers.input) {
-            this.engine.onEndFrame(() => managers.input!.clearJustPressed());
+        if (runtime.input) {
+            this.engine.onEndFrame(() => runtime.input!.clearJustPressed());
         }
     }
 
@@ -202,9 +202,9 @@ export class App {
         if (this.playerInitialized || !id) return;
         this.playerInitialized = true;
 
-        const managers = this.context.managers;
-        managers.render.switchToPlayerView();
+        const runtime = this.context.runtime;
+        runtime.render.switchToPlayerView();
 
-        managers.player.init(id);
+        runtime.player.init(id);
     }
 }

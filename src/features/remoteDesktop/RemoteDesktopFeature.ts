@@ -46,7 +46,7 @@ export class RemoteDesktopFeature implements IUpdatable {
     }
 
     public update(_delta: number): void {
-        const renderMgr = this.context.managers.render;
+        const renderMgr = this.context.runtime.render;
         if (!renderMgr || !renderMgr.camera) return;
 
         const camPos = new THREE.Vector3();
@@ -105,7 +105,7 @@ export class RemoteDesktopFeature implements IUpdatable {
         const keys = this.configs
             .map(c => c.key)
             .filter(k => k.length > 0);
-        this.context.managers.network.sendData(
+        this.context.runtime.network.sendData(
             this.context.sessionId,
             PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST,
             { keys }
@@ -135,7 +135,7 @@ export class RemoteDesktopFeature implements IUpdatable {
             payload.quaternion = [head.quaternion.x, head.quaternion.y, head.quaternion.z, head.quaternion.w];
         }
 
-        this.context.managers.network.sendData(
+        this.context.runtime.network.sendData(
             this.context.sessionId,
             PACKET_TYPES.DESKTOP_STREAM_SUMMON,
             payload
@@ -144,7 +144,7 @@ export class RemoteDesktopFeature implements IUpdatable {
 
     public stopStream(key: string): void {
         if (!this.context.sessionId) return;
-        this.context.managers.network.sendData(
+        this.context.runtime.network.sendData(
             this.context.sessionId,
             PACKET_TYPES.DESKTOP_STREAM_STOP,
             { key }
@@ -340,7 +340,7 @@ export class RemoteDesktopFeature implements IUpdatable {
 
         // Initial default position until layout refreshes
         group.position.set(0, 1.5, -2.4);
-        this.context.managers.render.scene.add(group);
+        this.context.runtime.render.scene.add(group);
 
         const surface: IRenderSurface = {
             key,
@@ -370,13 +370,13 @@ export class RemoteDesktopFeature implements IUpdatable {
         const total = sortedActive.length;
 
         // Hide/Show duck based on screen count
-        this.context.managers.session.toggleHologram(total === 0);
+        this.context.runtime.session.toggleHologram(total === 0);
 
         sortedActive.forEach((key, index) => {
             const surface = this.surfacesByKey.get(key);
             if (!surface) return;
 
-            const layout = this.context.managers.session.getDesktopLayout(index, total);
+            const layout = this.context.runtime.session.getDesktopLayout(index, total);
             surface.group.position.set(layout.position[0], layout.position[1], layout.position[2]);
 
             if (layout.rotation) {
@@ -475,7 +475,7 @@ export class RemoteDesktopFeature implements IUpdatable {
         const surface = this.surfacesByKey.get(key);
         if (!surface) return;
 
-        this.context.managers.render.scene.remove(surface.group);
+        this.context.runtime.render.scene.remove(surface.group);
         surface.group.traverse((obj) => {
             const mesh = obj as THREE.Mesh;
             if (!mesh.geometry || !mesh.material) return;

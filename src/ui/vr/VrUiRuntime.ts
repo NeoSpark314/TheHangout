@@ -35,15 +35,15 @@ export class VrUiRuntime implements IUpdatable {
         this.tablet = new TabletEntity(this.context, 'local-tablet');
 
         // Add mesh to the scene rendering
-        if (this.context.managers.render) {
-            this.context.managers.render.scene.add(this.tablet.mesh);
+        if (this.context.runtime.render) {
+            this.context.runtime.render.scene.add(this.tablet.mesh);
         }
 
         // Add to Entity Manager so Grab works
-        if (this.context.managers.entity) {
+        if (this.context.runtime.entity) {
             // Because our ECS requires entities in the map to be findable by raycasters/skills
             // But we don't want it synced. We can manually add it with a local prefix:
-            this.context.managers.entity.addEntity(this.tablet as any);
+            this.context.runtime.entity.addEntity(this.tablet as any);
         }
 
         // Setup the Main Layout (1280x800 landscape)
@@ -69,7 +69,7 @@ export class VrUiRuntime implements IUpdatable {
 
         this.keyboardHandler = (e: KeyboardEvent) => {
             if (e.key.toLowerCase() === 'm') {
-                const render = this.context.managers.render;
+                const render = this.context.runtime.render;
                 if (render && !render.isXRPresenting()) {
                     this.toggle2DMenu();
                 }
@@ -176,13 +176,13 @@ export class VrUiRuntime implements IUpdatable {
         }
 
         if (this.tablet) {
-            const isVR = this.context.managers.render?.isXRPresenting();
+            const isVR = this.context.runtime.render?.isXRPresenting();
             this.tablet.setVisible(!!isVR);
         }
 
         // Restore desktop controls if not in VR
         const controls = document.getElementById('desktop-controls');
-        if (controls && !this.context.managers.render?.isXRPresenting()) {
+        if (controls && !this.context.runtime.render?.isXRPresenting()) {
             controls.style.display = 'block';
         }
     }
@@ -239,12 +239,12 @@ export class VrUiRuntime implements IUpdatable {
                     name: (this.context.playerName || 'You') + ' (You)',
                     avatarColor: this.context.avatarConfig.color,
                     isLocal: true,
-                    audioLevel: this.context.managers.media ? this.context.managers.media.getLocalVolume() : 0,
+                    audioLevel: this.context.runtime.media ? this.context.runtime.media.getLocalVolume() : 0,
                     micEnabled: this.context.voiceEnabled
                 });
 
                 // 2. Add Remote Players
-                for (const entity of this.context.managers.entity.entities.values()) {
+                for (const entity of this.context.runtime.entity.entities.values()) {
                     if (entity.type === 'REMOTE_PLAYER') {
                         const rp = entity as RemotePlayer;
                         // Avoid adding duplicates if the same player is discovered multiple times (edge case)
@@ -352,7 +352,7 @@ export class VrUiRuntime implements IUpdatable {
 
             // Reactive updates
             this.onPeerUpdateHandler = () => {
-                const isVR = this.context.managers.render?.isXRPresenting();
+                const isVR = this.context.runtime.render?.isXRPresenting();
                 if (this.context.isMenuOpen || isVR) {
                     renderList();
                 }
@@ -365,7 +365,7 @@ export class VrUiRuntime implements IUpdatable {
 
             // Periodically refresh for Talking indicators if menu is visible
             this.peersTalkingInterval = setInterval(() => {
-                const isVR = this.context.managers.render?.isXRPresenting();
+                const isVR = this.context.runtime.render?.isXRPresenting();
                 if (this.context.isMenuOpen || isVR) {
                     renderList();
                 }
@@ -376,7 +376,7 @@ export class VrUiRuntime implements IUpdatable {
                 const nextPreference = !this.context.voiceAutoEnable;
                 this.context.voiceAutoEnable = nextPreference;
                 localStorage.setItem('hangout_voiceEnabled', String(nextPreference));
-                this.context.managers.media.setMicrophoneEnabled(nextPreference).then((actualState) => {
+                this.context.runtime.media.setMicrophoneEnabled(nextPreference).then((actualState) => {
                     this.context.voiceEnabled = actualState;
                 });
             });
@@ -420,7 +420,7 @@ export class VrUiRuntime implements IUpdatable {
             });
             const nextBtn = new UIButton("Next >", 880, 630, 200, 80, () => {
                 let totalPeers = 1; // Start with local player
-                for (const entity of this.context.managers.entity.entities.values()) {
+                for (const entity of this.context.runtime.entity.entities.values()) {
                     if (entity.type === 'REMOTE_PLAYER') totalPeers++;
                 }
                 const totalPages = Math.max(1, Math.ceil(totalPeers / playersPerPage));
@@ -459,7 +459,7 @@ export class VrUiRuntime implements IUpdatable {
             systemContainer.addChild(title);
 
             const leaveBtn = new UIButton("Leave Session", 440, 630, 400, 80, () => {
-                const render = this.context.managers.render;
+                const render = this.context.runtime.render;
                 if (render && render.isXRPresenting()) {
                     render.getXRSession()?.end().then(() => {
                         location.reload();
@@ -486,7 +486,7 @@ export class VrUiRuntime implements IUpdatable {
         const sessionContainer = this.sessionTab.container;
 
         import('../shared/canvasui').then(({ UIButton, UILabel }) => {
-            const desktop = this.context.managers.remoteDesktop;
+            const desktop = this.context.runtime.remoteDesktop;
 
             const title = new UILabel('Remote Screens', 50, 30, 1180, 70);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
@@ -609,7 +609,7 @@ export class VrUiRuntime implements IUpdatable {
             title.textAlign = 'center';
             debugContainer.addChild(title);
 
-            const debugManager = this.context.managers.debugRender;
+            const debugManager = this.context.runtime.debugRender;
             const debugSettings = debugManager?.getSettings();
 
             const overlayToggle = new UIToggle(
@@ -623,7 +623,7 @@ export class VrUiRuntime implements IUpdatable {
             );
             debugContainer.addChild(overlayToggle);
 
-            const physics = this.context.managers.physics;
+            const physics = this.context.runtime.physics;
             const makeStepper = (
                 label: string,
                 y: number,
@@ -822,7 +822,7 @@ export class VrUiRuntime implements IUpdatable {
     public update(delta: number): void {
         if (this.tablet) {
             // Update 3D visibility based on VR state vs Desktop Menu
-            const isVR = this.context.managers.render?.isXRPresenting();
+            const isVR = this.context.runtime.render?.isXRPresenting();
             if (isVR) {
                 this.tablet.setVisible(true);
             } else if (!this.context.isMenuOpen) {

@@ -4,7 +4,7 @@ import { LocalPlayer } from '../world/entities/LocalPlayer';
 import { IInteractable } from '../shared/contracts/IInteractable';
 import { IGrabbable } from '../shared/contracts/IGrabbable';
 import { isGrabbable, isInteractable } from '../shared/utils/TypeGuards';
-import type { IManagers } from '../app/AppContext';
+import type { IRuntimeRegistry } from '../app/AppContext';
 import eventBus from '../app/events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { IHandIntentPayload } from '../shared/contracts/IIntents';
@@ -31,7 +31,7 @@ export class GrabSkill extends Skill {
 
         const onGrabStart = (payload: IHandIntentPayload) => {
             if (this.heldObjects.has(payload.hand)) return;
-            const handState = player.context.managers.tracking.getState().hands[payload.hand];
+            const handState = player.context.runtime.tracking.getState().hands[payload.hand];
             let nearest = this.highlightedEntities[payload.hand];
 
             // Resolve the actual proximity target at grab time from the current hand pose.
@@ -40,7 +40,7 @@ export class GrabSkill extends Skill {
             if (handState.active) {
                 const pos = handState.pointerPose.position || handState.pose.position;
                 const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-                const currentNearest = player.context.managers.interaction.findNearestInteractable(queryPos, this.grabRadius);
+                const currentNearest = player.context.runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 nearest = currentNearest?.interactable || null;
             }
 
@@ -138,8 +138,8 @@ export class GrabSkill extends Skill {
         this._updateHighlight(player.id, 'right', null);
     }
 
-    public update(delta: number, player: LocalPlayer, managers: IManagers): void {
-        const trackingHands = managers.tracking.getState().hands;
+    public update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void {
+        const trackingHands = runtime.tracking.getState().hands;
         for (const hand of ['left', 'right'] as const) {
             const handState = trackingHands[hand];
             const held = this.heldObjects.get(hand);
@@ -173,7 +173,7 @@ export class GrabSkill extends Skill {
                 if (handState.active) {
                     const pos = handState.pointerPose.position || handState.pose.position;
                     const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-                    result = managers.interaction.findNearestInteractable(queryPos, this.grabRadius);
+                    result = runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 }
 
                 this._updateHighlight(player.id, hand, result?.interactable || null);

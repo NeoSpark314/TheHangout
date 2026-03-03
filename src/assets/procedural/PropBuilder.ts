@@ -40,7 +40,7 @@ export class PropBuilder implements IReplicatedFeature {
     constructor(scene: THREE.Scene, randomFunc: () => number, private context: AppContext) {
         this.scene = scene;
         this.random = randomFunc;
-        this.context.managers.replication.registerFeature(this);
+        this.context.runtime.replication.registerFeature(this);
 
         this.onPhysicsCollisionStartedHandler = (data) => {
             const padA = this.drumPadFreqByHandle.get(data.handleA);
@@ -50,7 +50,7 @@ export class PropBuilder implements IReplicatedFeature {
             const hit = padA || padB!;
             const entityId = padA ? data.entityBId : data.entityAId;
             if (!entityId) return;
-            const entity = this.context.managers.entity.getEntity(entityId) as PhysicsEntity | undefined;
+            const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsEntity | undefined;
             if (!entity || entity.type !== 'PHYSICS_PROP') return;
 
             const v = entity.rigidBody.linvel();
@@ -137,9 +137,9 @@ export class PropBuilder implements IReplicatedFeature {
             this.scene.add(tableGroup);
         }
 
-        if (this.context.managers.physics) {
-            this.context.managers.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
-            this.context.managers.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
+        if (this.context.runtime.physics) {
+            this.context.runtime.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
+            this.context.runtime.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
         }
     }
 
@@ -156,7 +156,7 @@ export class PropBuilder implements IReplicatedFeature {
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
 
-        this.context.managers.assets.getNormalizedModel('models/duck.glb', 0.25).then(duck => {
+        this.context.runtime.assets.getNormalizedModel('models/duck.glb', 0.25).then(duck => {
             if (this.hologram) {
                 this.duckModel = duck;
                 this.duckModel.visible = this.desiredHologramVisible;
@@ -188,8 +188,8 @@ export class PropBuilder implements IReplicatedFeature {
                 }
 
                 // Add static physics collider
-                if (this.context.managers.physics) {
-                    this.context.managers.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
+                if (this.context.runtime.physics) {
+                    this.context.runtime.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
                 }
             }
         }
@@ -219,8 +219,8 @@ export class PropBuilder implements IReplicatedFeature {
             }
 
             // Add static physics collider
-            if (this.context.managers.physics) {
-                this.context.managers.physics.createCuboid(w / 2, h / 2, w / 2, { x: posX, y: h / 2, z: posZ }, null, true);
+            if (this.context.runtime.physics) {
+                this.context.runtime.physics.createCuboid(w / 2, h / 2, w / 2, { x: posX, y: h / 2, z: posZ }, null, true);
             }
         }
         if (this.scene) this.scene.add(this.decorations);
@@ -235,7 +235,7 @@ export class PropBuilder implements IReplicatedFeature {
         const pen = EntityFactory.spawn(this.context, 'PEN', penId, {
             position: { x: 0.5, y: 1.15, z: 0.5 }
         });
-        if (pen) this.context.managers.entity.addEntity(pen);
+        if (pen) this.context.runtime.entity.addEntity(pen);
 
         const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
         for (let i = 0; i < 6; i++) {
@@ -342,7 +342,7 @@ export class PropBuilder implements IReplicatedFeature {
             this.drumPadFlash.push(0);
             this.drumPadById.set(`pad-${i}`, { index: i, frequency: notes[i], position: new THREE.Vector3(px, padY, pz) });
 
-            const collider = this.context.managers.physics.createStaticCuboidCollider(
+            const collider = this.context.runtime.physics.createStaticCuboidCollider(
                 0.21, 0.04, 0.21,
                 { x: px, y: padY, z: pz }
             );
@@ -355,7 +355,7 @@ export class PropBuilder implements IReplicatedFeature {
     }
 
     private updateHandDrumHits(delta: number): void {
-        const trackingMgr = (this.context.managers as any).tracking;
+        const trackingMgr = (this.context.runtime as any).tracking;
         if (!trackingMgr || typeof trackingMgr.getState !== 'function') {
             // Headless dedicated server has no local tracking provider.
             this.handLastPos.left = null;
@@ -422,7 +422,7 @@ export class PropBuilder implements IReplicatedFeature {
     }
 
     private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
-        const trackingMgr = (this.context.managers as any).tracking;
+        const trackingMgr = (this.context.runtime as any).tracking;
         if (!trackingMgr || typeof trackingMgr.getState !== 'function') return null;
         const trackingState = trackingMgr.getState().hands[hand];
         const localHumanoidJoints = this.context.localPlayer?.humanoid?.joints;
@@ -469,14 +469,14 @@ export class PropBuilder implements IReplicatedFeature {
             this.drumPadFlash[idx] = Math.max(this.drumPadFlash[idx], Math.min(1.0, hit.intensity * 1.2));
         }
 
-        this.context.managers.audio?.playDrumPadHit({
+        this.context.runtime.audio?.playDrumPadHit({
             frequency: hit.frequency,
             intensity: hit.intensity,
             position: hit.position
         });
 
         if (replicate) {
-            this.context.managers.replication.emitFeatureEvent(this.featureId, 'hit', hit);
+            this.context.runtime.replication.emitFeatureEvent(this.featureId, 'hit', hit);
         }
     }
 

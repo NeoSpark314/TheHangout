@@ -40,7 +40,7 @@ export class InputRuntime implements IUpdatable {
 
     private _initWheel(): void {
         window.addEventListener('wheel', (e) => {
-            const render = this.context.managers.render;
+            const render = this.context.runtime.render;
             if (render && !render.isXRPresenting()) {
                 // We don't preventDefault() here to allow browser zooming/scrolling if needed,
                 // but we capture the delta for reach adjustment.
@@ -51,7 +51,7 @@ export class InputRuntime implements IUpdatable {
 
     private _initMouseLook(): void {
         document.addEventListener('mousemove', (e) => {
-            const render = this.context.managers.render;
+            const render = this.context.runtime.render;
             const canvas = document.getElementById('app');
             if (document.pointerLockElement === canvas && render && !render.isXRPresenting()) {
                 // Divide by 15 to normalize discrete mouse pixel deltas to the continuous magnitude 
@@ -158,9 +158,9 @@ export class InputRuntime implements IUpdatable {
         this.gamepad.poll(delta);
         this.xrInput.poll(frame);
 
-        const managers = this.context.managers;
-        const render = managers.render;
-        const tracking = managers.tracking;
+        const runtime = this.context.runtime;
+        const render = runtime.render;
+        const tracking = runtime.tracking;
 
         const nonVRInteractHeld = (!this.context.isMenuOpen) &&
             (this.isKeyDown('secondary_action') || !!this.gamepad.buttons[0]);
@@ -213,7 +213,7 @@ export class InputRuntime implements IUpdatable {
     }
 
     private _processInteractions(): void {
-        const render = this.context.managers.render;
+        const render = this.context.runtime.render;
 
         const currentStates = {
             left: { isSqueezing: false, isInteracting: false, triggerValue: 0 },
@@ -223,7 +223,7 @@ export class InputRuntime implements IUpdatable {
         if (render && render.isXRPresenting()) {
             const session = render.getXRSession();
             if (session) {
-                const tracking = this.context.managers.tracking;
+                const tracking = this.context.runtime.tracking;
                 const trackingState = tracking.getState();
 
                 for (let i = 0; i < session.inputSources.length; i++) {
@@ -238,7 +238,7 @@ export class InputRuntime implements IUpdatable {
             }
         } else {
             // Desktop/Mobile interactions
-            const tracking = this.context.managers.tracking;
+            const tracking = this.context.runtime.tracking;
             const trackingState = tracking.getState();
             const leftActive = trackingState.hands.left.active;
             const rightActive = trackingState.hands.right.active;
