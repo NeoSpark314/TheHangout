@@ -1,8 +1,10 @@
 import type { AppContext } from '../../../app/AppContext';
 import { DebugBeaconObject } from '../../objects/DebugBeaconObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
+import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
+import { DefaultHangoutWorld } from './DefaultHangoutWorld';
 
 export class DefaultHangoutScenario implements IScenarioModule {
     public readonly id = 'default-hangout';
@@ -10,26 +12,27 @@ export class DefaultHangoutScenario implements IScenarioModule {
     public readonly kind = 'social' as const;
     public readonly maxPlayers = 16;
     private readonly objectModules: IObjectModule[] = [new DebugBeaconObject()];
+    private readonly world: DefaultHangoutWorld;
 
-    constructor(private session: SessionRuntime) { }
+    constructor(session: SessionRuntime, context: AppContext) {
+        this.world = new DefaultHangoutWorld(session, context);
+    }
 
     public load(context: AppContext, options: IScenarioLoadOptions): void {
-        this.session.ensureDefaultWorld(this.session.scene);
         const seed = options.seed ?? context.sessionConfig.seed;
         if (context.sessionConfig.seed !== seed) {
             context.sessionConfig = { ...context.sessionConfig, seed };
         }
-        this.session.applyConfig(context.sessionConfig);
-        this.session.toggleHologram(true);
+        this.world.load(context.sessionConfig);
+        this.world.setHologramVisible(true);
     }
 
     public unload(_context: AppContext): void {
-        this.session.clearProceduralElements();
+        this.world.unload();
     }
 
     public update(delta: number): void {
-        if (this.session.environment) this.session.environment.update(delta);
-        if (this.session.props) this.session.props.update(delta);
+        this.world.update(delta);
     }
 
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
@@ -46,5 +49,17 @@ export class DefaultHangoutScenario implements IScenarioModule {
 
     public getObjectModules(): IObjectModule[] {
         return this.objectModules;
+    }
+
+    public applyConfig(_context: AppContext, config: AppContext['sessionConfig']): void {
+        this.world.applyConfig(config);
+    }
+
+    public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
+        return this.world.getDesktopLayout(index, total);
+    }
+
+    public setHologramVisible(visible: boolean): void {
+        this.world.setHologramVisible(visible);
     }
 }

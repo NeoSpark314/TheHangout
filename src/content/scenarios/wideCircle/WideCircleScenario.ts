@@ -11,23 +11,16 @@ export class WideCircleScenario implements IScenarioModule {
     constructor(private session: SessionRuntime) { }
 
     public load(context: AppContext, options: IScenarioLoadOptions): void {
-        this.session.ensureDefaultWorld(this.session.scene);
+        this.session.ensureGroundPhysics();
         const seed = options.seed ?? context.sessionConfig.seed;
         if (context.sessionConfig.seed !== seed) {
             context.sessionConfig = { ...context.sessionConfig, seed };
         }
-        this.session.applyConfig(context.sessionConfig);
-        this.session.toggleHologram(false);
     }
 
-    public unload(_context: AppContext): void {
-        this.session.clearProceduralElements();
-    }
+    public unload(_context: AppContext): void { }
 
-    public update(delta: number): void {
-        if (this.session.environment) this.session.environment.update(delta);
-        if (this.session.props) this.session.props.update(delta);
-    }
+    public update(_delta: number): void { }
 
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
         const radius = 4.2;

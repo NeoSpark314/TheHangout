@@ -307,6 +307,33 @@ export class PhysicsRuntime {
         return collider;
     }
 
+    public removeRigidBody(rigidBody: RAPIER.RigidBody | null | undefined): void {
+        if (!this.world || !rigidBody) return;
+
+        const entry = this.debugBodies.get(rigidBody.handle);
+        if (entry) {
+            for (const collider of entry.colliders) {
+                this.colliderToEntity.delete(collider.handle);
+            }
+
+            for (const [entityId, collider] of this.entityToPrimaryCollider.entries()) {
+                if (entry.colliders.includes(collider)) {
+                    this.entityToPrimaryCollider.delete(entityId);
+                }
+            }
+
+            for (const [key, pair] of this.activePropContacts.entries()) {
+                if (entry.colliders.some((collider) => collider.handle === pair.a || collider.handle === pair.b)) {
+                    this.activePropContacts.delete(key);
+                }
+            }
+
+            this.debugBodies.delete(rigidBody.handle);
+        }
+
+        this.world.removeRigidBody(rigidBody);
+    }
+
     private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsPropEntity): void {
         const handle = rigidBody.handle;
         const existing = this.debugBodies.get(handle);

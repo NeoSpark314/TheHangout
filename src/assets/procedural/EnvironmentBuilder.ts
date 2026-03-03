@@ -255,7 +255,18 @@ export class EnvironmentBuilder {
         };
         remove(this.hills);
         remove(this.stars);
+        remove(this.floor);
+        remove(this.grid);
+        remove(this.lights);
+        remove(this.sun);
         this.hills = null;
         this.stars = null;
+        this.floor = null;
+        this.grid = null;
+        this.lights = null;
+        this.sun = null;
+        this.gridUniforms = null;
+        this.scene.background = null;
+        this.scene.fog = null;
     }
 }

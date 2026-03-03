@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
-import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
-import { PropBuilder } from '../../assets/procedural/PropBuilder';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
@@ -14,8 +12,6 @@ import { WideCircleScenario } from '../../content/scenarios/wideCircle/WideCircl
 export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
-    public environment: EnvironmentBuilder | null = null;
-    public props: PropBuilder | null = null;
     private hasGroundPhysics: boolean = false;
     private readonly scenarioEntityIds = new Set<string>();
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
@@ -24,7 +20,7 @@ export class SessionRuntime implements IUpdatable {
     public assignedSpawnIndex?: number;
 
     constructor(private context: AppContext) {
-        const defaultScenario = new DefaultHangoutScenario(this);
+        const defaultScenario = new DefaultHangoutScenario(this, context);
         const wideCircleScenario = new WideCircleScenario(this);
         this.scenarioRegistry.register(defaultScenario);
         this.scenarioRegistry.register(wideCircleScenario);
@@ -40,9 +36,14 @@ export class SessionRuntime implements IUpdatable {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
+    public randomFloat(): number {
+        return this.random();
+    }
+
     public init(scene: THREE.Scene): void {
         try {
             this.scene = scene;
+            this._seed = this.context.sessionConfig.seed;
             const configuredScenario = this.scenarioRegistry.get(this.context.sessionConfig.activeScenarioId);
             if (configuredScenario) {
                 this.activeScenario = configuredScenario;
@@ -58,31 +59,11 @@ export class SessionRuntime implements IUpdatable {
         }
     }
 
-    public ensureDefaultWorld(scene: THREE.Scene | null): void {
-        if (!scene) return;
-
-        if (!this.environment || !this.props) {
-            const randomBound = this.random.bind(this);
-            this.environment = new EnvironmentBuilder(scene, randomBound);
-            this.props = new PropBuilder(scene, randomBound, this.context);
-        }
-
+    public ensureGroundPhysics(): void {
         if (!this.hasGroundPhysics && this.context.runtime.physics) {
             this.context.runtime.physics.createGround(25);
             this.hasGroundPhysics = true;
         }
-    }
-
-    public applyConfig(config: ISessionConfig): void {
-        if (!config || !this.environment || !this.props) return;
-
-        console.log('[SessionRuntime] Coordinating Session Config:', config);
-        if (config.seed !== undefined) {
-            this._seed = config.seed;
-        }
-
-        this.environment.applyConfig(config);
-        this.props.applyConfig(config);
     }
 
     public update(delta: number): void {
@@ -110,15 +91,21 @@ export class SessionRuntime implements IUpdatable {
         }
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
-            this.clearProceduralElements();
+            this._seed = this.context.sessionConfig.seed;
+            if (this.scene) {
+                this.activeScenario.unload(this.context);
+                this.clearScenarioEntities();
+                this.activeScenario.load(this.context, {
+                    isHost: this.context.isHost,
+                    seed: this.context.sessionConfig.seed,
+                    reason: 'reload'
+                });
+                this.refreshActiveObjectModules();
+            }
+            return;
         }
 
-        this.applyConfig(this.context.sessionConfig);
-    }
-
-    public clearProceduralElements(): void {
-        if (this.environment) this.environment.clearProcedural();
-        if (this.props) this.props.clearProcedural();
+        this.activeScenario.applyConfig?.(this.context, this.context.sessionConfig);
     }
 
     public getSpawnPoint(index: number): { position: THREE.Vector3, yaw: number } {
@@ -181,6 +168,7 @@ export class SessionRuntime implements IUpdatable {
         this.clearScenarioEntities();
         this.activeScenario = nextScenario;
         this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
+        this._seed = options.seed ?? this.context.sessionConfig.seed;
 
         if (this.scene) {
             this.activeScenario.load(this.context, {
@@ -197,8 +185,8 @@ export class SessionRuntime implements IUpdatable {
     }
 
     public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
-        if (this.props) {
-            return this.props.getDesktopLayout(index, total);
+        if (this.activeScenario.getDesktopLayout) {
+            return this.activeScenario.getDesktopLayout(index, total);
         }
         // Fallback
         return {
@@ -208,9 +196,7 @@ export class SessionRuntime implements IUpdatable {
     }
 
     public toggleHologram(visible: boolean): void {
-        if (this.props) {
-            this.props.setHologramVisible(visible);
-        }
+        this.activeScenario.setHologramVisible?.(visible);
     }
 
     private refreshActiveObjectModules(): void {

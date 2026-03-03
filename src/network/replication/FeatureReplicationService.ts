@@ -57,6 +57,10 @@ export class FeatureReplicationService {
         this.features.set(feature.featureId, feature);
     }
 
+    public unregisterFeature(featureId: string): void {
+        this.features.delete(featureId);
+    }
+
     /**
      * Feature-scoped replication entry point.
      *

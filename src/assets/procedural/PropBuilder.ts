@@ -19,6 +19,7 @@ export class PropBuilder implements IReplicatedFeature {
     private scene: THREE.Scene;
     private random: () => number;
 
+    private tableGroup: THREE.Group | null = null;
     private table: THREE.Mesh | null = null;
     private hologram: THREE.Mesh | null = null;
     private duckModel: THREE.Object3D | null = null;
@@ -27,6 +28,8 @@ export class PropBuilder implements IReplicatedFeature {
     private decorations: THREE.Group | null = null;
     private hasSpawnedGrabbables: boolean = false;
     private hasSpawnedDominoes: boolean = false;
+    private readonly spawnedEntityIds: string[] = [];
+    private readonly staticPhysicsBodies: unknown[] = [];
     private drumPads: THREE.Group | null = null;
     private drumPadMeshes: THREE.Mesh[] = [];
     private drumPadPositions: THREE.Vector3[] = [];
@@ -105,6 +108,7 @@ export class PropBuilder implements IReplicatedFeature {
 
     private createTable(): void {
         const tableGroup = new THREE.Group();
+        this.tableGroup = tableGroup;
         const topGeo = new THREE.CylinderGeometry(2, 2, 0.1, 6);
         const topMat = new THREE.MeshStandardMaterial({
             color: 0x1a1a2e,
@@ -138,8 +142,10 @@ export class PropBuilder implements IReplicatedFeature {
         }
 
         if (this.context.runtime.physics) {
-            this.context.runtime.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
-            this.context.runtime.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
+            const tableBody = this.context.runtime.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
+            const baseBody = this.context.runtime.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
+            if (tableBody) this.staticPhysicsBodies.push(tableBody);
+            if (baseBody) this.staticPhysicsBodies.push(baseBody);
         }
     }
 
@@ -189,7 +195,8 @@ export class PropBuilder implements IReplicatedFeature {
 
                 // Add static physics collider
                 if (this.context.runtime.physics) {
-                    this.context.runtime.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
+                    const colliderBody = this.context.runtime.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
+                    if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
                 }
             }
         }
@@ -220,7 +227,8 @@ export class PropBuilder implements IReplicatedFeature {
 
             // Add static physics collider
             if (this.context.runtime.physics) {
-                this.context.runtime.physics.createCuboid(w / 2, h / 2, w / 2, { x: posX, y: h / 2, z: posZ }, null, true);
+                const colliderBody = this.context.runtime.physics.createCuboid(w / 2, h / 2, w / 2, { x: posX, y: h / 2, z: posZ }, null, true);
+                if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
             }
         }
         if (this.scene) this.scene.add(this.decorations);
@@ -235,7 +243,10 @@ export class PropBuilder implements IReplicatedFeature {
         const pen = EntityFactory.spawn(this.context, 'PEN', penId, {
             position: { x: 0.5, y: 1.15, z: 0.5 }
         });
-        if (pen) this.context.runtime.entity.addEntity(pen);
+        if (pen) {
+            this.context.runtime.entity.addEntity(pen);
+            this.spawnedEntityIds.push(penId);
+        }
 
         const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
         for (let i = 0; i < 6; i++) {
@@ -255,6 +266,7 @@ export class PropBuilder implements IReplicatedFeature {
 
             const entityId = `grabbable-${i}`;
             EntityFactory.createGrabbable(this.context, entityId, 0.12, position, mesh as any);
+            this.spawnedEntityIds.push(entityId);
         }
     }
 
@@ -302,6 +314,7 @@ export class PropBuilder implements IReplicatedFeature {
                 mesh,
                 half
             );
+            this.spawnedEntityIds.push(id);
         }
     }
 
@@ -348,6 +361,8 @@ export class PropBuilder implements IReplicatedFeature {
             );
             if (collider) {
                 this.drumPadFreqByHandle.set(collider.handle, { padId: `pad-${i}`, frequency: notes[i] });
+                const body = collider.parent();
+                if (body) this.staticPhysicsBodies.push(body);
             }
         }
 
@@ -493,11 +508,28 @@ export class PropBuilder implements IReplicatedFeature {
                 }
             });
         };
+        for (const entityId of this.spawnedEntityIds) {
+            this.context.runtime.entity.removeEntity(entityId);
+        }
+        this.spawnedEntityIds.length = 0;
+
+        for (const body of this.staticPhysicsBodies) {
+            this.context.runtime.physics.removeRigidBody(body as any);
+        }
+        this.staticPhysicsBodies.length = 0;
+
+        remove(this.tableGroup);
         remove(this.podest);
         remove(this.decorations);
         remove(this.drumPads);
+        this.tableGroup = null;
+        this.table = null;
+        this.hologram = null;
+        this.duckModel = null;
         this.podest = null;
         this.decorations = null;
+        this.hasSpawnedGrabbables = false;
+        this.hasSpawnedDominoes = false;
         this.drumPads = null;
         this.drumPadMeshes = [];
         this.drumPadPositions = [];
@@ -507,6 +539,15 @@ export class PropBuilder implements IReplicatedFeature {
         this.handLastPos.left = null;
         this.handLastPos.right = null;
         this.lastHandPadHitAtMs.clear();
+    }
+
+    public dispose(): void {
+        this.clearProcedural();
+        if (this.onPhysicsCollisionStartedHandler) {
+            eventBus.off(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
+            this.onPhysicsCollisionStartedHandler = null;
+        }
+        this.context.runtime.replication.unregisterFeature(this.featureId);
     }
 
     private parsePadIndex(padId: string): number {
@@ -531,7 +572,10 @@ export class PropBuilder implements IReplicatedFeature {
         }
 
         const entityId = `admin-spawn-${Date.now()}`;
-        EntityFactory.createGrabbable(this.context, entityId, 0.12, pos, mesh as any);
+        const entity = EntityFactory.createGrabbable(this.context, entityId, 0.12, pos, mesh as any);
+        if (entity) {
+            this.spawnedEntityIds.push(entityId);
+        }
     }
 
     public getDesktopLayout(index: number, _total: number): IDesktopScreenLayout {

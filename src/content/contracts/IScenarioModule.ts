@@ -1,5 +1,7 @@
 import type { AppContext } from '../../app/AppContext';
+import type { ISessionConfig } from '../../app/AppContext';
 import type { IUpdatable } from '../../shared/contracts/IUpdatable';
+import type { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectModule } from './IObjectModule';
 
 export interface IScenarioLoadOptions {
@@ -23,6 +25,9 @@ export interface IScenarioModule extends IUpdatable {
     unload(context: AppContext): Promise<void> | void;
     getSpawnPoint(index: number): IScenarioSpawnPoint;
 
+    applyConfig?(context: AppContext, config: ISessionConfig): void;
+    getDesktopLayout?(index: number, total: number): IDesktopScreenLayout;
+    setHologramVisible?(visible: boolean): void;
     getObjectModules?(): IObjectModule[];
     onPlayerJoined?(playerId: string): void;
     onPlayerLeft?(playerId: string): void;
