@@ -58,6 +58,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - [IScenarioModule.ts](/c:/programming/TheHangout/src/content/contracts/IScenarioModule.ts) defines a loadable world package.
 - [IObjectModule.ts](/c:/programming/TheHangout/src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
 - [IObjectRuntimeContext.ts](/c:/programming/TheHangout/src/content/contracts/IObjectRuntimeContext.ts) is the narrow contributor-facing authoring context for content objects.
+- Content interaction is XR-first: objects are typically `IHoldable` first, and only some holdables are movable (`IMovableHoldable` / legacy `IGrabbable`).
 - [ISpawnedObjectInstance.ts](/c:/programming/TheHangout/src/content/contracts/ISpawnedObjectInstance.ts) is the runtime lifecycle contract for spawned content instances.
 - [IReplicatedObjectInstance.ts](/c:/programming/TheHangout/src/content/contracts/IReplicatedObjectInstance.ts) adds per-instance sync hooks for content objects that need networked events and late-join snapshots.
 - [ScenarioRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ScenarioRegistry.ts) tracks available scenarios.
@@ -68,6 +69,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - [ObjectReplicationHost.ts](/c:/programming/TheHangout/src/content/runtime/ObjectReplicationHost.ts) adapts replicated object instances onto the existing feature replication transport.
 - [DefaultHangoutScenario.ts](/c:/programming/TheHangout/src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario.
 - Small experimental content can now be authored as compact object modules, such as [DebugBeaconObject.ts](/c:/programming/TheHangout/src/content/objects/DebugBeaconObject.ts).
+- Fixed interactables such as [ChairObject.ts](/c:/programming/TheHangout/src/content/objects/ChairObject.ts) now use the holdable path without pretending to be movable props.
 - Content modules can also wrap low-level engine entities. For example, [PenToolObject.ts](/c:/programming/TheHangout/src/content/objects/PenToolObject.ts) is the content-facing module, while [PenToolEntity.ts](/c:/programming/TheHangout/src/world/entities/PenToolEntity.ts) remains the low-level replicated primitive it spawns.
 - The same pattern now applies to default physics props: [GrabbableCubeObject.ts](/c:/programming/TheHangout/src/content/objects/GrabbableCubeObject.ts) wraps the low-level grabbable physics-entity spawn path for scenario-owned cubes.
 - Shared drawing is now content-owned: [DrawingSurfaceObject.ts](/c:/programming/TheHangout/src/content/objects/DrawingSurfaceObject.ts) is a replicated object instance that owns stroke state and late-join snapshots.
@@ -145,6 +147,7 @@ These names are part of the architecture. New modules should follow them instead
 - If something is how a scenario exposes or configures that primitive, it belongs in `content/objects`.
 - If something is a spawned content object with its own lifecycle, it should be modeled as an object instance, not just a free-floating entity id.
 - If something needs semantic sync and late-join restoration, prefer `IReplicatedObjectInstance` over adding a new hardcoded global feature.
+- If something should be touched and grabbed but must stay fixed in place, implement `IHoldable`; only implement `IMovableHoldable` / `IGrabbable` when the object should follow the hand pose.
 - Prefer `IObjectRuntimeContext` over `AppContext` in content code; reaching into broad engine globals should be the exception, not the default.
 
 ## What To Read Next

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { IInteractable } from '../../shared/contracts/IInteractable';
 import { AppContext } from '../../app/AppContext';
-import { isGrabbable, isInteractable } from '../../shared/utils/TypeGuards';
+import { isHoldable, isInteractable } from '../../shared/utils/TypeGuards';
 import { EntityType } from '../../shared/contracts/IEntityState';
 
 export class InteractionSystem {
@@ -30,7 +30,7 @@ export class InteractionSystem {
                 const entityId = hitObj.userData.entityId;
                 if (entityId) {
                     const entity = entityManager.getEntity(entityId);
-                    if (entity && isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
+                    if (entity && isHoldable(entity) && isInteractable(entity) && !entity.heldBy) {
                         return {
                             interactable: entity as unknown as IInteractable,
                             distance: hit.distance,
@@ -73,8 +73,8 @@ export class InteractionSystem {
 
         for (const entity of this.context.runtime.entity.entities.values()) {
             if (entity.type === EntityType.PHYSICS_PROP) continue;
-            // Check if it's grabbable, interactable and NOT currently held
-            if (isGrabbable(entity) && isInteractable(entity) && !entity.heldBy) {
+            // Check if it's holdable, interactable and NOT currently held
+            if (isHoldable(entity) && isInteractable(entity) && !entity.heldBy) {
                 const entityRadius = this.getEntityGrabRadius(entity as unknown as { getGrabRadius?: () => number });
                 // Check if the entity provides specific grab handles
                 const grabRoots = (entity.getGrabRoots && typeof entity.getGrabRoots === 'function')

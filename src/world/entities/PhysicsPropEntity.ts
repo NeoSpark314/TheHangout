@@ -39,6 +39,7 @@ interface INetworkSnapshot {
 export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
     public view: IView<IPhysicsPropState> | null;
+    public isHoldable: boolean;
     public isGrabbable: boolean;
     private hoverSources: Set<string> = new Set();
     public spawnPosition: IVector3 | null;
@@ -72,6 +73,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
         this.rigidBody = rigidBody;
         this.view = options.view || null;
+        this.isHoldable = options.grabbable || false;
         this.isGrabbable = options.grabbable || false;
         this.spawnPosition = options.spawnPosition ? { ...options.spawnPosition } : null;
         this.grabRadius = Math.max(0.03, options.grabRadius ?? 0.06);

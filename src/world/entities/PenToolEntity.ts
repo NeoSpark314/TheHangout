@@ -13,6 +13,7 @@ import * as THREE from 'three';
  * A non-physics grabbable object that can draw lines in the world.
  */
 export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInteractable {
+    public isHoldable = true;
     public isGrabbable = true;
     private hoverSources: Set<string> = new Set();
     public heldBy: string | null = null;

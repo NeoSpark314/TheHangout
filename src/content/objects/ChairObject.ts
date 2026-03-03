@@ -3,20 +3,20 @@ import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectIns
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
 import type { IEntity } from '../../shared/contracts/IEntity';
-import type { IGrabbable } from '../../shared/contracts/IGrabbable';
+import type { IHoldable } from '../../shared/contracts/IHoldable';
 import type { IInteractable } from '../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
-import type { IVector3, IPose } from '../../shared/contracts/IMath';
+import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IMountableObject } from '../contracts/IMountableObject';
 
 interface IChairOccupancyPayload {
     occupiedBy: string | null;
 }
 
-class ChairSeatEntity implements IEntity, IGrabbable, IInteractable {
+class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
     public readonly type = 'CONTENT_CHAIR';
-    public readonly isGrabbable = true;
-    public readonly heldBy: string | null = null;
+    public readonly isHoldable = true;
+    public heldBy: string | null = null;
     public isAuthority = true;
     public isDestroyed = false;
     public readonly mesh: THREE.Group;
@@ -84,16 +84,14 @@ class ChairSeatEntity implements IEntity, IGrabbable, IInteractable {
         this.isDestroyed = true;
     }
 
-    public onGrab(): void {
-        // InteractionSystem currently requires IGrabbable for focus. Chairs use a no-op grab contract.
+    public onGrab(playerId: string, _hand: 'left' | 'right'): void {
+        this.heldBy = playerId;
+        // Chairs are fixed hold targets. Grab establishes interaction ownership without moving the chair.
     }
 
-    public onRelease(): void {
-        // Chairs are not actually hand-held. This remains a no-op interaction compatibility hook.
-    }
-
-    public updateGrabbedPose(_pose: IPose): void {
-        // Chairs are fixed props; pose updates are intentionally ignored.
+    public onRelease(_velocity?: IVector3): void {
+        this.heldBy = null;
+        // Chairs remain fixed when released.
     }
 
     public onHoverEnter(): void {

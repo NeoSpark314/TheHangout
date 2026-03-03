@@ -14,6 +14,7 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
     public isDestroyed: boolean = false;
     public ownerId: string | null = null;
 
+    public isHoldable: boolean = true;
     public isGrabbable: boolean = true;
     public heldBy: string | null = null;
 
@@ -202,6 +203,7 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
 
     public setVisible(visible: boolean): void {
         this.mesh.visible = visible;
+        this.isHoldable = visible;
         this.isGrabbable = visible;
         // Also hide handles
         this.leftHandle.visible = visible;

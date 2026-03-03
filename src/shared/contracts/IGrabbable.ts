@@ -1,29 +1,10 @@
-import * as THREE from 'three';
-import { IVector3, IPose } from './IMath';
+import { IMovableHoldable } from './IMovableHoldable';
 
 /**
- * Capability interface for objects that can be picked up and moved.
+ * Legacy alias for movable holdables.
+ * Prefer IMovableHoldable for new code.
  */
-export interface IGrabbable {
+export interface IGrabbable extends IMovableHoldable {
+    readonly isHoldable: boolean;
     readonly isGrabbable: boolean;
-    readonly heldBy: string | null;
-
-    onGrab(playerId: string, hand: 'left' | 'right'): void;
-    onRelease(velocity?: IVector3): void;
-
-    /**
-     * Optional method returning specific sub-meshes that act as physical grab zones or 'handles'.
-     * If defined, the InteractionSystem will compute distance against these meshes instead of the root.
-     */
-    getGrabRoots?(): THREE.Object3D[];
-
-    /**
-     * Optional approximate radius (meters) used for near-grab sphere overlap tests.
-     */
-    getGrabRadius?(): number;
-
-    /**
-     * Called every frame by the holder to sync the object's pose.
-     */
-    updateGrabbedPose(pose: IPose): void;
 }
