@@ -273,7 +273,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
     }
 
-    public applyStateUpdate(entityStates: IStateUpdatePacket[], source: 'state_update' | 'player_input' = 'state_update'): void {
+    public applyStateUpdate(
+        entityStates: IStateUpdatePacket[],
+        source: 'state_update' | 'player_input' = 'state_update',
+        senderId?: string
+    ): void {
         const runtime = this.context.runtime;
         const localId = this.context.localPlayer?.id || 'local';
         for (const stateData of entityStates) {
@@ -292,24 +296,29 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             }
             const state = stateData.state as { ownerId?: string | null; o?: string | null; b?: string | null; p?: number[] };
             const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
-            const canReconcileOwnershipFromState =
-                source === 'player_input' &&
-                stateData.type !== EntityType.PLAYER_AVATAR;
-            if (entity && canReconcileOwnershipFromState && hasOwnershipHint) {
-                const incomingOwnerId = state.ownerId !== undefined ? state.ownerId : state.o;
-                (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
-                entity.isAuthority = (incomingOwnerId === localId) || (incomingOwnerId === null && this.context.isHost);
-            }
-            if (entity && stateData.type === EntityType.PHYSICS_PROP) {
-                if (state.ownerId || state.b) {
-                    console.info('[NetworkRuntime] applyStateUpdate physics prop', {
-                        entityId: stateData.id,
-                        ownerId: state.ownerId ?? null,
-                        heldBy: state.b ?? null,
-                        isAuthority: entity.isAuthority,
-                        willApply: !entity.isAuthority,
-                        hasPosition: Array.isArray(state.p)
-                    });
+            const incomingOwnerId = hasOwnershipHint
+                ? (state.ownerId !== undefined ? state.ownerId : state.o)
+                : undefined;
+
+            if (entity && source === 'player_input' && stateData.type !== EntityType.PLAYER_AVATAR) {
+                const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
+
+                if (this.context.isHost) {
+                    if (currentOwnerId && senderId && currentOwnerId !== senderId) {
+                        continue;
+                    }
+
+                    if (
+                        currentOwnerId === null &&
+                        incomingOwnerId !== undefined &&
+                        incomingOwnerId === senderId
+                    ) {
+                        (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
+                        entity.isAuthority = false;
+                    }
+                } else if (incomingOwnerId !== undefined) {
+                    (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
+                    entity.isAuthority = (incomingOwnerId === localId) || (incomingOwnerId === null && this.context.isHost);
                 }
             }
             if (entity && !entity.isAuthority) {
@@ -366,12 +375,6 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         if (!entity) return;
         const logicEntity = entity as any;
         if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
-            console.info('[NetworkRuntime] handleOwnershipRequest', {
-                entityId: payload.entityId,
-                previousOwnerId: logicEntity.ownerId ?? null,
-                nextOwnerId: senderId,
-                hostWasAuthority: entity.isAuthority
-            });
             logicEntity.ownerId = senderId;
             entity.isAuthority = (senderId === (this.context.localPlayer?.id || 'local'));
             const seq = this.nextOwnershipSeq(entity.id);
@@ -487,7 +490,7 @@ class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
     constructor(private context: AppContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         if (!this.context.isHost) {
-            this.context.runtime.network.applyStateUpdate(payload, 'state_update');
+            this.context.runtime.network.applyStateUpdate(payload, 'state_update', senderId);
         }
     }
 }
@@ -495,25 +498,7 @@ class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
 class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PLAYER_INPUT]> {
     constructor(private network: NetworkRuntime, private context: AppContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
-        const heldPhysicsPackets = payload.filter((packet) => {
-            if (packet.type !== EntityType.PHYSICS_PROP) return false;
-            const state = packet.state as { ownerId?: string | null; b?: string | null };
-            return !!state.ownerId || !!state.b;
-        });
-        if (heldPhysicsPackets.length > 0) {
-            console.info('[NetworkRuntime] PLAYER_INPUT received', {
-                senderId,
-                heldPhysicsPackets: heldPhysicsPackets.map((packet) => {
-                    const state = packet.state as { ownerId?: string | null; b?: string | null };
-                    return {
-                        entityId: packet.id,
-                        ownerId: state.ownerId ?? null,
-                        heldBy: state.b ?? null
-                    };
-                })
-            });
-        }
-        this.network.applyStateUpdate(payload, 'player_input');
+        this.network.applyStateUpdate(payload, 'player_input', senderId);
         if (this.context.isHost) {
             // Only relay player avatars and objects the host is NOT authoritative over
             const relayPackets = payload.filter(p => {

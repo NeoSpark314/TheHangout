@@ -35,7 +35,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         // Register server handlers
         this.dispatcher.registerHandler(PACKET_TYPES.PLAYER_INPUT, {
             handle: (senderId: string, payload: IStateUpdatePacket[]) => {
-                this.applyStateUpdate(payload);
+                this.applyStateUpdate(payload, senderId);
                 // Headless server broadcasts its own authoritative state via synchronizer.
                 // We must relay avatars AND any objects the server has given ownership to!
                 const relayPackets = payload.filter(p => {
@@ -159,7 +159,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     // --- State and Ownership Methods ---
-    public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
+    public applyStateUpdate(entityStates: IStateUpdatePacket[], senderId?: string): void {
         const runtime = this.context.runtime;
         const localId = this.context.localPlayer?.id || 'local';
         for (const stateData of entityStates) {
@@ -175,10 +175,24 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             }
             const state = stateData.state as { ownerId?: string | null; o?: string | null };
             const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
-            if (entity && stateData.type !== EntityType.PLAYER_AVATAR && hasOwnershipHint) {
-                const incomingOwnerId = state.ownerId !== undefined ? state.ownerId : state.o;
-                (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
-                entity.isAuthority = (incomingOwnerId === localId) || (incomingOwnerId === null && this.context.isHost);
+            const incomingOwnerId = hasOwnershipHint
+                ? (state.ownerId !== undefined ? state.ownerId : state.o)
+                : undefined;
+            if (entity && stateData.type !== EntityType.PLAYER_AVATAR) {
+                const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
+
+                if (currentOwnerId && senderId && currentOwnerId !== senderId) {
+                    continue;
+                }
+
+                if (
+                    currentOwnerId === null &&
+                    incomingOwnerId !== undefined &&
+                    incomingOwnerId === senderId
+                ) {
+                    (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
+                    entity.isAuthority = false;
+                }
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as any;
