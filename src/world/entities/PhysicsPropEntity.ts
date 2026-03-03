@@ -196,14 +196,6 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         if (!this.rigidBody) return;
-        console.info('[PhysicsPropEntity] onGrab', {
-            entityId: this.id,
-            playerId,
-            hand,
-            ownerId: this.ownerId,
-            isAuthority: this.isAuthority,
-            simMode: this.simMode
-        });
         this.requestOwnership();
 
         this.pendingReleaseArmed = false;
@@ -371,15 +363,6 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.syncNetworkState(state);
 
         if (this.isAuthority) return;
-        if (state.ownerId || state.b) {
-            console.info('[PhysicsPropEntity] applyNetworkState', {
-                entityId: this.id,
-                ownerId: state.ownerId ?? null,
-                heldBy: state.b ?? null,
-                simMode: this.simMode,
-                snapshotBufferSize: this.snapshotBuffer.length
-            });
-        }
 
         const snapshot: INetworkSnapshot = {
             receivedAtMs: this.nowMs(),
@@ -434,19 +417,6 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private setSimMode(nextMode: PhysicsSimMode): void {
         if (this.simMode === nextMode) return;
         const prevMode = this.simMode;
-        if (
-            (nextMode === PhysicsSimMode.ProxyKinematic || prevMode === PhysicsSimMode.ProxyKinematic) &&
-            (this.ownerId || this.heldBy)
-        ) {
-            console.info('[PhysicsPropEntity] setSimMode', {
-                entityId: this.id,
-                prevMode,
-                nextMode,
-                ownerId: this.ownerId,
-                heldBy: this.heldBy,
-                snapshotBufferSize: this.snapshotBuffer.length
-            });
-        }
         this.simMode = nextMode;
 
         switch (nextMode) {

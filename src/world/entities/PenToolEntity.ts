@@ -7,6 +7,8 @@ import { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
 import { IView } from '../../shared/contracts/IView';
 import { IPenEntityState, EntityType } from '../../shared/contracts/IEntityState';
 import { AppContext } from '../../app/AppContext';
+import eventBus from '../../app/events/EventBus';
+import { EVENTS } from '../../shared/constants/Constants';
 import * as THREE from 'three';
 
 /**
@@ -46,6 +48,21 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
         this.heldBy = null;
         this.isDrawing = false;
         this.lastDrawPosition = null;
+
+        if (!this.isAuthority) return;
+
+        if (this.context.isHost) {
+            this.releaseOwnership();
+            this.context.runtime.network?.syncEntityNow(this.id);
+            return;
+        }
+
+        const state = this.getNetworkState();
+        eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
+            entityId: this.id,
+            position: state.p,
+            quaternion: state.q
+        });
     }
 
     public updateGrabbedPose(pose: IPose): void {

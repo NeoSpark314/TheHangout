@@ -55,21 +55,9 @@ export class FeatureReplicationService {
     constructor(private context: AppContext) { }
 
     public registerFeature(feature: IReplicatedFeature): void {
-        if (feature.featureId.includes('drawing-surface')) {
-            console.info('[FeatureReplicationService] registerFeature', {
-                featureId: feature.featureId,
-                hasApplySnapshot: typeof feature.applySnapshot === 'function',
-                hasCaptureSnapshot: typeof feature.captureSnapshot === 'function'
-            });
-        }
         this.features.set(feature.featureId, feature);
         const pendingSnapshot = this.pendingSnapshots.get(feature.featureId);
         if (pendingSnapshot !== undefined && feature.applySnapshot) {
-            if (feature.featureId.includes('drawing-surface')) {
-                console.info('[FeatureReplicationService] applying pending snapshot on register', {
-                    featureId: feature.featureId
-                });
-            }
             feature.applySnapshot(pendingSnapshot);
             this.pendingSnapshots.delete(feature.featureId);
         }
@@ -135,13 +123,6 @@ export class FeatureReplicationService {
             if (snapshot === undefined) {
                 continue;
             }
-            if (feature.featureId.includes('drawing-surface')) {
-                const segmentCount = this.extractSegmentCount(snapshot);
-                console.info('[FeatureReplicationService] capture snapshot', {
-                    featureId: feature.featureId,
-                    segmentCount
-                });
-            }
             features.push({
                 featureId: feature.featureId,
                 snapshot
@@ -152,33 +133,11 @@ export class FeatureReplicationService {
 
     public applySnapshotPayload(payload: IReplicatedFeatureSnapshotPayload | undefined | null): void {
         if (!payload || !Array.isArray(payload.features)) return;
-        const drawingFeatures = payload.features
-            .filter((entry) => entry.featureId.includes('drawing-surface'))
-            .map((entry) => ({
-                featureId: entry.featureId,
-                segmentCount: this.extractSegmentCount(entry.snapshot)
-            }));
-        if (drawingFeatures.length > 0) {
-            console.info('[FeatureReplicationService] apply snapshot payload', {
-                drawingFeatures
-            });
-        }
         for (const entry of payload.features) {
             const feature = this.features.get(entry.featureId);
             if (!feature?.applySnapshot) {
-                if (entry.featureId.includes('drawing-surface')) {
-                    console.info('[FeatureReplicationService] snapshot arrived before feature registration', {
-                        featureId: entry.featureId
-                    });
-                }
                 this.pendingSnapshots.set(entry.featureId, entry.snapshot);
                 continue;
-            }
-            if (entry.featureId.includes('drawing-surface')) {
-                console.info('[FeatureReplicationService] applying snapshot to registered feature', {
-                    featureId: entry.featureId,
-                    segmentCount: this.extractSegmentCount(entry.snapshot)
-                });
             }
             feature.applySnapshot(entry.snapshot);
         }
@@ -190,18 +149,6 @@ export class FeatureReplicationService {
         } | undefined;
         if (!network) return;
         const payload = this.createSnapshotPayload();
-        const drawingFeatures = payload.features
-            .filter((entry) => entry.featureId.includes('drawing-surface'))
-            .map((entry) => ({
-                featureId: entry.featureId,
-                segmentCount: this.extractSegmentCount(entry.snapshot)
-            }));
-        if (drawingFeatures.length > 0) {
-            console.info('[FeatureReplicationService] sendSnapshotToPeer', {
-                peerId,
-                drawingFeatures
-            });
-        }
         network.sendData(peerId, PACKET_TYPES.FEATURE_SNAPSHOT, payload);
     }
 
@@ -214,16 +161,7 @@ export class FeatureReplicationService {
             sendData: (targetId: string, type: number, payload: unknown) => void;
         } | undefined;
         if (!network) return;
-        console.info('[FeatureReplicationService] requestSnapshotFromHost', {
-            hostId
-        });
         network.sendData(hostId, PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {});
-    }
-
-    private extractSegmentCount(snapshot: unknown): number | null {
-        if (!snapshot || typeof snapshot !== 'object') return null;
-        const candidate = snapshot as { segments?: unknown[] };
-        return Array.isArray(candidate.segments) ? candidate.segments.length : null;
     }
 
     private applyEvent(payload: IReplicatedFeatureEventPayload, senderId: string | null, local: boolean): void {

@@ -37,11 +37,6 @@ class DrawingSurfaceInstance extends BaseReplicatedObjectInstance implements IDr
         if (!this.isValidSegment(segment)) return;
 
         if (replicate) {
-            console.info('[DrawingSurfaceInstance] emit segment', {
-                instanceId: this.id,
-                replicationKey: this.replicationKey,
-                currentSegmentCount: this.segments.length
-            });
             this.emitSyncEvent('segment', segment);
             return;
         }
@@ -62,11 +57,6 @@ class DrawingSurfaceInstance extends BaseReplicatedObjectInstance implements IDr
     }
 
     public captureReplicationSnapshot(): unknown {
-        console.info('[DrawingSurfaceInstance] captureReplicationSnapshot', {
-            instanceId: this.id,
-            replicationKey: this.replicationKey,
-            segmentCount: this.segments.length
-        });
         return {
             segments: this.segments.slice()
         };
@@ -76,12 +66,6 @@ class DrawingSurfaceInstance extends BaseReplicatedObjectInstance implements IDr
         if (!snapshot || typeof snapshot !== 'object') return;
         const payload = snapshot as { segments?: IDrawSegmentPayload[] };
         if (!Array.isArray(payload.segments)) return;
-
-        console.info('[DrawingSurfaceInstance] applyReplicationSnapshot', {
-            instanceId: this.id,
-            replicationKey: this.replicationKey,
-            incomingSegmentCount: payload.segments.length
-        });
 
         this.clear();
         for (const segment of payload.segments) {

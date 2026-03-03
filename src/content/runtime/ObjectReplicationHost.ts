@@ -19,12 +19,6 @@ export class ObjectReplicationHost {
         }
 
         const channel = new ObjectReplicationChannel(instance);
-        if (instance.replicationKey.includes('drawing-surface')) {
-            console.info('[ObjectReplicationHost] attach', {
-                instanceId: instance.id,
-                replicationKey: instance.replicationKey
-            });
-        }
         this.instances.set(instance.id, instance);
         this.channels.set(instance.id, channel);
         this.context.runtime.replication.registerFeature(channel);
