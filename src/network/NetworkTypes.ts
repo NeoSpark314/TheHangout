@@ -8,13 +8,13 @@ import {
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonPayload,
     IDesktopStreamSummonedPayload,
-    IRoomNotificationPayload,
+    ISessionNotificationPayload,
     IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
     IOwnershipTransferPayload,
     IPeerDisconnectPayload,
-    IRoomConfigUpdatePayload
+    ISessionConfigUpdatePayload
 } from '../interfaces/INetworkPacket';
 import { IAudioChunkPayload } from '../interfaces/IVoice';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
@@ -24,7 +24,7 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.STATE_UPDATE]: IStateUpdatePacket[];
     [PACKET_TYPES.PLAYER_INPUT]: IStateUpdatePacket[];
     [PACKET_TYPES.PEER_DISCONNECT]: string | IPeerDisconnectPayload;
-    [PACKET_TYPES.ROOM_CONFIG_UPDATE]: IRoomConfigUpdatePayload;
+    [PACKET_TYPES.SESSION_CONFIG_UPDATE]: ISessionConfigUpdatePayload;
     [PACKET_TYPES.OWNERSHIP_REQUEST]: IOwnershipRequestPayload;
     [PACKET_TYPES.OWNERSHIP_RELEASE]: IOwnershipReleasePayload;
     [PACKET_TYPES.OWNERSHIP_TRANSFER]: IOwnershipTransferPayload;
@@ -41,7 +41,7 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.DESKTOP_STREAM_STOPPED]: IDesktopStreamStoppedPayload;
     [PACKET_TYPES.DESKTOP_STREAM_OFFLINE]: IDesktopStreamOfflinePayload;
     [PACKET_TYPES.DESKTOP_STREAM_FRAME]: IDesktopStreamFramePayload;
-    [PACKET_TYPES.ROOM_NOTIFICATION]: IRoomNotificationPayload;
+    [PACKET_TYPES.SESSION_NOTIFICATION]: ISessionNotificationPayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {

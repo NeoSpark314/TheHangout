@@ -43,13 +43,13 @@ h1 {
     opacity: 0.8;
 }
 
-.room-grid {
+.session-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 20px;
 }
 
-.room-card {
+.session-card {
     background: var(--card);
     border-radius: 12px;
     padding: 24px;
@@ -57,7 +57,7 @@ h1 {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-.room-id {
+.session-id {
     color: var(--primary);
     font-size: 1.4em;
     margin-bottom: 15px;

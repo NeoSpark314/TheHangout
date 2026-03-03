@@ -2,23 +2,23 @@ import { GameContext } from '../core/GameState';
 import { GameEngine } from '../core/GameEngine';
 import { EntityManager } from '../managers/EntityManager';
 import { PhysicsManager } from '../managers/PhysicsManager';
-import { RoomManager } from '../managers/RoomManager';
+import { SessionManager } from '../managers/SessionManager';
 import { ServerNetworkManager } from './ServerNetworkManager';
 import { ReplicationManager } from '../managers/ReplicationManager';
 import { DrawingManager } from '../managers/DrawingManager';
 
-export class HeadlessRoom {
+export class HeadlessSession {
     public context: GameContext;
     public engine: GameEngine;
     public network: ServerNetworkManager;
     public startTime: number = Date.now();
 
-    constructor(public roomId: string, networkTransport: ServerNetworkManager) {
+    constructor(public sessionId: string, networkTransport: ServerNetworkManager) {
         this.context = new GameContext();
         this.context.isHost = true;
         this.context.isDedicatedHost = true;
         this.context.isLocalServer = true;
-        this.context.roomId = roomId;
+        this.context.sessionId = sessionId;
         this.context.playerName = 'Dedicated_Server';
         this.context.voiceEnabled = false;
 
@@ -32,8 +32,8 @@ export class HeadlessRoom {
         const physicsMgr = new PhysicsManager(this.context);
         this.context.setManager('physics', physicsMgr);
 
-        const roomMgr = new RoomManager(this.context);
-        this.context.setManager('room', roomMgr);
+        const sessionMgr = new SessionManager(this.context);
+        this.context.setManager('session', sessionMgr);
         this.context.setManager('drawing', new DrawingManager(null, this.context));
 
         this.context.setManager('network', this.network as any);
@@ -42,28 +42,28 @@ export class HeadlessRoom {
         this.engine.addSystem({
             update: (delta) => physicsMgr.step(delta)
         });
-        this.engine.addSystem(roomMgr);
+        this.engine.addSystem(sessionMgr);
         this.engine.addSystem(entityMgr);
         this.engine.addSystem(this.network);
     }
 
     public async start(): Promise<void> {
-        console.log(`[HeadlessRoom] Initializing Room: ${this.roomId}`);
+        console.log(`[HeadlessSession] Initializing Session: ${this.sessionId}`);
 
         await this.context.managers.physics.init();
 
         // Pass null for scene in headless environment
-        this.context.managers.room.init(null as any);
+        this.context.managers.session.init(null as any);
 
-        console.log(`[HeadlessRoom] Entity List AFTER Room Init:`, Array.from(this.context.managers.entity.entities.keys()));
+        console.log(`[HeadlessSession] Entity List AFTER Session Init:`, Array.from(this.context.managers.entity.entities.keys()));
 
         this.engine.start();
-        console.log(`[HeadlessRoom] Simulation Loop Started for ${this.roomId} at 60Hz`);
+        console.log(`[HeadlessSession] Simulation Loop Started for ${this.sessionId} at 60Hz`);
     }
 
     public stop(): void {
         this.engine.stop();
-        console.log(`[HeadlessRoom] Stopped ${this.roomId}`);
+        console.log(`[HeadlessSession] Stopped ${this.sessionId}`);
     }
 
     public getStats() {
@@ -74,7 +74,7 @@ export class HeadlessRoom {
         const players = entities.filter(e => e.type === 'REMOTE_PLAYER');
 
         return {
-            id: this.roomId,
+            id: this.sessionId,
             uptime: Math.floor((Date.now() - this.startTime) / 1000),
             clients: this.network.connections.size,
             peers: Array.from(this.network.connections.keys()).map(id => {

@@ -17,7 +17,7 @@ import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import { HeadlessRoom } from './src/server/HeadlessRoom.js';
+import { HeadlessSession } from './src/server/HeadlessSession.js';
 import { ServerNetworkManager } from './src/server/ServerNetworkManager.js';
 import { PACKET_TYPES } from './src/utils/Constants.js';
 import {
@@ -27,12 +27,12 @@ import {
     IDesktopStreamStopPayload
 } from './src/interfaces/INetworkPacket.js';
 
-const activeRooms = new Map<string, HeadlessRoom>(); // roomId -> HeadlessRoom
+const activeSessions = new Map<string, HeadlessSession>(); // sessionId -> HeadlessSession
 const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket
 const desktopSourceBySocket = new WeakMap<WebSocket, string>(); // source websocket -> key
-const desktopRoutes = new Map<string, { roomId: string; name?: string; summonedBy: string; summonerName?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
+const desktopRoutes = new Map<string, { sessionId: string; name?: string; summonedBy: string; summonerName?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
 const capturingKeys = new Set<string>(); // key -> currently broadcasting
-const relaySourceSubscriptions = new Map<WebSocket, { roomId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
+const relaySourceSubscriptions = new Map<WebSocket, { sessionId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -86,24 +86,24 @@ if (customKey && customCert) {
     };
 }
 
-function sendPacketToRoom(roomId: string, type: number, payload: unknown): void {
-    const room = activeRooms.get(roomId);
-    if (!room) return;
+function sendPacketToSession(sessionId: string, type: number, payload: unknown): void {
+    const session = activeSessions.get(sessionId);
+    if (!session) return;
     const envelope = JSON.stringify({ type, payload });
-    for (const ws of room.network.connections.values()) {
+    for (const ws of session.network.connections.values()) {
         if (ws?.readyState === 1) ws.send(envelope);
     }
 }
 
-function sendBinaryToRoom(roomId: string, data: Buffer): void {
-    const room = activeRooms.get(roomId);
-    if (!room) return;
-    for (const ws of room.network.connections.values()) {
+function sendBinaryToSession(sessionId: string, data: Buffer): void {
+    const session = activeSessions.get(sessionId);
+    if (!session) return;
+    for (const ws of session.network.connections.values()) {
         if (ws?.readyState === 1) ws.send(data);
     }
 }
 
-function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDesktopSourcesStatusResponsePayload {
+function buildSourceStatusPayload(sessionId: string, requestedKeys: string[]): IDesktopSourcesStatusResponsePayload {
     const statuses: Record<string, boolean> = {};
     const requestedSet = new Set(requestedKeys);
 
@@ -112,14 +112,14 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
         statuses[key] = globalDesktopSources.has(key);
     }
 
-    // 2. Identify all keys currently active in THIS room
-    const roomActiveKeys: string[] = [];
+    // 2. Identify all keys currently active in THIS session
+    const sessionActiveKeys: string[] = [];
     const activeNames: Record<string, string> = {};
     const activeSummonerNames: Record<string, string> = {};
 
     for (const [key, route] of desktopRoutes.entries()) {
-        if (route.roomId === roomId) {
-            roomActiveKeys.push(key);
+        if (route.sessionId === sessionId) {
+            sessionActiveKeys.push(key);
             activeNames[key] = route.name || key;
             activeSummonerNames[key] = route.summonerName || 'Someone';
             // Also ensure online status is reported for these so client knows they're available
@@ -127,13 +127,13 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
         }
     }
 
-    // 3. Capturing keys (union of requested + room-active)
-    const allRelevantKeys = new Set([...requestedKeys, ...roomActiveKeys]);
+    // 3. Capturing keys (union of requested + session-active)
+    const allRelevantKeys = new Set([...requestedKeys, ...sessionActiveKeys]);
     const capturing = Array.from(allRelevantKeys).filter(k => capturingKeys.has(k));
 
     const response = {
         statuses,
-        activeKeys: roomActiveKeys,
+        activeKeys: sessionActiveKeys,
         capturingKeys: capturing,
         activeNames,
         activeSummonerNames
@@ -141,9 +141,9 @@ function buildSourceStatusPayload(roomId: string, requestedKeys: string[]): IDes
     return response;
 }
 
-function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: string[]): void {
+function sendSourceStatusToRelayClient(ws: WebSocket, sessionId: string, keys: string[]): void {
     if (ws.readyState !== 1) return;
-    const payload = buildSourceStatusPayload(roomId, keys);
+    const payload = buildSourceStatusPayload(sessionId, keys);
     ws.send(JSON.stringify({
         type: PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE,
         payload
@@ -152,7 +152,7 @@ function sendSourceStatusToRelayClient(ws: WebSocket, roomId: string, keys: stri
 
 function notifySubscribedClientsForKey(key: string): void {
     const route = desktopRoutes.get(key);
-    const isWatched = !!route; // If it has a route, it's summoned in a room
+    const isWatched = !!route; // If it has a route, it's summoned in a session
 
     // 1. Notify the source itself about its watch status
     const sourceWs = globalDesktopSources.get(key);
@@ -167,17 +167,17 @@ function notifySubscribedClientsForKey(key: string): void {
     // 2. Notify relay clients (the UI)
     for (const [ws, sub] of relaySourceSubscriptions.entries()) {
         const isRequested = sub.keys.has(key);
-        const isInRoom = route && route.roomId === sub.roomId;
+        const isInSession = route && route.sessionId === sub.sessionId;
 
-        if (isRequested || isInRoom) {
-            sendSourceStatusToRelayClient(ws, sub.roomId, Array.from(sub.keys));
+        if (isRequested || isInSession) {
+            sendSourceStatusToRelayClient(ws, sub.sessionId, Array.from(sub.keys));
         }
     }
 }
 
-function stopRoutedStreamsForRoom(roomId: string): void {
+function stopRoutedStreamsForSession(sessionId: string): void {
     for (const [key, route] of Array.from(desktopRoutes.entries())) {
-        if (route.roomId !== roomId) continue;
+        if (route.sessionId !== sessionId) continue;
         desktopRoutes.delete(key);
         notifySubscribedClientsForKey(key);
     }
@@ -197,10 +197,10 @@ app.get('/api/server-info', (req, res) => {
 
 app.use(express.json());
 
-app.get('/api/admin/rooms', (req, res) => {
+app.get('/api/admin/sessions', (req, res) => {
     const data = [];
-    for (const [id, room] of activeRooms.entries()) {
-        data.push(room.getStats());
+    for (const [id, session] of activeSessions.entries()) {
+        data.push(session.getStats());
     }
     res.json(data);
 });
@@ -214,24 +214,24 @@ app.get('/api/admin/server-stats', (req, res) => {
     });
 });
 
-app.post('/api/admin/room/:id/command', (req, res) => {
+app.post('/api/admin/session/:id/command', (req, res) => {
     const { id } = req.params;
     const { command, payload } = req.body;
-    const room = activeRooms.get(id);
+    const session = activeSessions.get(id);
 
-    if (!room) return res.status(404).json({ error: 'Room not found' });
+    if (!session) return res.status(404).json({ error: 'Session not found' });
 
     console.log(`[Admin] Command received for ${id}: ${command}`, payload);
 
     switch (command) {
         case 'spawn_cube':
-            room.network.spawnCube();
+            session.network.spawnCube();
             break;
         case 'reset':
-            room.network.resetRoom();
+            session.network.resetSession();
             break;
         case 'broadcast':
-            room.network.broadcastNotification(payload || 'System Announcement');
+            session.network.broadcastNotification(payload || 'System Announcement');
             break;
         default:
             return res.status(400).json({ error: 'Unknown command' });
@@ -333,7 +333,7 @@ server.on('upgrade', (request, socket, head) => {
 });
 wss.on('connection', (ws) => {
     console.log('[Relay] New Connection established');
-    let currentRoomId: string | null = null;
+    let currentSessionId: string | null = null;
     let currentPeerId: string | null = null;
     let currentSubscribedKeys: Set<string> = new Set();
 
@@ -342,26 +342,26 @@ wss.on('connection', (ws) => {
             const data = typeof message === 'string' ? JSON.parse(message) : JSON.parse(message.toString());
 
             if (data.type === 'join') {
-                currentRoomId = data.roomId;
+                currentSessionId = data.sessionId;
                 currentPeerId = data.peerId;
 
-                if (!currentRoomId || !currentPeerId) return;
+                if (!currentSessionId || !currentPeerId) return;
 
-                if (!activeRooms.has(currentRoomId)) {
+                if (!activeSessions.has(currentSessionId)) {
                     const networkMgr = new ServerNetworkManager();
-                    const room = new HeadlessRoom(currentRoomId, networkMgr);
-                    activeRooms.set(currentRoomId, room);
-                    room.start();
+                    const session = new HeadlessSession(currentSessionId, networkMgr);
+                    activeSessions.set(currentSessionId, session);
+                    session.start();
                 }
 
-                const room = activeRooms.get(currentRoomId);
-                if (room) {
-                    room.network.addClient(currentPeerId, ws);
-                    console.log(`[Relay] Peer ${currentPeerId} joined room ${currentRoomId}`);
+                const session = activeSessions.get(currentSessionId);
+                if (session) {
+                    session.network.addClient(currentPeerId, ws);
+                    console.log(`[Relay] Peer ${currentPeerId} joined session ${currentSessionId}`);
                 }
 
             } else {
-                if (currentRoomId && currentPeerId) {
+                if (currentSessionId && currentPeerId) {
                     if (data.type === PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST) {
                         const payload = (data.payload || {}) as IDesktopSourcesStatusRequestPayload;
                         const keys = Array.isArray(payload.keys)
@@ -369,11 +369,11 @@ wss.on('connection', (ws) => {
                             : [];
                         currentSubscribedKeys = new Set(keys);
                         relaySourceSubscriptions.set(ws, {
-                            roomId: currentRoomId,
+                            sessionId: currentSessionId,
                             keys: currentSubscribedKeys
                         });
 
-                        sendSourceStatusToRelayClient(ws, currentRoomId, keys);
+                        sendSourceStatusToRelayClient(ws, currentSessionId, keys);
                         return;
                     }
 
@@ -384,9 +384,9 @@ wss.on('connection', (ws) => {
 
                         const sourceWs = globalDesktopSources.get(key);
                         if (!sourceWs || sourceWs.readyState !== 1) {
-                            sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
+                            sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
                                 key,
-                                roomId: currentRoomId
+                                sessionId: currentSessionId
                             });
                             return;
                         }
@@ -398,7 +398,7 @@ wss.on('connection', (ws) => {
                         // }
 
                         desktopRoutes.set(key, {
-                            roomId: currentRoomId,
+                            sessionId: currentSessionId,
                             name: payload.name,
                             summonedBy: currentPeerId,
                             summonerName: payload.summonerName || 'Someone',
@@ -407,17 +407,17 @@ wss.on('connection', (ws) => {
                         });
                         notifySubscribedClientsForKey(key);
 
-                        sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_SUMMONED, {
+                        sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_SUMMONED, {
                             key,
                             name: payload.name,
-                            roomId: currentRoomId,
+                            sessionId: currentSessionId,
                             anchor: payload.anchor,
                             quaternion: payload.quaternion,
                             summonedByPeerId: currentPeerId,
                             summonedByName: payload.summonerName || 'Someone'
                         });
 
-                        sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                        sendPacketToSession(currentSessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
                             kind: 'desktop_stream_started',
                             actorPeerId: currentPeerId,
                             actorName: payload.name || 'Someone',
@@ -432,16 +432,16 @@ wss.on('connection', (ws) => {
                         const key = typeof payload.key === 'string' ? payload.key.trim() : '';
                         if (!key) return;
                         const route = desktopRoutes.get(key);
-                        if (!route || route.roomId !== currentRoomId) return;
+                        if (!route || route.sessionId !== currentSessionId) return;
 
                         desktopRoutes.delete(key);
                         notifySubscribedClientsForKey(key);
-                        sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
+                        sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
                             key,
-                            roomId: currentRoomId
+                            sessionId: currentSessionId
                         });
 
-                        sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                        sendPacketToSession(currentSessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
                             kind: 'desktop_stream_stopped',
                             actorPeerId: currentPeerId,
                             subjectName: route?.name || key,
@@ -450,9 +450,9 @@ wss.on('connection', (ws) => {
                         return;
                     }
 
-                    const room = activeRooms.get(currentRoomId);
-                    if (room) {
-                        room.network.handleMessage(currentPeerId, data);
+                    const session = activeSessions.get(currentSessionId);
+                    if (session) {
+                        session.network.handleMessage(currentPeerId, data);
                     }
                 }
             }
@@ -465,39 +465,39 @@ wss.on('connection', (ws) => {
         relaySourceSubscriptions.delete(ws);
 
         // Auto-Cleanup Desktop Streams owned by this peer
-        if (currentPeerId && currentRoomId) {
+        if (currentPeerId && currentSessionId) {
             for (const [key, route] of desktopRoutes.entries()) {
-                if (route.summonedBy === currentPeerId && route.roomId === currentRoomId) {
+                if (route.summonedBy === currentPeerId && route.sessionId === currentSessionId) {
                     desktopRoutes.delete(key);
                     notifySubscribedClientsForKey(key);
-                    sendPacketToRoom(currentRoomId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
+                    sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
                         key,
-                        roomId: currentRoomId
+                        sessionId: currentSessionId
                     });
 
-                    sendPacketToRoom(currentRoomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                    sendPacketToSession(currentSessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
                         kind: 'desktop_stream_stopped',
                         actorPeerId: 'system',
                         actorName: 'System',
                         subjectName: route.name || key,
-                        message: `Screen stopped because the owner left the room.`,
+                        message: `Screen stopped because the owner left the session.`,
                         sentAt: Date.now()
                     });
                 }
             }
         }
 
-        if (currentRoomId && currentPeerId) {
-            const room = activeRooms.get(currentRoomId);
-            if (room) {
-                room.network.removeClient(currentPeerId);
-                console.log(`[Relay] Peer ${currentPeerId} left room ${currentRoomId}`);
+        if (currentSessionId && currentPeerId) {
+            const session = activeSessions.get(currentSessionId);
+            if (session) {
+                session.network.removeClient(currentPeerId);
+                console.log(`[Relay] Peer ${currentPeerId} left session ${currentSessionId}`);
 
-                if (room.network.connections.size === 0) {
-                    stopRoutedStreamsForRoom(currentRoomId);
-                    room.stop();
-                    activeRooms.delete(currentRoomId);
-                    console.log(`[Relay] Closed empty room ${currentRoomId}`);
+                if (session.network.connections.size === 0) {
+                    stopRoutedStreamsForSession(currentSessionId);
+                    session.stop();
+                    activeSessions.delete(currentSessionId);
+                    console.log(`[Relay] Closed empty session ${currentSessionId}`);
                 }
             }
         }
@@ -523,8 +523,8 @@ desktopSourceWss.on('connection', (ws) => {
                     // Only relay if this source is currently capturing
                     if (capturingKeys.has(key)) {
                         const route = desktopRoutes.get(key);
-                        if (route && route.roomId) {
-                            sendBinaryToRoom(route.roomId, message);
+                        if (route && route.sessionId) {
+                            sendBinaryToSession(route.sessionId, message);
                         }
                     }
                     return;
@@ -584,16 +584,16 @@ desktopSourceWss.on('connection', (ws) => {
                 if (!key) return;
                 const route = desktopRoutes.get(key);
                 if (!route) return;
-                if (route.roomId && !activeRooms.has(route.roomId)) {
+                if (route.sessionId && !activeSessions.has(route.sessionId)) {
                     desktopRoutes.delete(key);
                     notifySubscribedClientsForKey(key);
                     return;
                 }
 
-                sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_FRAME, {
+                sendPacketToSession(route.sessionId, PACKET_TYPES.DESKTOP_STREAM_FRAME, {
                     key,
                     name: route.name || key,
-                    roomId: route.roomId,
+                    sessionId: route.sessionId,
                     dataUrl: data.dataUrl,
                     width: data.width,
                     height: data.height,
@@ -612,7 +612,7 @@ desktopSourceWss.on('connection', (ws) => {
 
                 const route = desktopRoutes.get(key);
                 if (route) {
-                    sendPacketToRoom(route.roomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+                    sendPacketToSession(route.sessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
                         kind: 'desktop_stream_stopped',
                         subjectName: route.name || key,
                         sentAt: Date.now()
@@ -646,12 +646,12 @@ desktopSourceWss.on('connection', (ws) => {
         if (route) {
             desktopRoutes.delete(key);
             notifySubscribedClientsForKey(key);
-            sendPacketToRoom(route.roomId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
+            sendPacketToSession(route.sessionId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
                 key,
-                roomId: route.roomId
+                sessionId: route.sessionId
             });
 
-            sendPacketToRoom(route.roomId, PACKET_TYPES.ROOM_NOTIFICATION, {
+            sendPacketToSession(route.sessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
                 kind: 'desktop_stream_offline',
                 subjectName: route.name || key,
                 sentAt: Date.now()

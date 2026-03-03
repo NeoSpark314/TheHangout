@@ -89,8 +89,8 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     public addClient(peerId: string, ws: any): void {
         this.connections.set(peerId, ws);
 
-        const welcomeConfig = { ...this.context.roomConfig, assignedSpawnIndex: this.connections.size };
-        this.sendData(peerId, PACKET_TYPES.ROOM_CONFIG_UPDATE, welcomeConfig);
+        const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
+        this.sendData(peerId, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
 
         const snapshot = this.context.managers.entity.getWorldSnapshot();
         this.sendData(peerId, PACKET_TYPES.STATE_UPDATE, snapshot);
@@ -209,7 +209,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public broadcastNotification(message: string): void {
-        this.broadcast(PACKET_TYPES.ROOM_NOTIFICATION, {
+        this.broadcast(PACKET_TYPES.SESSION_NOTIFICATION, {
             kind: 'system',
             message: message,
             level: 'info',
@@ -218,13 +218,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public spawnCube(): void {
-        const roomMgr = this.context.managers.room;
-        if (roomMgr && roomMgr.props) {
-            roomMgr.props.spawnGrabbableCube();
+        const sessionMgr = this.context.managers.session;
+        if (sessionMgr && sessionMgr.props) {
+            sessionMgr.props.spawnGrabbableCube();
         }
     }
 
-    public resetRoom(): void {
+    public resetSession(): void {
         const entityMgr = this.context.managers.entity;
         const entities = Array.from(entityMgr.entities.values());
         entities.forEach(entity => {
@@ -232,8 +232,8 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                 entityMgr.removeEntity(entity.id);
             }
         });
-        // Re-init the room props
-        this.context.managers.room.init(null as any);
+        // Re-init the session props
+        this.context.managers.session.init(null as any);
         this.broadcast(PACKET_TYPES.STATE_UPDATE, entityMgr.getWorldSnapshot());
     }
 

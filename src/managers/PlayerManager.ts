@@ -17,14 +17,14 @@ export class PlayerManager {
 
         let spawnIndex = 0;
         if (!this.context.isHost) {
-            if (managers.room && (managers.room as any).assignedSpawnIndex !== undefined) {
-                spawnIndex = (managers.room as any).assignedSpawnIndex;
+            if (managers.session && (managers.session as any).assignedSpawnIndex !== undefined) {
+                spawnIndex = (managers.session as any).assignedSpawnIndex;
             } else if (managers.network) {
                 spawnIndex = managers.network.connections.size;
             }
         }
 
-        const spawn = (managers.room as any).getSpawnPoint ? (managers.room as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
+        const spawn = (managers.session as any).getSpawnPoint ? (managers.session as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
 
         this.context.localPlayer = EntityFactory.createPlayer(this.context, id, {
             isLocal: true,

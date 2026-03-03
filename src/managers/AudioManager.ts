@@ -80,7 +80,7 @@ export class AudioManager {
     /**
      * Feature-facing API for localized drum-pad feedback.
      *
-     * This stays out of the global EventBus because drum pads are room-specific
+     * This stays out of the global EventBus because drum pads are session-specific
      * domain logic, not an app-wide infrastructure concern.
      */
     public playDrumPadHit(data: { frequency: number; intensity: number; position?: IVector3 }): void {

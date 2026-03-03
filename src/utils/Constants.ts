@@ -5,14 +5,14 @@
  * multiple systems (session lifecycle, shared input intents, ownership
  * requests, voice plumbing, global notifications).
  *
- * If an event name starts to describe room-specific or item-specific gameplay
+ * If an event name starts to describe session-specific or item-specific gameplay
  * semantics, keep it inside the owning feature manager and use
  * ReplicationManager for network fan-out instead of expanding the global bus.
  */
 export const EVENTS = {
     START_XR: 'START_XR',
-    JOIN_ROOM: 'JOIN_ROOM',
-    CREATE_ROOM: 'CREATE_ROOM',
+    JOIN_SESSION: 'JOIN_SESSION',
+    CREATE_SESSION: 'CREATE_SESSION',
     HOST_READY: 'HOST_READY',
     SESSION_CONNECTED: 'SESSION_CONNECTED',
     ENTITY_DISCOVERED: 'ENTITY_DISCOVERED',
@@ -38,7 +38,7 @@ export const EVENTS = {
     RECLAIM_OWNERSHIP: 'RECLAIM_OWNERSHIP',
     SYSTEM_NOTIFICATION: 'SYSTEM_NOTIFICATION',
     AUDIO_CHUNK_RECEIVED: 'AUDIO_CHUNK_RECEIVED',
-    PEER_JOINED_ROOM: 'PEER_JOINED_ROOM',
+    PEER_JOINED_SESSION: 'PEER_JOINED_SESSION',
     XR_SESSION_STARTED: 'XR_SESSION_STARTED',
     XR_SESSION_ENDED: 'XR_SESSION_ENDED',
     VOICE_STATE_UPDATED: 'VOICE_STATE_UPDATED',
@@ -59,7 +59,7 @@ export const PACKET_TYPES = {
     STATE_UPDATE: 0,
     PLAYER_INPUT: 1,
     PEER_DISCONNECT: 2,
-    ROOM_CONFIG_UPDATE: 3,
+    SESSION_CONFIG_UPDATE: 3,
     OWNERSHIP_REQUEST: 4,
     OWNERSHIP_RELEASE: 5,
     OWNERSHIP_TRANSFER: 6,
@@ -76,7 +76,7 @@ export const PACKET_TYPES = {
     DESKTOP_STREAM_STOPPED: 17,
     DESKTOP_STREAM_OFFLINE: 18,
     DESKTOP_STREAM_FRAME: 19,
-    ROOM_NOTIFICATION: 20
+    SESSION_NOTIFICATION: 20
 } as const;
 
 export const INPUT_CONFIG = {

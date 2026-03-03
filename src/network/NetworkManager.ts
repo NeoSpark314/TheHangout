@@ -10,9 +10,9 @@ import {
     IDesktopStreamOfflinePayload,
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonedPayload,
-    IRoomNotificationPayload,
+    ISessionNotificationPayload,
     IFeatureSnapshotRequestPayload,
-    IRoomConfigUpdatePayload,
+    ISessionConfigUpdatePayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
     IOwnershipTransferPayload
@@ -50,12 +50,12 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         this.registerHandlers();
 
-        eventBus.on(EVENTS.CREATE_ROOM, (customId: string) => this.initHost(customId));
-        eventBus.on(EVENTS.JOIN_ROOM, (roomId: string) => this.initGuest(roomId));
+        eventBus.on(EVENTS.CREATE_SESSION, (customId: string) => this.initHost(customId));
+        eventBus.on(EVENTS.JOIN_SESSION, (sessionId: string) => this.initGuest(sessionId));
 
         eventBus.on(EVENTS.REQUEST_OWNERSHIP, (payload) => {
-            if (!this.context.isHost && this.context.roomId) {
-                this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_REQUEST, {
+            if (!this.context.isHost && this.context.sessionId) {
+                this.sendData(this.context.sessionId, PACKET_TYPES.OWNERSHIP_REQUEST, {
                     ...payload,
                     sentAt: this.nowMs()
                 });
@@ -63,8 +63,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         });
 
         eventBus.on(EVENTS.RELEASE_OWNERSHIP, (payload) => {
-            if (!this.context.isHost && this.context.roomId) {
-                this.sendData(this.context.roomId, PACKET_TYPES.OWNERSHIP_RELEASE, {
+            if (!this.context.isHost && this.context.sessionId) {
+                this.sendData(this.context.sessionId, PACKET_TYPES.OWNERSHIP_RELEASE, {
                     ...payload,
                     sentAt: this.nowMs()
                 });
@@ -82,7 +82,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.STATE_UPDATE, new StateUpdateHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.PLAYER_INPUT, new PlayerInputHandler(this, this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.PEER_DISCONNECT, new PeerDisconnectHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.ROOM_CONFIG_UPDATE, new RoomConfigHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, new SessionConfigHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, new OwnershipRequestHandler(this, this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, new OwnershipReleaseHandler(this, this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler(this.context));
@@ -95,7 +95,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_STOPPED, new DesktopStreamStoppedHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_OFFLINE, new DesktopStreamOfflineHandler(this.context));
         this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_FRAME, new DesktopStreamFrameHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.ROOM_NOTIFICATION, new RoomNotificationHandler(this.context));
+        this.dispatcher.registerHandler(PACKET_TYPES.SESSION_NOTIFICATION, new SessionNotificationHandler(this.context));
     }
 
     private getPeerConfig(): any {
@@ -125,7 +125,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Host Peer ID: ${id}`);
-            this.context.roomId = id;
+            this.context.sessionId = id;
 
             if (this.context.managers.media) {
                 this.context.managers.media.bindPeer(this.peer!);
@@ -151,7 +151,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         this.peer.on('open', async (id) => {
             console.log(`[NetworkManager] Guest Peer ID: ${id}`);
-            this.context.roomId = hostId;
+            this.context.sessionId = hostId;
             if (this.context.managers.media) {
                 this.context.managers.media.bindPeer(this.peer!);
             }
@@ -161,7 +161,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         });
     }
 
-    private async initWebSocketOnly(roomId: string): Promise<void> {
+    private async initWebSocketOnly(sessionId: string): Promise<void> {
         return new Promise((resolve, reject) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.hostname;
@@ -177,8 +177,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
             this.relaySocket.onopen = () => {
                 console.log('[NetworkManager] Connected to Headless Server WebSocket');
-                this.relaySocket!.send(JSON.stringify({ type: 'join', roomId: roomId, peerId: peerId }));
-                this.context.roomId = roomId;
+                this.relaySocket!.send(JSON.stringify({ type: 'join', sessionId: sessionId, peerId: peerId }));
+                this.context.sessionId = sessionId;
 
                 const serverConn = new ServerConnection(this.relaySocket!, peerId);
                 this.setupConnection(serverConn as any);
@@ -201,8 +201,8 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
             if (this.context.isHost) {
-                const welcomeConfig = { ...this.context.roomConfig, assignedSpawnIndex: this.connections.size };
-                this.sendData(conn.peer, PACKET_TYPES.ROOM_CONFIG_UPDATE, welcomeConfig);
+                const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
+                this.sendData(conn.peer, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
                 const snapshot = this.context.managers.entity.getWorldSnapshot();
                 this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
                 this.context.managers.replication.sendSnapshotToPeer(conn.peer);
@@ -245,7 +245,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
                 this.reclaimOwnership(conn.peer);
                 this.broadcast(PACKET_TYPES.PEER_DISCONNECT, conn.peer);
             }
-            if (!this.context.isHost && conn.peer === this.context.roomId) {
+            if (!this.context.isHost && conn.peer === this.context.sessionId) {
                 eventBus.emit(EVENTS.HOST_DISCONNECTED);
             }
         });
@@ -382,7 +382,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             this.peer = null;
         }
         this.connections.clear();
-        this.context.roomId = null;
+        this.context.sessionId = null;
     }
 
     private nextOwnershipSeq(entityId: string): number {
@@ -403,10 +403,10 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         switch (err.type) {
             case 'unavailable-id':
-                userMessage = 'Room name already taken. Please choose another.';
+                userMessage = 'Session name already taken. Please choose another.';
                 break;
             case 'peer-unavailable':
-                userMessage = 'Room not found. Please check the name.';
+                userMessage = 'Session not found. Please check the name.';
                 break;
             case 'network':
                 userMessage = 'Connection lost. Check your internet.';
@@ -478,11 +478,11 @@ class PeerDisconnectHandler implements IPacketHandler<PacketPayloadMap[typeof PA
     }
 }
 
-class RoomConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.ROOM_CONFIG_UPDATE]> {
+class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]> {
     constructor(private context: GameContext) { }
-    handle(senderId: string, payload: IRoomConfigUpdatePayload): void {
+    handle(senderId: string, payload: ISessionConfigUpdatePayload): void {
         if (!this.context.isHost) {
-            this.context.managers.room.updateConfig(payload);
+            this.context.managers.session.updateConfig(payload);
 
             // If we are in local server mode, this is our cue that we are "connected" and ready to spawn
             if (this.context.isLocalServer) {
@@ -520,7 +520,7 @@ class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET
     constructor(private context: GameContext) { }
     handle(senderId: string, payload: { peerId: string }): void {
         if (!this.context.isHost && this.context.isLocalServer) {
-            eventBus.emit(EVENTS.PEER_JOINED_ROOM, payload.peerId);
+            eventBus.emit(EVENTS.PEER_JOINED_SESSION, payload.peerId);
         }
     }
 }
@@ -582,9 +582,9 @@ class DesktopStreamFrameHandler implements IPacketHandler<PacketPayloadMap[typeo
     }
 }
 
-class RoomNotificationHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.ROOM_NOTIFICATION]> {
+class SessionNotificationHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_NOTIFICATION]> {
     constructor(private context: GameContext) { }
-    handle(_senderId: string, payload: IRoomNotificationPayload): void {
+    handle(_senderId: string, payload: ISessionNotificationPayload): void {
         const localPeerId = this.context.localPlayer?.id;
         if (payload.actorPeerId && localPeerId && payload.actorPeerId === localPeerId) return;
 

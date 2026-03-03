@@ -9,7 +9,7 @@ import { EntityManager } from '../managers/EntityManager';
 import { MediaManager } from '../managers/MediaManager';
 import { HUDManager } from '../managers/HUDManager';
 import { InputManager } from '../input/InputManager';
-import { RoomManager } from '../managers/RoomManager';
+import { SessionManager } from '../managers/SessionManager';
 import { AudioManager } from '../managers/AudioManager';
 import { InteractionSystem } from '../systems/InteractionSystem';
 import { AssetManager } from '../managers/AssetManager';
@@ -93,7 +93,7 @@ export class App {
         this.context.setManager('player', new PlayerManager(this.context));
         this.context.setManager('input', new InputManager(this.context));
         this.context.setManager('hud', new HUDManager(this.context));
-        this.context.setManager('room', new RoomManager(this.context));
+        this.context.setManager('session', new SessionManager(this.context));
         this.context.setManager('audio', new AudioManager(this.context));
         this.context.setManager('assets', new AssetManager(this.context));
         this.context.setManager('drawing', new DrawingManager(this.context.managers.render.scene, this.context));
@@ -149,8 +149,8 @@ export class App {
     private async initSystems(): Promise<void> {
         const managers = this.context.managers;
 
-        if (managers.render && managers.room) {
-            managers.room.init(managers.render.scene);
+        if (managers.render && managers.session) {
+            managers.session.init(managers.render.scene);
         }
 
         if (managers.vrUi) {
@@ -173,7 +173,7 @@ export class App {
         }
         this.engine.addSystem(new PhysicsPresentationSystem(this.context));
 
-        if (managers.room) this.engine.addSystem(managers.room as any);
+        if (managers.session) this.engine.addSystem(managers.session as any);
         if (managers.social) this.engine.addSystem(managers.social as any);
         if (managers.particles) this.engine.addSystem(managers.particles as any);
         if (managers.remoteDesktop) this.engine.addSystem(managers.remoteDesktop as any);

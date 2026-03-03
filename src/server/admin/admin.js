@@ -1,6 +1,6 @@
-async function sendCommand(roomId, command, payload = null) {
+async function sendCommand(sessionId, command, payload = null) {
     try {
-        const res = await fetch(`/api/admin/room/${roomId}/command`, {
+        const res = await fetch(`/api/admin/session/${sessionId}/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command, payload })
@@ -8,7 +8,7 @@ async function sendCommand(roomId, command, payload = null) {
         const data = await res.json();
         if (data.success) {
             console.log('Command successful');
-            fetchRooms();
+            fetchSessions();
         }
     } catch (e) {
         console.error('Command failed:', e);
@@ -34,20 +34,20 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-async function fetchRooms() {
+async function fetchSessions() {
     try {
-        const res = await fetch('/api/admin/rooms');
-        const rooms = await res.json();
-        const el = document.getElementById('rooms');
+        const res = await fetch('/api/admin/sessions');
+        const sessions = await res.json();
+        const el = document.getElementById('sessions');
 
-        if (rooms.length === 0) {
+        if (sessions.length === 0) {
             el.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 50px; opacity: 0.5;">NO ACTIVE SESSIONS</div>';
             return;
         }
 
-        el.innerHTML = rooms.map(r => `
-            <div class="room-card">
-                <span class="room-id">${r.id}</span>
+        el.innerHTML = sessions.map(r => `
+            <div class="session-card">
+                <span class="session-id">${r.id}</span>
                 <div class="stat-row">
                     <span class="stat-label">Uptime</span>
                     <span class="stat-value">${r.uptime}s</span>
@@ -83,7 +83,7 @@ async function fetchRooms() {
 
                 <div class="controls">
                     <button onclick="sendCommand('${r.id}', 'spawn_cube')" class="primary">Spawn Cube</button>
-                    <button onclick="sendCommand('${r.id}', 'reset')" class="danger">Reset Room</button>
+                    <button onclick="sendCommand('${r.id}', 'reset')" class="danger">Reset Session</button>
                     
                     <div class="broadcast-group">
                         <input type="text" id="bc-${r.id}" placeholder="System message...">
@@ -93,13 +93,13 @@ async function fetchRooms() {
             </div>
         `).join('');
     } catch (e) {
-        console.error('Failed to fetch rooms:', e);
+        console.error('Failed to fetch sessions:', e);
     }
 }
 
 function updateAll() {
     fetchServerStats();
-    fetchRooms();
+    fetchSessions();
 }
 
 setInterval(updateAll, 3000);

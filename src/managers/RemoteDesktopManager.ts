@@ -101,25 +101,25 @@ export class RemoteDesktopManager implements IUpdatable {
     }
 
     public requestSourceStatus(): void {
-        if (!this.context.roomId) return;
+        if (!this.context.sessionId) return;
         const keys = this.configs
             .map(c => c.key)
             .filter(k => k.length > 0);
         this.context.managers.network.sendData(
-            this.context.roomId,
+            this.context.sessionId,
             PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST,
             { keys }
         );
     }
 
     public summonStream(key: string, name?: string): void {
-        if (!this.context.roomId) return;
+        if (!this.context.sessionId) return;
         if (!this.isOnline(key)) {
             eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${key}" is offline.`);
             return;
         }
         if (this.isActive(key)) {
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active in-room.`);
+            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active in-session.`);
             return;
         }
 
@@ -136,16 +136,16 @@ export class RemoteDesktopManager implements IUpdatable {
         }
 
         this.context.managers.network.sendData(
-            this.context.roomId,
+            this.context.sessionId,
             PACKET_TYPES.DESKTOP_STREAM_SUMMON,
             payload
         );
     }
 
     public stopStream(key: string): void {
-        if (!this.context.roomId) return;
+        if (!this.context.sessionId) return;
         this.context.managers.network.sendData(
-            this.context.roomId,
+            this.context.sessionId,
             PACKET_TYPES.DESKTOP_STREAM_STOP,
             { key }
         );
@@ -178,7 +178,7 @@ export class RemoteDesktopManager implements IUpdatable {
         this.activeByKey.clear();
         for (const key of payload.activeKeys || []) {
             this.activeByKey.add(key);
-            // Ensure surface exists for all active room streams, using the name from activeNames if available
+            // Ensure surface exists for all active session streams, using the name from activeNames if available
             const name = (payload.activeNames && payload.activeNames[key]) || key;
             const sharerName = (payload.activeSummonerNames && payload.activeSummonerNames[key]) || 'Someone';
             const surface = this.ensureSurface(key, name);
@@ -192,7 +192,7 @@ export class RemoteDesktopManager implements IUpdatable {
                     this.drawStandby(surface);
                 }
             } else {
-                // Not active in this room anymore
+                // Not active in this session anymore
                 this.removeSurface(key);
             }
         }
@@ -370,13 +370,13 @@ export class RemoteDesktopManager implements IUpdatable {
         const total = sortedActive.length;
 
         // Hide/Show duck based on screen count
-        this.context.managers.room.toggleHologram(total === 0);
+        this.context.managers.session.toggleHologram(total === 0);
 
         sortedActive.forEach((key, index) => {
             const surface = this.surfacesByKey.get(key);
             if (!surface) return;
 
-            const layout = this.context.managers.room.getDesktopLayout(index, total);
+            const layout = this.context.managers.session.getDesktopLayout(index, total);
             surface.group.position.set(layout.position[0], layout.position[1], layout.position[2]);
 
             if (layout.rotation) {

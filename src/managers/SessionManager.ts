@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameContext, IRoomConfig } from '../core/GameState';
+import { GameContext, ISessionConfig } from '../core/GameState';
 import { IUpdatable } from '../interfaces/IUpdatable';
 import { EnvironmentManager } from './EnvironmentManager';
 import { PropManager } from './PropManager';
@@ -7,7 +7,7 @@ import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { IDesktopScreenLayout } from '../interfaces/IDesktopScreenLayout';
 
-export class RoomManager implements IUpdatable {
+export class SessionManager implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
     public environment: EnvironmentManager | null = null;
@@ -38,16 +38,16 @@ export class RoomManager implements IUpdatable {
                 this.hasGroundPhysics = true;
             }
 
-            this.applyConfig(this.context.roomConfig);
+            this.applyConfig(this.context.sessionConfig);
         } catch (e) {
-            console.error('[RoomManager] init crashed:', e);
+            console.error('[SessionManager] init crashed:', e);
         }
     }
 
-    public applyConfig(config: IRoomConfig): void {
+    public applyConfig(config: ISessionConfig): void {
         if (!config || !this.environment || !this.props) return;
 
-        console.log('[RoomManager] Coordinating Room Config:', config);
+        console.log('[SessionManager] Coordinating Session Config:', config);
         if (config.seed !== undefined) {
             this._seed = config.seed;
         }
@@ -61,21 +61,21 @@ export class RoomManager implements IUpdatable {
         if (this.props) this.props.update(delta);
     }
 
-    public updateConfig(newConfig: Partial<IRoomConfig> & { assignedSpawnIndex?: number }): void {
-        const oldSeed = this.context.roomConfig.seed;
+    public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): void {
+        const oldSeed = this.context.sessionConfig.seed;
 
         if (newConfig.assignedSpawnIndex !== undefined) {
             this.assignedSpawnIndex = newConfig.assignedSpawnIndex;
             delete newConfig.assignedSpawnIndex;
         }
 
-        this.context.roomConfig = { ...this.context.roomConfig, ...newConfig as IRoomConfig };
+        this.context.sessionConfig = { ...this.context.sessionConfig, ...newConfig as ISessionConfig };
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this.clearProceduralElements();
         }
 
-        this.applyConfig(this.context.roomConfig);
+        this.applyConfig(this.context.sessionConfig);
     }
 
     public clearProceduralElements(): void {

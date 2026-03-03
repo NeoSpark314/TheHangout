@@ -60,7 +60,7 @@ export class ReplicationManager {
     /**
      * Feature-scoped replication entry point.
      *
-     * Use this for room/item-specific domain behavior (for example, a drum hit,
+     * Use this for session/item-specific domain behavior (for example, a drum hit,
      * a puzzle trigger, or a drawing segment). This keeps those semantics out of
      * the global app EventBus, which should remain reserved for shared
      * infrastructure and lifecycle events.
@@ -88,7 +88,7 @@ export class ReplicationManager {
             return;
         }
 
-        const hostId = this.context.roomId;
+        const hostId = this.context.sessionId;
         if (hostId) {
             network.sendData(hostId, PACKET_TYPES.FEATURE_EVENT, payload);
         }
@@ -136,7 +136,7 @@ export class ReplicationManager {
 
     public requestSnapshotFromHost(): void {
         if (this.context.isHost) return;
-        const hostId = this.context.roomId;
+        const hostId = this.context.sessionId;
         if (!hostId) return;
 
         const network = this.context.managers.network as unknown as {
@@ -183,7 +183,7 @@ export class ReplicationManager {
 
     private getLocalPeerId(): string {
         return this.context.localPlayer?.id
-            || this.context.roomId
+            || this.context.sessionId
             || 'local';
     }
 

@@ -1,4 +1,4 @@
-import { IRoomConfig } from '../core/GameState';
+import { ISessionConfig } from '../core/GameState';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../managers/ReplicationManager';
 
 export interface IOwnershipTransferPayload {
@@ -27,7 +27,7 @@ export interface IPeerDisconnectPayload {
     peerId: string;
 }
 
-export interface IRoomConfigUpdatePayload extends Partial<IRoomConfig> {
+export interface ISessionConfigUpdatePayload extends Partial<ISessionConfig> {
     assignedSpawnIndex?: number;
 }
 
@@ -62,7 +62,7 @@ export interface IDesktopStreamStopPayload {
 export interface IDesktopStreamSummonedPayload {
     key: string;
     name?: string;
-    roomId: string;
+    sessionId: string;
     anchor?: [number, number, number];
     quaternion?: [number, number, number, number];
     summonedByPeerId?: string;
@@ -71,18 +71,18 @@ export interface IDesktopStreamSummonedPayload {
 
 export interface IDesktopStreamStoppedPayload {
     key: string;
-    roomId: string;
+    sessionId: string;
 }
 
 export interface IDesktopStreamOfflinePayload {
     key: string;
-    roomId: string;
+    sessionId: string;
 }
 
 export interface IDesktopStreamFramePayload {
     key: string;
     name?: string;
-    roomId: string;
+    sessionId: string;
     dataUrl: string;
     width?: number;
     height?: number;
@@ -91,7 +91,7 @@ export interface IDesktopStreamFramePayload {
     quaternion?: [number, number, number, number];
 }
 
-export interface IRoomNotificationPayload {
+export interface ISessionNotificationPayload {
     kind: string;
     actorPeerId?: string;
     actorName?: string;
@@ -107,7 +107,7 @@ export type NetworkPayload =
     | IOwnershipRequestPayload
     | IOwnershipReleasePayload
     | IPeerDisconnectPayload
-    | IRoomConfigUpdatePayload
+    | ISessionConfigUpdatePayload
     | IReplicatedFeatureEventPayload
     | IReplicatedFeatureSnapshotPayload
     | IFeatureSnapshotRequestPayload
@@ -119,5 +119,5 @@ export type NetworkPayload =
     | IDesktopStreamStoppedPayload
     | IDesktopStreamOfflinePayload
     | IDesktopStreamFramePayload
-    | IRoomNotificationPayload
+    | ISessionNotificationPayload
     | any; // Fallback for unsupported packets

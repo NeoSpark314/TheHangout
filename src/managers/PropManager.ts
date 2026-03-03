@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EntityFactory } from '../factories/EntityFactory';
-import { GameContext, IRoomConfig } from '../core/GameState';
+import { GameContext, ISessionConfig } from '../core/GameState';
 import eventBus from '../core/EventBus';
 import { EVENTS } from '../utils/Constants';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
@@ -67,7 +67,7 @@ export class PropManager implements IReplicatedFeature {
         eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
     }
 
-    public applyConfig(config: IRoomConfig): void {
+    public applyConfig(config: ISessionConfig): void {
         if (!config) return;
 
         try {
@@ -459,8 +459,8 @@ export class PropManager implements IReplicatedFeature {
     /**
      * Feature-local drum hit pipeline.
      *
-     * Drum pads are room-specific behavior, so we keep the flash/audio logic and
-     * replication trigger inside the room feature instead of publishing a global
+     * Drum pads are session-specific behavior, so we keep the flash/audio logic and
+     * replication trigger inside the session feature instead of publishing a global
      * app event. This keeps the global EventBus focused on shared infrastructure.
      */
     private applyDrumHit(hit: IDrumPadHitPayload, replicate: boolean): void {
@@ -535,7 +535,7 @@ export class PropManager implements IReplicatedFeature {
     }
 
     public getDesktopLayout(index: number, _total: number): IDesktopScreenLayout {
-        // Logic for the CyperStube room: large billboard on the table
+        // Logic for the CyperStube session: large billboard on the table
         // We increase the gap to 1.5 to prevent vertical overlap when multiple sources are active
         return {
             position: [0, 1.8 + index * 1.5, 0],

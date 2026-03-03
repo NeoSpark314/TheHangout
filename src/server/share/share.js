@@ -126,7 +126,7 @@ function startCaptureLoop() {
 
         // Smart Transmission Optimization
         if (!isWatched) {
-            setStatus(`Streaming "${activeKey}" (PAUSED - No room is watching)`, 'warn');
+            setStatus(`Streaming "${activeKey}" (PAUSED - No session is watching)`, 'warn');
             return;
         }
         setStatus(`Streaming "${activeKey}" (LIVE)`, 'ok');

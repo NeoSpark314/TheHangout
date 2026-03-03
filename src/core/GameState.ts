@@ -4,7 +4,7 @@ import type { NetworkManager } from '../network/NetworkManager';
 import type { InputManager } from '../input/InputManager';
 import type { RenderManager } from '../managers/RenderManager';
 import type { PlayerManager } from '../managers/PlayerManager';
-import type { RoomManager } from '../managers/RoomManager';
+import type { SessionManager } from '../managers/SessionManager';
 import type { FlatUIManager } from '../managers/FlatUIManager';
 import type { HUDManager } from '../managers/HUDManager';
 import type { MediaManager } from '../managers/MediaManager';
@@ -26,7 +26,7 @@ export interface IAvatarConfig {
     color: string | number;
 }
 
-export interface IRoomConfig {
+export interface ISessionConfig {
     environment: string;
     skyColor: string;
     fogNear: number;
@@ -44,7 +44,7 @@ export interface IManagers {
     player: PlayerManager;
     input: InputManager;
     hud: HUDManager;
-    room: RoomManager;
+    session: SessionManager;
     audio: AudioManager;
     interaction: InteractionSystem;
     animation: AnimationSystem;
@@ -68,14 +68,14 @@ export class GameContext {
     public isHost: boolean = false;
     public isDedicatedHost: boolean = false;
     public isLocalServer: boolean = false;
-    public roomId: string | null = null;
+    public sessionId: string | null = null;
     public playerName: string = 'Player';
     public avatarConfig: IAvatarConfig = {
         color: '#00ffff'
     };
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;
-    public roomConfig: IRoomConfig = {
+    public sessionConfig: ISessionConfig = {
         environment: 'cyber-stube',
         skyColor: '#0b0c10',
         fogNear: 5,

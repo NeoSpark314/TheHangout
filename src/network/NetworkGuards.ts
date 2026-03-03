@@ -37,8 +37,8 @@ function isOwnershipTransferPayload(payload: unknown): boolean {
         (payload.sentAt === undefined || typeof payload.sentAt === 'number');
 }
 
-function isRoomConfigPayload(payload: unknown): boolean {
-    // Keep this permissive for compatibility with partial room updates.
+function isSessionConfigPayload(payload: unknown): boolean {
+    // Keep this permissive for compatibility with partial session updates.
     if (!isObject(payload)) return false;
     if ('assignedSpawnIndex' in payload && typeof payload.assignedSpawnIndex !== 'number') return false;
     return true;
@@ -101,29 +101,29 @@ function isDesktopStreamStopPayload(payload: unknown): boolean {
 function isDesktopStreamSummonedPayload(payload: unknown): boolean {
     return isObject(payload) &&
         typeof payload.key === 'string' &&
-        typeof payload.roomId === 'string';
+        typeof payload.sessionId === 'string';
 }
 
 function isDesktopStreamStoppedPayload(payload: unknown): boolean {
     return isObject(payload) &&
         typeof payload.key === 'string' &&
-        typeof payload.roomId === 'string';
+        typeof payload.sessionId === 'string';
 }
 
 function isDesktopStreamOfflinePayload(payload: unknown): boolean {
     return isObject(payload) &&
         typeof payload.key === 'string' &&
-        typeof payload.roomId === 'string';
+        typeof payload.sessionId === 'string';
 }
 
 function isDesktopStreamFramePayload(payload: unknown): boolean {
     return isObject(payload) &&
         typeof payload.key === 'string' &&
-        typeof payload.roomId === 'string' &&
+        typeof payload.sessionId === 'string' &&
         typeof payload.dataUrl === 'string';
 }
 
-function isRoomNotificationPayload(payload: unknown): boolean {
+function isSessionNotificationPayload(payload: unknown): boolean {
     if (!isObject(payload) || typeof payload.kind !== 'string') return false;
     if ('actorPeerId' in payload && typeof payload.actorPeerId !== 'string') return false;
     if ('actorName' in payload && typeof payload.actorName !== 'string') return false;
@@ -145,8 +145,8 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isOwnershipReleasePayload(payload);
         case PACKET_TYPES.OWNERSHIP_TRANSFER:
             return isOwnershipTransferPayload(payload);
-        case PACKET_TYPES.ROOM_CONFIG_UPDATE:
-            return isRoomConfigPayload(payload);
+        case PACKET_TYPES.SESSION_CONFIG_UPDATE:
+            return isSessionConfigPayload(payload);
         case PACKET_TYPES.PEER_JOINED:
             return isPeerJoinedPayload(payload);
         case PACKET_TYPES.PEER_DISCONNECT:
@@ -173,8 +173,8 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isDesktopStreamOfflinePayload(payload);
         case PACKET_TYPES.DESKTOP_STREAM_FRAME:
             return isDesktopStreamFramePayload(payload);
-        case PACKET_TYPES.ROOM_NOTIFICATION:
-            return isRoomNotificationPayload(payload);
+        case PACKET_TYPES.SESSION_NOTIFICATION:
+            return isSessionNotificationPayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

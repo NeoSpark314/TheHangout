@@ -10,14 +10,14 @@ import type { IVoiceStreamReceivedEvent } from '../interfaces/IVoice';
  * Architectural boundary:
  * - Keep cross-cutting infrastructure here (session lifecycle, input intents,
  *   ownership requests, shared UI/system notifications, voice plumbing).
- * - Do not add room-specific or item-specific domain events here. Those belong
- *   inside feature/room managers and should use feature-local APIs plus
+ * - Do not add session-specific or item-specific domain events here. Those belong
+ *   inside feature/session managers and should use feature-local APIs plus
  *   ReplicationManager for network fan-out.
  */
 export interface AppEventMap {
     START_XR: void;
-    JOIN_ROOM: string;
-    CREATE_ROOM: string;
+    JOIN_SESSION: string;
+    CREATE_SESSION: string;
     HOST_READY: string;
     SESSION_CONNECTED: string;
     ENTITY_DISCOVERED: string;
@@ -43,7 +43,7 @@ export interface AppEventMap {
     RECLAIM_OWNERSHIP: void;
     SYSTEM_NOTIFICATION: string;
     AUDIO_CHUNK_RECEIVED: unknown;
-    PEER_JOINED_ROOM: string;
+    PEER_JOINED_SESSION: string;
     XR_SESSION_STARTED: void;
     XR_SESSION_ENDED: void;
     VOICE_STATE_UPDATED: void;

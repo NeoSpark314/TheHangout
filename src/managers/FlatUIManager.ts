@@ -9,8 +9,8 @@ export class FlatUIManager implements IUpdatable {
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;
     private joinBtn: HTMLButtonElement;
-    private roomInput: HTMLInputElement;
-    private copyRoomBtn: HTMLButtonElement;
+    private sessionInput: HTMLInputElement;
+    private copySessionBtn: HTMLButtonElement;
     private avatarBtn: HTMLButtonElement;
     private avatarDialog: HTMLElement;
     private closeAvatarBtn: HTMLButtonElement;
@@ -37,8 +37,8 @@ export class FlatUIManager implements IUpdatable {
         this.nameInput = document.getElementById('player-name') as HTMLInputElement;
         this.createBtn = document.getElementById('create-btn') as HTMLButtonElement;
         this.joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
-        this.roomInput = document.getElementById('room-id') as HTMLInputElement;
-        this.copyRoomBtn = document.getElementById('copy-room-btn') as HTMLButtonElement;
+        this.sessionInput = document.getElementById('session-id') as HTMLInputElement;
+        this.copySessionBtn = document.getElementById('copy-session-btn') as HTMLButtonElement;
         this.avatarBtn = document.getElementById('avatar-btn') as HTMLButtonElement;
         this.avatarDialog = document.getElementById('avatar-dialog')!;
         this.closeAvatarBtn = document.getElementById('close-avatar-btn') as HTMLButtonElement;
@@ -64,10 +64,10 @@ export class FlatUIManager implements IUpdatable {
 
     private init(): void {
         const urlParams = new URLSearchParams(window.location.search);
-        const roomIdToJoin = urlParams.get('room');
+        const sessionIdToJoin = urlParams.get('session');
 
-        if (roomIdToJoin) {
-            this.setupGuestMode(roomIdToJoin);
+        if (sessionIdToJoin) {
+            this.setupGuestMode(sessionIdToJoin);
         } else {
             this.setupDefaultMode();
         }
@@ -83,8 +83,8 @@ export class FlatUIManager implements IUpdatable {
             }
         }
 
-        if (this.copyRoomBtn) {
-            this.copyRoomBtn.addEventListener('click', () => this.handleInlineCopy());
+        if (this.copySessionBtn) {
+            this.copySessionBtn.addEventListener('click', () => this.handleInlineCopy());
         }
 
         if (this.voiceBtn) {
@@ -100,7 +100,7 @@ export class FlatUIManager implements IUpdatable {
             this.saveToStorage();
         });
 
-        this.roomInput.addEventListener('input', () => {
+        this.sessionInput.addEventListener('input', () => {
             this.saveToStorage();
         });
 
@@ -165,11 +165,11 @@ export class FlatUIManager implements IUpdatable {
             });
         }
 
-        // Room UI events are handled in setupGuestMode / setupDefaultMode
+        // Session UI events are handled in setupGuestMode / setupDefaultMode
 
         eventBus.on(EVENTS.HOST_READY, (peerId: string) => {
             if (this.context.isHost) {
-                this.setStatus('Room Created! Starting...');
+                this.setStatus('Session Created! Starting...');
                 this.ensureAudioContextResumed();
                 setTimeout(() => this.hideOverlay(), 1000);
             }
@@ -248,13 +248,13 @@ export class FlatUIManager implements IUpdatable {
             this.nameInput.value = storedName;
         }
 
-        const storedRoom = localStorage.getItem('hangout_lastRoomId');
-        if (!storedRoom) {
-            const defaultRoom = 'TestRoom';
-            this.roomInput.value = defaultRoom;
-            localStorage.setItem('hangout_lastRoomId', defaultRoom);
+        const storedSession = localStorage.getItem('hangout_lastSessionId');
+        if (!storedSession) {
+            const defaultSession = 'TestSession';
+            this.sessionInput.value = defaultSession;
+            localStorage.setItem('hangout_lastSessionId', defaultSession);
         } else {
-            this.roomInput.value = storedRoom;
+            this.sessionInput.value = storedSession;
         }
 
         const storedVoice = localStorage.getItem('hangout_voiceEnabled');
@@ -291,7 +291,7 @@ export class FlatUIManager implements IUpdatable {
 
     private saveToStorage(): void {
         const name = this.nameInput.value.trim();
-        const room = this.roomInput.value.trim();
+        const session = this.sessionInput.value.trim();
         if (name) {
             localStorage.setItem('hangout_playerName', name);
             this.context.playerName = name;
@@ -301,12 +301,12 @@ export class FlatUIManager implements IUpdatable {
             localStorage.setItem('hangout_avatarColor', this.context.avatarConfig.color as string);
         }
         localStorage.setItem('hangout_voiceEnabled', String(this.context.voiceAutoEnable));
-        if (room) {
-            localStorage.setItem('hangout_lastRoomId', room);
+        if (session) {
+            localStorage.setItem('hangout_lastSessionId', session);
         }
     }
 
-    private generateReadableRoomId(): string {
+    private generateReadableSessionId(): string {
         const adjs = ['neon', 'cyber', 'retro', 'pixel', 'synth', 'hyper', 'quantum', 'turbo', 'holo', 'astro'];
         const nouns = ['tiger', 'rider', 'runner', 'punk', 'wave', 'grid', 'nexus', 'core', 'blade', 'nova'];
         const adj = adjs[Math.floor(Math.random() * adjs.length)];
@@ -324,10 +324,10 @@ export class FlatUIManager implements IUpdatable {
         this.joinBtn.disabled = false;
     }
 
-    private setupGuestMode(roomId: string): void {
+    private setupGuestMode(sessionId: string): void {
         this.context.isHost = false;
         if (this.createBtn) this.createBtn.style.display = 'none';
-        this.roomInput.value = roomId;
+        this.sessionInput.value = sessionId;
         this.joinBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Guest';
@@ -336,7 +336,7 @@ export class FlatUIManager implements IUpdatable {
             }
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
-            eventBus.emit(EVENTS.JOIN_ROOM, this.roomInput.value.trim() || roomId);
+            eventBus.emit(EVENTS.JOIN_SESSION, this.sessionInput.value.trim() || sessionId);
         });
     }
 
@@ -354,15 +354,15 @@ export class FlatUIManager implements IUpdatable {
                 if (this.context.voiceAutoEnable) {
                     await this.context.managers.media.ensureMicrophoneEnabled();
                 }
-                const targetId = this.roomInput.value.trim() || this.generateReadableRoomId();
-                this.roomInput.value = targetId; // populate if random generated
+                const targetId = this.sessionInput.value.trim() || this.generateReadableSessionId();
+                this.sessionInput.value = targetId; // populate if random generated
                 this.disableAllButtons();
                 this.clearError();
                 this.saveToStorage();
 
                 this.context.isHost = false;
                 this.setStatus('Connecting to headless server...');
-                eventBus.emit(EVENTS.JOIN_ROOM, targetId);
+                eventBus.emit(EVENTS.JOIN_SESSION, targetId);
             });
             return;
         }
@@ -373,14 +373,14 @@ export class FlatUIManager implements IUpdatable {
             if (this.context.voiceAutoEnable) {
                 await this.context.managers.media.ensureMicrophoneEnabled();
             }
-            const customId = this.roomInput.value.trim() || this.generateReadableRoomId();
+            const customId = this.sessionInput.value.trim() || this.generateReadableSessionId();
             this.disableAllButtons();
             this.clearError();
             this.saveToStorage();
 
             this.context.isHost = true;
-            this.setStatus('Creating room...');
-            eventBus.emit(EVENTS.CREATE_ROOM, customId);
+            this.setStatus('Creating session...');
+            eventBus.emit(EVENTS.CREATE_SESSION, customId);
         });
 
         this.joinBtn.addEventListener('click', async () => {
@@ -389,9 +389,9 @@ export class FlatUIManager implements IUpdatable {
             if (this.context.voiceAutoEnable) {
                 await this.context.managers.media.ensureMicrophoneEnabled();
             }
-            const targetId = this.roomInput.value.trim();
+            const targetId = this.sessionInput.value.trim();
             if (!targetId) {
-                this.setStatus('Please enter a Room Name to join.');
+                this.setStatus('Please enter a Session Name to join.');
                 return;
             }
             this.disableAllButtons();
@@ -399,7 +399,7 @@ export class FlatUIManager implements IUpdatable {
             this.saveToStorage();
             this.context.isHost = false;
             this.setStatus('Connecting to host...');
-            eventBus.emit(EVENTS.JOIN_ROOM, targetId);
+            eventBus.emit(EVENTS.JOIN_SESSION, targetId);
         });
     }
 
@@ -462,13 +462,13 @@ export class FlatUIManager implements IUpdatable {
     }
 
     private handleInlineCopy(): void {
-        const roomId = this.roomInput.value.trim() || 'TestRoom';
+        const sessionId = this.sessionInput.value.trim() || 'TestSession';
         const url = new URL(window.location.href);
-        url.searchParams.set('room', roomId);
-        const originalIcon = this.copyRoomBtn.textContent;
+        url.searchParams.set('session', sessionId);
+        const originalIcon = this.copySessionBtn.textContent;
         navigator.clipboard.writeText(url.toString()).then(() => {
-            this.copyRoomBtn.textContent = '✅';
-            setTimeout(() => { this.copyRoomBtn.textContent = originalIcon; }, 2000);
+            this.copySessionBtn.textContent = '✅';
+            setTimeout(() => { this.copySessionBtn.textContent = originalIcon; }, 2000);
         }).catch(() => { this.setStatus('Copy failed.'); });
     }
 
@@ -525,8 +525,8 @@ export class FlatUIManager implements IUpdatable {
         if (!this.overlay || this.overlay.style.display === 'none') return [];
         const elements: HTMLElement[] = [];
         if (this.nameInput && this.nameInput.offsetParent) elements.push(this.nameInput);
-        if (this.roomInput && this.roomInput.offsetParent) elements.push(this.roomInput);
-        if (this.copyRoomBtn && this.copyRoomBtn.offsetParent) elements.push(this.copyRoomBtn);
+        if (this.sessionInput && this.sessionInput.offsetParent) elements.push(this.sessionInput);
+        if (this.copySessionBtn && this.copySessionBtn.offsetParent) elements.push(this.copySessionBtn);
         if (this.createBtn && this.createBtn.offsetParent) elements.push(this.createBtn);
         if (this.joinBtn && this.joinBtn.offsetParent) elements.push(this.joinBtn);
         if (this.voiceBtn && this.voiceBtn.offsetParent) elements.push(this.voiceBtn);

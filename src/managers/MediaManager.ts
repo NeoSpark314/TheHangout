@@ -44,7 +44,7 @@ export class MediaManager {
             this.remoteStreams.delete(peerId);
         });
 
-        eventBus.on(EVENTS.PEER_JOINED_ROOM, (peerId: string) => {
+        eventBus.on(EVENTS.PEER_JOINED_SESSION, (peerId: string) => {
             if (this.context.isLocalServer && this.localStream && this.websocket) {
                 console.log(`[MediaManager] Peer ${peerId} joined. Restarting MediaRecorder to send fresh header.`);
                 if (this.mediaRecorder) {

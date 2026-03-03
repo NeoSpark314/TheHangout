@@ -44,4 +44,4 @@ https://<server-ip>/share
 Steps:
 - Enter your global share key (for example `bobs-macbook-2026`)
 - Click **Connect**
-- Keep the page open (it will start/stop capture when summoned from VR Room tab)
+- Keep the page open (it will start/stop capture when summoned from VR Session tab)

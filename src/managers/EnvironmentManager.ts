@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { IRoomConfig } from '../core/GameState';
+import { ISessionConfig } from '../core/GameState';
 
 export class EnvironmentManager {
     private scene: THREE.Scene;
@@ -18,7 +18,7 @@ export class EnvironmentManager {
         this.random = randomFunc;
     }
 
-    public applyConfig(config: IRoomConfig): void {
+    public applyConfig(config: ISessionConfig): void {
         if (!config || !this.scene) return;
 
         if (config.skyColor) {

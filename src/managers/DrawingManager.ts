@@ -29,7 +29,7 @@ export class DrawingManager implements IReplicatedFeature {
      *
      * We intentionally keep drawing semantics out of the global EventBus.
      * The drawing feature owns both local rendering and network replication so
-     * room/item-specific behavior does not leak into app-wide infrastructure.
+     * session/item-specific behavior does not leak into app-wide infrastructure.
      */
     public addSegment(segment: IDrawSegmentPayload, replicate: boolean = true): void {
         if (!this.isValidSegment(segment)) return;

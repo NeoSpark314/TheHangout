@@ -16,7 +16,7 @@ export class VRUIManager implements IUpdatable {
     private overlayContainer: HTMLDivElement | null = null;
 
     private peersTab: any = null; // Store UITab handle
-    private roomTab: any = null;
+    private sessionTab: any = null;
     private systemTab: any = null;
     private refreshPeersList: (() => void) | null = null;
     private peersTalkingInterval: ReturnType<typeof setInterval> | null = null;
@@ -53,7 +53,7 @@ export class VRUIManager implements IUpdatable {
         // Add default System Tab immediately
         this.addPeersTab();
         if (this.context.isLocalServer) {
-            this.addRoomTab();
+            this.addSessionTab();
         }
         this.addSystemTab();
         this.addDebugTab();
@@ -87,7 +87,7 @@ export class VRUIManager implements IUpdatable {
         if (this.onPeerUpdateHandler) {
             eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.onPeerUpdateHandler);
             eventBus.off(EVENTS.PEER_STATE_UPDATED, this.onPeerUpdateHandler);
-            eventBus.off(EVENTS.PEER_JOINED_ROOM, this.onPeerUpdateHandler);
+            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.onPeerUpdateHandler);
             eventBus.off(EVENTS.PEER_DISCONNECTED, this.onPeerUpdateHandler);
             this.onPeerUpdateHandler = null;
         }
@@ -111,7 +111,7 @@ export class VRUIManager implements IUpdatable {
 
         if (this.onDesktopResubscribeHandler) {
             eventBus.off(EVENTS.SESSION_CONNECTED, this.onDesktopResubscribeHandler);
-            eventBus.off(EVENTS.PEER_JOINED_ROOM, this.onDesktopResubscribeHandler);
+            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.onDesktopResubscribeHandler);
             this.onDesktopResubscribeHandler = null;
         }
     }
@@ -192,18 +192,18 @@ export class VRUIManager implements IUpdatable {
         this.teardownPeersTabSubscriptions();
 
         this.peersTab = this.tabPanel.addTab('Peers');
-        const roomContainer = this.peersTab.container;
+        const sessionContainer = this.peersTab.container;
         let currentPage = 0;
         const playersPerPage = 4;
 
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
             // 1. Header Row (for actions like Copy Invite)
             const headerContainer = new UIElement(0, 20, 1280, 80);
-            roomContainer.addChild(headerContainer);
+            sessionContainer.addChild(headerContainer);
 
             // 2. List Container (shifted down)
             const listContainer = new UIElement(0, 110, 1280, 500);
-            roomContainer.addChild(listContainer);
+            sessionContainer.addChild(listContainer);
 
             const pageLabel = new UILabel("Page 1/1", 540, 640, 200, 60);
             pageLabel.font = getFont(UITheme.typography.sizes.small);
@@ -290,7 +290,7 @@ export class VRUIManager implements IUpdatable {
                     listContainer.addChild(colorBlock);
 
                     // Name + Badges
-                    const isHost = peer.id === this.context.roomId || (peer.isLocal && this.context.isHost);
+                    const isHost = peer.id === this.context.sessionId || (peer.isLocal && this.context.isHost);
                     const displayName = formatPlayerDisplayName({
                         name: peer.name,
                         isHost,
@@ -360,7 +360,7 @@ export class VRUIManager implements IUpdatable {
 
             eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.onPeerUpdateHandler);
             eventBus.on(EVENTS.PEER_STATE_UPDATED, this.onPeerUpdateHandler);
-            eventBus.on(EVENTS.PEER_JOINED_ROOM, this.onPeerUpdateHandler);
+            eventBus.on(EVENTS.PEER_JOINED_SESSION, this.onPeerUpdateHandler);
             eventBus.on(EVENTS.PEER_DISCONNECTED, this.onPeerUpdateHandler);
 
             // Periodically refresh for Talking indicators if menu is visible
@@ -396,7 +396,7 @@ export class VRUIManager implements IUpdatable {
             updateMicUI(); // Initial state
 
             const copyBtn = new UIButton("Copy Invite Link", 660, 10, 380, 60, () => {
-                const url = window.location.origin + window.location.pathname + "?room=" + this.context.roomId;
+                const url = window.location.origin + window.location.pathname + "?session=" + this.context.sessionId;
                 navigator.clipboard.writeText(url).then(() => {
                     copyBtn.text = "Copied!";
                     this.tablet?.ui.markDirty();
@@ -430,9 +430,9 @@ export class VRUIManager implements IUpdatable {
                 }
             });
 
-            roomContainer.addChild(prevBtn);
-            roomContainer.addChild(pageLabel);
-            roomContainer.addChild(nextBtn);
+            sessionContainer.addChild(prevBtn);
+            sessionContainer.addChild(pageLabel);
+            sessionContainer.addChild(nextBtn);
 
             // Hook up auto-refresh events.
             this.scheduleRenderHandler = () => { setTimeout(renderList, 100); };
@@ -458,7 +458,7 @@ export class VRUIManager implements IUpdatable {
             title.textAlign = 'center';
             systemContainer.addChild(title);
 
-            const leaveBtn = new UIButton("Leave Room", 440, 630, 400, 80, () => {
+            const leaveBtn = new UIButton("Leave Session", 440, 630, 400, 80, () => {
                 const render = this.context.managers.render;
                 if (render && render.isXRPresenting()) {
                     render.getXRSession()?.end().then(() => {
@@ -479,11 +479,11 @@ export class VRUIManager implements IUpdatable {
         });
     }
 
-    private addRoomTab() {
+    private addSessionTab() {
         if (!this.tabPanel) return;
 
-        this.roomTab = this.tabPanel.addTab('Room');
-        const roomContainer = this.roomTab.container;
+        this.sessionTab = this.tabPanel.addTab('Session');
+        const sessionContainer = this.sessionTab.container;
 
         import('../utils/canvasui').then(({ UIButton, UILabel }) => {
             const desktop = this.context.managers.remoteDesktop;
@@ -492,22 +492,22 @@ export class VRUIManager implements IUpdatable {
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
             title.textAlign = 'center';
-            roomContainer.addChild(title);
+            sessionContainer.addChild(title);
 
             const subtitle = new UILabel('Manage your pre-configured global desktop sources', 70, 90, 1140, 40);
             subtitle.font = getFont(UITheme.typography.sizes.small);
             subtitle.textColor = UITheme.colors.textMuted;
             subtitle.textAlign = 'center';
-            roomContainer.addChild(subtitle);
+            sessionContainer.addChild(subtitle);
 
             const refreshBtn = new UIButton('Refresh Status', 420, 140, 440, 70, () => {
                 desktop.requestSourceStatus();
             });
             refreshBtn.cornerRadius = 10;
-            roomContainer.addChild(refreshBtn);
+            sessionContainer.addChild(refreshBtn);
 
             const listContainer = new UIElement(40, 240, 1200, 500);
-            roomContainer.addChild(listContainer);
+            sessionContainer.addChild(listContainer);
 
             const renderList = () => {
                 listContainer.children = [];
@@ -585,7 +585,7 @@ export class VRUIManager implements IUpdatable {
 
             eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
             eventBus.on(EVENTS.SESSION_CONNECTED, this.onDesktopResubscribeHandler);
-            eventBus.on(EVENTS.PEER_JOINED_ROOM, this.onDesktopResubscribeHandler);
+            eventBus.on(EVENTS.PEER_JOINED_SESSION, this.onDesktopResubscribeHandler);
             desktop.requestSourceStatus();
             renderList();
         });
