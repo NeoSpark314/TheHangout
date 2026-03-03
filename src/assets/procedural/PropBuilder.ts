@@ -238,16 +238,6 @@ export class PropBuilder implements IReplicatedFeature {
         console.log('[PropBuilder] createGrabbables running...');
         this.hasSpawnedGrabbables = true;
 
-        // Spawn a Pen
-        const penId = 'pen-1';
-        const pen = EntityFactory.spawn(this.context, 'PEN', penId, {
-            position: { x: 0.5, y: 1.15, z: 0.5 }
-        });
-        if (pen) {
-            this.context.runtime.entity.addEntity(pen);
-            this.spawnedEntityIds.push(penId);
-        }
-
         const colors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
         for (let i = 0; i < 6; i++) {
             const angle = (i / 6) * Math.PI * 2;

@@ -13,7 +13,7 @@ import { SessionRuntime } from '../world/session/SessionRuntime';
 import { AudioRuntime } from '../media/audio/AudioRuntime';
 import { InteractionSystem } from '../world/systems/InteractionSystem';
 import { AssetRuntime } from '../assets/runtime/AssetRuntime';
-import { DrawingFeature } from '../features/drawing/DrawingFeature';
+import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
 import { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import { XRTrackingProvider } from '../input/providers/XRTrackingProvider';
 import { DesktopTrackingProvider } from '../input/providers/DesktopTrackingProvider';
@@ -96,7 +96,7 @@ export class App {
         this.context.setRuntime('session', new SessionRuntime(this.context));
         this.context.setRuntime('audio', new AudioRuntime(this.context));
         this.context.setRuntime('assets', new AssetRuntime(this.context));
-        this.context.setRuntime('drawing', new DrawingFeature(this.context.runtime.render.scene, this.context));
+        this.context.setRuntime('drawing', new DrawingRuntime(this.context));
         this.context.setRuntime('animation', new AnimationSystem());
         this.context.setRuntime('interaction', new InteractionSystem(this.context));
         this.context.setRuntime('vrUi', new VrUiRuntime(this.context));

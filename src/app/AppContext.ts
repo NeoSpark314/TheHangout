@@ -12,7 +12,7 @@ import type { AudioRuntime } from '../media/audio/AudioRuntime';
 import type { InteractionSystem } from '../world/systems/InteractionSystem';
 import type { AnimationSystem } from '../render/systems/AnimationSystem';
 import type { AssetRuntime } from '../assets/runtime/AssetRuntime';
-import type { DrawingFeature } from '../features/drawing/DrawingFeature';
+import type { DrawingRuntime } from '../content/runtime/DrawingRuntime';
 import type { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import type { VrUiRuntime } from '../ui/vr/VrUiRuntime';
 import type { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
@@ -50,7 +50,7 @@ export interface IRuntimeRegistry {
     interaction: InteractionSystem;
     animation: AnimationSystem;
     assets: AssetRuntime;
-    drawing: DrawingFeature;
+    drawing: DrawingRuntime;
     tracking: TrackingRuntime;
     vrUi: VrUiRuntime;
     debugRender: DebugRenderRuntime;

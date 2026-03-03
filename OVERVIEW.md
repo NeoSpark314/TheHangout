@@ -19,7 +19,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 | `input/` | Tracking providers and device-to-intent translation |
 | `ui/` | Flat pre-session UI, VR UI, HUD |
 | `media/` | Voice and audio playback/runtime integrations |
-| `features/` | Modular gameplay features such as drawing, social, remote desktop |
+| `features/` | Cross-cutting gameplay/runtime features such as social and remote desktop |
 | `assets/` | Procedural world builders and asset runtime helpers |
 | `content/` | Content authoring layer for scenarios and self-contained object modules |
 | `server/` | Headless session and server-side network runtime |
@@ -33,8 +33,9 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 5. **World-role-first entities**: entity names describe what they are in the world, not who controls them. Local vs remote behavior is handled via runtime state and strategies.
 6. **Typed network contracts**: packets and replicated entity state remain explicitly typed, with compact payloads for avatar and physics sync.
 7. **Input abstraction**: gameplay consumes spatial state and intent, not raw device-specific APIs.
-8. **Feature isolation**: drawing, social interactions, and remote desktop live as separate feature modules, not as app-wide infrastructure.
+8. **Feature isolation**: cross-cutting capabilities such as social interactions and remote desktop stay separate from app-wide infrastructure.
 9. **Content-first extensibility**: scenarios and experimental objects now have a content-facing layer that sits above low-level engine spawning.
+10. **Entity vs content separation**: low-level replicated world primitives can stay in `world/entities`, while scenarios expose content-facing object modules that spawn and configure them.
 
 ## Runtime Model
 
@@ -50,21 +51,29 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - [EntityFactory.ts](/c:/programming/TheHangout/src/world/spawning/EntityFactory.ts) is the low-level engine spawn registry for core world entities.
 - The current player model is unified around [PlayerAvatarEntity.ts](/c:/programming/TheHangout/src/world/entities/PlayerAvatarEntity.ts).
 - Local vs remote avatar behavior is delegated to strategy classes under [src/world/entities/strategies](/c:/programming/TheHangout/src/world/entities/strategies).
+- Core entity types such as [PenToolEntity.ts](/c:/programming/TheHangout/src/world/entities/PenToolEntity.ts) still live here when they are engine-facing replicated primitives.
 
 ### Content, Scenarios, and Object Modules
 
 - [IScenarioModule.ts](/c:/programming/TheHangout/src/content/contracts/IScenarioModule.ts) defines a loadable world package.
 - [IObjectModule.ts](/c:/programming/TheHangout/src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
+- [ISpawnedObjectInstance.ts](/c:/programming/TheHangout/src/content/contracts/ISpawnedObjectInstance.ts) is the runtime lifecycle contract for spawned content instances.
+- [IReplicatedObjectInstance.ts](/c:/programming/TheHangout/src/content/contracts/IReplicatedObjectInstance.ts) adds per-instance sync hooks for content objects that need networked events and late-join snapshots.
 - [ScenarioRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ScenarioRegistry.ts) tracks available scenarios.
 - [ObjectModuleRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ObjectModuleRegistry.ts) tracks the object modules exposed by the active scenario.
+- [ObjectInstanceRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ObjectInstanceRegistry.ts) tracks active spawned content instances and destroys them on scenario unload.
+- [ObjectReplicationHost.ts](/c:/programming/TheHangout/src/content/runtime/ObjectReplicationHost.ts) adapts replicated object instances onto the existing feature replication transport.
 - [DefaultHangoutScenario.ts](/c:/programming/TheHangout/src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario.
 - Small experimental content can now be authored as compact object modules, such as [DebugBeaconObject.ts](/c:/programming/TheHangout/src/content/objects/DebugBeaconObject.ts).
+- Content modules can also wrap low-level engine entities. For example, [PenToolObject.ts](/c:/programming/TheHangout/src/content/objects/PenToolObject.ts) is the content-facing module, while [PenToolEntity.ts](/c:/programming/TheHangout/src/world/entities/PenToolEntity.ts) remains the low-level replicated primitive it spawns.
+- Shared drawing is now content-owned: [DrawingSurfaceObject.ts](/c:/programming/TheHangout/src/content/objects/DrawingSurfaceObject.ts) is a replicated object instance that owns stroke state and late-join snapshots.
 
 ### Networking
 
 - [NetworkRuntime.ts](/c:/programming/TheHangout/src/network/transport/NetworkRuntime.ts) owns the client transport layer.
 - [StateSynchronizer.ts](/c:/programming/TheHangout/src/network/replication/StateSynchronizer.ts) handles continuous authoritative state sync.
 - [FeatureReplicationService.ts](/c:/programming/TheHangout/src/network/replication/FeatureReplicationService.ts) handles semantic feature events and snapshots.
+- Replicated content objects now reuse that transport through per-instance replication keys (`object:<moduleId>:<instanceId>`) instead of requiring a new hardcoded engine feature per object type.
 - Player tokens are unified under `EntityType.PLAYER_AVATAR`; local vs remote avatar mode is runtime state (`controlMode`), not a separate entity type.
 
 ### Session and Spawn Rules
@@ -74,6 +83,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - Guest spawn placement depends on `assignedSpawnIndex` from the host. Guest initialization is intentionally delayed until that host-assigned slot is available.
 - Spawn points come from the active scenario, not from a hardcoded global room implementation.
 - The active scenario can expose its own object modules, and `SessionRuntime` can spawn them through the content-facing object module registry.
+- `SessionRuntime` now tracks spawned object instances, not just entity ids, so scenario unload can destroy content-owned runtime state as well as entity-backed objects.
 
 ### Input and Tracking
 
@@ -94,8 +104,8 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 src/
   app/       # bootstrap, engine, app context, events
   assets/    # procedural builders and asset runtime helpers
-  content/   # scenarios, object modules, and content registries
-  features/  # modular gameplay features
+  content/   # scenarios, object modules, content runtime, object instance sync
+  features/  # cross-cutting gameplay/runtime features
   input/     # controllers and tracking providers
   media/     # voice and audio runtime
   network/   # transport, protocol, replication
@@ -118,9 +128,17 @@ src/
 - `*Feature`: self-contained gameplay capability
 - `*Scenario`: loadable world/experience package
 - `*Object`: content-facing self-contained spawnable module
+- `*Instance`: runtime object instance owned by a scenario/session
 - `*View`: visual-only rendering layer
 
 These names are part of the architecture. New modules should follow them instead of reintroducing generic `Manager` naming.
+
+## Contributor Rule Of Thumb
+
+- If something is a low-level replicated world primitive used by core engine systems, it likely belongs in `world/entities`.
+- If something is how a scenario exposes or configures that primitive, it belongs in `content/objects`.
+- If something is a spawned content object with its own lifecycle, it should be modeled as an object instance, not just a free-floating entity id.
+- If something needs semantic sync and late-join restoration, prefer `IReplicatedObjectInstance` over adding a new hardcoded global feature.
 
 ## What To Read Next
 

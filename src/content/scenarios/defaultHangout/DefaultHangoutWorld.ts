@@ -8,6 +8,7 @@ export class DefaultHangoutWorld {
     private environment: EnvironmentBuilder | null = null;
     private props: PropBuilder | null = null;
     private readonly drawingSurfaceId = 'default-drawing-surface';
+    private readonly defaultPenId = 'default-pen';
 
     constructor(
         private session: SessionRuntime,
@@ -17,6 +18,12 @@ export class DefaultHangoutWorld {
     public load(config: ISessionConfig): void {
         if (!this.session.getObjectInstance(this.drawingSurfaceId)) {
             this.session.spawnObjectModule('drawing-surface', { id: this.drawingSurfaceId });
+        }
+        if (!this.session.getObjectInstance(this.defaultPenId)) {
+            this.session.spawnObjectModule('pen-tool', {
+                id: this.defaultPenId,
+                position: { x: 0.5, y: 1.15, z: 0.5 }
+            });
         }
 
         const scene = this.session.scene;

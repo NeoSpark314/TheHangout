@@ -5,7 +5,7 @@ import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
 import { SessionRuntime } from '../world/session/SessionRuntime';
 import { ServerNetworkManager } from './ServerNetworkManager';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
-import { DrawingFeature } from '../features/drawing/DrawingFeature';
+import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
 import { EntityType } from '../shared/contracts/IEntityState';
 
 export class HeadlessSession {
@@ -35,7 +35,7 @@ export class HeadlessSession {
 
         const sessionMgr = new SessionRuntime(this.context);
         this.context.setRuntime('session', sessionMgr);
-        this.context.setRuntime('drawing', new DrawingFeature(null, this.context));
+        this.context.setRuntime('drawing', new DrawingRuntime(this.context));
 
         this.context.setRuntime('network', this.network as any);
 
