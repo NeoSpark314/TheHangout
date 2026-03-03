@@ -35,6 +35,16 @@ export interface IObjectRuntimeContext {
         emit(eventType: string, data: unknown): void;
     };
 
+    mount: {
+        mountLocal(options: {
+            ownerInstanceId: string;
+            getSeatPose: () => { position: THREE.Vector3; yaw: number };
+            getExitPose?: () => { position: THREE.Vector3; yaw: number };
+        }): boolean;
+        unmountLocal(ownerInstanceId?: string): void;
+        isMountedLocal(ownerInstanceId?: string): boolean;
+    };
+
     objects: {
         spawn(moduleId: string, config?: IObjectSpawnConfig): ISpawnedObjectInstance | null;
         get(instanceId: string): ISpawnedObjectInstance | undefined;

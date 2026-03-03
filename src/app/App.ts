@@ -14,6 +14,7 @@ import { AudioRuntime } from '../media/audio/AudioRuntime';
 import { InteractionSystem } from '../world/systems/InteractionSystem';
 import { AssetRuntime } from '../assets/runtime/AssetRuntime';
 import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
+import { MountRuntime } from '../content/runtime/MountRuntime';
 import { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import { XRTrackingProvider } from '../input/providers/XRTrackingProvider';
 import { DesktopTrackingProvider } from '../input/providers/DesktopTrackingProvider';
@@ -97,6 +98,7 @@ export class App {
         this.context.setRuntime('audio', new AudioRuntime(this.context));
         this.context.setRuntime('assets', new AssetRuntime(this.context));
         this.context.setRuntime('drawing', new DrawingRuntime(this.context));
+        this.context.setRuntime('mount', new MountRuntime(this.context));
         this.context.setRuntime('animation', new AnimationSystem());
         this.context.setRuntime('interaction', new InteractionSystem(this.context));
         this.context.setRuntime('vrUi', new VrUiRuntime(this.context));
@@ -174,6 +176,7 @@ export class App {
         this.engine.addSystem(new PhysicsPresentationSystem(this.context));
 
         if (runtime.session) this.engine.addSystem(runtime.session as any);
+        if (runtime.mount) this.engine.addSystem(runtime.mount as any);
         if (runtime.social) this.engine.addSystem(runtime.social as any);
         if (runtime.particles) this.engine.addSystem(runtime.particles as any);
         if (runtime.remoteDesktop) this.engine.addSystem(runtime.remoteDesktop as any);

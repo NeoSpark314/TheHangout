@@ -13,6 +13,7 @@ import type { InteractionSystem } from '../world/systems/InteractionSystem';
 import type { AnimationSystem } from '../render/systems/AnimationSystem';
 import type { AssetRuntime } from '../assets/runtime/AssetRuntime';
 import type { DrawingRuntime } from '../content/runtime/DrawingRuntime';
+import type { MountRuntime } from '../content/runtime/MountRuntime';
 import type { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import type { VrUiRuntime } from '../ui/vr/VrUiRuntime';
 import type { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
@@ -51,6 +52,7 @@ export interface IRuntimeRegistry {
     animation: AnimationSystem;
     assets: AssetRuntime;
     drawing: DrawingRuntime;
+    mount: MountRuntime;
     tracking: TrackingRuntime;
     vrUi: VrUiRuntime;
     debugRender: DebugRenderRuntime;

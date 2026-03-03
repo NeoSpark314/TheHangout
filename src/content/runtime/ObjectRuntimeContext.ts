@@ -14,6 +14,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
     public readonly entity;
     public readonly tracking;
     public readonly sync;
+    public readonly mount;
     public readonly objects;
 
     constructor(
@@ -56,6 +57,12 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             emit: (eventType, data) => {
                 this.app.runtime.session.emitObjectInstanceEvent(this.instanceId, eventType, data);
             }
+        };
+
+        this.mount = {
+            mountLocal: (options) => this.app.runtime.mount.mountLocal(options),
+            unmountLocal: (ownerInstanceId?: string) => this.app.runtime.mount.unmountLocal(ownerInstanceId),
+            isMountedLocal: (ownerInstanceId?: string) => this.app.runtime.mount.isMountedLocal(ownerInstanceId)
         };
 
         this.objects = {

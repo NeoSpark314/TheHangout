@@ -10,6 +10,7 @@ export class DefaultHangoutWorld {
     private readonly drawingSurfaceId = 'default-drawing-surface';
     private readonly defaultPenId = 'default-pen';
     private readonly drumPadArcId = 'default-drum-pad-arc';
+    private readonly defaultChairId = 'default-chair';
     private readonly defaultCubeColors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
 
     constructor(
@@ -29,6 +30,13 @@ export class DefaultHangoutWorld {
         }
         if (!this.session.getObjectInstance(this.drumPadArcId)) {
             this.session.spawnObjectModule('drum-pad-arc', { id: this.drumPadArcId });
+        }
+        if (!this.session.getObjectInstance(this.defaultChairId)) {
+            this.session.spawnObjectModule('chair', {
+                id: this.defaultChairId,
+                position: { x: -2.4, y: 0, z: 0.8 },
+                rotationY: Math.PI / 2
+            });
         }
         this.ensureDefaultCubes();
 
