@@ -73,6 +73,15 @@ export class ObjectInstanceRegistry {
         return this.instances.get(instanceId);
     }
 
+    public getFirstByModuleId(moduleId: string): ISpawnedObjectInstance | undefined {
+        for (const instance of this.instances.values()) {
+            if (instance.moduleId === moduleId) {
+                return instance;
+            }
+        }
+        return undefined;
+    }
+
     public list(): ISpawnedObjectInstance[] {
         return Array.from(this.instances.values());
     }

@@ -7,6 +7,7 @@ import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 export class DefaultHangoutWorld {
     private environment: EnvironmentBuilder | null = null;
     private props: PropBuilder | null = null;
+    private readonly drawingSurfaceId = 'default-drawing-surface';
 
     constructor(
         private session: SessionRuntime,
@@ -14,6 +15,10 @@ export class DefaultHangoutWorld {
     ) { }
 
     public load(config: ISessionConfig): void {
+        if (!this.session.getObjectInstance(this.drawingSurfaceId)) {
+            this.session.spawnObjectModule('drawing-surface', { id: this.drawingSurfaceId });
+        }
+
         const scene = this.session.scene;
         if (!scene) return;
 

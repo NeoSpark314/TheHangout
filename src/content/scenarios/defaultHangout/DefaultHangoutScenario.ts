@@ -1,5 +1,6 @@
 import type { AppContext } from '../../../app/AppContext';
 import { DebugBeaconObject } from '../../objects/DebugBeaconObject';
+import { DrawingSurfaceObject } from '../../objects/DrawingSurfaceObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
@@ -11,7 +12,7 @@ export class DefaultHangoutScenario implements IScenarioModule {
     public readonly displayName = 'Default Hangout';
     public readonly kind = 'social' as const;
     public readonly maxPlayers = 16;
-    private readonly objectModules: IObjectModule[] = [new DebugBeaconObject()];
+    private readonly objectModules: IObjectModule[] = [new DrawingSurfaceObject(), new DebugBeaconObject()];
     private readonly world: DefaultHangoutWorld;
 
     constructor(session: SessionRuntime, context: AppContext) {

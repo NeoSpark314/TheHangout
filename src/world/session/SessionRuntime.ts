@@ -4,6 +4,7 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
+import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
 import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegistry';
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
@@ -50,12 +51,12 @@ export class SessionRuntime implements IUpdatable {
             if (configuredScenario) {
                 this.activeScenario = configuredScenario;
             }
+            this.refreshActiveObjectModules();
             this.activeScenario.load(this.context, {
                 isHost: this.context.isHost,
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
             });
-            this.refreshActiveObjectModules();
         } catch (e) {
             console.error('[SessionRuntime] init crashed:', e);
         }
@@ -171,6 +172,7 @@ export class SessionRuntime implements IUpdatable {
         this.activeScenario = nextScenario;
         this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
         this._seed = options.seed ?? this.context.sessionConfig.seed;
+        this.refreshActiveObjectModules();
 
         if (this.scene) {
             this.activeScenario.load(this.context, {
@@ -180,7 +182,6 @@ export class SessionRuntime implements IUpdatable {
             });
         }
 
-        this.refreshActiveObjectModules();
         this.repositionLocalPlayerForActiveScenario();
 
         return true;
@@ -199,6 +200,18 @@ export class SessionRuntime implements IUpdatable {
 
     public toggleHologram(visible: boolean): void {
         this.activeScenario.setHologramVisible?.(visible);
+    }
+
+    public getObjectInstance(instanceId: string): ISpawnedObjectInstance | undefined {
+        return this.objectInstanceRegistry.get(instanceId);
+    }
+
+    public getFirstObjectInstanceByModuleId(moduleId: string): ISpawnedObjectInstance | undefined {
+        return this.objectInstanceRegistry.getFirstByModuleId(moduleId);
+    }
+
+    public emitObjectInstanceEvent(instanceId: string, eventType: string, data: unknown): void {
+        this.objectInstanceRegistry.emit(instanceId, eventType, data);
     }
 
     private refreshActiveObjectModules(): void {
