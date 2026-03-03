@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LocalPlayer } from '../../world/entities/LocalPlayer';
+import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import type { IRuntimeRegistry } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
@@ -8,11 +8,11 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 
 /**
  * Consumes logical Intents (mainly VR Tracking and Movement) to position the 
- * virtual hands and head of the LocalPlayer. 
+ * virtual hands and head of the locally controlled player avatar. 
  * This unifies Desktop procedural animations with VR 1:1 hardware tracking.
  */
 export class AnimationSystem implements IUpdatable {
-    private localPlayer: LocalPlayer | null = null;
+    private localPlayer: PlayerAvatarEntity | null = null;
     private runtime: IRuntimeRegistry | null = null;
 
     private _isMoving: boolean = false;
@@ -22,7 +22,7 @@ export class AnimationSystem implements IUpdatable {
         eventBus.on(EVENTS.INTENT_MOVE, this._onMove.bind(this));
     }
 
-    public setLocalPlayer(player: LocalPlayer, runtime: IRuntimeRegistry): void {
+    public setLocalPlayer(player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
         this.localPlayer = player;
         this.runtime = runtime;
     }

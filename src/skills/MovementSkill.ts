@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
-import { LocalPlayer } from '../world/entities/LocalPlayer';
+import { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import { IVector3 } from '../shared/contracts/IMath';
 import type { IRuntimeRegistry } from '../app/AppContext';
 import eventBus from '../app/events/EventBus';
@@ -27,7 +27,7 @@ export class MovementSkill extends Skill {
         this.yaw = yaw;
     }
 
-    public activate(player: LocalPlayer): void {
+    public activate(player: PlayerAvatarEntity): void {
         super.activate(player);
 
         const onMove = (payload: IMoveIntentPayload) => {
@@ -38,7 +38,7 @@ export class MovementSkill extends Skill {
             this.yaw -= payload.delta.x * this.turnSpeed * 15;
         };
         const onVRSnapTurn = (payload: IVRSnapTurnPayload) => {
-            this.applyVRTurn(player, payload.angle, player.context.runtime);
+            this.applyVRTurn(player, payload.angle, player.appContext.runtime);
         };
 
         eventBus.on(EVENTS.INTENT_MOVE, onMove);
@@ -50,7 +50,7 @@ export class MovementSkill extends Skill {
         this._handlers.push({ event: EVENTS.INTENT_VR_SNAP_TURN, handler: onVRSnapTurn });
     }
 
-    public deactivate(player: LocalPlayer): void {
+    public deactivate(player: PlayerAvatarEntity): void {
         super.deactivate(player);
         for (const { event, handler } of this._handlers) {
             eventBus.off(event, handler);
@@ -59,7 +59,7 @@ export class MovementSkill extends Skill {
         this._currentMove = { x: 0, y: 0 };
     }
 
-    private _attachInputListeners(player: LocalPlayer, runtime: IRuntimeRegistry): void {
+    private _attachInputListeners(player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
         const canvas = document.getElementById('app');
         if (!canvas) return;
 
@@ -71,7 +71,7 @@ export class MovementSkill extends Skill {
         });
     }
 
-    public update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void {
+    public update(delta: number, player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
         const render = runtime.render;
 
         if (!this._inputListenersAttached) {
@@ -117,7 +117,7 @@ export class MovementSkill extends Skill {
         player._lastMoveVector = { x: moveVector.x, y: moveVector.y, z: moveVector.z };
     }
 
-    private applyVRTurn(player: LocalPlayer, deltaYaw: number, runtime: IRuntimeRegistry): void {
+    private applyVRTurn(player: PlayerAvatarEntity, deltaYaw: number, runtime: IRuntimeRegistry): void {
         const render = runtime.render;
 
         // Pivot around camera world position

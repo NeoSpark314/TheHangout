@@ -3,8 +3,7 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { TabletSurfaceEntity } from '../../world/entities/TabletSurfaceEntity';
 import { UITabPanel, UIElement, UIButton, UILabel } from '../shared/canvasui';
 import { UITheme, getFont } from '../shared/UITheme';
-import { RemotePlayer } from '../../world/entities/RemotePlayer';
-import { LocalPlayer } from '../../world/entities/LocalPlayer';
+import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
@@ -226,7 +225,7 @@ export class VrUiRuntime implements IUpdatable {
                     audioLevel: number;
                     isMuted?: boolean;
                     micEnabled?: boolean;
-                    player?: RemotePlayer;
+                    player?: PlayerAvatarEntity;
                     targetPos?: THREE.Vector3;
                     targetYaw?: number;
                 }
@@ -246,7 +245,7 @@ export class VrUiRuntime implements IUpdatable {
                 // 2. Add Remote Players
                 for (const entity of this.context.runtime.entity.entities.values()) {
                     if (entity.type === 'REMOTE_PLAYER') {
-                        const rp = entity as RemotePlayer;
+                        const rp = entity as PlayerAvatarEntity;
                         // Avoid adding duplicates if the same player is discovered multiple times (edge case)
                         if (allPeers.find(p => p.id === rp.id)) continue;
 
@@ -323,7 +322,7 @@ export class VrUiRuntime implements IUpdatable {
 
                         // Go To Button
                         const gotoBtn = new UIButton("Go To", 950, rowY + 15, 200, 70, () => {
-                            const localPlayer = this.context.localPlayer as LocalPlayer;
+                            const localPlayer = this.context.localPlayer as PlayerAvatarEntity;
                             if (localPlayer && localPlayer.teleportTo && peer.targetPos && peer.targetYaw !== undefined) {
                                 const targetPos = new THREE.Vector3(peer.targetPos.x, peer.targetPos.y, peer.targetPos.z);
                                 const targetYaw = peer.targetYaw;

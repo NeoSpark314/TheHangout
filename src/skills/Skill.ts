@@ -1,4 +1,4 @@
-import { LocalPlayer } from '../world/entities/LocalPlayer';
+import { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import type { IRuntimeRegistry } from '../app/AppContext';
 
 export abstract class Skill {
@@ -13,15 +13,15 @@ export abstract class Skill {
         this.isAlwaysActive = isAlwaysActive;
     }
 
-    public activate(player: LocalPlayer): void {
+    public activate(player: PlayerAvatarEntity): void {
         this.isActive = true;
     }
 
-    public deactivate(player: LocalPlayer): void {
+    public deactivate(player: PlayerAvatarEntity): void {
         this.isActive = false;
     }
 
-    public abstract update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void;
+    public abstract update(delta: number, player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void;
 
     public getNetworkState(): any {
         return null;

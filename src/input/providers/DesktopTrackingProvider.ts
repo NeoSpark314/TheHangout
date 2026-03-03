@@ -4,7 +4,6 @@ import { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrack
 import { HandState } from '../../shared/types/HandState';
 import { HumanoidState } from '../../shared/types/HumanoidState';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
-import { LocalPlayer } from '../../world/entities/LocalPlayer';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -158,7 +157,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         if (render.isXRPresenting()) return;
 
-        const lp = this.context.localPlayer as LocalPlayer;
+        const lp = this.context.localPlayer as PlayerAvatarEntity;
         if (!lp || lp.type !== 'LOCAL_PLAYER') return;
 
         // 1. Source of Truth: Origin and Orientation

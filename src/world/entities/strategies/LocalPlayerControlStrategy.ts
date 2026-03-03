@@ -6,7 +6,7 @@ import type { Skill } from '../../../skills/Skill';
 import { MovementSkill } from '../../../skills/MovementSkill';
 import { GrabSkill } from '../../../skills/GrabSkill';
 import { UIPointerSkill } from '../../../skills/UIPointerSkill';
-import type { LocalPlayer } from '../LocalPlayer';
+import type { PlayerAvatarEntity } from '../PlayerAvatarEntity';
 import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrategy';
 
 export interface ILocalPlayerTeleportOptions {
@@ -23,7 +23,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     private activeSkill: Skill | null = null;
     private lastProviderId: string | null = null;
 
-    public attach(player: LocalPlayer): void {
+    public attach(player: PlayerAvatarEntity): void {
         this.xrOrigin = {
             position: { ...player.spawnPosition },
             quaternion: {
@@ -37,7 +37,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         this.initializeSkills(player);
     }
 
-    public detach(player: LocalPlayer): void {
+    public detach(player: PlayerAvatarEntity): void {
         for (const skill of this.skills) {
             skill.destroy();
         }
@@ -46,8 +46,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         this.lastProviderId = null;
     }
 
-    public update(player: LocalPlayer, delta: number, frame?: XRFrame): void {
-        const runtime = player.context.runtime;
+    public update(player: PlayerAvatarEntity, delta: number, frame?: XRFrame): void {
+        const runtime = player.appContext.runtime;
         const render = runtime.render;
 
         const movementSkill = this.getSkill('movement');
@@ -99,7 +99,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         }
 
         player.audioLevel = runtime.media ? runtime.media.getLocalVolume() : 0;
-        player.micEnabled = player.context.voiceEnabled;
+        player.micEnabled = player.appContext.voiceEnabled;
 
         player.view.applyState({
             position: { x: player.headState.position.x, y: 0, z: player.headState.position.z },
@@ -108,15 +108,15 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             headQuaternion: player.headState.quaternion,
             humanoid: player.humanoid,
             name: player.name || 'You',
-            color: player.context.avatarConfig.color,
+            color: player.appContext.avatarConfig.color,
             isLocal: true,
             audioLevel: player.audioLevel,
             lerpFactor: 1.0
         }, delta);
     }
 
-    public getNetworkState(player: LocalPlayer, fullSync: boolean = false): IPlayerEntityState {
-        const runtime = player.context.runtime;
+    public getNetworkState(player: PlayerAvatarEntity, fullSync: boolean = false): IPlayerEntityState {
+        const runtime = player.appContext.runtime;
         const trackingState = runtime.tracking.getState();
         const bodyYaw = trackingState.head.yaw;
 
@@ -136,25 +136,25 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             hmd: player.humanoid.consumeNetworkDelta(fullSync) || undefined,
             hm: [trackingState.hands.left.hasJoints ? 1 : 0, trackingState.hands.right.hasJoints ? 1 : 0],
             conf: {
-                color: player.context.avatarConfig.color
+                color: player.appContext.avatarConfig.color
             },
-            mic: player.context.voiceEnabled,
+            mic: player.appContext.voiceEnabled,
             ownerId: player.ownerId
         };
     }
 
-    public destroy(player: LocalPlayer): void {
+    public destroy(player: PlayerAvatarEntity): void {
         this.detach(player);
     }
 
-    public addSkill(player: LocalPlayer, skill: Skill): void {
+    public addSkill(player: PlayerAvatarEntity, skill: Skill): void {
         this.skills.push(skill);
         if (skill.isAlwaysActive) {
             skill.activate(player);
         }
     }
 
-    public setActiveSkill(player: LocalPlayer, id: string): void {
+    public setActiveSkill(player: PlayerAvatarEntity, id: string): void {
         if (this.activeSkill && !this.activeSkill.isAlwaysActive) {
             this.activeSkill.deactivate(player);
         }
@@ -182,8 +182,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         };
     }
 
-    public teleportTo(player: LocalPlayer, position: THREE.Vector3, yaw: number, options: ILocalPlayerTeleportOptions = {}): void {
-        const runtime = player.context.runtime;
+    public teleportTo(player: PlayerAvatarEntity, position: THREE.Vector3, yaw: number, options: ILocalPlayerTeleportOptions = {}): void {
+        const runtime = player.appContext.runtime;
         const targetSpace = options.targetSpace || 'player';
 
         const localHeadOffset = new THREE.Vector3().copy(runtime.render.camera.position);
@@ -212,7 +212,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         movement?.setYaw(targetOriginYaw);
     }
 
-    private initializeSkills(player: LocalPlayer): void {
+    private initializeSkills(player: PlayerAvatarEntity): void {
         const movement = new MovementSkill();
         movement.setYaw(player.spawnYaw);
         this.addSkill(player, movement);

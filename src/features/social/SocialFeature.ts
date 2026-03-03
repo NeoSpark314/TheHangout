@@ -3,7 +3,7 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { AppContext } from '../../app/AppContext';
 import { IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
 import { EntityType } from '../../shared/contracts/IEntityState';
-import { RemotePlayer } from '../../world/entities/RemotePlayer';
+import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import { ParticleEffectSystem } from '../../render/effects/ParticleEffectSystem';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
@@ -52,7 +52,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
         const entities = this.context.runtime.entity.entities;
         for (const entity of entities.values()) {
             if (entity.type !== EntityType.REMOTE_PLAYER) continue;
-            const remote = entity as RemotePlayer;
+            const remote = entity as PlayerAvatarEntity;
             const remoteId = remote.id;
             if (!remoteId || localId >= remoteId) continue; // single emitter rule
 
@@ -177,7 +177,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
         return null;
     }
 
-    private getRemoteHandPosition(remote: RemotePlayer, hand: Handedness): THREE.Vector3 | null {
+    private getRemoteHandPosition(remote: PlayerAvatarEntity, hand: Handedness): THREE.Vector3 | null {
         const tipName = hand === 'left' ? 'leftIndexTip' : 'rightIndexTip';
         const wristName = hand === 'left' ? 'leftHand' : 'rightHand';
         const tip = remote.humanoid.joints[tipName]?.position;

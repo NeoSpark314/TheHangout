@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Skill } from './Skill';
-import { LocalPlayer } from '../world/entities/LocalPlayer';
+import { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import { IInteractable } from '../shared/contracts/IInteractable';
 import { IGrabbable } from '../shared/contracts/IGrabbable';
 import { isGrabbable, isInteractable } from '../shared/utils/TypeGuards';
@@ -26,12 +26,12 @@ export class GrabSkill extends Skill {
         super('grab', 'Grab', { isAlwaysActive: true });
     }
 
-    public activate(player: LocalPlayer): void {
+    public activate(player: PlayerAvatarEntity): void {
         super.activate(player);
 
         const onGrabStart = (payload: IHandIntentPayload) => {
             if (this.heldObjects.has(payload.hand)) return;
-            const handState = player.context.runtime.tracking.getState().hands[payload.hand];
+            const handState = player.appContext.runtime.tracking.getState().hands[payload.hand];
             let nearest = this.highlightedEntities[payload.hand];
 
             // Resolve the actual proximity target at grab time from the current hand pose.
@@ -40,7 +40,7 @@ export class GrabSkill extends Skill {
             if (handState.active) {
                 const pos = handState.pointerPose.position || handState.pose.position;
                 const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-                const currentNearest = player.context.runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
+                const currentNearest = player.appContext.runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 nearest = currentNearest?.interactable || null;
             }
 
@@ -126,7 +126,7 @@ export class GrabSkill extends Skill {
         this._handlers.push({ event: EVENTS.INTENT_INTERACT_END, handler: onInteractEnd });
     }
 
-    public deactivate(player: LocalPlayer): void {
+    public deactivate(player: PlayerAvatarEntity): void {
         super.deactivate(player);
         for (const { event, handler } of this._handlers) {
             eventBus.off(event, handler);
@@ -138,7 +138,7 @@ export class GrabSkill extends Skill {
         this._updateHighlight(player.id, 'right', null);
     }
 
-    public update(delta: number, player: LocalPlayer, runtime: IRuntimeRegistry): void {
+    public update(delta: number, player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
         const trackingHands = runtime.tracking.getState().hands;
         for (const hand of ['left', 'right'] as const) {
             const handState = trackingHands[hand];

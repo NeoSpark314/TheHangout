@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { LocalPlayer } from '../entities/LocalPlayer';
-import { RemotePlayer } from '../entities/RemotePlayer';
+import { PlayerAvatarEntity } from '../entities/PlayerAvatarEntity';
 import { StickFigureView } from '../../render/avatar/stickfigure/StickFigureView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
 import { PhysicsPropEntity } from '../entities/PhysicsPropEntity';
@@ -9,6 +8,9 @@ import { PenView } from '../../render/views/PenView';
 import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { NullView } from '../../render/views/NullView';
+import { EntityType } from '../../shared/contracts/IEntityState';
+import { LocalPlayerControlStrategy } from '../entities/strategies/LocalPlayerControlStrategy';
+import { RemotePlayerReplicationStrategy } from '../entities/strategies/RemotePlayerReplicationStrategy';
 
 export class EntityFactory {
     private static registry: Map<string, (context: AppContext, id: string, config: any) => any> = new Map();
@@ -45,7 +47,7 @@ export class EntityFactory {
         return creator(context, id, config);
     }
 
-    public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
+    public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): PlayerAvatarEntity {
         const render = context.runtime.render;
         const view = render
             ? new StickFigureView(context, {
@@ -54,9 +56,23 @@ export class EntityFactory {
             })
             : new NullView(id);
 
-        const entity = isLocal
-            ? new LocalPlayer(context, id, spawnPos, spawnYaw, view)
-            : new RemotePlayer(context, id, view);
+        const entity = new PlayerAvatarEntity(
+            context,
+            id,
+            isLocal ? EntityType.LOCAL_PLAYER : EntityType.REMOTE_PLAYER,
+            isLocal,
+            view,
+            {
+                controlMode: isLocal ? 'local' : 'remote',
+                spawnPos,
+                spawnYaw
+            }
+        );
+        entity.attachControlStrategy(
+            isLocal
+                ? new LocalPlayerControlStrategy()
+                : new RemotePlayerReplicationStrategy()
+        );
 
         if (render && view instanceof StickFigureView) {
             view.addToScene(render.scene);

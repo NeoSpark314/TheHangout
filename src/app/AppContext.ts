@@ -20,7 +20,7 @@ import type { FeatureReplicationService } from '../network/replication/FeatureRe
 import type { ParticleEffectSystem } from '../render/effects/ParticleEffectSystem';
 import type { SocialFeature } from '../features/social/SocialFeature';
 import type { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
-import type { LocalPlayer } from '../world/entities/LocalPlayer';
+import type { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -83,7 +83,7 @@ export class AppContext {
         seed: Math.floor(Math.random() * 2147483647)
     };
 
-    public localPlayer: LocalPlayer | null = null;
+    public localPlayer: PlayerAvatarEntity | null = null;
     public isMenuOpen: boolean = false;
 
     private _runtime: Partial<IRuntimeRegistry> = {};
