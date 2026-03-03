@@ -2,6 +2,7 @@ import type { AppContext } from '../../app/AppContext';
 import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IObjectModule, IObjectSpawnConfig } from '../contracts/IObjectModule';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
+import { ObjectRuntimeContext } from './ObjectRuntimeContext';
 
 class EntityBackedObjectInstance implements ISpawnedObjectInstance {
     constructor(
@@ -61,7 +62,7 @@ export class ObjectModuleRegistry {
         if (!module) return null;
 
         const instanceId = config.id || `${moduleId}-${Math.random().toString(36).slice(2, 8)}`;
-        const result = module.spawn({ app, instanceId }, config);
+        const result = module.spawn(new ObjectRuntimeContext(app, instanceId), config);
         if (!result) return null;
 
         if (isSpawnedObjectInstance(result)) {

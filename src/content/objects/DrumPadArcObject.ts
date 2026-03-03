@@ -1,11 +1,9 @@
 import * as THREE from 'three';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
-import type { AppContext } from '../../app/AppContext';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
+import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 
 interface IDrumPadHitPayload {
     padId: string;
@@ -14,32 +12,22 @@ interface IDrumPadHitPayload {
     position?: { x: number; y: number; z: number };
 }
 
-class DrumPadArcInstance implements IReplicatedObjectInstance {
-    public readonly moduleId: string;
-    public readonly replicationKey: string;
+class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplicatedObjectInstance {
     private readonly padMeshes: THREE.Mesh[] = [];
     private readonly padPositions: THREE.Vector3[] = [];
     private readonly padFlash: number[] = [];
     private readonly padFreqByHandle = new Map<number, { padId: string; frequency: number }>();
     private readonly padById = new Map<string, { index: number; frequency: number; position: THREE.Vector3 }>();
-    private readonly staticBodies: unknown[] = [];
     private readonly handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandPadHitAtMs = new Map<string, number>();
     private readonly group: THREE.Group | null;
-    private onPhysicsCollisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
 
-    constructor(
-        public readonly id: string,
-        moduleId: string,
-        private context: AppContext
-    ) {
-        this.moduleId = moduleId;
-        this.replicationKey = `object:${moduleId}:${id}`;
-        this.group = this.context.runtime.render ? new THREE.Group() : null;
+    constructor(context: IObjectSpawnContext, moduleId: string) {
+        super(context, moduleId);
+        this.group = this.context.app.runtime.render ? this.ownSceneObject(new THREE.Group()) : null;
 
         if (this.group) {
-            this.group.name = `drum-pad-arc:${id}`;
-            this.context.runtime.render.scene.add(this.group);
+            this.group.name = `drum-pad-arc:${this.id}`;
         }
 
         this.createDrumPads();
@@ -60,16 +48,6 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
     }
 
     public destroy(): void {
-        if (this.onPhysicsCollisionStartedHandler) {
-            eventBus.off(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
-            this.onPhysicsCollisionStartedHandler = null;
-        }
-
-        for (const body of this.staticBodies) {
-            this.context.runtime.physics.removeRigidBody(body as any);
-        }
-        this.staticBodies.length = 0;
-
         this.padFreqByHandle.clear();
         this.padById.clear();
         this.padPositions.length = 0;
@@ -77,24 +55,8 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
         this.lastHandPadHitAtMs.clear();
         this.handLastPos.left = null;
         this.handLastPos.right = null;
-
-        if (this.group) {
-            this.context.runtime.render?.scene.remove(this.group);
-            while (this.group.children.length > 0) {
-                const child = this.group.children.pop();
-                if (!child) break;
-                child.traverse((node) => {
-                    const mesh = node as THREE.Mesh;
-                    if (mesh.geometry) mesh.geometry.dispose();
-                    if (mesh.material) {
-                        if (Array.isArray(mesh.material)) mesh.material.forEach((mat) => mat.dispose());
-                        else mesh.material.dispose();
-                    }
-                });
-            }
-        }
-
         this.padMeshes.length = 0;
+        super.destroy();
     }
 
     public onReplicationEvent(eventType: string, data: unknown, _meta: IObjectReplicationMeta): void {
@@ -142,7 +104,7 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
             this.padFlash.push(0);
             this.padById.set(`pad-${i}`, { index: i, frequency: notes[i], position });
 
-            const collider = this.context.runtime.physics.createStaticCuboidCollider(
+            const collider = this.context.physics.createStaticCuboidCollider(
                 0.21, 0.04, 0.21,
                 { x: px, y: padY, z: pz }
             );
@@ -150,14 +112,14 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
                 this.padFreqByHandle.set(collider.handle, { padId: `pad-${i}`, frequency: notes[i] });
                 const body = collider.parent();
                 if (body) {
-                    this.staticBodies.push(body);
+                    this.ownPhysicsBody(body);
                 }
             }
         }
     }
 
     private bindCollisionListener(): void {
-        this.onPhysicsCollisionStartedHandler = (data) => {
+        this.context.onPhysicsCollisionStarted((data) => {
             const padA = this.padFreqByHandle.get(data.handleA);
             const padB = this.padFreqByHandle.get(data.handleB);
             if (!padA && !padB) return;
@@ -166,7 +128,7 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
             const entityId = padA ? data.entityBId : data.entityAId;
             if (!entityId) return;
 
-            const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
+            const entity = this.context.entity.get(entityId) as PhysicsPropEntity | undefined;
             if (!entity || entity.type !== EntityType.PHYSICS_PROP) return;
 
             const v = entity.rigidBody.linvel();
@@ -180,20 +142,16 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
                 intensity,
                 position: padInfo ? { x: padInfo.position.x, y: padInfo.position.y, z: padInfo.position.z } : undefined
             }, true);
-        };
-
-        eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.onPhysicsCollisionStartedHandler);
+        });
     }
 
     private updateHandDrumHits(delta: number): void {
-        const trackingMgr = this.context.runtime.tracking;
-        if (!trackingMgr || typeof trackingMgr.getState !== 'function') {
+        const tracking = this.context.tracking.getState?.();
+        if (!tracking) {
             this.handLastPos.left = null;
             this.handLastPos.right = null;
             return;
         }
-
-        const tracking = trackingMgr.getState();
         const dt = Math.max(0.0001, delta);
         const now = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
         const padRadius = 0.27;
@@ -253,11 +211,8 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
     }
 
     private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
-        const trackingMgr = this.context.runtime.tracking;
-        if (!trackingMgr || typeof trackingMgr.getState !== 'function') return null;
-
-        const trackingState = trackingMgr.getState().hands[hand];
-        const localHumanoidJoints = this.context.localPlayer?.humanoid?.joints;
+        const trackingState = this.context.tracking.getState().hands[hand];
+        const localHumanoidJoints = this.context.tracking.getLocalPlayer()?.humanoid?.joints;
 
         if (trackingState.hasJoints) {
             const tipPose = trackingState.joints[9]?.pose?.position;
@@ -286,14 +241,14 @@ class DrumPadArcInstance implements IReplicatedObjectInstance {
             this.padFlash[idx] = Math.max(this.padFlash[idx], Math.min(1.0, hit.intensity * 1.2));
         }
 
-        this.context.runtime.audio?.playDrumPadHit({
+        this.context.audio.playDrumPadHit({
             frequency: hit.frequency,
             intensity: hit.intensity,
             position: hit.position
         });
 
         if (replicate) {
-            this.context.runtime.session.emitObjectInstanceEvent(this.id, 'hit', hit);
+            this.emitSyncEvent('hit', hit);
         }
     }
 
@@ -317,6 +272,6 @@ export class DrumPadArcObject implements IObjectModule {
     public readonly portable = false;
 
     public spawn(context: IObjectSpawnContext, _config: IObjectSpawnConfig): DrumPadArcInstance {
-        return new DrumPadArcInstance(context.instanceId, this.id, context.app);
+        return new DrumPadArcInstance(context, this.id);
     }
 }

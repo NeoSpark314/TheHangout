@@ -133,7 +133,7 @@ export class SessionRuntime implements IUpdatable {
         return this.objectModuleRegistry.listIds();
     }
 
-    public spawnObjectModule(id: string, config: IObjectSpawnConfig = {}) {
+    public spawnObjectInstance(id: string, config: IObjectSpawnConfig = {}): ISpawnedObjectInstance | null {
         const instance = this.objectModuleRegistry.spawn(id, this.context, config);
         if (!instance) {
             console.warn(`[SessionRuntime] Failed to spawn object module: ${id}`);
@@ -141,6 +141,12 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.objectInstanceRegistry.add(instance);
+        return instance;
+    }
+
+    public spawnObjectModule(id: string, config: IObjectSpawnConfig = {}) {
+        const instance = this.spawnObjectInstance(id, config);
+        if (!instance) return null;
         return instance.getPrimaryEntity?.() ?? instance;
     }
 
@@ -212,6 +218,10 @@ export class SessionRuntime implements IUpdatable {
 
     public emitObjectInstanceEvent(instanceId: string, eventType: string, data: unknown): void {
         this.objectInstanceRegistry.emit(instanceId, eventType, data);
+    }
+
+    public removeObjectInstance(instanceId: string): void {
+        this.objectInstanceRegistry.remove(instanceId);
     }
 
     private refreshActiveObjectModules(): void {

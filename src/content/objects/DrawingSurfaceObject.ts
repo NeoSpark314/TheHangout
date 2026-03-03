@@ -1,57 +1,43 @@
 import * as THREE from 'three';
-import type { AppContext } from '../../app/AppContext';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IReplicatedObjectInstance, IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
 import type { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
+import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 
 export interface IDrawingSurfaceInstance extends IReplicatedObjectInstance {
     addSegment(segment: IDrawSegmentPayload, replicate?: boolean): void;
     clear(): void;
 }
 
-class DrawingSurfaceInstance implements IDrawingSurfaceInstance {
-    public readonly moduleId: string;
-    public readonly replicationKey: string;
+class DrawingSurfaceInstance extends BaseReplicatedObjectInstance implements IDrawingSurfaceInstance {
     private readonly lineMaterial: THREE.LineBasicMaterial;
     private lineGroup: THREE.Group | null = null;
     private readonly segments: IDrawSegmentPayload[] = [];
     private readonly maxSegments = 10000;
 
-    constructor(
-        public readonly id: string,
-        moduleId: string,
-        private context: AppContext
-    ) {
-        this.moduleId = moduleId;
-        this.replicationKey = `object:${moduleId}:${id}`;
+    constructor(context: IObjectSpawnContext, moduleId: string) {
+        super(context, moduleId);
         this.lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
+        this.addCleanup(() => this.lineMaterial.dispose());
 
-        const scene = this.context.runtime.render?.scene || null;
+        const scene = this.context.app.runtime.render?.scene || null;
         if (scene) {
-            this.lineGroup = new THREE.Group();
-            this.lineGroup.name = `drawing-surface:${id}`;
-            scene.add(this.lineGroup);
+            this.lineGroup = this.ownSceneObject(new THREE.Group());
+            this.lineGroup.name = `drawing-surface:${this.id}`;
         }
     }
 
-    public update(): void { }
-
     public destroy(): void {
         this.clear();
-
-        if (this.lineGroup) {
-            this.context.runtime.render?.scene.remove(this.lineGroup);
-            this.lineGroup = null;
-        }
-
-        this.lineMaterial.dispose();
+        this.lineGroup = null;
+        super.destroy();
     }
 
     public addSegment(segment: IDrawSegmentPayload, replicate: boolean = true): void {
         if (!this.isValidSegment(segment)) return;
 
         if (replicate) {
-            this.context.runtime.session.emitObjectInstanceEvent(this.id, 'segment', segment);
+            this.emitSyncEvent('segment', segment);
             return;
         }
 
@@ -137,6 +123,6 @@ export class DrawingSurfaceObject implements IObjectModule {
     public readonly portable = false;
 
     public spawn(context: IObjectSpawnContext, _config: IObjectSpawnConfig): DrawingSurfaceInstance {
-        return new DrawingSurfaceInstance(context.instanceId, this.id, context.app);
+        return new DrawingSurfaceInstance(context, this.id);
     }
 }
