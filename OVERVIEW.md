@@ -1,102 +1,113 @@
 # Overview of The Hangout
-This overview is intended to give a high-level overview of the project architecture and design decisions mostly for coding agents to get a quick grasp of where everything is and how it works.
+
+This document is a quick orientation guide for the current codebase after the architecture refactor.
+It is meant to help a contributor understand the live project structure, vocabulary, and major runtime boundaries.
 
 ## Architecture
 
-The project follows a **Clean Object-Oriented (OOP) Architecture** pattern based on a robust Entity Class Hierarchy. It is designed for high-performance spatial synchronization and modular gameplay features while remaining approachable and easy to maintain without the complexity of an ECS.
+The project is organized by domain first, not by generic implementation buckets.
+The app is still object-oriented and runtime-driven, but the structure now separates responsibilities more clearly:
 
-| Layer | Tech | Role |
-|-------|------|------|
-| **Core** | TypeScript | App Orchestration (`App`), Game loop (`GameEngine`), Event Bus, Type-safe Global State. |
-| **Logic Entities** | Custom | "Source of Truth" for state. They own logic, physics modes, and poses. |
-| **Managers** | Custom | Lifecycle and orchestration (Network, Render, Physics, Assets). |
-| **Systems** | Custom | Logic Hubs (XR Math, Interaction, Drawing). |
-| **Views** | Three.js | Purely visual representation of entities. No business logic here. |
+| Domain | Role |
+|---|---|
+| `app/` | Bootstrap, runtime wiring, engine loop, app-wide event bus |
+| `shared/` | Contracts, serializable types, constants, generic utilities |
+| `network/` | Transport, packet protocol, state sync, feature replication |
+| `world/` | Session state, entity lifecycle, spawning, world systems |
+| `render/` | Three.js scene/runtime, entity views, avatar rendering, effects |
+| `physics/` | Rapier simulation runtime and physics-facing systems |
+| `input/` | Tracking providers and device-to-intent translation |
+| `ui/` | Flat pre-session UI, VR UI, HUD |
+| `media/` | Voice and audio playback/runtime integrations |
+| `features/` | Modular gameplay features such as drawing, social, remote desktop |
+| `assets/` | Procedural world builders and asset runtime helpers |
+| `server/` | Headless session and server-side network runtime |
 
-### Engineering Principles
+## Core Principles
 
-1.  **Dependency Injection (DI)**: Core context (`GameContext`) is explicitly passed via constructors. No hidden global singletons, making dependencies obvious and easily testable.
-2.  **Open/Closed Game Loop**: The `GameEngine` iterates over an array of dynamically injected `IUpdatable` systems. New managers or mechanics can be slotted into the frame loop without altering the engine code.
-3.  **World-Space Uniformity**: All spatial data (Joints, Head, Hands) is processed and synchronized in **World Space**. Coordinates are only transformed into local space at the final rendering step within the `View` layer. This "Standardized World" approach eliminates double-transformation bugs, simplifies network synchronization, and ensures frame-perfect parity between local and remote representations.
-4.  **Capability-Based Interaction**: Interaction is defined by interfaces (`IInteractable`, `IGrabbable`). Logic systems safely query these capabilities at runtime.
-5.  **Strictly Typed Network Contract**: All traffic utilizes explicitly typed packet payloads (`INetworkPacket.ts`) and Discriminated Unions (`IEntityState.ts`). We use a compact wire format (tuples and abbreviated keys) to minimize bandwidth.
-6.  **Lean Player Avatar Sync Contract**: Player avatar sync is now based on `hmd` (humanoid joint delta) plus `hm` (per-hand mode flags for hand-tracking vs. controller mode). Legacy `hands` payload replication was removed to avoid redundant state paths and desync.
-7.  **Single Source of Truth for Local Hand Interaction**: Local interaction systems (grab, UI pointer, gesture intent) read hand state directly from `TrackingManager.getState().hands`. We intentionally avoid mirroring hand state into player entity fields to prevent drift and race conditions.
-8.  **Gesture Pipeline Separation**: `GestureUtils` provides raw gesture metrics (pinch distance, fist curl count), while `InputManager` owns hysteresis/latching and intent edge emission. This keeps thresholds centralized and behavior deterministic.
-9.  **Feature Replication Layer**: `ReplicationManager` provides a generic network-aware event+snapshot path for gameplay features (e.g. drum hits, drawing) with local echo and late-join snapshot sync.
-10. **Linear Lifecycle**: The `App` class enforces a strict, promise-based initialization bootstrap: **Infrastructure -> World -> Engine**.
-11. **Data-Oriented Math Types (Interfaces vs. Classes)**: For fundamental spatial data (`IPose`, `IVector3`, `IQuaternion`), the architecture strictly uses **Interfaces** rather than Classes with helper methods. This provides three critical benefits:
-    *   **Zero Allocation Overhead**: In a 90hz VR render loop, instantiating millions of `new Pose()` class objects would thrash the Garbage Collector and cause frame drops. Interfaces are zero-cost at runtime.
-    *   **Frictionless Serialization**: Raw JSON from the network (`{ position: {...}, quaternion: {...} }`) can be cast directly to `IPose` without needing to iterate and manually instantiate class instances.
-    *   **Duck-Typing Interoperability**: Because the interfaces only define data shape (`x, y, z`), objects from other libraries (like `THREE.Vector3` or WebXR's `XRRigidTransform`) often automatically fulfill the contract without expensive conversions.
+1. **Single composition root**: [App.ts](/c:/programming/TheHangout/src/app/App.ts) owns runtime assembly. Subsystems are registered in one place through `AppContext`.
+2. **Role-based naming**: `Runtime`, `System`, `Service`, `Registry`, `Provider`, and `Feature` are used intentionally. `Manager` is no longer the default catch-all.
+3. **Domain-first structure**: top-level folders describe product areas (`network`, `world`, `render`), while subfolders describe roles inside those areas.
+4. **Explicit runtime registry**: global subsystem access is exposed through `context.runtime`, not `context.managers`.
+5. **World-role-first entities**: entity names describe what they are in the world, not who controls them. Local vs remote behavior is handled via runtime state and strategies.
+6. **Typed network contracts**: packets and replicated entity state remain explicitly typed, with compact payloads for avatar and physics sync.
+7. **Input abstraction**: gameplay consumes spatial state and intent, not raw device-specific APIs.
+8. **Feature isolation**: drawing, social interactions, and remote desktop live as separate feature modules, not as app-wide infrastructure.
 
-## Core Systems
+## Runtime Model
 
-### App Orchestrator
-The `App` class manages the startup sequence, ensuring all managers are registered and systems are initialized in the correct order to prevent race conditions.
+### App and Engine
 
-### Entity & View System
-- **Entities**: Logic-only state owners.
-- **Views**: Visual-only representations with a managed Three.js lifecycle.
-- **EntityFactory**: Data-driven spawning using the `EntityType` registry.
+- [App.ts](/c:/programming/TheHangout/src/app/App.ts) boots the app in a fixed order: infrastructure, world initialization, then engine startup.
+- [Engine.ts](/c:/programming/TheHangout/src/app/Engine.ts) runs the frame loop over registered systems.
+- [AppContext.ts](/c:/programming/TheHangout/src/app/AppContext.ts) is the shared runtime state container and dependency registry.
 
-### Modular Networking
-- **Transport**: Raw communication via PeerJS/Sockets or local WebSocket Relay.
-- **Dispatcher**: Routes incoming packets to specific `PacketHandlers`.
-- **Synchronizer**: A 20Hz loop that broadcasts authoritative entity states using standardized, bandwidth-efficient interfaces.
-- **Feature Replication**: `ReplicationManager` handles generic feature events and optional snapshots for late joiners.
+### Entities and Spawning
 
-### Network Lanes
-- **Lane A: Continuous State Sync**  
-  Used for high-frequency, continuously changing simulation state.
-  - Player/avatar pose and humanoid deltas (`hmd`, `hm`)
-  - Physics body state + ownership transfer
-  - Why: these domains need authority, interpolation, and tight cadence.
-- **Lane B: Feature Replication (Event + Snapshot)**  
-  Used for semantic gameplay effects and accumulated feature state.
-  - Drum pad hits (event)
-  - High five effects (event)
-  - Drawing history (event stream + snapshot for late join)
-  - Why: local-first feature logic with network awareness and optional late-join recovery.
-- **Lane C: Media/Voice Transport**  
-  Dedicated path for audio chunk streaming.
-  - Why: different throughput/timing profile and decode pipeline than gameplay state.
+- [EntityRegistry.ts](/c:/programming/TheHangout/src/world/entities/EntityRegistry.ts) stores and updates active entities.
+- [EntityFactory.ts](/c:/programming/TheHangout/src/world/spawning/EntityFactory.ts) is the central spawn registry.
+- The current player model is unified around [PlayerAvatarEntity.ts](/c:/programming/TheHangout/src/world/entities/PlayerAvatarEntity.ts).
+- Local vs remote avatar behavior is delegated to strategy classes under [src/world/entities/strategies](/c:/programming/TheHangout/src/world/entities/strategies).
 
-### Replication Boundaries
-- Use `ReplicationManager` for semantic events and snapshotable feature state.
-- Do **not** use `ReplicationManager` for high-rate physics/avatar streams.
-- Keep transport responsibilities separate: continuous simulation, feature semantics, and voice/media each stay in their lane.
+### Networking
 
-### Tracking & Gestures
-- **Tracking Providers own hand state**: `DesktopTrackingProvider` and `XRTrackingProvider` are the authoritative writers of `hands` tracking data.
-- **InputManager consumes tracking state**: Gesture and interaction intents are derived directly from `TrackingManager` hand state, not from view/entity mirrors.
-- **HumanoidState is avatar/network focused**: `HumanoidState` is used for avatar pose replication/rendering (`hmd`), while interaction logic uses tracked hands.
+- [NetworkRuntime.ts](/c:/programming/TheHangout/src/network/transport/NetworkRuntime.ts) owns the client transport layer.
+- [StateSynchronizer.ts](/c:/programming/TheHangout/src/network/replication/StateSynchronizer.ts) handles continuous authoritative state sync.
+- [FeatureReplicationService.ts](/c:/programming/TheHangout/src/network/replication/FeatureReplicationService.ts) handles semantic feature events and snapshots.
+- Player tokens are unified under `EntityType.PLAYER_AVATAR`; local vs remote avatar mode is runtime state (`controlMode`), not a separate entity type.
 
-### Social & VFX
-- **SocialEffectsManager**: feature-specific local detection + replicated semantic events (`feature:social`, currently high fives).
-- **ParticleSystemManager**: generic GPU-style `THREE.Points` spark system used by social and future effects.
-- **AudioManager + SoundSynth**: local playback of replicated social/drum events with distance/pan shaping.
+### Session and Spawn Rules
 
-## Project Structure
+- [SessionRuntime.ts](/c:/programming/TheHangout/src/world/session/SessionRuntime.ts) owns session configuration and procedural world setup.
+- [PlayerPresenceService.ts](/c:/programming/TheHangout/src/world/session/PlayerPresenceService.ts) creates the local player avatar when the session is ready.
+- Guest spawn placement depends on `assignedSpawnIndex` from the host. Guest initialization is intentionally delayed until that host-assigned slot is available.
 
-`views/` is now split by avatar concern:
-- `src/views/avatar/components/` contains generic avatar features reusable across future avatar types (name tag and voice audio).
-- `src/views/avatar/stickfigure/` contains `StickFigureView` and stick-figure specific rig/hand modules.
+### Input and Tracking
 
+- Tracking state is owned by providers such as [DesktopTrackingProvider.ts](/c:/programming/TheHangout/src/input/providers/DesktopTrackingProvider.ts) and [XRTrackingProvider.ts](/c:/programming/TheHangout/src/input/providers/XRTrackingProvider.ts).
+- [InputRuntime.ts](/c:/programming/TheHangout/src/input/controllers/InputRuntime.ts) translates device state into gameplay-facing intents and interactions.
+- Local interaction logic should read tracking state from the tracking runtime, not from duplicated mirrors on entities.
+
+### Rendering and Views
+
+- [RenderRuntime.ts](/c:/programming/TheHangout/src/render/runtime/RenderRuntime.ts) owns scene, camera, WebXR, and frame rendering.
+- `render/views/` contains general entity views.
+- `render/avatar/` contains avatar-specific rendering code.
+- Views are visual implementations only; world logic stays in entities and runtimes.
+
+## Current Project Structure
+
+```text
+src/
+  app/       # bootstrap, engine, app context, events
+  assets/    # procedural builders and asset runtime helpers
+  features/  # modular gameplay features
+  input/     # controllers and tracking providers
+  media/     # voice and audio runtime
+  network/   # transport, protocol, replication
+  physics/   # physics runtime and systems
+  render/    # renderer, views, avatar, effects, debug
+  server/    # headless session / server-side runtime
+  shared/    # contracts, types, constants, utilities
+  skills/    # local avatar interaction skills
+  ui/        # flat UI, VR UI, HUD
+  world/     # session, entities, spawning, world systems
 ```
-├── src/
-│   ├── core/           # App, GameEngine, EventBus, GameContext
-│   ├── entities/       # Logic Owners: LocalPlayer, PhysicsEntity, PenEntity, TabletEntity
-│   ├── factories/      # Object creation: EntityFactory
-│   ├── input/          # Hardware Input Layers: Keyboard, Gamepad, XR, Joystick
-│   ├── interfaces/     # Strict Contracts: IUpdatable, IEntity, IView, IEntityState, IPose
-│   ├── managers/       # Orchestrators: Render, Network, Physics, Assets, VRUI
-│   ├── models/         # Pure Data Models: HandState
-│   ├── network/        # Messaging: Dispatcher, Synchronizer, PacketHandlers
-│   ├── server/         # Tiny local Node/Bun relay server scripts
-│   ├── skills/         # Action logic modules: MovementSkill, GrabSkill, UIPointerSkill
-│   ├── systems/        # Logic Hubs: InteractionSystem, AnimationSystem
-│   ├── views/          # Three.js Visuals (EntityView, PhysicsPropView, PenView, avatar/*)
-│   └── utils/          # Math, Constants, GestureUtils
-└── vite.config.ts
-```
+
+## Naming Conventions
+
+- `*Runtime`: long-lived domain subsystem
+- `*System`: frame-updated logic unit
+- `*Service`: domain coordinator without broad engine ownership
+- `*Registry`: id/type-backed storage
+- `*Provider`: pluggable implementation behind a contract
+- `*Feature`: self-contained gameplay capability
+- `*View`: visual-only rendering layer
+
+These names are part of the architecture. New modules should follow them instead of reintroducing generic `Manager` naming.
+
+## What To Read Next
+
+- [ARCHITECTURE_REFACTOR_SPEC.md](/c:/programming/TheHangout/ARCHITECTURE_REFACTOR_SPEC.md) for the naming and structure rules that drove the refactor
+- [ENTITY_ARCHITECTURE_PLAN.md](/c:/programming/TheHangout/ENTITY_ARCHITECTURE_PLAN.md) for the entity model rationale
+- [PLAYER_AVATAR_REFACTOR_PLAN.md](/c:/programming/TheHangout/PLAYER_AVATAR_REFACTOR_PLAN.md) for the unified player-avatar design
