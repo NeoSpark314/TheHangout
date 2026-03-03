@@ -161,6 +161,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     // --- State and Ownership Methods ---
     public applyStateUpdate(entityStates: IStateUpdatePacket[]): void {
         const runtime = this.context.runtime;
+        const localId = this.context.localPlayer?.id || 'local';
         for (const stateData of entityStates) {
             let entity = runtime.entity.getEntity(stateData.id);
             if (!entity) {
@@ -171,6 +172,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                     controlMode: stateData.type === EntityType.PLAYER_AVATAR ? 'remote' : undefined
                 };
                 entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
+            }
+            const state = stateData.state as { ownerId?: string | null; o?: string | null };
+            const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
+            if (entity && stateData.type !== EntityType.PLAYER_AVATAR && hasOwnershipHint) {
+                const incomingOwnerId = state.ownerId !== undefined ? state.ownerId : state.o;
+                (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
+                entity.isAuthority = (incomingOwnerId === localId) || (incomingOwnerId === null && this.context.isHost);
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as any;
