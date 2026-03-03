@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrackingProvider';
 import { HandState } from '../../shared/types/HandState';
 import { HumanoidState } from '../../shared/types/HumanoidState';
@@ -49,7 +49,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.humanoid = new HumanoidState();
         this.state = this.createInitialState();
     }

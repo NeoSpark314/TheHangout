@@ -6,7 +6,7 @@ import { IVector3, IQuaternion, IPose } from '../../shared/contracts/IMath';
 import { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
 import { IView } from '../../shared/contracts/IView';
 import { IPenEntityState, EntityType } from '../../shared/contracts/IEntityState';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import * as THREE from 'three';
 
 /**
@@ -25,7 +25,7 @@ export class PenEntity extends NetworkEntity implements IGrabbable, IInteractabl
 
     private lastDrawPosition: IVector3 | null = null;
 
-    constructor(protected context: GameContext, id: string, isAuthority: boolean, view: IView<any> | null) {
+    constructor(protected context: AppContext, id: string, isAuthority: boolean, view: IView<any> | null) {
         super(context, id, EntityType.PEN, isAuthority);
         this.view = view;
     }

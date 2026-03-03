@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrackingProvider';
 import { HandState } from '../../shared/types/HandState';
 import { HumanoidState } from '../../shared/types/HumanoidState';
 import { HumanoidJointName } from '../../shared/contracts/IHumanoid';
 import { IVector3, IQuaternion } from '../../shared/contracts/IMath';
-import { RenderManager } from '../../render/runtime/RenderRuntime';
+import { RenderRuntime } from '../../render/runtime/RenderRuntime';
 
 const JOINT_NAMES: XRHandJoint[] = [
     "wrist",
@@ -42,7 +42,7 @@ export class XRTrackingProvider implements ITrackingProvider {
     private tempVec = new THREE.Vector3();
     private tempQuat = new THREE.Quaternion();
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.humanoid = new HumanoidState();
         this.state = this.createInitialState();
     }
@@ -105,7 +105,7 @@ export class XRTrackingProvider implements ITrackingProvider {
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !xrFrame || !referenceSpace) return;
 
-        // 1. Head Tracking (Viewer Pose) - polling directly from RenderManager.camera
+        // 1. Head Tracking (Viewer Pose) - polling directly from RenderRuntime.camera
         const viewerPose = this.getViewerWorldPose(render, xrFrame, referenceSpace);
         this.state.head = {
             pose: {
@@ -260,7 +260,7 @@ export class XRTrackingProvider implements ITrackingProvider {
     }
 
     private getViewerWorldPose(
-        render: RenderManager,
+        render: RenderRuntime,
         xrFrame: XRFrame,
         referenceSpace: XRReferenceSpace
     ): { position: IVector3, quaternion: IQuaternion, yaw: number } {

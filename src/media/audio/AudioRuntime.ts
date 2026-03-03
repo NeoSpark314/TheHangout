@@ -1,17 +1,17 @@
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { SoundSynth } from './SoundSynth';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
 
-export class AudioManager {
+export class AudioRuntime {
     public ctx: AudioContext | null = null;
     public isInitialized: boolean = false;
 
     private readonly JOIN_FREQS = [440, 554.37, 659.25, 880];
     private readonly LEAVE_FREQS = [880, 659.25, 554.37, 440];
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.setupListeners();
     }
 
@@ -30,7 +30,7 @@ export class AudioManager {
         }
 
         if (!this.isInitialized) {
-            console.log('[AudioManager] AudioContext resumed and ready.');
+            console.log('[AudioRuntime] AudioContext resumed and ready.');
             this.isInitialized = true;
             eventBus.emit(EVENTS.AUDIO_READY);
         }

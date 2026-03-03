@@ -1,18 +1,18 @@
 import { EVENTS } from '../shared/constants/Constants';
-import { GameContext } from './AppContext';
+import { AppContext } from './AppContext';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
 
 /**
  * The core simulation runner for the application.
  * Executes all registered systems (IUpdatable) each frame.
  */
-export class GameEngine {
+export class Engine {
     private isRunning: boolean = false;
     private lastTime: number = performance.now();
     private updateSystems: IUpdatable[] = [];
     private endFrameCallbacks: Array<(delta: number) => void> = [];
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     /**
      * Registers a subsystem or manager to be updated every frame.
@@ -34,7 +34,7 @@ export class GameEngine {
      * Prepares the engine for simulation. Called by App during bootstrap.
      */
     public async initialize(): Promise<void> {
-        console.log('[GameEngine] Initializing...');
+        console.log('[Engine] Initializing...');
     }
 
     /**
@@ -44,7 +44,7 @@ export class GameEngine {
         if (this.isRunning) return;
         this.isRunning = true;
         this.lastTime = performance.now();
-        console.log('[GameEngine] Engine started.');
+        console.log('[Engine] Engine started.');
 
         if (this.context.managers.render) {
             this.context.managers.render.setAnimationLoop((time, frame) => this.loop(time, frame));

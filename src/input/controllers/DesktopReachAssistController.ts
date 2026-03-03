@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IHandIntentPayload } from '../../shared/contracts/IIntents';
@@ -23,7 +23,7 @@ export class NonVRReachAssistController {
     private extendSpeed = 5.4;
     private retractSpeed = 6.5;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public update(
         delta: number,

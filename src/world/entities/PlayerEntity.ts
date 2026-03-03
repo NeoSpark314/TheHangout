@@ -1,5 +1,5 @@
 import { NetworkEntity } from './NetworkEntity';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IPose } from '../../shared/contracts/IMath';
 
 export abstract class PlayerEntity extends NetworkEntity {
@@ -11,7 +11,7 @@ export abstract class PlayerEntity extends NetworkEntity {
     public audioLevel: number = 0;
     public isMuted: boolean = false;
 
-    constructor(protected context: GameContext, id: string, type: string, isAuthority: boolean) {
+    constructor(protected context: AppContext, id: string, type: string, isAuthority: boolean) {
         super(context, id, type, isAuthority);
 
         this.headState = {

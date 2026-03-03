@@ -39,7 +39,7 @@ export class PhysicsPropView extends EntityView<IPhysicsPropState> {
                     mat.emissiveIntensity = (this._originalEmissive.r + this._originalEmissive.g + this._originalEmissive.b) > 0 ? 1.0 : 0.3;
                     // Reset to a sensible default if the original was basically black
                     if (mat.emissiveIntensity === 0.3 && !on) {
-                        mat.emissiveIntensity = 0.3; // Match PropManager default
+                        mat.emissiveIntensity = 0.3; // Match PropBuilder default
                     }
                 }
             }

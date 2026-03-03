@@ -1,30 +1,30 @@
-import { GameContext } from './AppContext';
-import { GameEngine } from './Engine';
-import { FlatUIManager } from '../ui/flat/FlatUiRuntime';
-import { NetworkManager } from '../network/transport/NetworkRuntime';
-import { PhysicsManager } from '../physics/runtime/PhysicsRuntime';
-import { RenderManager } from '../render/runtime/RenderRuntime';
-import { PlayerManager } from '../world/session/PlayerPresenceService';
-import { EntityManager } from '../world/entities/EntityRegistry';
-import { MediaManager } from '../media/voice/VoiceRuntime';
-import { HUDManager } from '../ui/hud/HudRuntime';
-import { InputManager } from '../input/controllers/InputRuntime';
-import { SessionManager } from '../world/session/SessionRuntime';
-import { AudioManager } from '../media/audio/AudioRuntime';
+import { AppContext } from './AppContext';
+import { Engine } from './Engine';
+import { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
+import { NetworkRuntime } from '../network/transport/NetworkRuntime';
+import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import { RenderRuntime } from '../render/runtime/RenderRuntime';
+import { PlayerPresenceService } from '../world/session/PlayerPresenceService';
+import { EntityRegistry } from '../world/entities/EntityRegistry';
+import { VoiceRuntime } from '../media/voice/VoiceRuntime';
+import { HudRuntime } from '../ui/hud/HudRuntime';
+import { InputRuntime } from '../input/controllers/InputRuntime';
+import { SessionRuntime } from '../world/session/SessionRuntime';
+import { AudioRuntime } from '../media/audio/AudioRuntime';
 import { InteractionSystem } from '../world/systems/InteractionSystem';
-import { AssetManager } from '../assets/runtime/AssetRuntime';
-import { DrawingManager } from '../features/drawing/DrawingFeature';
-import { TrackingManager } from '../input/providers/TrackingRuntime';
+import { AssetRuntime } from '../assets/runtime/AssetRuntime';
+import { DrawingFeature } from '../features/drawing/DrawingFeature';
+import { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import { XRTrackingProvider } from '../input/providers/XRTrackingProvider';
 import { DesktopTrackingProvider } from '../input/providers/DesktopTrackingProvider';
 import { AnimationSystem } from '../render/systems/AnimationSystem';
 import { PhysicsPresentationSystem } from '../physics/systems/PhysicsPresentationSystem';
-import { VRUIManager } from '../ui/vr/VrUiRuntime';
-import { DebugRenderManager } from '../render/debug/DebugRenderRuntime';
-import { ReplicationManager } from '../network/replication/FeatureReplicationService';
-import { ParticleSystemManager } from '../render/effects/ParticleEffectSystem';
-import { SocialEffectsManager } from '../features/social/SocialFeature';
-import { RemoteDesktopManager } from '../features/remoteDesktop/RemoteDesktopFeature';
+import { VrUiRuntime } from '../ui/vr/VrUiRuntime';
+import { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
+import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
+import { ParticleEffectSystem } from '../render/effects/ParticleEffectSystem';
+import { SocialFeature } from '../features/social/SocialFeature';
+import { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import eventBus from './events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 
@@ -32,12 +32,12 @@ import { EVENTS } from '../shared/constants/Constants';
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
  */
 export class App {
-    private engine: GameEngine;
-    public context: GameContext;
+    private engine: Engine;
+    public context: AppContext;
 
     constructor() {
-        this.context = new GameContext();
-        this.engine = new GameEngine(this.context);
+        this.context = new AppContext();
+        this.engine = new Engine(this.context);
     }
 
     public async bootstrap(): Promise<void> {
@@ -82,30 +82,30 @@ export class App {
     }
 
     private initializeManagers(): void {
-        this.context.setManager('entity', new EntityManager(this.context));
-        this.context.setManager('replication', new ReplicationManager(this.context));
-        this.context.setManager('remoteDesktop', new RemoteDesktopManager(this.context));
-        this.context.setManager('ui', new FlatUIManager(this.context));
-        this.context.setManager('network', new NetworkManager(this.context));
-        this.context.setManager('media', new MediaManager(this.context));
-        this.context.setManager('render', new RenderManager(this.context));
-        this.context.setManager('physics', new PhysicsManager(this.context));
-        this.context.setManager('player', new PlayerManager(this.context));
-        this.context.setManager('input', new InputManager(this.context));
-        this.context.setManager('hud', new HUDManager(this.context));
-        this.context.setManager('session', new SessionManager(this.context));
-        this.context.setManager('audio', new AudioManager(this.context));
-        this.context.setManager('assets', new AssetManager(this.context));
-        this.context.setManager('drawing', new DrawingManager(this.context.managers.render.scene, this.context));
+        this.context.setManager('entity', new EntityRegistry(this.context));
+        this.context.setManager('replication', new FeatureReplicationService(this.context));
+        this.context.setManager('remoteDesktop', new RemoteDesktopFeature(this.context));
+        this.context.setManager('ui', new FlatUiRuntime(this.context));
+        this.context.setManager('network', new NetworkRuntime(this.context));
+        this.context.setManager('media', new VoiceRuntime(this.context));
+        this.context.setManager('render', new RenderRuntime(this.context));
+        this.context.setManager('physics', new PhysicsRuntime(this.context));
+        this.context.setManager('player', new PlayerPresenceService(this.context));
+        this.context.setManager('input', new InputRuntime(this.context));
+        this.context.setManager('hud', new HudRuntime(this.context));
+        this.context.setManager('session', new SessionRuntime(this.context));
+        this.context.setManager('audio', new AudioRuntime(this.context));
+        this.context.setManager('assets', new AssetRuntime(this.context));
+        this.context.setManager('drawing', new DrawingFeature(this.context.managers.render.scene, this.context));
         this.context.setManager('animation', new AnimationSystem());
         this.context.setManager('interaction', new InteractionSystem(this.context));
-        this.context.setManager('vrUi', new VRUIManager(this.context));
-        this.context.setManager('debugRender', new DebugRenderManager(this.context));
-        this.context.setManager('particles', new ParticleSystemManager(this.context.managers.render.scene));
-        this.context.setManager('social', new SocialEffectsManager(this.context, this.context.managers.particles));
+        this.context.setManager('vrUi', new VrUiRuntime(this.context));
+        this.context.setManager('debugRender', new DebugRenderRuntime(this.context));
+        this.context.setManager('particles', new ParticleEffectSystem(this.context.managers.render.scene));
+        this.context.setManager('social', new SocialFeature(this.context, this.context.managers.particles));
 
         // Tracking Initialization
-        const tracking = new TrackingManager(this.context);
+        const tracking = new TrackingRuntime(this.context);
         tracking.registerProvider(new XRTrackingProvider(this.context));
         tracking.registerProvider(new DesktopTrackingProvider(this.context));
         tracking.setProvider('desktop'); // Default
@@ -160,7 +160,7 @@ export class App {
             managers.debugRender.init();
         }
 
-        // Register systems to GameEngine in the exact desired execution order
+        // Register systems to Engine in the exact desired execution order
         if (managers.network) this.engine.addSystem(managers.network as any);
         if (managers.input) this.engine.addSystem(managers.input as any);
         if (managers.entity) this.engine.addSystem(managers.entity as any);

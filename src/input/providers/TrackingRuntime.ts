@@ -1,12 +1,12 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrackingProvider';
 import { HandState } from '../../shared/types/HandState';
 
-export class TrackingManager {
+export class TrackingRuntime {
     private activeProvider: ITrackingProvider | null = null;
     private providers: Map<string, ITrackingProvider> = new Map();
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public registerProvider(provider: ITrackingProvider): void {
         this.providers.set(provider.id, provider);
@@ -25,7 +25,7 @@ export class TrackingManager {
             }
             this.activeProvider = provider;
             this.activeProvider.activate();
-            console.log(`[TrackingManager] Switched to provider: ${id}`);
+            console.log(`[TrackingRuntime] Switched to provider: ${id}`);
         }
     }
 

@@ -1,25 +1,25 @@
-import type { EntityManager } from '../world/entities/EntityRegistry';
-import type { PhysicsManager } from '../physics/runtime/PhysicsRuntime';
-import type { NetworkManager } from '../network/transport/NetworkRuntime';
-import type { InputManager } from '../input/controllers/InputRuntime';
-import type { RenderManager } from '../render/runtime/RenderRuntime';
-import type { PlayerManager } from '../world/session/PlayerPresenceService';
-import type { SessionManager } from '../world/session/SessionRuntime';
-import type { FlatUIManager } from '../ui/flat/FlatUiRuntime';
-import type { HUDManager } from '../ui/hud/HudRuntime';
-import type { MediaManager } from '../media/voice/VoiceRuntime';
-import type { AudioManager } from '../media/audio/AudioRuntime';
+import type { EntityRegistry } from '../world/entities/EntityRegistry';
+import type { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import type { NetworkRuntime } from '../network/transport/NetworkRuntime';
+import type { InputRuntime } from '../input/controllers/InputRuntime';
+import type { RenderRuntime } from '../render/runtime/RenderRuntime';
+import type { PlayerPresenceService } from '../world/session/PlayerPresenceService';
+import type { SessionRuntime } from '../world/session/SessionRuntime';
+import type { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
+import type { HudRuntime } from '../ui/hud/HudRuntime';
+import type { VoiceRuntime } from '../media/voice/VoiceRuntime';
+import type { AudioRuntime } from '../media/audio/AudioRuntime';
 import type { InteractionSystem } from '../world/systems/InteractionSystem';
 import type { AnimationSystem } from '../render/systems/AnimationSystem';
-import type { AssetManager } from '../assets/runtime/AssetRuntime';
-import type { DrawingManager } from '../features/drawing/DrawingFeature';
-import type { TrackingManager } from '../input/providers/TrackingRuntime';
-import type { VRUIManager } from '../ui/vr/VrUiRuntime';
-import type { DebugRenderManager } from '../render/debug/DebugRenderRuntime';
-import type { ReplicationManager } from '../network/replication/FeatureReplicationService';
-import type { ParticleSystemManager } from '../render/effects/ParticleEffectSystem';
-import type { SocialEffectsManager } from '../features/social/SocialFeature';
-import type { RemoteDesktopManager } from '../features/remoteDesktop/RemoteDesktopFeature';
+import type { AssetRuntime } from '../assets/runtime/AssetRuntime';
+import type { DrawingFeature } from '../features/drawing/DrawingFeature';
+import type { TrackingRuntime } from '../input/providers/TrackingRuntime';
+import type { VrUiRuntime } from '../ui/vr/VrUiRuntime';
+import type { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
+import type { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
+import type { ParticleEffectSystem } from '../render/effects/ParticleEffectSystem';
+import type { SocialFeature } from '../features/social/SocialFeature';
+import type { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import type { LocalPlayer } from '../world/entities/LocalPlayer';
 
 export interface IAvatarConfig {
@@ -35,36 +35,36 @@ export interface ISessionConfig {
 }
 
 export interface IManagers {
-    entity: EntityManager;
-    ui: FlatUIManager;
-    network: NetworkManager;
-    media: MediaManager;
-    render: RenderManager;
-    physics: PhysicsManager;
-    player: PlayerManager;
-    input: InputManager;
-    hud: HUDManager;
-    session: SessionManager;
-    audio: AudioManager;
+    entity: EntityRegistry;
+    ui: FlatUiRuntime;
+    network: NetworkRuntime;
+    media: VoiceRuntime;
+    render: RenderRuntime;
+    physics: PhysicsRuntime;
+    player: PlayerPresenceService;
+    input: InputRuntime;
+    hud: HudRuntime;
+    session: SessionRuntime;
+    audio: AudioRuntime;
     interaction: InteractionSystem;
     animation: AnimationSystem;
-    assets: AssetManager;
-    drawing: DrawingManager;
-    tracking: TrackingManager;
-    vrUi: VRUIManager;
-    debugRender: DebugRenderManager;
-    replication: ReplicationManager;
-    particles: ParticleSystemManager;
-    social: SocialEffectsManager;
-    remoteDesktop: RemoteDesktopManager;
+    assets: AssetRuntime;
+    drawing: DrawingFeature;
+    tracking: TrackingRuntime;
+    vrUi: VrUiRuntime;
+    debugRender: DebugRenderRuntime;
+    replication: FeatureReplicationService;
+    particles: ParticleEffectSystem;
+    social: SocialFeature;
+    remoteDesktop: RemoteDesktopFeature;
 }
 
 /**
- * GameContext acts as the central dependency injection container and state holder.
+ * AppContext acts as the central dependency injection container and state holder.
  * It replaces the legacy global singleton approach, making dependencies explicit
  * and improving testability and modularity across the application.
  */
-export class GameContext {
+export class AppContext {
     public isHost: boolean = false;
     public isDedicatedHost: boolean = false;
     public isLocalServer: boolean = false;

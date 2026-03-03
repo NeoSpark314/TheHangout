@@ -1,19 +1,19 @@
 import { EntityFactory } from '../spawning/EntityFactory';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants.js';
 
-export class PlayerManager {
+export class PlayerPresenceService {
     public isInitialized: boolean = false;
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         eventBus.on(EVENTS.PEER_DISCONNECTED, (peerId: string) => this.onPeerDisconnected(peerId));
     }
 
     public init(id: string): void {
         const managers = this.context.managers;
 
-        console.log('[PlayerManager] Initializing Local Player with ID:', id);
+        console.log('[PlayerPresenceService] Initializing Local Player with ID:', id);
 
         let spawnIndex = 0;
         if (!this.context.isHost) {
@@ -47,11 +47,11 @@ export class PlayerManager {
         const entity = managers.entity.getEntity(peerId);
 
         if (!entity) {
-            console.warn(`[PlayerManager] Received disconnect for unknown peer: ${peerId}`);
+            console.warn(`[PlayerPresenceService] Received disconnect for unknown peer: ${peerId}`);
             return;
         }
 
-        console.log(`[PlayerManager] Removing entity for disconnected peer: ${peerId} (type: ${entity.type})`);
+        console.log(`[PlayerPresenceService] Removing entity for disconnected peer: ${peerId} (type: ${entity.type})`);
 
         const name = (entity as any).name;
         const isPlayer = entity.type === 'REMOTE_PLAYER' || entity.type === 'LOCAL_PLAYER';

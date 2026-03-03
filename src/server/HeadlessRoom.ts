@@ -1,20 +1,20 @@
-import { GameContext } from '../app/AppContext';
-import { GameEngine } from '../app/Engine';
-import { EntityManager } from '../world/entities/EntityRegistry';
-import { PhysicsManager } from '../physics/runtime/PhysicsRuntime';
-import { SessionManager } from '../world/session/SessionRuntime';
+import { AppContext } from '../app/AppContext';
+import { Engine } from '../app/Engine';
+import { EntityRegistry } from '../world/entities/EntityRegistry';
+import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import { SessionRuntime } from '../world/session/SessionRuntime';
 import { ServerNetworkManager } from './ServerNetworkManager';
-import { ReplicationManager } from '../network/replication/FeatureReplicationService';
-import { DrawingManager } from '../features/drawing/DrawingFeature';
+import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
+import { DrawingFeature } from '../features/drawing/DrawingFeature';
 
 export class HeadlessSession {
-    public context: GameContext;
-    public engine: GameEngine;
+    public context: AppContext;
+    public engine: Engine;
     public network: ServerNetworkManager;
     public startTime: number = Date.now();
 
     constructor(public sessionId: string, networkTransport: ServerNetworkManager) {
-        this.context = new GameContext();
+        this.context = new AppContext();
         this.context.isHost = true;
         this.context.isDedicatedHost = true;
         this.context.isLocalServer = true;
@@ -25,20 +25,20 @@ export class HeadlessSession {
         this.network = networkTransport;
         this.network.setContext(this.context);
 
-        const entityMgr = new EntityManager(this.context);
+        const entityMgr = new EntityRegistry(this.context);
         this.context.setManager('entity', entityMgr);
-        this.context.setManager('replication', new ReplicationManager(this.context));
+        this.context.setManager('replication', new FeatureReplicationService(this.context));
 
-        const physicsMgr = new PhysicsManager(this.context);
+        const physicsMgr = new PhysicsRuntime(this.context);
         this.context.setManager('physics', physicsMgr);
 
-        const sessionMgr = new SessionManager(this.context);
+        const sessionMgr = new SessionRuntime(this.context);
         this.context.setManager('session', sessionMgr);
-        this.context.setManager('drawing', new DrawingManager(null, this.context));
+        this.context.setManager('drawing', new DrawingFeature(null, this.context));
 
         this.context.setManager('network', this.network as any);
 
-        this.engine = new GameEngine(this.context);
+        this.engine = new Engine(this.context);
         this.engine.addSystem({
             update: (delta) => physicsMgr.step(delta)
         });

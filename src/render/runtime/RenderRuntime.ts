@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { isTrueHMD } from '../../shared/utils/DeviceUtils.js';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
-export class RenderManager {
+export class RenderRuntime {
     public container: HTMLElement;
     public scene: THREE.Scene;
     public camera: THREE.PerspectiveCamera;
@@ -20,7 +20,7 @@ export class RenderManager {
     public hands: THREE.Group[] = [];
     private raycaster: THREE.Raycaster = new THREE.Raycaster();
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.container = document.getElementById('app')!;
 
         // Scene setup
@@ -63,11 +63,11 @@ export class RenderManager {
         // WebXR Enable
         this.renderer.xr.enabled = true;
         this.renderer.xr.addEventListener('sessionstart', () => {
-            console.log('[RenderManager] XR Session Started');
+            console.log('[RenderRuntime] XR Session Started');
             eventBus.emit(EVENTS.XR_SESSION_STARTED);
         });
         this.renderer.xr.addEventListener('sessionend', () => {
-            console.log('[RenderManager] XR Session Ended');
+            console.log('[RenderRuntime] XR Session Ended');
             eventBus.emit(EVENTS.XR_SESSION_ENDED);
         });
 

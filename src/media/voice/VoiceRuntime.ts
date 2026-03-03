@@ -1,10 +1,10 @@
 import Peer, { MediaConnection } from 'peerjs';
 import eventBus from '../../app/events/EventBus';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IVoiceStreamReceivedEvent } from '../../shared/contracts/IVoice';
 import { EVENTS, PACKET_TYPES } from '../../shared/constants/Constants';
 
-export class MediaManager {
+export class VoiceRuntime {
     private localStream: MediaStream | null = null;
     private calls: Map<string, MediaConnection> = new Map();
     private remoteStreams: Map<string, MediaStream> = new Map();
@@ -17,7 +17,7 @@ export class MediaManager {
     private websocket: WebSocket | null = null;
     private mediaRecorder: MediaRecorder | null = null;
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         eventBus.on(EVENTS.ENTITY_DISCOVERED, (peerId: string) => {
             const network = this.context.managers.network;
             const localId = network?.peer?.id || network?.localPeerId;
@@ -46,7 +46,7 @@ export class MediaManager {
 
         eventBus.on(EVENTS.PEER_JOINED_SESSION, (peerId: string) => {
             if (this.context.isLocalServer && this.localStream && this.websocket) {
-                console.log(`[MediaManager] Peer ${peerId} joined. Restarting MediaRecorder to send fresh header.`);
+                console.log(`[VoiceRuntime] Peer ${peerId} joined. Restarting MediaRecorder to send fresh header.`);
                 if (this.mediaRecorder) {
                     // Let the old one finish its last chunk then start a new one automatically
                     this.mediaRecorder.stop();
@@ -86,7 +86,7 @@ export class MediaManager {
     private async enableMicrophone(): Promise<boolean> {
         try {
             this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            console.log('[MediaManager] Microphone access granted.');
+            console.log('[VoiceRuntime] Microphone access granted.');
 
             const render = this.context.managers.render;
             if (render && render.audioListener) {
@@ -128,7 +128,7 @@ export class MediaManager {
             this.syncVoiceState();
             return true;
         } catch (err) {
-            console.error('[MediaManager] Failed to get microphone:', err);
+            console.error('[VoiceRuntime] Failed to get microphone:', err);
             this.syncVoiceState();
             return false;
         }
@@ -147,7 +147,7 @@ export class MediaManager {
                 this.mediaRecorder.stop();
                 this.mediaRecorder = null;
             }
-            console.log('[MediaManager] Microphone stopped.');
+            console.log('[VoiceRuntime] Microphone stopped.');
             for (const call of this.calls.values()) {
                 call.close();
             }
@@ -158,7 +158,7 @@ export class MediaManager {
 
     public bindPeer(peer: Peer): void {
         peer.on('call', (call: MediaConnection) => {
-            console.log(`[MediaManager] Incoming voice call from ${call.peer}`);
+            console.log(`[VoiceRuntime] Incoming voice call from ${call.peer}`);
             if (this.localStream) {
                 call.answer(this.localStream);
             } else {
@@ -172,7 +172,7 @@ export class MediaManager {
         this.websocket = ws;
         if (this.localStream) {
             if (this.mediaRecorder) {
-                console.log('[MediaManager] WebSocket rebound, restarting MediaRecorder for fresh header.');
+                console.log('[VoiceRuntime] WebSocket rebound, restarting MediaRecorder for fresh header.');
                 this.mediaRecorder.stop();
                 this.mediaRecorder = null;
             }
@@ -205,7 +205,7 @@ export class MediaManager {
                     isFirstChunk = false;
 
                     if (isHeader) {
-                        console.log(`[MediaManager] Sending audio header chunk (${base64.length} chars)`);
+                        console.log(`[VoiceRuntime] Sending audio header chunk (${base64.length} chars)`);
                     }
 
                     this.websocket.send(JSON.stringify({
@@ -218,9 +218,9 @@ export class MediaManager {
                 }
             };
             this.mediaRecorder.start(100); // 100ms chunks for lower latency
-            console.log(`[MediaManager] Started MediaRecorder via WebSocket chunking at 100ms`);
+            console.log(`[VoiceRuntime] Started MediaRecorder via WebSocket chunking at 100ms`);
         } catch (err) {
-            console.error('[MediaManager] MediaRecorder error:', err);
+            console.error('[VoiceRuntime] MediaRecorder error:', err);
         }
     }
 
@@ -230,7 +230,7 @@ export class MediaManager {
         const localId = peer?.id || network?.localPeerId;
         if (!peer || !this.localStream || !network?.connections.has(targetPeerId) || targetPeerId === localId || this.calls.has(targetPeerId)) return;
 
-        console.log(`[MediaManager] Calling ${targetPeerId} for voice chat...`);
+        console.log(`[VoiceRuntime] Calling ${targetPeerId} for voice chat...`);
         const call = peer.call(targetPeerId, this.localStream);
         this.setupCall(call);
     }
@@ -242,7 +242,7 @@ export class MediaManager {
         }
         this.calls.set(call.peer, call);
         call.on('stream', (remoteStream: MediaStream) => {
-            console.log(`[MediaManager] Received voice stream from ${call.peer}`);
+            console.log(`[VoiceRuntime] Received voice stream from ${call.peer}`);
             this.remoteStreams.set(call.peer, remoteStream);
             const voiceEvent: IVoiceStreamReceivedEvent = {
                 peerId: call.peer,
@@ -256,7 +256,7 @@ export class MediaManager {
             }
         });
         call.on('error', (err: any) => {
-            console.error(`[MediaManager] Call error with ${call.peer}:`, err);
+            console.error(`[VoiceRuntime] Call error with ${call.peer}:`, err);
             if (this.calls.get(call.peer) === call) {
                 this.calls.delete(call.peer);
             }

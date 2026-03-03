@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { PACKET_TYPES } from '../../shared/constants/Constants';
 
 /**
@@ -44,14 +44,14 @@ export interface IReplicatedFeature {
     applySnapshot?(snapshot: unknown): void;
 }
 
-export class ReplicationManager {
+export class FeatureReplicationService {
     private features: Map<string, IReplicatedFeature> = new Map();
     private eventSeq: number = 0;
     private seenEventIds: Set<string> = new Set();
     private seenEventQueue: string[] = [];
     private maxSeenEventIds: number = 4096;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public registerFeature(feature: IReplicatedFeature): void {
         this.features.set(feature.featureId, feature);

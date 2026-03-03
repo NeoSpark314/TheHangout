@@ -52,6 +52,6 @@ export class AnimationSystem implements IUpdatable {
         const worldHeadPos = headLocalPos.clone().applyQuaternion(originQuat).add(originPos);
 
         this.localPlayer.headState.position = { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z };
-        // Note: Head quaternion is already synced to camera by RenderManager/TrackingProvider on Desktop
+        // Note: Head quaternion is already synced to camera by RenderRuntime/TrackingProvider on Desktop
     }
 }

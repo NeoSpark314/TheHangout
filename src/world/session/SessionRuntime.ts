@@ -1,21 +1,21 @@
 import * as THREE from 'three';
-import { GameContext, ISessionConfig } from '../../app/AppContext';
+import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
-import { EnvironmentManager } from '../../assets/procedural/EnvironmentBuilder';
-import { PropManager } from '../../assets/procedural/PropBuilder';
+import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
+import { PropBuilder } from '../../assets/procedural/PropBuilder';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 
-export class SessionManager implements IUpdatable {
+export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
-    public environment: EnvironmentManager | null = null;
-    public props: PropManager | null = null;
+    public environment: EnvironmentBuilder | null = null;
+    public props: PropBuilder | null = null;
     private hasGroundPhysics: boolean = false;
     public assignedSpawnIndex?: number;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     private random(): number {
         this._seed |= 0;
@@ -29,8 +29,8 @@ export class SessionManager implements IUpdatable {
         try {
             this.scene = scene;
             const randomBound = this.random.bind(this);
-            this.environment = new EnvironmentManager(scene, randomBound);
-            this.props = new PropManager(scene, randomBound, this.context);
+            this.environment = new EnvironmentBuilder(scene, randomBound);
+            this.props = new PropBuilder(scene, randomBound, this.context);
 
             // Ground is created strictly during applyConfig or init via master orchestrator
             if (this.context.managers.physics) {
@@ -40,14 +40,14 @@ export class SessionManager implements IUpdatable {
 
             this.applyConfig(this.context.sessionConfig);
         } catch (e) {
-            console.error('[SessionManager] init crashed:', e);
+            console.error('[SessionRuntime] init crashed:', e);
         }
     }
 
     public applyConfig(config: ISessionConfig): void {
         if (!config || !this.environment || !this.props) return;
 
-        console.log('[SessionManager] Coordinating Session Config:', config);
+        console.log('[SessionRuntime] Coordinating Session Config:', config);
         if (config.seed !== undefined) {
             this._seed = config.seed;
         }

@@ -1,4 +1,4 @@
-import { GameContext } from '../app/AppContext';
+import { AppContext } from '../app/AppContext';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
 import { PACKET_TYPES } from '../shared/constants/Constants';
 import { NetworkDispatcher } from '../network/protocol/PacketDispatcher';
@@ -13,7 +13,7 @@ import {
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../network/replication/FeatureReplicationService';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
-    private context!: GameContext;
+    private context!: AppContext;
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer!: NetworkSynchronizer;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
@@ -27,7 +27,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         this.dispatcher = new NetworkDispatcher<PacketPayloadMap>();
     }
 
-    public setContext(context: GameContext): void {
+    public setContext(context: AppContext): void {
         this.context = context;
         this.synchronizer = new NetworkSynchronizer(this, this.context);
 

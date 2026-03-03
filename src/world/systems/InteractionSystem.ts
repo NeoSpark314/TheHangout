@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { IInteractable } from '../../shared/contracts/IInteractable';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { isGrabbable, isInteractable } from '../../shared/utils/TypeGuards';
 import { EntityType } from '../../shared/contracts/IEntityState';
 
 export class InteractionSystem {
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
     }
 
     /**

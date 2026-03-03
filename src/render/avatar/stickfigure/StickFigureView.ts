@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { EntityView } from '../../views/EntityView';
 import { IVector3, IPose } from '../../../shared/contracts/IMath';
-import { GameContext } from '../../../app/AppContext';
+import { AppContext } from '../../../app/AppContext';
 import { HumanoidState } from '../../../shared/types/HumanoidState';
 import { NameTagComponent } from '../components/NameTagComponent';
 import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
@@ -79,7 +79,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private readonly defaultLeftRestTarget = new THREE.Vector3(-0.3, 0.9, 0);
     private readonly defaultRightRestTarget = new THREE.Vector3(0.3, 0.9, 0);
 
-    constructor(private context: GameContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
+    constructor(private context: AppContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
         this.color = color;
         this.isLocal = isLocal;

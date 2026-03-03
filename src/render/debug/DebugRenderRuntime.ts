@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IPhysicsDebugBody } from '../../physics/runtime/PhysicsRuntime';
 
@@ -26,7 +26,7 @@ const BODY_COLOR = {
     sleepingTint: new THREE.Color(0x6b7280)
 };
 
-export class DebugRenderManager implements IUpdatable {
+export class DebugRenderRuntime implements IUpdatable {
     private readonly root = new THREE.Group();
     private readonly visuals: Map<string, IDebugVisual> = new Map();
     private syncTimer = 0;
@@ -39,7 +39,7 @@ export class DebugRenderManager implements IUpdatable {
         showAuthorityLabels: true
     };
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.root.name = 'DebugRenderLayer';
     }
 

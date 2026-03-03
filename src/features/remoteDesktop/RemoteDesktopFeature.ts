@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import eventBus from '../../app/events/EventBus';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import {
     IDesktopSourcesStatusResponsePayload,
@@ -34,14 +34,14 @@ interface IRenderSurface {
 
 const MY_SCREENS_STORAGE_KEY = 'hangout_myScreens';
 
-export class RemoteDesktopManager implements IUpdatable {
+export class RemoteDesktopFeature implements IUpdatable {
     private configs: IMyScreenConfig[] = [];
     private onlineByKey: Map<string, boolean> = new Map();
     private capturingByKey: Map<string, boolean> = new Map();
     private activeByKey: Set<string> = new Set();
     private surfacesByKey: Map<string, IRenderSurface> = new Map();
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.loadConfigsFromStorage();
     }
 
@@ -296,7 +296,7 @@ export class RemoteDesktopManager implements IUpdatable {
             }
             bitmap.close();
         }).catch(err => {
-            console.error('[RemoteDesktopManager] Async decode failed:', err);
+            console.error('[RemoteDesktopFeature] Async decode failed:', err);
         });
     }
 

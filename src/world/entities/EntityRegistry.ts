@@ -5,12 +5,12 @@ import { INetworkable } from '../../shared/contracts/INetworkable';
 import { EntityFactory } from '../spawning/EntityFactory';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 
-export class EntityManager implements IUpdatable {
+export class EntityRegistry implements IUpdatable {
     public entities: Map<string, IEntity>;
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.entities = new Map();
     }
 
@@ -19,7 +19,7 @@ export class EntityManager implements IUpdatable {
     public discover(id: string, type: string, config: any = {}): IEntity | null {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
-        console.log(`[EntityManager] Discovering new ${type} with ID: ${id}`);
+        console.log(`[EntityRegistry] Discovering new ${type} with ID: ${id}`);
         const entity = EntityFactory.spawn(this.context, type, id, config);
 
         if (entity) {
@@ -33,14 +33,14 @@ export class EntityManager implements IUpdatable {
 
     public addEntity(entity: IEntity): void {
         if (!entity || !entity.id) {
-            console.error('[EntityManager] Attempted to add invalid entity:', entity);
+            console.error('[EntityRegistry] Attempted to add invalid entity:', entity);
             return;
         }
 
         if (this.entities.has(entity.id)) {
             const old = this.entities.get(entity.id);
             if (old === entity) return; // Ignore re-adding the exact same instance
-            console.warn(`[EntityManager] Entity with ID ${entity.id} already exists. Overwriting.`);
+            console.warn(`[EntityRegistry] Entity with ID ${entity.id} already exists. Overwriting.`);
             old?.destroy();
         }
         this.entities.set(entity.id, entity);
@@ -74,7 +74,7 @@ export class EntityManager implements IUpdatable {
                 try {
                     entity.update(delta, frame);
                 } catch (e) {
-                    console.error(`[EntityManager] Error updating entity ${id}:`, e);
+                    console.error(`[EntityRegistry] Error updating entity ${id}:`, e);
                 }
             } else {
                 this.entities.delete(id);

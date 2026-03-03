@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
 import { IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
 
 /**
  * Manages rendering and syncing of 3D drawings.
  */
-export class DrawingManager implements IReplicatedFeature {
+export class DrawingFeature implements IReplicatedFeature {
     public readonly featureId: string = 'feature:drawing';
     private scene: THREE.Scene | null;
     private lineMaterial: THREE.LineBasicMaterial;
@@ -14,7 +14,7 @@ export class DrawingManager implements IReplicatedFeature {
     private segments: IDrawSegmentPayload[] = [];
     private maxSegments: number = 10000;
 
-    constructor(scene: THREE.Scene | null, private context: GameContext) {
+    constructor(scene: THREE.Scene | null, private context: AppContext) {
         this.scene = scene;
         this.lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
         if (this.scene) {

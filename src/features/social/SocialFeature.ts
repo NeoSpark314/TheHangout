@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { RemotePlayer } from '../../world/entities/RemotePlayer';
-import { ParticleSystemManager } from '../../render/effects/ParticleEffectSystem';
+import { ParticleEffectSystem } from '../../render/effects/ParticleEffectSystem';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -19,7 +19,7 @@ interface IHighFiveEventPayload {
     i: number;
 }
 
-export class SocialEffectsManager implements IUpdatable, IReplicatedFeature {
+export class SocialFeature implements IUpdatable, IReplicatedFeature {
     public readonly featureId: string = 'feature:social';
 
     private readonly hitDistance = 0.13;
@@ -34,7 +34,7 @@ export class SocialEffectsManager implements IUpdatable, IReplicatedFeature {
     private pairArmed: Map<string, boolean> = new Map();
     private pairLastTriggerAt: Map<string, number> = new Map();
 
-    constructor(private context: GameContext, private particles: ParticleSystemManager) {
+    constructor(private context: AppContext, private particles: ParticleEffectSystem) {
         this.context.managers.replication.registerFeature(this);
     }
 

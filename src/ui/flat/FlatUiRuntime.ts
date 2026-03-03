@@ -1,10 +1,10 @@
 import eventBus from '../../app/events/EventBus';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { EVENTS } from '../../shared/constants/Constants';
 import { isMobile } from '../../shared/utils/DeviceUtils';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 
-export class FlatUIManager implements IUpdatable {
+export class FlatUiRuntime implements IUpdatable {
     private overlay: HTMLElement;
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;
@@ -32,7 +32,7 @@ export class FlatUIManager implements IUpdatable {
     private _joysticksInitialized: boolean = false;
     private _mobileHudEnabled: boolean = false;
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.overlay = document.getElementById('ui-overlay')!;
         this.nameInput = document.getElementById('player-name') as HTMLInputElement;
         this.createBtn = document.getElementById('create-btn') as HTMLButtonElement;
@@ -491,14 +491,14 @@ export class FlatUIManager implements IUpdatable {
     }
 
     public hideOverlay(): void {
-        console.log('[FlatUIManager] hideOverlay() called');
+        console.log('[FlatUiRuntime] hideOverlay() called');
         this.context.isMenuOpen = false;
         if (this.overlay) {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
                 this.overlay.style.display = 'none';
                 if (this.desktopControls && !this.isMobile) {
-                    console.log('[FlatUIManager] Showing desktop controls');
+                    console.log('[FlatUiRuntime] Showing desktop controls');
                     this.desktopControls.style.display = 'block';
                 }
                 if (this.isMobile) {
@@ -563,7 +563,7 @@ export class FlatUIManager implements IUpdatable {
     }
 
     public showOverlay(): void {
-        console.log('[FlatUIManager] showOverlay() called');
+        console.log('[FlatUiRuntime] showOverlay() called');
         this.context.isMenuOpen = true;
         if (this.overlay) {
             this.overlay.style.display = 'flex';
@@ -571,7 +571,7 @@ export class FlatUIManager implements IUpdatable {
             this.overlay.style.opacity = '1';
         }
         if (this.desktopControls) {
-            console.log('[FlatUIManager] Hiding desktop controls');
+            console.log('[FlatUiRuntime] Hiding desktop controls');
             this.desktopControls.style.display = 'none';
         }
         if (this.mobileHud) this.mobileHud.style.display = 'none';

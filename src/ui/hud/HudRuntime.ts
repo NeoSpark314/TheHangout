@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import eventBus from '../../app/events/EventBus';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { UITheme } from '../shared/UITheme';
@@ -11,7 +11,7 @@ interface Notification {
     duration: number;
 }
 
-export class HUDManager implements IUpdatable {
+export class HudRuntime implements IUpdatable {
     public group: THREE.Group;
     private noteCanvas: HTMLCanvasElement;
     private noteContext: CanvasRenderingContext2D;
@@ -23,7 +23,7 @@ export class HUDManager implements IUpdatable {
     private notifications: Notification[] = [];
     private maxNotifications: number = 1;
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.group = new THREE.Group();
         this.group.raycast = () => { }; // Disable raycasting for the whole HUD group
 
@@ -39,7 +39,7 @@ export class HUDManager implements IUpdatable {
         });
 
         eventBus.on(EVENTS.SYSTEM_NOTIFICATION, (msg: string) => {
-            console.log('[HUDManager] System Notification received:', msg);
+            console.log('[HudRuntime] System Notification received:', msg);
             this.showNotification(`SYSTEM: ${msg}`, 8000);
         });
 

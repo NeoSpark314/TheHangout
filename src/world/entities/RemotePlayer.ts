@@ -6,7 +6,7 @@ import { IPlayerEntityState, EntityType } from '../../shared/contracts/IEntitySt
 import { HumanoidState } from '../../shared/types/HumanoidState';
 import { HumanoidJointName } from '../../shared/contracts/IHumanoid';
 import { IAudioChunkPayload, IVoiceStreamReceivedEvent, IVoiceStreamReceiver } from '../../shared/contracts/IVoice';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
@@ -37,7 +37,7 @@ export class RemotePlayer extends PlayerEntity {
     private lastNetworkUpdateTime: number = performance.now();
     private _onVoiceStream: (data?: IVoiceStreamReceivedEvent) => void;
 
-    constructor(protected context: GameContext, peerId: string, view: IView<IPlayerViewState>) {
+    constructor(protected context: AppContext, peerId: string, view: IView<IPlayerViewState>) {
         super(context, peerId, EntityType.REMOTE_PLAYER, false);
         this.peerId = peerId;
         this.view = view;

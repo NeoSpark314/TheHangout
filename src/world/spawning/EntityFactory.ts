@@ -6,12 +6,12 @@ import { PhysicsPropView } from '../../render/views/PhysicsPropView';
 import { PhysicsEntity } from '../entities/PhysicsEntity';
 import { PenEntity } from '../entities/PenEntity';
 import { PenView } from '../../render/views/PenView';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { NullView } from '../../render/views/NullView';
 
 export class EntityFactory {
-    private static registry: Map<string, (context: GameContext, id: string, config: any) => any> = new Map();
+    private static registry: Map<string, (context: AppContext, id: string, config: any) => any> = new Map();
 
     static {
         // Register default types
@@ -32,11 +32,11 @@ export class EntityFactory {
         this.register('PEN', (context, id, config) => this.createPen(context, id, config));
     }
 
-    public static register(type: string, creator: (context: GameContext, id: string, config: any) => any): void {
+    public static register(type: string, creator: (context: AppContext, id: string, config: any) => any): void {
         this.registry.set(type, creator);
     }
 
-    public static spawn(context: GameContext, type: string, id: string, config: any): any {
+    public static spawn(context: AppContext, type: string, id: string, config: any): any {
         const creator = this.registry.get(type);
         if (!creator) {
             console.warn(`[EntityFactory] No creator registered for type: ${type}`);
@@ -45,7 +45,7 @@ export class EntityFactory {
         return creator(context, id, config);
     }
 
-    public static createPlayer(context: GameContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
+    public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): LocalPlayer | RemotePlayer {
         const render = context.managers.render;
         const view = render
             ? new StickFigureView(context, {
@@ -67,7 +67,7 @@ export class EntityFactory {
     }
 
     public static createGrabbable(
-        context: GameContext,
+        context: AppContext,
         id: string,
         size: number,
         position: IVector3,
@@ -93,7 +93,7 @@ export class EntityFactory {
         return managers.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
     }
 
-    public static createPen(context: GameContext, id: string, config: any): PenEntity {
+    public static createPen(context: AppContext, id: string, config: any): PenEntity {
         const render = context.managers.render;
         const view = render ? new PenView(id) : new NullView(id);
         const entity = new PenEntity(context, id, !!config.isAuthority, view);

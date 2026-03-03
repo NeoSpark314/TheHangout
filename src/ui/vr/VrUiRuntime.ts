@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { TabletEntity } from '../../world/entities/TabletEntity';
 import { UITabPanel, UIElement, UIButton, UILabel } from '../shared/canvasui';
@@ -10,7 +10,7 @@ import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
 import * as THREE from 'three';
 
-export class VRUIManager implements IUpdatable {
+export class VrUiRuntime implements IUpdatable {
     public tablet: TabletEntity | null = null;
     private tabPanel: UITabPanel | null = null;
     private overlayContainer: HTMLDivElement | null = null;
@@ -28,7 +28,7 @@ export class VRUIManager implements IUpdatable {
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public init(): void {
         // Create the Tablet Entity

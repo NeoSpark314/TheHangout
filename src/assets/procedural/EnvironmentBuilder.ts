@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ISessionConfig } from '../../app/AppContext';
 
-export class EnvironmentManager {
+export class EnvironmentBuilder {
     private scene: THREE.Scene;
     private random: () => number;
 

@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { PACKET_TYPES } from '../../shared/constants/Constants';
 import { INetworkable } from '../../shared/contracts/INetworkable';
 
@@ -14,7 +14,7 @@ export class NetworkSynchronizer {
     private timeSinceLastSync: number = 0;
     private timeSinceLastHeartbeat: number = 0;
 
-    constructor(transport: INetworkTransport, private context: GameContext) {
+    constructor(transport: INetworkTransport, private context: AppContext) {
         this.transport = transport;
     }
 

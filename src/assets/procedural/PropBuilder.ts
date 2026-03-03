@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EntityFactory } from '../../world/spawning/EntityFactory';
-import { GameContext, ISessionConfig } from '../../app/AppContext';
+import { AppContext, ISessionConfig } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
@@ -14,7 +14,7 @@ interface IDrumPadHitPayload {
     position?: { x: number; y: number; z: number };
 }
 
-export class PropManager implements IReplicatedFeature {
+export class PropBuilder implements IReplicatedFeature {
     public readonly featureId: string = 'feature:drumPads';
     private scene: THREE.Scene;
     private random: () => number;
@@ -37,7 +37,7 @@ export class PropManager implements IReplicatedFeature {
     private lastHandPadHitAtMs: Map<string, number> = new Map();
     private onPhysicsCollisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
 
-    constructor(scene: THREE.Scene, randomFunc: () => number, private context: GameContext) {
+    constructor(scene: THREE.Scene, randomFunc: () => number, private context: AppContext) {
         this.scene = scene;
         this.random = randomFunc;
         this.context.managers.replication.registerFeature(this);
@@ -80,7 +80,7 @@ export class PropManager implements IReplicatedFeature {
             // Domino run disabled for now until grab/interaction shape tuning is improved.
             // if (!this.hasSpawnedDominoes) this.createDominoRun();
         } catch (e) {
-            console.error('[PropManager] applyConfig crashed:', e);
+            console.error('[PropBuilder] applyConfig crashed:', e);
         }
     }
 
@@ -227,7 +227,7 @@ export class PropManager implements IReplicatedFeature {
     }
 
     private createGrabbables(): void {
-        console.log('[PropManager] createGrabbables running...');
+        console.log('[PropBuilder] createGrabbables running...');
         this.hasSpawnedGrabbables = true;
 
         // Spawn a Pen

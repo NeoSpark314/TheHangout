@@ -1,6 +1,6 @@
 import { IEntity } from '../../shared/contracts/IEntity';
 import { INetworkable } from '../../shared/contracts/INetworkable';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -11,7 +11,7 @@ export abstract class NetworkEntity implements IEntity, INetworkable<any> {
     public isDestroyed: boolean = false;
     public ownerId: string | null = null;
 
-    constructor(protected context: GameContext, id: string, type: string, isAuthority: boolean = false) {
+    constructor(protected context: AppContext, id: string, type: string, isAuthority: boolean = false) {
         this.id = id;
         this.type = type;
         this.isAuthority = isAuthority;

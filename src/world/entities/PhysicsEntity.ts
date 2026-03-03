@@ -7,7 +7,7 @@ import { IView } from '../../shared/contracts/IView';
 import { IVector3, IQuaternion, IPose } from '../../shared/contracts/IMath';
 import { PhysicsPropView, IPhysicsPropState } from '../../render/views/PhysicsPropView';
 import { IPhysicsEntityState, EntityType } from '../../shared/contracts/IEntityState';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -68,7 +68,7 @@ export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrab
     private pendingReleaseMinHoldMs: number = 220;
     private pendingReleaseMaxHoldMs: number = 900;
 
-    constructor(protected context: GameContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
+    constructor(protected context: AppContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
         this.rigidBody = rigidBody;
         this.view = options.view || null;

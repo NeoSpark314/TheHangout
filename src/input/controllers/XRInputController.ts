@@ -1,10 +1,10 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public poll(frame?: XRFrame): void {
         this.move = { x: 0, y: 0 };

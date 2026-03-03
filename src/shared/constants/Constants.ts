@@ -7,7 +7,7 @@
  *
  * If an event name starts to describe session-specific or item-specific gameplay
  * semantics, keep it inside the owning feature manager and use
- * ReplicationManager for network fan-out instead of expanding the global bus.
+ * FeatureReplicationService for network fan-out instead of expanding the global bus.
  */
 export const EVENTS = {
     START_XR: 'START_XR',

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IGrabbable } from '../../shared/contracts/IGrabbable';
 import { IInteractable } from '../../shared/contracts/IInteractable';
 import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
@@ -23,7 +23,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
     public isRelative: boolean = true;
     public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.3, -0.5);
     public relativeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.1, 0, 0));
-    private context: GameContext;
+    private context: AppContext;
     private position: THREE.Vector3;
     private quaternion: THREE.Quaternion;
 
@@ -33,7 +33,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
     private isRecentering: boolean = false;
     private hasSpawned: boolean = false;
 
-    constructor(context: GameContext, id: string) {
+    constructor(context: AppContext, id: string) {
         this.context = context;
         this.id = id;
 

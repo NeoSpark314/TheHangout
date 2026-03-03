@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { INPUT_CONFIG } from '../../shared/constants/Constants';
 
 export class GamepadManager {
@@ -10,7 +10,7 @@ export class GamepadManager {
     public navCooldown = 0;
     private deadzone: number = INPUT_CONFIG.DEADZONE;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public poll(delta: number): void {
         const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];

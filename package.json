@@ -11,6 +11,8 @@
     "refactor:arch:dry-run": "node scripts/migrate-architecture.mjs",
     "refactor:arch:apply": "node scripts/migrate-architecture.mjs --apply",
     "refactor:arch:rewrite": "node scripts/migrate-architecture.mjs --rewrite-only",
+    "refactor:arch:rename-symbols:dry-run": "node scripts/rename-architecture-symbols.mjs",
+    "refactor:arch:rename-symbols:apply": "node scripts/rename-architecture-symbols.mjs --apply",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test"

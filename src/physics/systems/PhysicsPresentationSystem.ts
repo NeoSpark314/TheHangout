@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
@@ -8,7 +8,7 @@ import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
  * This keeps rendering concerns out of simulation update logic.
  */
 export class PhysicsPresentationSystem implements IUpdatable {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public update(delta: number, _frame?: XRFrame): void {
         const entityManager = this.context.managers.entity;

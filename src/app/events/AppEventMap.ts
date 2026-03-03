@@ -12,7 +12,7 @@ import type { IVoiceStreamReceivedEvent } from '../../shared/contracts/IVoice';
  *   ownership requests, shared UI/system notifications, voice plumbing).
  * - Do not add session-specific or item-specific domain events here. Those belong
  *   inside feature/session managers and should use feature-local APIs plus
- *   ReplicationManager for network fan-out.
+ *   FeatureReplicationService for network fan-out.
  */
 export interface AppEventMap {
     START_XR: void;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PlayerEntity } from './PlayerEntity';
 import { IView } from '../../shared/contracts/IView';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { IVector3, IPose } from '../../shared/contracts/IMath';
 import { Skill } from '../../skills/Skill';
 import { MovementSkill } from '../../skills/MovementSkill';
@@ -21,7 +21,7 @@ export interface ILocalPlayerTeleportOptions {
 
 /**
  * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).
- * The RenderManager and Views must follow this state, never modify it directly.
+ * The RenderRuntime and Views must follow this state, never modify it directly.
  */
 export class LocalPlayer extends PlayerEntity {
     public view: IView<IPlayerViewState>;
@@ -36,7 +36,7 @@ export class LocalPlayer extends PlayerEntity {
     public _rightControllerIndex: number = 1;
     private _lastProviderId: string | null = null;
 
-    constructor(public context: GameContext, id: string, spawnPos: IVector3, spawnYaw: number, view: IView<IPlayerViewState>) {
+    constructor(public context: AppContext, id: string, spawnPos: IVector3, spawnYaw: number, view: IView<IPlayerViewState>) {
         super(context, id || 'local-player-id-temp', EntityType.LOCAL_PLAYER, true);
         this.isAuthority = true;
         this.view = view;
@@ -108,7 +108,7 @@ export class LocalPlayer extends PlayerEntity {
         }
 
         // 2. PHASE 2: Sync Origin to Render Objects
-        // Critical for RenderManager.camera.getWorldPose() and tracking.update() to return
+        // Critical for RenderRuntime.camera.getWorldPose() and tracking.update() to return
         // accurate world coordinates relative to the current frame's position.
         if (render.cameraGroup) {
             render.cameraGroup.position.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
@@ -136,7 +136,7 @@ export class LocalPlayer extends PlayerEntity {
             this.humanoid.applyNetworkDelta(trackingState.humanoidDelta);
         }
 
-        // NOTE: Local hand interaction state now lives solely in TrackingManager.getState().hands.
+        // NOTE: Local hand interaction state now lives solely in TrackingRuntime.getState().hands.
         // We intentionally avoid mirroring into PlayerEntity.handStates to prevent drift.
 
         this.headState.position = { ...worldHeadPos };

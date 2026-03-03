@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IHandIntentPayload } from '../../shared/contracts/IIntents';
@@ -15,7 +15,7 @@ export class NonVRInteractionController {
     private mobileLatched = false;
     private directHeld = false;
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public update(directHeld: boolean): void {
         this.directHeld = directHeld;

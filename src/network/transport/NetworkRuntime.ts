@@ -1,6 +1,6 @@
 import Peer, { DataConnection } from 'peerjs';
 import eventBus from '../../app/events/EventBus';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { EVENTS, PACKET_TYPES } from '../../shared/constants/Constants';
 import { INetworkable } from '../../shared/contracts/INetworkable';
 import { EntityType, IStateUpdatePacket } from '../../shared/contracts/IEntityState';
@@ -33,7 +33,7 @@ import { IAudioChunkPayload, IAudioChunkReceiver } from '../../shared/contracts/
  * Note: Use EventBus for cross-system requests (e.g. OWNERSHIP_REQUEST) 
  * to keep entities decoupled from specific networking implementation details.
  */
-export class NetworkManager implements IUpdatable, INetworkTransport {
+export class NetworkRuntime implements IUpdatable, INetworkTransport {
     public peer: Peer | null = null;
     public localPeerId: string | null = null;
     private relaySocket: WebSocket | null = null;
@@ -44,7 +44,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     private ownershipSeqByEntity: Map<string, number> = new Map();
     private lastAppliedOwnershipSeqByEntity: Map<string, number> = new Map();
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.dispatcher = new NetworkDispatcher<PacketPayloadMap>();
         this.synchronizer = new NetworkSynchronizer(this, context);
 
@@ -73,7 +73,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                console.warn('[NetworkManager] Tab hidden.');
+                console.warn('[NetworkRuntime] Tab hidden.');
             }
         });
     }
@@ -124,7 +124,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.peer.on('error', (err) => this.handlePeerError(err));
 
         this.peer.on('open', async (id) => {
-            console.log(`[NetworkManager] Host Peer ID: ${id}`);
+            console.log(`[NetworkRuntime] Host Peer ID: ${id}`);
             this.context.sessionId = id;
 
             if (this.context.managers.media) {
@@ -150,7 +150,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
         this.peer.on('error', (err) => this.handlePeerError(err));
 
         this.peer.on('open', async (id) => {
-            console.log(`[NetworkManager] Guest Peer ID: ${id}`);
+            console.log(`[NetworkRuntime] Guest Peer ID: ${id}`);
             this.context.sessionId = hostId;
             if (this.context.managers.media) {
                 this.context.managers.media.bindPeer(this.peer!);
@@ -176,7 +176,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
             this.localPeerId = peerId;
 
             this.relaySocket.onopen = () => {
-                console.log('[NetworkManager] Connected to Headless Server WebSocket');
+                console.log('[NetworkRuntime] Connected to Headless Server WebSocket');
                 this.relaySocket!.send(JSON.stringify({ type: 'join', sessionId: sessionId, peerId: peerId }));
                 this.context.sessionId = sessionId;
 
@@ -185,7 +185,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
 
                 // Wait to emit connection until server responds to match PeerJS behavior
 
-                // MediaManager integration hook
+                // VoiceRuntime integration hook
                 if (this.context.managers.media) {
                     this.context.managers.media.bindWebSocket(this.relaySocket!);
                 }
@@ -398,7 +398,7 @@ export class NetworkManager implements IUpdatable, INetworkTransport {
     }
 
     private handlePeerError(err: any): void {
-        console.error('[NetworkManager] PeerJS Error:', err);
+        console.error('[NetworkRuntime] PeerJS Error:', err);
         let userMessage = 'Network connection error.';
 
         switch (err.type) {
@@ -445,7 +445,7 @@ function isAudioChunkEnvelope(data: unknown): data is NetworkEnvelope<typeof PAC
  */
 
 class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.STATE_UPDATE]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         if (!this.context.isHost) {
             this.context.managers.network.applyStateUpdate(payload);
@@ -454,7 +454,7 @@ class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
 }
 
 class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PLAYER_INPUT]> {
-    constructor(private network: NetworkManager, private context: GameContext) { }
+    constructor(private network: NetworkRuntime, private context: AppContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
         this.network.applyStateUpdate(payload);
         if (this.context.isHost) {
@@ -472,14 +472,14 @@ class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
 }
 
 class PeerDisconnectHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PEER_DISCONNECT]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: unknown): void {
         if (!this.context.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, payload);
     }
 }
 
 class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: ISessionConfigUpdatePayload): void {
         if (!this.context.isHost) {
             this.context.managers.session.updateConfig(payload);
@@ -496,28 +496,28 @@ class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PAC
 }
 
 class OwnershipRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_REQUEST]> {
-    constructor(private network: NetworkManager, private context: GameContext) { }
+    constructor(private network: NetworkRuntime, private context: AppContext) { }
     handle(senderId: string, payload: IOwnershipRequestPayload): void {
         if (this.context.isHost) this.network.handleOwnershipRequest(senderId, payload);
     }
 }
 
 class OwnershipReleaseHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_RELEASE]> {
-    constructor(private network: NetworkManager, private context: GameContext) { }
+    constructor(private network: NetworkRuntime, private context: AppContext) { }
     handle(senderId: string, payload: IOwnershipReleasePayload): void {
         if (this.context.isHost) this.network.handleOwnershipRelease(senderId, payload);
     }
 }
 
 class OwnershipTransferHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_TRANSFER]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: IOwnershipTransferPayload): void {
         if (!this.context.isHost) this.context.managers.network.applyOwnershipTransfer(payload);
     }
 }
 
 class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PEER_JOINED]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: { peerId: string }): void {
         if (!this.context.isHost && this.context.isLocalServer) {
             eventBus.emit(EVENTS.PEER_JOINED_SESSION, payload.peerId);
@@ -526,21 +526,21 @@ class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET
 }
 
 class FeatureEventHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_EVENT]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: IReplicatedFeatureEventPayload): void {
         this.context.managers.replication.handleIncomingFeatureEvent(senderId, payload);
     }
 }
 
 class FeatureSnapshotHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: IReplicatedFeatureSnapshotPayload): void {
         this.context.managers.replication.applySnapshotPayload(payload);
     }
 }
 
 class FeatureSnapshotRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(senderId: string, payload: IFeatureSnapshotRequestPayload): void {
         if (!this.context.isHost) return;
         this.context.managers.replication.sendSnapshotToPeer(senderId);
@@ -548,42 +548,42 @@ class FeatureSnapshotRequestHandler implements IPacketHandler<PacketPayloadMap[t
 }
 
 class DesktopSourcesStatusHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopSourcesStatusResponsePayload): void {
         this.context.managers.remoteDesktop.handleSourcesStatus(payload);
     }
 }
 
 class DesktopStreamSummonedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_SUMMONED]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamSummonedPayload): void {
         this.context.managers.remoteDesktop.handleStreamSummoned(payload);
     }
 }
 
 class DesktopStreamStoppedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_STOPPED]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamStoppedPayload): void {
         this.context.managers.remoteDesktop.handleStreamStopped(payload);
     }
 }
 
 class DesktopStreamOfflineHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_OFFLINE]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamOfflinePayload): void {
         this.context.managers.remoteDesktop.handleStreamOffline(payload);
     }
 }
 
 class DesktopStreamFrameHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_FRAME]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(_senderId: string, payload: IDesktopStreamFramePayload): void {
         this.context.managers.remoteDesktop.handleStreamFrame(payload);
     }
 }
 
 class SessionNotificationHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_NOTIFICATION]> {
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
     handle(_senderId: string, payload: ISessionNotificationPayload): void {
         const localPeerId = this.context.localPlayer?.id;
         if (payload.actorPeerId && localPeerId && payload.actorPeerId === localPeerId) return;
@@ -659,7 +659,7 @@ class ServerConnection {
     }
     public send(data: any) {
         if (this.open && this.socket.readyState === WebSocket.OPEN) {
-            // Data from NetworkManager is already stringified JSON
+            // Data from NetworkRuntime is already stringified JSON
             this.socket.send(typeof data === 'string' ? data : JSON.stringify(data));
         }
     }

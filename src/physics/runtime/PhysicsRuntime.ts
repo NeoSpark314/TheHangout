@@ -4,7 +4,7 @@ import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { IView } from '../../shared/contracts/IView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { EntityType } from '../../shared/contracts/IEntityState';
@@ -33,7 +33,7 @@ interface IPhysicsDebugBodyEntry {
     getLastTransferSeq?: () => number;
 }
 
-export class PhysicsManager {
+export class PhysicsRuntime {
     public world: RAPIER.World | null = null;
     private nextPhysicsId: number = 0;
     private accumulator: number = 0;
@@ -63,14 +63,14 @@ export class PhysicsManager {
     private collisionSoundCooldownMs: number = 100;
     private lastCollisionSoundAtByPair: Map<string, number> = new Map();
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public async init(): Promise<void> {
         await RAPIER.init();
         const gravity = { x: 0.0, y: -9.81, z: 0.0 };
         this.world = new RAPIER.World(gravity);
         this.eventQueue = new RAPIER.EventQueue(true);
-        console.log('[PhysicsManager] Rapier3D initialized');
+        console.log('[PhysicsRuntime] Rapier3D initialized');
         eventBus.emit(EVENTS.PHYSICS_READY);
     }
 

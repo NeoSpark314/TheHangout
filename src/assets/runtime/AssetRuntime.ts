@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 
 /**
  * Service for loading and caching 3D assets and textures.
  */
-export class AssetManager {
+export class AssetRuntime {
     private loader = new GLTFLoader();
     private cache: Map<string, THREE.Group> = new Map();
     private loadingPromises: Map<string, Promise<THREE.Group>> = new Map();
 
-    constructor(private context: GameContext) { }
+    constructor(private context: AppContext) { }
 
     public async loadGLTF(url: string): Promise<THREE.Group> {
         if (this.cache.has(url)) {

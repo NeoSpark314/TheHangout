@@ -10,7 +10,7 @@ export interface IParticleBurstOptions {
     size?: number; // point size scalar in world-like units
 }
 
-export class ParticleSystemManager implements IUpdatable {
+export class ParticleEffectSystem implements IUpdatable {
     private readonly capacity = 1200;
     private readonly gravity = 2.3;
     private readonly drag = 0.985;

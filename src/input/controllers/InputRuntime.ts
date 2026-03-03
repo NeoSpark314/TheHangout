@@ -1,4 +1,4 @@
-import { GameContext } from '../../app/AppContext';
+import { AppContext } from '../../app/AppContext';
 import { INPUT_CONFIG } from '../../shared/constants/Constants';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import eventBus from '../../app/events/EventBus';
@@ -17,7 +17,7 @@ import { GestureUtils } from '../../shared/utils/GestureUtils';
  * Aggregates user input from multiple distinct hardware sources (Keyboard, Gamepad, Mobile Joysticks, XR).
  * Provides a unified interface for querying movement semantic intentions and handling VR pointers.
  */
-export class InputManager implements IUpdatable {
+export class InputRuntime implements IUpdatable {
     public keyboard: KeyboardManager;
     public gamepad: GamepadManager;
     public mobileJoystick: MobileJoystickManager;
@@ -26,7 +26,7 @@ export class InputManager implements IUpdatable {
     public xrInput: XRInputManager;
     private _wheelDelta = 0;
 
-    constructor(private context: GameContext) {
+    constructor(private context: AppContext) {
         this.keyboard = new KeyboardManager();
         this.gamepad = new GamepadManager(context);
         this.mobileJoystick = new MobileJoystickManager();
