@@ -109,8 +109,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 { x: px, y: padY, z: pz }
             );
             if (collider) {
-                this.padFreqByHandle.set(collider.handle, { padId: `pad-${i}`, frequency: notes[i] });
-                const body = collider.parent();
+                this.padFreqByHandle.set(collider.id, { padId: `pad-${i}`, frequency: notes[i] });
+                const body = collider.body;
                 if (body) {
                     this.ownPhysicsBody(body);
                 }

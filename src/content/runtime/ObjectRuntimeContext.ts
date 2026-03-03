@@ -1,7 +1,11 @@
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import type { AppContext } from '../../app/AppContext';
-import type { IObjectRuntimeContext } from '../contracts/IObjectRuntimeContext';
+import type {
+    IObjectRuntimeContext,
+    IPhysicsBodyHandle,
+    IPhysicsColliderHandle
+} from '../contracts/IObjectRuntimeContext';
 import type { IObjectSpawnConfig } from '../contracts/IObjectModule';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
 
@@ -39,7 +43,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             unregisterInteractionCollider: (collider) => {
                 this.app.runtime.physics.unregisterInteractionCollider(collider);
             },
-            removeRigidBody: (body) => {
+            removeRigidBody: (body: IPhysicsBodyHandle | null | undefined) => {
                 this.app.runtime.physics.removeRigidBody(body);
             }
         };

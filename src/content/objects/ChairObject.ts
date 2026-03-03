@@ -317,7 +317,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
                 this.context.physics.unregisterInteractionCollider(collider);
             });
 
-            const body = collider.parent();
+            const body = collider.body;
             if (body) {
                 this.ownPhysicsBody(body);
             }

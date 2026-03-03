@@ -65,7 +65,7 @@ export class InteractionSystem {
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
-        const interactionHit = this.context.runtime.physics?.queryNearestPhysicsInteractable(
+        const interactionHit = this.context.runtime.physics?.queryNearestInteractionCollider(
             { x: point.x, y: point.y, z: point.z },
             maxDist
         );

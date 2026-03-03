@@ -10,6 +10,10 @@ import { EVENTS } from '../../shared/constants/Constants';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { IHoldable } from '../../shared/contracts/IHoldable';
 import { IInteractable } from '../../shared/contracts/IInteractable';
+import type {
+    IPhysicsBodyHandle,
+    IPhysicsColliderHandle
+} from '../../content/contracts/IObjectRuntimeContext';
 
 export interface IPhysicsDebugBody {
     id: string;
@@ -36,6 +40,8 @@ interface IPhysicsDebugBodyEntry {
 }
 
 type PhysicsInteractionTarget = IHoldable & IInteractable;
+type RuntimePhysicsBodyHandle = IPhysicsBodyHandle & { readonly rigidBody: RAPIER.RigidBody };
+type RuntimePhysicsColliderHandle = IPhysicsColliderHandle & { readonly collider: RAPIER.Collider };
 
 export class PhysicsRuntime {
     public world: RAPIER.World | null = null;
@@ -264,42 +270,7 @@ export class PhysicsRuntime {
         return this.touchQueryAvgHitsPerFrame;
     }
 
-    public queryNearestPhysicsGrabbable(point: IVector3, gripRadius: number): { entity: PhysicsPropEntity; distance: number } | null {
-        if (!this.world) return null;
-        this.grabQueryShape.radius = Math.max(0.01, gripRadius);
-
-        let nearestEntity: PhysicsPropEntity | null = null;
-        let minDistance = Number.POSITIVE_INFINITY;
-
-        this.world.intersectionsWithShape(
-            { x: point.x, y: point.y, z: point.z },
-            this.identityRotation,
-            this.grabQueryShape,
-            (collider) => {
-                const entity = this.colliderToEntity.get(collider.handle);
-                if (!entity || entity.isDestroyed || !entity.isGrabbable || !!entity.heldBy) return true;
-
-                const projection = collider.projectPoint({ x: point.x, y: point.y, z: point.z }, true);
-                if (!projection) return true;
-
-                const dx = projection.point.x - point.x;
-                const dy = projection.point.y - point.y;
-                const dz = projection.point.z - point.z;
-                const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
-
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestEntity = entity;
-                }
-                return true;
-            }
-        );
-
-        if (!nearestEntity || minDistance > gripRadius) return null;
-        return { entity: nearestEntity, distance: minDistance };
-    }
-
-    public queryNearestPhysicsInteractable(
+    public queryNearestInteractionCollider(
         point: IVector3,
         gripRadius: number
     ): { target: PhysicsInteractionTarget; distance: number; point: IVector3 } | null {
@@ -349,7 +320,7 @@ export class PhysicsRuntime {
         hz: number,
         position: IVector3,
         rotation?: { x: number; y: number; z: number; w: number }
-    ): RAPIER.Collider | null {
+    ): IPhysicsColliderHandle | null {
         if (!this.world) return null;
         const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z);
         if (rotation) {
@@ -361,20 +332,21 @@ export class PhysicsRuntime {
             body
         );
         this.registerDebugBody(`static-cuboid-${this.nextPhysicsId++}`, body, collider);
-        return collider;
+        return this.createColliderHandle(collider);
     }
 
-    public registerInteractionCollider(collider: RAPIER.Collider | null | undefined, target: PhysicsInteractionTarget): void {
+    public registerInteractionCollider(collider: IPhysicsColliderHandle | null | undefined, target: PhysicsInteractionTarget): void {
         if (!collider) return;
-        this.interactionColliders.set(collider.handle, target);
+        this.interactionColliders.set(collider.id, target);
     }
 
-    public unregisterInteractionCollider(collider: RAPIER.Collider | null | undefined): void {
+    public unregisterInteractionCollider(collider: IPhysicsColliderHandle | null | undefined): void {
         if (!collider) return;
-        this.interactionColliders.delete(collider.handle);
+        this.interactionColliders.delete(collider.id);
     }
 
-    public removeRigidBody(rigidBody: RAPIER.RigidBody | null | undefined): void {
+    public removeRigidBody(rigidBodyHandle: IPhysicsBodyHandle | null | undefined): void {
+        const rigidBody = rigidBodyHandle ? (rigidBodyHandle as RuntimePhysicsBodyHandle).rigidBody : null;
         if (!this.world || !rigidBody) return;
 
         const entry = this.debugBodies.get(rigidBody.handle);
@@ -435,6 +407,23 @@ export class PhysicsRuntime {
         }
 
         this.debugBodies.set(handle, entry);
+    }
+
+    private createBodyHandle(rigidBody: RAPIER.RigidBody | null | undefined): IPhysicsBodyHandle | null {
+        if (!rigidBody) return null;
+        return {
+            id: rigidBody.handle,
+            rigidBody
+        } as RuntimePhysicsBodyHandle;
+    }
+
+    private createColliderHandle(collider: RAPIER.Collider | null | undefined): IPhysicsColliderHandle | null {
+        if (!collider) return null;
+        return {
+            id: collider.handle,
+            body: this.createBodyHandle(collider.parent()),
+            collider
+        } as RuntimePhysicsColliderHandle;
     }
 
     private drainCollisionEvents(): void {

@@ -4,6 +4,15 @@ import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IObjectSpawnConfig } from './IObjectModule';
 import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
 
+export interface IPhysicsBodyHandle {
+    readonly id: number;
+}
+
+export interface IPhysicsColliderHandle {
+    readonly id: number;
+    readonly body: IPhysicsBodyHandle | null;
+}
+
 export interface IObjectRuntimeContext {
     app: AppContext;
     instanceId: string;
@@ -20,10 +29,10 @@ export interface IObjectRuntimeContext {
             hz: number,
             position: IVector3,
             rotation?: { x: number; y: number; z: number; w: number }
-        ): any | null;
-        registerInteractionCollider(collider: any, target: unknown): void;
-        unregisterInteractionCollider(collider: any): void;
-        removeRigidBody(body: any): void;
+        ): IPhysicsColliderHandle | null;
+        registerInteractionCollider(collider: IPhysicsColliderHandle, target: unknown): void;
+        unregisterInteractionCollider(collider: IPhysicsColliderHandle): void;
+        removeRigidBody(body: IPhysicsBodyHandle | null | undefined): void;
     };
 
     audio: {
