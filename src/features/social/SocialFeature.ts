@@ -51,8 +51,9 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
 
         const entities = this.context.runtime.entity.entities;
         for (const entity of entities.values()) {
-            if (entity.type !== EntityType.REMOTE_PLAYER) continue;
+            if (entity.type !== EntityType.PLAYER_AVATAR) continue;
             const remote = entity as PlayerAvatarEntity;
+            if (remote.controlMode !== 'remote') continue;
             const remoteId = remote.id;
             if (!remoteId || localId >= remoteId) continue; // single emitter rule
 

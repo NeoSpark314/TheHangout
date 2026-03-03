@@ -122,7 +122,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         return {
             id: player.id,
-            type: EntityType.LOCAL_PLAYER,
+            type: EntityType.PLAYER_AVATAR,
             n: player.name,
             p: [player.headState.position.x, 0, player.headState.position.z],
             y: bodyYaw,

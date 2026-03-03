@@ -17,8 +17,10 @@ export class EntityFactory {
 
     static {
         // Register default types
-        this.register('LOCAL_PLAYER', (context, id, config) => this.createPlayer(context, id, { ...config, isLocal: true }));
-        this.register('REMOTE_PLAYER', (context, id, config) => this.createPlayer(context, id, { ...config, isLocal: false }));
+        this.register('PLAYER_AVATAR', (context, id, config) => this.createPlayer(context, id, {
+            ...config,
+            isLocal: config.controlMode ? config.controlMode === 'local' : !!config.isLocal
+        }));
         this.register('PHYSICS_PROP', (context, id, config) => {
             // For remote discovery, we might not have the mesh yet
             // If config.mesh is missing, createGrabbable handles it or we use a default
@@ -59,7 +61,7 @@ export class EntityFactory {
         const entity = new PlayerAvatarEntity(
             context,
             id,
-            isLocal ? EntityType.LOCAL_PLAYER : EntityType.REMOTE_PLAYER,
+            EntityType.PLAYER_AVATAR,
             isLocal,
             view,
             {

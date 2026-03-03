@@ -6,6 +6,7 @@ import { SessionRuntime } from '../world/session/SessionRuntime';
 import { ServerNetworkManager } from './ServerNetworkManager';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
 import { DrawingFeature } from '../features/drawing/DrawingFeature';
+import { EntityType } from '../shared/contracts/IEntityState';
 
 export class HeadlessSession {
     public context: AppContext;
@@ -71,7 +72,7 @@ export class HeadlessSession {
         const physicsMgr = this.context.runtime.physics;
         const entities = Array.from(entityMgr.entities.values());
 
-        const players = entities.filter(e => e.type === 'REMOTE_PLAYER');
+        const players = entities.filter(e => e.type === EntityType.PLAYER_AVATAR && (e as any).controlMode === 'remote');
 
         return {
             id: this.sessionId,
@@ -91,7 +92,7 @@ export class HeadlessSession {
             entityCount: entities.length,
             entityBreakdown: {
                 players: players.length,
-                props: entities.filter(e => e.type === 'PHYSICS_PROP').length
+                props: entities.filter(e => e.type === EntityType.PHYSICS_PROP).length
             },
             physics: {
                 bodies: (physicsMgr as any).world?.nbRigidBodies || 0,

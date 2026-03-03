@@ -38,7 +38,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
                 // Headless server broadcasts its own authoritative state via synchronizer.
                 // We must relay avatars AND any objects the server has given ownership to!
                 const relayPackets = payload.filter(p => {
-                    if (p.type === EntityType.LOCAL_PLAYER) return true;
+                    if (p.type === EntityType.PLAYER_AVATAR) return true;
                     const entity = this.context.runtime.entity.getEntity(p.id);
                     return entity && !entity.isAuthority;
                 });
@@ -157,9 +157,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         for (const stateData of entityStates) {
             let entity = runtime.entity.getEntity(stateData.id);
             if (!entity) {
-                const spawnType = stateData.type === EntityType.LOCAL_PLAYER ? EntityType.REMOTE_PLAYER : stateData.type;
-                const config = { spawnPos: { x: 0, y: 0, z: 0 }, spawnYaw: 0, isAuthority: false };
-                entity = runtime.entity.discover(stateData.id, spawnType, config) || undefined;
+                const config = {
+                    spawnPos: { x: 0, y: 0, z: 0 },
+                    spawnYaw: 0,
+                    isAuthority: false,
+                    controlMode: stateData.type === EntityType.PLAYER_AVATAR ? 'remote' : undefined
+                };
+                entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as any;

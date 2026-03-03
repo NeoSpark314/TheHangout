@@ -11,8 +11,7 @@ export type Vec3Arr = [number, number, number];
 export type QuatArr = [number, number, number, number];
 
 export enum EntityType {
-    LOCAL_PLAYER = 'LOCAL_PLAYER',
-    REMOTE_PLAYER = 'REMOTE_PLAYER',
+    PLAYER_AVATAR = 'PLAYER_AVATAR',
     PHYSICS_PROP = 'PHYSICS_PROP',
     PEN = 'PEN'
 }
@@ -24,10 +23,10 @@ export interface IBaseEntityState {
 }
 
 /**
- * State for Player entities (Local and Remote)
+ * State for player avatars. Local vs remote control is runtime state, not a type split.
  */
 export interface IPlayerEntityState extends IBaseEntityState {
-    type: EntityType.LOCAL_PLAYER | EntityType.REMOTE_PLAYER;
+    type: EntityType.PLAYER_AVATAR;
     n: string; // name
     p: Vec3Arr; // body position
     y: number; // body yaw

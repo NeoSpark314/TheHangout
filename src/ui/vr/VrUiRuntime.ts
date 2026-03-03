@@ -4,6 +4,7 @@ import { TabletSurfaceEntity } from '../../world/entities/TabletSurfaceEntity';
 import { UITabPanel, UIElement, UIButton, UILabel } from '../shared/canvasui';
 import { UITheme, getFont } from '../shared/UITheme';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
+import { EntityType } from '../../shared/contracts/IEntityState';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
@@ -244,7 +245,7 @@ export class VrUiRuntime implements IUpdatable {
 
                 // 2. Add Remote Players
                 for (const entity of this.context.runtime.entity.entities.values()) {
-                    if (entity.type === 'REMOTE_PLAYER') {
+                    if (entity.type === EntityType.PLAYER_AVATAR && (entity as PlayerAvatarEntity).controlMode === 'remote') {
                         const rp = entity as PlayerAvatarEntity;
                         // Avoid adding duplicates if the same player is discovered multiple times (edge case)
                         if (allPeers.find(p => p.id === rp.id)) continue;
@@ -420,7 +421,7 @@ export class VrUiRuntime implements IUpdatable {
             const nextBtn = new UIButton("Next >", 880, 630, 200, 80, () => {
                 let totalPeers = 1; // Start with local player
                 for (const entity of this.context.runtime.entity.entities.values()) {
-                    if (entity.type === 'REMOTE_PLAYER') totalPeers++;
+                    if (entity.type === EntityType.PLAYER_AVATAR && (entity as PlayerAvatarEntity).controlMode === 'remote') totalPeers++;
                 }
                 const totalPages = Math.max(1, Math.ceil(totalPeers / playersPerPage));
                 if (currentPage < totalPages - 1) {

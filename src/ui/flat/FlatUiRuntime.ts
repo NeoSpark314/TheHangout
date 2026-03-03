@@ -589,7 +589,7 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.context.runtime.entity) {
             const entities = Array.from(this.context.runtime.entity.entities.values());
             entities.forEach(entity => {
-                if (entity.type !== 'LOCAL_PLAYER') {
+                if (entity.id !== this.context.localPlayer?.id) {
                     this.context.runtime.entity!.removeEntity(entity.id);
                 }
             });

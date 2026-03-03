@@ -120,7 +120,7 @@ export class RenderRuntime {
         if (!possessedPlayer) return;
 
         // Camera following logic
-        if (possessedPlayer.type === 'LOCAL_PLAYER') {
+        if (possessedPlayer.controlMode === 'local') {
             const lp = possessedPlayer;
             this.cameraGroup.position.set(lp.xrOrigin.position.x, lp.xrOrigin.position.y, lp.xrOrigin.position.z);
             this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);

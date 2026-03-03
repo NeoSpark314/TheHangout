@@ -158,7 +158,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         if (render.isXRPresenting()) return;
 
         const lp = this.context.localPlayer as PlayerAvatarEntity;
-        if (!lp || lp.type !== 'LOCAL_PLAYER') return;
+        if (!lp || lp.controlMode !== 'local') return;
 
         // 1. Source of Truth: Origin and Orientation
         const originPos = new THREE.Vector3(lp.xrOrigin.position.x, lp.xrOrigin.position.y, lp.xrOrigin.position.z);

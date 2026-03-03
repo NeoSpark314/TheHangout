@@ -271,15 +271,13 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 // Skip if this is actually us (should already be in entities, but be safe)
                 if (this.context.localPlayer && stateData.id === this.context.localPlayer.id) continue;
 
-                // Role Reversal: If someone says they are a LOCAL_PLAYER, to us they are a REMOTE_PLAYER
-                const spawnType = stateData.type === EntityType.LOCAL_PLAYER ? EntityType.REMOTE_PLAYER : stateData.type;
-
                 const config = {
                     spawnPos: { x: 0, y: 0, z: 0 },
                     spawnYaw: 0,
-                    isAuthority: false
+                    isAuthority: false,
+                    controlMode: stateData.type === EntityType.PLAYER_AVATAR ? 'remote' : undefined
                 };
-                entity = runtime.entity.discover(stateData.id, spawnType, config) || undefined;
+                entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
             }
             if (entity && !entity.isAuthority) {
                 const networkable = entity as unknown as INetworkable<unknown>;
@@ -460,7 +458,7 @@ class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
         if (this.context.isHost) {
             // Only relay player avatars and objects the host is NOT authoritative over
             const relayPackets = payload.filter(p => {
-                if (p.type === EntityType.LOCAL_PLAYER) return true;
+                if (p.type === EntityType.PLAYER_AVATAR) return true;
                 const entity = this.context.runtime.entity.getEntity(p.id);
                 return entity && !entity.isAuthority;
             });

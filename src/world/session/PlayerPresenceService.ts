@@ -2,6 +2,7 @@ import { EntityFactory } from '../spawning/EntityFactory';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants.ts';
+import { EntityType } from '../../shared/contracts/IEntityState';
 
 export class PlayerPresenceService {
     public isInitialized: boolean = false;
@@ -54,7 +55,7 @@ export class PlayerPresenceService {
         console.log(`[PlayerPresenceService] Removing entity for disconnected peer: ${peerId} (type: ${entity.type})`);
 
         const name = (entity as any).name;
-        const isPlayer = entity.type === 'REMOTE_PLAYER' || entity.type === 'LOCAL_PLAYER';
+        const isPlayer = entity.type === EntityType.PLAYER_AVATAR;
 
         // Critical: Always trigger destruction and removal
         runtime.entity.removeEntity(peerId);
