@@ -1,69 +1,40 @@
 import * as THREE from 'three';
-import type { AppContext } from '../../app/AppContext';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IEntity } from '../../shared/contracts/IEntity';
+import { BaseObjectInstance } from '../runtime/BaseObjectInstance';
 
-class DebugBeaconEntity implements IEntity {
-    public readonly type = 'CONTENT_DEBUG_BEACON';
-    public isAuthority = true;
-    public isDestroyed = false;
+class DebugBeaconInstance extends BaseObjectInstance {
     private readonly mesh: THREE.Mesh;
     private elapsed = 0;
     private readonly baseY: number;
 
-    constructor(
-        public id: string,
-        private context: AppContext,
-        position: THREE.Vector3,
-        color: number
-    ) {
+    constructor(context: IObjectSpawnContext, position: THREE.Vector3, color: number) {
+        super(context, 'debug-beacon');
         const geometry = new THREE.SphereGeometry(0.12, 12, 12);
         const material = new THREE.MeshStandardMaterial({
             color,
             emissive: color,
             emissiveIntensity: 0.45
         });
+        this.addCleanup(() => geometry.dispose());
+        this.addCleanup(() => material.dispose());
 
         this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.position.copy(position);
         this.mesh.castShadow = false;
         this.mesh.receiveShadow = false;
-        this.mesh.userData.entityId = id;
+        this.mesh.userData.objectInstanceId = this.id;
         this.baseY = position.y;
-
-        const render = this.context.runtime.render;
-        if (render) {
-            render.scene.add(this.mesh);
-            render.interactionGroup.add(this.mesh);
-        }
+        this.ownSceneObject(this.mesh);
     }
 
     public update(delta: number): void {
-        if (this.isDestroyed) return;
         this.elapsed += delta;
         this.mesh.rotation.y += delta * 1.5;
         this.mesh.position.y = this.baseY + Math.sin(this.elapsed * 2.2) * 0.04;
     }
 
     public destroy(): void {
-        if (this.isDestroyed) return;
-        this.isDestroyed = true;
-
-        const render = this.context.runtime.render;
-        if (render) {
-            render.interactionGroup.remove(this.mesh);
-            render.scene.remove(this.mesh);
-        }
-
-        this.mesh.geometry.dispose();
-        const material = this.mesh.material;
-        if (Array.isArray(material)) {
-            for (const entry of material) {
-                entry.dispose();
-            }
-        } else {
-            material.dispose();
-        }
+        super.destroy();
     }
 }
 
@@ -74,7 +45,7 @@ export class DebugBeaconObject implements IObjectModule {
     public readonly networked = false;
     public readonly portable = true;
 
-    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): IEntity | null {
+    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): DebugBeaconInstance | null {
         if (!context.app.runtime.render) {
             return null;
         }
@@ -84,11 +55,6 @@ export class DebugBeaconObject implements IObjectModule {
             : new THREE.Vector3(0, 1.15, -1.8);
         const colorValue = typeof config.color === 'number' ? config.color : 0x00ffff;
 
-        return new DebugBeaconEntity(
-            context.instanceId,
-            context.app,
-            position,
-            colorValue
-        );
+        return new DebugBeaconInstance(context, position, colorValue);
     }
 }

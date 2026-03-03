@@ -9,6 +9,7 @@ export class GrabbableCubeObject implements IObjectModule {
     public readonly networked = true;
     public readonly portable = true;
 
+    // Thin content wrapper over the engine-level grabbable physics spawn path.
     public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
         const size = typeof config.size === 'number' ? config.size : 0.12;
         const position = config.position ?? { x: 0, y: 1.15, z: 0 };

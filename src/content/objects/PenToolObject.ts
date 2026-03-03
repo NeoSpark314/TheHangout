@@ -8,6 +8,7 @@ export class PenToolObject implements IObjectModule {
     public readonly networked = true;
     public readonly portable = true;
 
+    // Thin content wrapper over the engine-level PEN entity primitive.
     public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
         return EntityFactory.spawn(context.app, 'PEN', context.instanceId, {
             ...config,

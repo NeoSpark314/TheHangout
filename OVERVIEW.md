@@ -57,11 +57,14 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 
 - [IScenarioModule.ts](/c:/programming/TheHangout/src/content/contracts/IScenarioModule.ts) defines a loadable world package.
 - [IObjectModule.ts](/c:/programming/TheHangout/src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
+- [IObjectRuntimeContext.ts](/c:/programming/TheHangout/src/content/contracts/IObjectRuntimeContext.ts) is the narrow contributor-facing authoring context for content objects.
 - [ISpawnedObjectInstance.ts](/c:/programming/TheHangout/src/content/contracts/ISpawnedObjectInstance.ts) is the runtime lifecycle contract for spawned content instances.
 - [IReplicatedObjectInstance.ts](/c:/programming/TheHangout/src/content/contracts/IReplicatedObjectInstance.ts) adds per-instance sync hooks for content objects that need networked events and late-join snapshots.
 - [ScenarioRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ScenarioRegistry.ts) tracks available scenarios.
 - [ObjectModuleRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ObjectModuleRegistry.ts) tracks the object modules exposed by the active scenario.
 - [ObjectInstanceRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ObjectInstanceRegistry.ts) tracks active spawned content instances and destroys them on scenario unload.
+- [BaseObjectInstance.ts](/c:/programming/TheHangout/src/content/runtime/BaseObjectInstance.ts) provides default cleanup tracking for scene objects, physics bodies, and per-instance disposables.
+- [BaseReplicatedObjectInstance.ts](/c:/programming/TheHangout/src/content/runtime/BaseReplicatedObjectInstance.ts) adds ergonomic sync emission and the standard object replication key pattern.
 - [ObjectReplicationHost.ts](/c:/programming/TheHangout/src/content/runtime/ObjectReplicationHost.ts) adapts replicated object instances onto the existing feature replication transport.
 - [DefaultHangoutScenario.ts](/c:/programming/TheHangout/src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario.
 - Small experimental content can now be authored as compact object modules, such as [DebugBeaconObject.ts](/c:/programming/TheHangout/src/content/objects/DebugBeaconObject.ts).
@@ -86,6 +89,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - Spawn points come from the active scenario, not from a hardcoded global room implementation.
 - The active scenario can expose its own object modules, and `SessionRuntime` can spawn them through the content-facing object module registry.
 - `SessionRuntime` now tracks spawned object instances, not just entity ids, so scenario unload can destroy content-owned runtime state as well as entity-backed objects.
+- Contributors writing new objects should start from `IObjectRuntimeContext` plus `BaseObjectInstance` / `BaseReplicatedObjectInstance`, not from raw `AppContext`.
 
 ### Input and Tracking
 
@@ -141,6 +145,7 @@ These names are part of the architecture. New modules should follow them instead
 - If something is how a scenario exposes or configures that primitive, it belongs in `content/objects`.
 - If something is a spawned content object with its own lifecycle, it should be modeled as an object instance, not just a free-floating entity id.
 - If something needs semantic sync and late-join restoration, prefer `IReplicatedObjectInstance` over adding a new hardcoded global feature.
+- Prefer `IObjectRuntimeContext` over `AppContext` in content code; reaching into broad engine globals should be the exception, not the default.
 
 ## What To Read Next
 
