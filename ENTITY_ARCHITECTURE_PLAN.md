@@ -568,6 +568,23 @@ The best practical next step is:
 
 That sequence keeps risk low while still moving toward a future-proof model.
 
+## Decision Frozen
+
+The chosen direction is:
+
+- converge toward a single `PlayerAvatarEntity`
+- move local vs remote behavior into separate control strategies
+
+This means `LocalPlayer` and `RemotePlayer` should be treated as transitional classes only.
+
+The target end-state is:
+
+- one avatar-role entity class
+- one local control strategy
+- one remote replication/control strategy
+
+The remaining player refactor should now optimize for that end-state rather than preserving two long-term avatar classes.
+
 ## Proposed Next Rename Manifest (When Ready)
 
 High-confidence now:
@@ -584,6 +601,8 @@ Defer pending design decision:
 - `RemotePlayer`
 - `EntityType.LOCAL_PLAYER`
 - `EntityType.REMOTE_PLAYER`
+
+With the decision now made, these can move in the next dedicated player-avatar refactor pass.
 
 ## Standard For The Final Entity Model
 
