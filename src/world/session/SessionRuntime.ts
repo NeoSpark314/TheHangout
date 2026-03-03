@@ -5,7 +5,9 @@ import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
 import { PropBuilder } from '../../assets/procedural/PropBuilder';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
+import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
+import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioRegistry } from '../../content/runtime/ScenarioRegistry';
 
 export class SessionRuntime implements IUpdatable {
@@ -14,6 +16,7 @@ export class SessionRuntime implements IUpdatable {
     public environment: EnvironmentBuilder | null = null;
     public props: PropBuilder | null = null;
     private hasGroundPhysics: boolean = false;
+    private readonly objectModuleRegistry = new ObjectModuleRegistry();
     private readonly scenarioRegistry = new ScenarioRegistry();
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
@@ -22,6 +25,7 @@ export class SessionRuntime implements IUpdatable {
         const defaultScenario = new DefaultHangoutScenario(this);
         this.scenarioRegistry.register(defaultScenario);
         this.activeScenario = defaultScenario;
+        this.refreshActiveObjectModules();
     }
 
     private random(): number {
@@ -40,6 +44,7 @@ export class SessionRuntime implements IUpdatable {
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
             });
+            this.refreshActiveObjectModules();
         } catch (e) {
             console.error('[SessionRuntime] init crashed:', e);
         }
@@ -111,6 +116,25 @@ export class SessionRuntime implements IUpdatable {
         return this.activeScenario;
     }
 
+    public getAvailableObjectModules() {
+        return this.objectModuleRegistry.list();
+    }
+
+    public getAvailableObjectModuleIds(): string[] {
+        return this.objectModuleRegistry.listIds();
+    }
+
+    public spawnObjectModule(id: string, config: IObjectSpawnConfig = {}) {
+        const entity = this.objectModuleRegistry.spawn(id, this.context, config);
+        if (!entity) {
+            console.warn(`[SessionRuntime] Failed to spawn object module: ${id}`);
+            return null;
+        }
+
+        this.context.runtime.entity.addEntity(entity);
+        return entity;
+    }
+
     public registerScenario(scenario: IScenarioModule): void {
         this.scenarioRegistry.register(scenario);
     }
@@ -145,6 +169,8 @@ export class SessionRuntime implements IUpdatable {
             });
         }
 
+        this.refreshActiveObjectModules();
+
         return true;
     }
 
@@ -163,5 +189,9 @@ export class SessionRuntime implements IUpdatable {
         if (this.props) {
             this.props.setHologramVisible(visible);
         }
+    }
+
+    private refreshActiveObjectModules(): void {
+        this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
     }
 }

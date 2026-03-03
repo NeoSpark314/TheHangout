@@ -21,6 +21,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 | `media/` | Voice and audio playback/runtime integrations |
 | `features/` | Modular gameplay features such as drawing, social, remote desktop |
 | `assets/` | Procedural world builders and asset runtime helpers |
+| `content/` | Content authoring layer for scenarios and self-contained object modules |
 | `server/` | Headless session and server-side network runtime |
 
 ## Core Principles
@@ -33,6 +34,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 6. **Typed network contracts**: packets and replicated entity state remain explicitly typed, with compact payloads for avatar and physics sync.
 7. **Input abstraction**: gameplay consumes spatial state and intent, not raw device-specific APIs.
 8. **Feature isolation**: drawing, social interactions, and remote desktop live as separate feature modules, not as app-wide infrastructure.
+9. **Content-first extensibility**: scenarios and experimental objects now have a content-facing layer that sits above low-level engine spawning.
 
 ## Runtime Model
 
@@ -45,9 +47,18 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 ### Entities and Spawning
 
 - [EntityRegistry.ts](/c:/programming/TheHangout/src/world/entities/EntityRegistry.ts) stores and updates active entities.
-- [EntityFactory.ts](/c:/programming/TheHangout/src/world/spawning/EntityFactory.ts) is the central spawn registry.
+- [EntityFactory.ts](/c:/programming/TheHangout/src/world/spawning/EntityFactory.ts) is the low-level engine spawn registry for core world entities.
 - The current player model is unified around [PlayerAvatarEntity.ts](/c:/programming/TheHangout/src/world/entities/PlayerAvatarEntity.ts).
 - Local vs remote avatar behavior is delegated to strategy classes under [src/world/entities/strategies](/c:/programming/TheHangout/src/world/entities/strategies).
+
+### Content, Scenarios, and Object Modules
+
+- [IScenarioModule.ts](/c:/programming/TheHangout/src/content/contracts/IScenarioModule.ts) defines a loadable world package.
+- [IObjectModule.ts](/c:/programming/TheHangout/src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
+- [ScenarioRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ScenarioRegistry.ts) tracks available scenarios.
+- [ObjectModuleRegistry.ts](/c:/programming/TheHangout/src/content/runtime/ObjectModuleRegistry.ts) tracks the object modules exposed by the active scenario.
+- [DefaultHangoutScenario.ts](/c:/programming/TheHangout/src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario.
+- Small experimental content can now be authored as compact object modules, such as [DebugBeaconObject.ts](/c:/programming/TheHangout/src/content/objects/DebugBeaconObject.ts).
 
 ### Networking
 
@@ -58,9 +69,11 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 
 ### Session and Spawn Rules
 
-- [SessionRuntime.ts](/c:/programming/TheHangout/src/world/session/SessionRuntime.ts) owns session configuration and procedural world setup.
+- [SessionRuntime.ts](/c:/programming/TheHangout/src/world/session/SessionRuntime.ts) now acts as the scenario host for the active session.
 - [PlayerPresenceService.ts](/c:/programming/TheHangout/src/world/session/PlayerPresenceService.ts) creates the local player avatar when the session is ready.
 - Guest spawn placement depends on `assignedSpawnIndex` from the host. Guest initialization is intentionally delayed until that host-assigned slot is available.
+- Spawn points come from the active scenario, not from a hardcoded global room implementation.
+- The active scenario can expose its own object modules, and `SessionRuntime` can spawn them through the content-facing object module registry.
 
 ### Input and Tracking
 
@@ -81,6 +94,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 src/
   app/       # bootstrap, engine, app context, events
   assets/    # procedural builders and asset runtime helpers
+  content/   # scenarios, object modules, and content registries
   features/  # modular gameplay features
   input/     # controllers and tracking providers
   media/     # voice and audio runtime
@@ -102,6 +116,8 @@ src/
 - `*Registry`: id/type-backed storage
 - `*Provider`: pluggable implementation behind a contract
 - `*Feature`: self-contained gameplay capability
+- `*Scenario`: loadable world/experience package
+- `*Object`: content-facing self-contained spawnable module
 - `*View`: visual-only rendering layer
 
 These names are part of the architecture. New modules should follow them instead of reintroducing generic `Manager` naming.
