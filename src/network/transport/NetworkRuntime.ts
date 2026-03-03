@@ -207,12 +207,6 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
                 this.context.runtime.replication.sendSnapshotToPeer(conn.peer);
             } else {
-                if (!this.context.isLocalServer) {
-                    const localId = this.peer?.id;
-                    if (localId) {
-                        eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
-                    }
-                }
                 this.context.runtime.replication.requestSnapshotFromHost();
             }
         });
@@ -481,13 +475,10 @@ class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PAC
     handle(senderId: string, payload: ISessionConfigUpdatePayload): void {
         if (!this.context.isHost) {
             this.context.runtime.session.updateConfig(payload);
-
-            // If we are in local server mode, this is our cue that we are "connected" and ready to spawn
-            if (this.context.isLocalServer) {
-                const network = this.context.runtime.network as any;
-                if (network.localPeerId) {
-                    eventBus.emit(EVENTS.SESSION_CONNECTED, network.localPeerId);
-                }
+            const network = this.context.runtime.network as any;
+            const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
+            if (localId && !this.context.localPlayer) {
+                eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
             }
         }
     }

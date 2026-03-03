@@ -18,11 +18,12 @@ export class PlayerPresenceService {
 
         let spawnIndex = 0;
         if (!this.context.isHost) {
-            if (runtime.session && (runtime.session as any).assignedSpawnIndex !== undefined) {
-                spawnIndex = (runtime.session as any).assignedSpawnIndex;
-            } else if (runtime.network) {
-                spawnIndex = runtime.network.connections.size;
+            const assignedSpawnIndex = runtime.session?.assignedSpawnIndex;
+            if (assignedSpawnIndex === undefined) {
+                console.error('[PlayerPresenceService] Cannot initialize guest player before assignedSpawnIndex is available.');
+                return;
             }
+            spawnIndex = assignedSpawnIndex;
         }
 
         const spawn = (runtime.session as any).getSpawnPoint ? (runtime.session as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };

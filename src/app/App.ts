@@ -200,9 +200,14 @@ export class App {
     private playerInitialized = false;
     private initPlayerOnce(id: string): void {
         if (this.playerInitialized || !id) return;
-        this.playerInitialized = true;
 
         const runtime = this.context.runtime;
+        if (!this.context.isHost && runtime.session.assignedSpawnIndex === undefined) {
+            console.warn('[App] Delaying guest player initialization until assignedSpawnIndex is available.');
+            return;
+        }
+
+        this.playerInitialized = true;
         runtime.render.switchToPlayerView();
 
         runtime.player.init(id);
