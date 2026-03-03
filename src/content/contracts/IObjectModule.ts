@@ -1,6 +1,7 @@
 import type { AppContext } from '../../app/AppContext';
 import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IVector3 } from '../../shared/contracts/IMath';
+import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
 
 export interface IObjectSpawnConfig {
     id?: string;
@@ -11,6 +12,13 @@ export interface IObjectSpawnConfig {
     [key: string]: unknown;
 }
 
+export interface IObjectSpawnContext {
+    app: AppContext;
+    instanceId: string;
+}
+
+export type IObjectSpawnResult = ISpawnedObjectInstance | IEntity | null;
+
 export interface IObjectModule {
     id: string;
     displayName: string;
@@ -18,5 +26,5 @@ export interface IObjectModule {
     networked?: boolean;
     portable?: boolean;
 
-    spawn(context: AppContext, config: IObjectSpawnConfig): IEntity | null;
+    spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): IObjectSpawnResult;
 }

@@ -89,6 +89,11 @@ export class DrawingFeature implements IReplicatedFeature {
         }
     }
 
+    public clear(): void {
+        this.segments = [];
+        this.clearRenderedLines();
+    }
+
     private isValidSegment(segment: IDrawSegmentPayload | undefined): segment is IDrawSegmentPayload {
         if (!segment) return false;
         if (!Array.isArray(segment.startPos) || segment.startPos.length < 3) return false;

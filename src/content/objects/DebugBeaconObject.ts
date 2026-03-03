@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AppContext } from '../../app/AppContext';
-import type { IObjectModule, IObjectSpawnConfig } from '../contracts/IObjectModule';
+import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IEntity } from '../../shared/contracts/IEntity';
 
 class DebugBeaconEntity implements IEntity {
@@ -74,8 +74,8 @@ export class DebugBeaconObject implements IObjectModule {
     public readonly networked = false;
     public readonly portable = true;
 
-    public spawn(context: AppContext, config: IObjectSpawnConfig): IEntity | null {
-        if (!context.runtime.render) {
+    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): IEntity | null {
+        if (!context.app.runtime.render) {
             return null;
         }
 
@@ -85,8 +85,8 @@ export class DebugBeaconObject implements IObjectModule {
         const colorValue = typeof config.color === 'number' ? config.color : 0x00ffff;
 
         return new DebugBeaconEntity(
-            config.id || `debug-beacon-${Math.random().toString(36).slice(2, 8)}`,
-            context,
+            context.instanceId,
+            context.app,
             position,
             colorValue
         );

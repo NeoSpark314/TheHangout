@@ -5,6 +5,7 @@ import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayou
 import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
+import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegistry';
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioRegistry } from '../../content/runtime/ScenarioRegistry';
 import { WideCircleScenario } from '../../content/scenarios/wideCircle/WideCircleScenario';
@@ -13,13 +14,14 @@ export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
     private hasGroundPhysics: boolean = false;
-    private readonly scenarioEntityIds = new Set<string>();
+    private readonly objectInstanceRegistry: ObjectInstanceRegistry;
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
     private readonly scenarioRegistry = new ScenarioRegistry();
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
 
     constructor(private context: AppContext) {
+        this.objectInstanceRegistry = new ObjectInstanceRegistry(context);
         const defaultScenario = new DefaultHangoutScenario(this, context);
         const wideCircleScenario = new WideCircleScenario(this);
         this.scenarioRegistry.register(defaultScenario);
@@ -68,6 +70,7 @@ export class SessionRuntime implements IUpdatable {
 
     public update(delta: number): void {
         this.activeScenario.update(delta);
+        this.objectInstanceRegistry.update(delta);
     }
 
     public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): void {
@@ -130,15 +133,14 @@ export class SessionRuntime implements IUpdatable {
     }
 
     public spawnObjectModule(id: string, config: IObjectSpawnConfig = {}) {
-        const entity = this.objectModuleRegistry.spawn(id, this.context, config);
-        if (!entity) {
+        const instance = this.objectModuleRegistry.spawn(id, this.context, config);
+        if (!instance) {
             console.warn(`[SessionRuntime] Failed to spawn object module: ${id}`);
             return null;
         }
 
-        this.context.runtime.entity.addEntity(entity);
-        this.scenarioEntityIds.add(entity.id);
-        return entity;
+        this.objectInstanceRegistry.add(instance);
+        return instance.getPrimaryEntity?.() ?? instance;
     }
 
     public registerScenario(scenario: IScenarioModule): void {
@@ -204,10 +206,8 @@ export class SessionRuntime implements IUpdatable {
     }
 
     private clearScenarioEntities(): void {
-        for (const entityId of this.scenarioEntityIds) {
-            this.context.runtime.entity.removeEntity(entityId);
-        }
-        this.scenarioEntityIds.clear();
+        this.context.runtime.drawing?.clear?.();
+        this.objectInstanceRegistry.removeAll();
     }
 
     private repositionLocalPlayerForActiveScenario(): void {
