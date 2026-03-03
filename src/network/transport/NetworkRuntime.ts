@@ -346,7 +346,9 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             logicEntity.ownerId = senderId;
             entity.isAuthority = (senderId === (this.context.localPlayer?.id || 'local'));
             const seq = this.nextOwnershipSeq(entity.id);
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() });
+            const transferPayload = { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() };
+            logicEntity.onNetworkEvent?.('OWNERSHIP_TRANSFER', transferPayload);
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, transferPayload);
         }
     }
 

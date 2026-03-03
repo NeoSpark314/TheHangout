@@ -205,7 +205,9 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             logicEntity.ownerId = senderId;
             entity.isAuthority = false; // Server gives up authority
             const seq = this.nextOwnershipSeq(entity.id);
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() });
+            const transferPayload = { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() };
+            logicEntity.onNetworkEvent?.('OWNERSHIP_TRANSFER', transferPayload);
+            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, transferPayload);
         }
     }
 
@@ -221,6 +223,9 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         if (logicEntity.onNetworkEvent) {
             logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
         }
+
+        const seq = this.nextOwnershipSeq(entity.id);
+        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
 
     }
 

@@ -63,14 +63,7 @@ class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
             this.mesh.add(leg);
         }
 
-        const hotspot = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.22, 0.22, 0.4, 16),
-            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.001, depthWrite: false })
-        );
-        hotspot.position.set(0, 0.65, 0.04);
-        hotspot.userData.entityId = id;
-
-        this.mesh.add(seat, back, hotspot);
+        this.mesh.add(seat, back);
         this.mesh.traverse((child) => {
             child.userData.entityId = id;
         });
@@ -140,14 +133,6 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
             });
         });
         this.ownSceneObject(this.seatEntity.mesh);
-        const interactionGroup = this.context.app.runtime.render?.interactionGroup;
-        if (interactionGroup) {
-            interactionGroup.add(this.seatEntity.mesh);
-            this.addCleanup(() => {
-                interactionGroup.remove(this.seatEntity.mesh);
-            });
-        }
-
         this.createPhysicsColliders();
     }
 

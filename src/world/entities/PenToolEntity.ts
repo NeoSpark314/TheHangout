@@ -135,4 +135,13 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
         this.isDrawing = !!state.isDrawing;
         this.color = state.c || 0xffffff;
     }
+
+    public destroy(): void {
+        super.destroy();
+        const render = this.context.runtime.render;
+        if (render && this.view) {
+            this.view.removeFromScene(render.scene);
+            this.view.destroy();
+        }
+    }
 }
