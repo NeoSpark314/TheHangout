@@ -6,7 +6,7 @@
  * requests, voice plumbing, global notifications).
  *
  * If an event name starts to describe session-specific or item-specific gameplay
- * semantics, keep it inside the owning feature manager and use
+ * semantics, keep it inside the owning feature runtime and use
  * FeatureReplicationService for network fan-out instead of expanding the global bus.
  */
 export const EVENTS = {

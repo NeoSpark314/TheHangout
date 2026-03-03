@@ -45,7 +45,7 @@ export class App {
 
         try {
             await this.detectServerInfo();
-            this.initializeManagers();
+            this.initializeRuntime();
             this.setupGlobalEventListeners();
 
             // 1. Infrastructure (Physics must be first)
@@ -81,7 +81,7 @@ export class App {
         }
     }
 
-    private initializeManagers(): void {
+    private initializeRuntime(): void {
         this.context.setRuntime('entity', new EntityRegistry(this.context));
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
         this.context.setRuntime('remoteDesktop', new RemoteDesktopFeature(this.context));

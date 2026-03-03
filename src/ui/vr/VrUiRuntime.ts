@@ -39,7 +39,7 @@ export class VrUiRuntime implements IUpdatable {
             this.context.runtime.render.scene.add(this.tablet.mesh);
         }
 
-        // Add to Entity Manager so Grab works
+        // Add to the entity registry so grab interactions can find it.
         if (this.context.runtime.entity) {
             // Because our ECS requires entities in the map to be findable by raycasters/skills
             // But we don't want it synced. We can manually add it with a local prefix:

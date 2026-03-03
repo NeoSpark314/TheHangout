@@ -81,7 +81,7 @@ export class EntityFactory {
         const view = render && mesh ? new PhysicsPropView(mesh, id) : new NullView(id);
 
         if (!runtime.physics) {
-            console.error('[EntityFactory] Physics manager not found');
+            console.error('[EntityFactory] Physics runtime not found');
             return null;
         }
 

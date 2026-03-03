@@ -15,7 +15,7 @@ export class Engine {
     constructor(private context: AppContext) { }
 
     /**
-     * Registers a subsystem or manager to be updated every frame.
+     * Registers a runtime subsystem to be updated every frame.
      * Order of registration determines execution order.
      */
     public addSystem(system: IUpdatable): void {
