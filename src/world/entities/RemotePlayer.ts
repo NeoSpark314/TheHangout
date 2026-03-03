@@ -1,4 +1,4 @@
-import { PlayerEntity } from './PlayerEntity';
+import { PlayerAvatarEntity } from './PlayerAvatarEntity';
 import { IVector3, IQuaternion } from '../../shared/contracts/IMath';
 import { IView } from '../../shared/contracts/IView';
 import { StickFigureView, IPlayerViewState } from '../../render/avatar/stickfigure/StickFigureView';
@@ -11,7 +11,7 @@ import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
 
-export class RemotePlayer extends PlayerEntity {
+export class RemotePlayer extends PlayerAvatarEntity {
     private static readonly HAND_FINGER_JOINTS: Record<'left' | 'right', HumanoidJointName[]> = {
         left: [
             'leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip',

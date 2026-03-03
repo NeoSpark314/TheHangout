@@ -1,7 +1,7 @@
 import { EntityFactory } from '../spawning/EntityFactory';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants.js';
+import { EVENTS } from '../../shared/constants/Constants.ts';
 
 export class PlayerPresenceService {
     public isInitialized: boolean = false;

@@ -13,6 +13,10 @@
     "refactor:arch:rewrite": "node scripts/migrate-architecture.mjs --rewrite-only",
     "refactor:arch:rename-symbols:dry-run": "node scripts/rename-architecture-symbols.mjs",
     "refactor:arch:rename-symbols:apply": "node scripts/rename-architecture-symbols.mjs --apply",
+    "refactor:entity:safe:dry-run": "node scripts/migrate-architecture.mjs --manifest scripts/entity-safe-rename.manifest.json",
+    "refactor:entity:safe:apply": "node scripts/migrate-architecture.mjs --manifest scripts/entity-safe-rename.manifest.json --apply",
+    "refactor:entity:safe:rename-symbols:dry-run": "node scripts/rename-architecture-symbols.mjs --manifest scripts/entity-safe-symbol-renames.manifest.json",
+    "refactor:entity:safe:rename-symbols:apply": "node scripts/rename-architecture-symbols.mjs --manifest scripts/entity-safe-symbol-renames.manifest.json --apply",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test"

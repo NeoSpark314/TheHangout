@@ -3,8 +3,8 @@ import { LocalPlayer } from '../entities/LocalPlayer';
 import { RemotePlayer } from '../entities/RemotePlayer';
 import { StickFigureView } from '../../render/avatar/stickfigure/StickFigureView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
-import { PhysicsEntity } from '../entities/PhysicsEntity';
-import { PenEntity } from '../entities/PenEntity';
+import { PhysicsPropEntity } from '../entities/PhysicsPropEntity';
+import { PenToolEntity } from '../entities/PenToolEntity';
 import { PenView } from '../../render/views/PenView';
 import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
@@ -73,7 +73,7 @@ export class EntityFactory {
         position: IVector3,
         mesh: THREE.Mesh,
         halfExtents?: IVector3
-    ): PhysicsEntity | null {
+    ): PhysicsPropEntity | null {
         const runtime = context.runtime;
         const render = runtime.render;
 
@@ -93,10 +93,10 @@ export class EntityFactory {
         return runtime.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
     }
 
-    public static createPen(context: AppContext, id: string, config: any): PenEntity {
+    public static createPen(context: AppContext, id: string, config: any): PenToolEntity {
         const render = context.runtime.render;
         const view = render ? new PenView(id) : new NullView(id);
-        const entity = new PenEntity(context, id, !!config.isAuthority, view);
+        const entity = new PenToolEntity(context, id, !!config.isAuthority, view);
 
         if (config.position) {
             entity.updateGrabbedPose({

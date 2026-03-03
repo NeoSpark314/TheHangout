@@ -4,7 +4,7 @@ import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
-export abstract class NetworkEntity implements IEntity, INetworkable<any> {
+export abstract class ReplicatedEntity implements IEntity, INetworkable<any> {
     public id: string;
     public type: string;
     public isAuthority: boolean;

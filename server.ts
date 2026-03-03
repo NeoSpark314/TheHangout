@@ -18,7 +18,7 @@ import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 
 import { HeadlessSession } from './src/server/HeadlessSession.js';
-import { ServerNetworkManager } from './src/server/ServerNetworkManager.js';
+import { ServerNetworkManager } from './src/server/ServerNetworkManager.ts';
 import { PACKET_TYPES } from './src/utils/Constants.js';
 import {
     IDesktopSourcesStatusRequestPayload,

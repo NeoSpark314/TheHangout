@@ -3,7 +3,7 @@ import { AppContext } from '../../app/AppContext';
 import { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrackingProvider';
 import { HandState } from '../../shared/types/HandState';
 import { HumanoidState } from '../../shared/types/HumanoidState';
-import { PlayerEntity } from '../../world/entities/PlayerEntity';
+import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import { LocalPlayer } from '../../world/entities/LocalPlayer';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
@@ -36,7 +36,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
     private pitch = 0;
     private turnSpeed = 0.002;
-    private headHeight = PlayerEntity.DEFAULT_HEAD_HEIGHT;
+    private headHeight = PlayerAvatarEntity.DEFAULT_HEAD_HEIGHT;
     private assistedForwardBase = 0.22;
     private assistedCameraPos = new THREE.Vector3();
     private assistedCameraQuat = new THREE.Quaternion();

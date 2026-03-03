@@ -1,4 +1,4 @@
-import { NetworkEntity } from './NetworkEntity';
+import { ReplicatedEntity } from './ReplicatedEntity';
 import { IGrabbable } from '../../shared/contracts/IGrabbable';
 import { IInteractable } from '../../shared/contracts/IInteractable';
 import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
@@ -12,7 +12,7 @@ import * as THREE from 'three';
 /**
  * A non-physics grabbable object that can draw lines in the world.
  */
-export class PenEntity extends NetworkEntity implements IGrabbable, IInteractable {
+export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInteractable {
     public isGrabbable = true;
     private hoverSources: Set<string> = new Set();
     public heldBy: string | null = null;

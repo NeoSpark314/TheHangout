@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "description": "Safe entity rename pass: class and type identifier alignment for shared and non-player entities.",
+  "renames": [
+    { "from": "NetworkEntity", "to": "ReplicatedEntity" },
+    { "from": "PlayerEntity", "to": "PlayerAvatarEntity" },
+    { "from": "PhysicsEntity", "to": "PhysicsPropEntity" },
+    { "from": "PenEntity", "to": "PenToolEntity" },
+    { "from": "TabletEntity", "to": "TabletSurfaceEntity" }
+  ]
+}

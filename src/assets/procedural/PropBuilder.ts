@@ -3,7 +3,7 @@ import { EntityFactory } from '../../world/spawning/EntityFactory';
 import { AppContext, ISessionConfig } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
-import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
+import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 
@@ -50,7 +50,7 @@ export class PropBuilder implements IReplicatedFeature {
             const hit = padA || padB!;
             const entityId = padA ? data.entityBId : data.entityAId;
             if (!entityId) return;
-            const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsEntity | undefined;
+            const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
             if (!entity || entity.type !== 'PHYSICS_PROP') return;
 
             const v = entity.rigidBody.linvel();

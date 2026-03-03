@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
+import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { IView } from '../../shared/contracts/IView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
@@ -40,7 +40,7 @@ export class PhysicsRuntime {
     private fixedTimeStep: number = 1 / 60;
     private debugBodies: Map<number, IPhysicsDebugBodyEntry> = new Map();
     private eventQueue: RAPIER.EventQueue | null = null;
-    private colliderToEntity: Map<number, PhysicsEntity> = new Map();
+    private colliderToEntity: Map<number, PhysicsPropEntity> = new Map();
     private entityToPrimaryCollider: Map<string, RAPIER.Collider> = new Map();
     private activePropContacts: Map<string, { a: number; b: number }> = new Map();
     private lastTouchClaimAtMsByEntity: Map<string, number> = new Map();
@@ -125,7 +125,7 @@ export class PhysicsRuntime {
         mesh: any,
         view?: IView<any>,
         halfExtents?: IVector3
-    ): PhysicsEntity | null {
+    ): PhysicsPropEntity | null {
         if (!this.world) return null;
 
         const entityId = id || `grabbable-${this.nextPhysicsId++}`;
@@ -164,7 +164,7 @@ export class PhysicsRuntime {
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
-        const physicsEntity = new PhysicsEntity(this.context, entityId, this.context.isHost, rigidBody, {
+        const physicsEntity = new PhysicsPropEntity(this.context, entityId, this.context.isHost, rigidBody, {
             grabbable: true,
             spawnPosition: position,
             view: finalView,
@@ -246,7 +246,7 @@ export class PhysicsRuntime {
         this.pendingReleaseMinHoldMs = clampedMin;
         this.pendingReleaseMaxHoldMs = clampedMax;
 
-        const entities = new Set<PhysicsEntity>();
+        const entities = new Set<PhysicsPropEntity>();
         for (const entity of this.colliderToEntity.values()) {
             entities.add(entity);
         }
@@ -259,11 +259,11 @@ export class PhysicsRuntime {
         return this.touchQueryAvgHitsPerFrame;
     }
 
-    public queryNearestPhysicsGrabbable(point: IVector3, gripRadius: number): { entity: PhysicsEntity; distance: number } | null {
+    public queryNearestPhysicsGrabbable(point: IVector3, gripRadius: number): { entity: PhysicsPropEntity; distance: number } | null {
         if (!this.world) return null;
         this.grabQueryShape.radius = Math.max(0.01, gripRadius);
 
-        let nearestEntity: PhysicsEntity | null = null;
+        let nearestEntity: PhysicsPropEntity | null = null;
         let minDistance = Number.POSITIVE_INFINITY;
 
         this.world.intersectionsWithShape(
@@ -307,7 +307,7 @@ export class PhysicsRuntime {
         return collider;
     }
 
-    private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsEntity): void {
+    private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsPropEntity): void {
         const handle = rigidBody.handle;
         const existing = this.debugBodies.get(handle);
         if (existing) {
@@ -425,11 +425,11 @@ export class PhysicsRuntime {
         const localId = this.context.localPlayer?.id;
         if (!localId) return;
 
-        const heldAuthoritative: PhysicsEntity[] = [];
+        const heldAuthoritative: PhysicsPropEntity[] = [];
         const dedupe = new Set<string>();
         for (const entity of this.context.runtime.entity.entities.values()) {
             if (entity.type !== EntityType.PHYSICS_PROP) continue;
-            const prop = entity as PhysicsEntity;
+            const prop = entity as PhysicsPropEntity;
             if (prop.heldBy === localId && prop.isAuthority && !dedupe.has(prop.id)) {
                 dedupe.add(prop.id);
                 heldAuthoritative.push(prop);
@@ -461,7 +461,7 @@ export class PhysicsRuntime {
         }
     }
 
-    private tryClaimTouchLease(target: PhysicsEntity, nowMs: number, localId: string): void {
+    private tryClaimTouchLease(target: PhysicsPropEntity, nowMs: number, localId: string): void {
         if (target.isDestroyed) return;
         if (target.heldBy && target.heldBy !== localId) return;
         if (target.ownerId === localId || target.isAuthority) return;

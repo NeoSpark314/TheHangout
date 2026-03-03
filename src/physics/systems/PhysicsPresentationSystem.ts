@@ -1,7 +1,7 @@
 import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { EntityType } from '../../shared/contracts/IEntityState';
-import { PhysicsEntity } from '../../world/entities/PhysicsEntity';
+import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 
 /**
  * Runs after physics and applies visual state for physics props.
@@ -16,7 +16,7 @@ export class PhysicsPresentationSystem implements IUpdatable {
 
         for (const entity of entityManager.entities.values()) {
             if (entity.type !== EntityType.PHYSICS_PROP) continue;
-            (entity as PhysicsEntity).present(delta);
+            (entity as PhysicsPropEntity).present(delta);
         }
     }
 }

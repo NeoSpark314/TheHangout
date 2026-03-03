@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { isTrueHMD } from '../../shared/utils/DeviceUtils.js';
+import { isTrueHMD } from '../../shared/utils/DeviceUtils.ts';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';

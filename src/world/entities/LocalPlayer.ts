@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PlayerEntity } from './PlayerEntity';
+import { PlayerAvatarEntity } from './PlayerAvatarEntity';
 import { IView } from '../../shared/contracts/IView';
 import { AppContext } from '../../app/AppContext';
 import { IVector3, IPose } from '../../shared/contracts/IMath';
@@ -23,7 +23,7 @@ export interface ILocalPlayerTeleportOptions {
  * Source of Truth: This entity owns the local player's spatial state (poses, origin, skills).
  * The RenderRuntime and Views must follow this state, never modify it directly.
  */
-export class LocalPlayer extends PlayerEntity {
+export class LocalPlayer extends PlayerAvatarEntity {
     public view: IView<IPlayerViewState>;
     public skills: Skill[] = [];
     public activeSkill: Skill | null = null;
@@ -137,7 +137,7 @@ export class LocalPlayer extends PlayerEntity {
         }
 
         // NOTE: Local hand interaction state now lives solely in TrackingRuntime.getState().hands.
-        // We intentionally avoid mirroring into PlayerEntity.handStates to prevent drift.
+        // We intentionally avoid mirroring into PlayerAvatarEntity.handStates to prevent drift.
 
         this.headState.position = { ...worldHeadPos };
         this.headState.quaternion = { ...worldHeadQuat };

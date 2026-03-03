@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { NetworkEntity } from './NetworkEntity';
+import { ReplicatedEntity } from './ReplicatedEntity';
 import { IInteractable } from '../../shared/contracts/IInteractable';
 import { IGrabbable } from '../../shared/contracts/IGrabbable';
 import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
@@ -36,7 +36,7 @@ interface INetworkSnapshot {
     heldBy: string | null;
 }
 
-export class PhysicsEntity extends NetworkEntity implements IInteractable, IGrabbable {
+export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable, IGrabbable {
     public rigidBody: RAPIER.RigidBody;
     public view: IView<IPhysicsPropState> | null;
     public isGrabbable: boolean;

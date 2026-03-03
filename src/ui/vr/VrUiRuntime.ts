@@ -1,6 +1,6 @@
 import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
-import { TabletEntity } from '../../world/entities/TabletEntity';
+import { TabletSurfaceEntity } from '../../world/entities/TabletSurfaceEntity';
 import { UITabPanel, UIElement, UIButton, UILabel } from '../shared/canvasui';
 import { UITheme, getFont } from '../shared/UITheme';
 import { RemotePlayer } from '../../world/entities/RemotePlayer';
@@ -11,7 +11,7 @@ import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
 import * as THREE from 'three';
 
 export class VrUiRuntime implements IUpdatable {
-    public tablet: TabletEntity | null = null;
+    public tablet: TabletSurfaceEntity | null = null;
     private tabPanel: UITabPanel | null = null;
     private overlayContainer: HTMLDivElement | null = null;
 
@@ -32,7 +32,7 @@ export class VrUiRuntime implements IUpdatable {
 
     public init(): void {
         // Create the Tablet Entity
-        this.tablet = new TabletEntity(this.context, 'local-tablet');
+        this.tablet = new TabletSurfaceEntity(this.context, 'local-tablet');
 
         // Add mesh to the scene rendering
         if (this.context.runtime.render) {

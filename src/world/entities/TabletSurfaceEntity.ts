@@ -7,7 +7,7 @@ import { IVector3, IQuaternion, IPose } from '../../shared/contracts/IMath';
 import { IEntity } from '../../shared/contracts/IEntity';
 import { CanvasUI } from '../../ui/shared/canvasui';
 
-export class TabletEntity implements IEntity, IGrabbable, IInteractable {
+export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
     public id: string;
     public type: string = 'TABLET';
     public isAuthority: boolean = true;
@@ -118,7 +118,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
 
                 this.hasSpawned = true;
 
-                console.log(`[TabletEntity] Deterministic Spawn:`);
+                console.log(`[TabletSurfaceEntity] Deterministic Spawn:`);
                 console.log(` - Head: [${head.position.x.toFixed(2)}, ${head.position.y.toFixed(2)}, ${head.position.z.toFixed(2)}]`);
                 console.log(` - Tablet: [${this.position.x.toFixed(2)}, ${this.position.y.toFixed(2)}, ${this.position.z.toFixed(2)}]`);
                 return;
@@ -133,7 +133,7 @@ export class TabletEntity implements IEntity, IGrabbable, IInteractable {
                 if (dist > deadzoneDist || angleDist > deadzoneAngle) {
                     this.isRecentering = true;
                     // Log once when we start moving to follow
-                    console.log(`[TabletEntity] Moving to follow player...`);
+                    console.log(`[TabletSurfaceEntity] Moving to follow player...`);
                 }
             }
 
