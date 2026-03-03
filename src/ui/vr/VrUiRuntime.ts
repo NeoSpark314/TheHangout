@@ -692,13 +692,46 @@ export class VrUiRuntime implements IUpdatable {
                 () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs(), physics.getPendingReleaseMaxHoldMs() + 40)
             );
 
-            const note = new UILabel("Tip: Keep Min below Max for snappy throws without freeze.", 90, 560, 1080, 52);
+            const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 540, 360, 68, () => {
+                const localPlayer = this.context.localPlayer;
+                const targetPosition = localPlayer
+                    ? {
+                        x: localPlayer.headState.position.x,
+                        y: localPlayer.headState.position.y - 0.2,
+                        z: localPlayer.headState.position.z
+                    }
+                    : { x: 0, y: 1.2, z: -1.8 };
+
+                if (localPlayer) {
+                    const forward = new THREE.Vector3(0, 0, -1);
+                    const headQuat = new THREE.Quaternion(
+                        localPlayer.headState.quaternion.x,
+                        localPlayer.headState.quaternion.y,
+                        localPlayer.headState.quaternion.z,
+                        localPlayer.headState.quaternion.w
+                    );
+                    forward.applyQuaternion(headQuat).multiplyScalar(1.1);
+                    targetPosition.x += forward.x;
+                    targetPosition.y += Math.max(-0.1, forward.y);
+                    targetPosition.z += forward.z;
+                }
+
+                this.context.runtime.session.spawnObjectModule('debug-beacon', {
+                    position: targetPosition
+                });
+                this.tablet?.ui.markDirty();
+            });
+            spawnBeaconBtn.cornerRadius = 10;
+            spawnBeaconBtn.borderColor = UITheme.colors.secondary;
+            debugContainer.addChild(spawnBeaconBtn);
+
+            const note = new UILabel("Tip: Keep Min below Max for snappy throws without freeze.", 90, 620, 1080, 52);
             note.font = getFont(UITheme.typography.sizes.small);
             note.textColor = UITheme.colors.textMuted;
             note.textAlign = 'left';
             debugContainer.addChild(note);
 
-            const statsLabel = new UILabel("", 90, 620, 1080, 52);
+            const statsLabel = new UILabel("", 90, 680, 1080, 52);
             statsLabel.font = getFont(UITheme.typography.sizes.small, 'bold');
             statsLabel.textColor = UITheme.colors.accent;
             statsLabel.textAlign = 'left';
