@@ -3,9 +3,9 @@ import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
 import { PropBuilder } from '../../assets/procedural/PropBuilder';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
+import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
+import type { IScenarioModule } from '../../content/contracts/IScenarioModule';
 
 export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
@@ -13,9 +13,12 @@ export class SessionRuntime implements IUpdatable {
     public environment: EnvironmentBuilder | null = null;
     public props: PropBuilder | null = null;
     private hasGroundPhysics: boolean = false;
+    private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
 
-    constructor(private context: AppContext) { }
+    constructor(private context: AppContext) {
+        this.activeScenario = new DefaultHangoutScenario(this);
+    }
 
     private random(): number {
         this._seed |= 0;
@@ -28,19 +31,28 @@ export class SessionRuntime implements IUpdatable {
     public init(scene: THREE.Scene): void {
         try {
             this.scene = scene;
+            this.activeScenario.load(this.context, {
+                isHost: this.context.isHost,
+                seed: this.context.sessionConfig.seed,
+                reason: 'session_start'
+            });
+        } catch (e) {
+            console.error('[SessionRuntime] init crashed:', e);
+        }
+    }
+
+    public ensureDefaultWorld(scene: THREE.Scene | null): void {
+        if (!scene) return;
+
+        if (!this.environment || !this.props) {
             const randomBound = this.random.bind(this);
             this.environment = new EnvironmentBuilder(scene, randomBound);
             this.props = new PropBuilder(scene, randomBound, this.context);
+        }
 
-            // Ground is created strictly during applyConfig or init via master orchestrator
-            if (this.context.runtime.physics) {
-                this.context.runtime.physics.createGround(25);
-                this.hasGroundPhysics = true;
-            }
-
-            this.applyConfig(this.context.sessionConfig);
-        } catch (e) {
-            console.error('[SessionRuntime] init crashed:', e);
+        if (!this.hasGroundPhysics && this.context.runtime.physics) {
+            this.context.runtime.physics.createGround(25);
+            this.hasGroundPhysics = true;
         }
     }
 
@@ -57,8 +69,7 @@ export class SessionRuntime implements IUpdatable {
     }
 
     public update(delta: number): void {
-        if (this.environment) this.environment.update(delta);
-        if (this.props) this.props.update(delta);
+        this.activeScenario.update(delta);
     }
 
     public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): void {
@@ -84,16 +95,16 @@ export class SessionRuntime implements IUpdatable {
     }
 
     public getSpawnPoint(index: number): { position: THREE.Vector3, yaw: number } {
-        const radius = 2.5;
-        const angle = (index * (Math.PI / 4)) + Math.PI;
-        const x = Math.sin(angle) * radius;
-        const z = Math.cos(angle) * radius;
-        const yaw = angle;
+        const spawn = this.activeScenario.getSpawnPoint(index);
 
         return {
-            position: new THREE.Vector3(x, 0.2, z),
-            yaw: yaw
+            position: new THREE.Vector3(spawn.position.x, spawn.position.y, spawn.position.z),
+            yaw: spawn.yaw
         };
+    }
+
+    public getActiveScenario(): IScenarioModule {
+        return this.activeScenario;
     }
 
     public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
