@@ -18,7 +18,6 @@ import {
     IOwnershipTransferPayload
 } from '../../shared/contracts/INetworkPacket';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
-import { RelayConnection } from './RelayConnection';
 import { NetworkDispatcher } from '../protocol/PacketDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from '../replication/StateSynchronizer';
 import { IPacketHandler } from '../protocol/PacketHandler';
@@ -37,7 +36,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     public peer: Peer | null = null;
     public localPeerId: string | null = null;
     private relaySocket: WebSocket | null = null;
-    public connections: Map<string, DataConnection | RelayConnection> = new Map();
+    public connections: Map<string, DataConnection | ServerConnection> = new Map();
 
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer: NetworkSynchronizer;
@@ -197,7 +196,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         });
     }
 
-    private setupConnection(conn: DataConnection | RelayConnection): void {
+    private setupConnection(conn: DataConnection | ServerConnection): void {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
             if (this.context.isHost) {
@@ -247,10 +246,6 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
     public update(delta: number): void {
         this.synchronizer.update(delta);
-    }
-
-    public syncStateManually(): void {
-        this.synchronizer.syncState();
     }
 
     public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
