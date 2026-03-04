@@ -15,12 +15,19 @@ export interface IHandLocomotionIndicatorState {
     radius: number;
 }
 
+export interface ITrackedHandUiProbe {
+    tracked: boolean;
+    currentLocal: { x: number; y: number; z: number };
+    pinchStarted: boolean;
+}
+
 type HandId = 'left' | 'right';
 
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
     private handPinchLatched: Record<HandId, boolean> = { left: false, right: false };
+    private handPinchStarted: Record<HandId, boolean> = { left: false, right: false };
     private handTracked: Record<HandId, boolean> = { left: false, right: false };
     private handHovering: Record<HandId, boolean> = { left: false, right: false };
     private handCurrentLocal: Record<HandId, THREE.Vector3> = {
@@ -66,6 +73,8 @@ export class XRInputManager {
         this.handTracked.right = false;
         this.handHovering.left = false;
         this.handHovering.right = false;
+        this.handPinchStarted.left = false;
+        this.handPinchStarted.right = false;
 
         for (const source of session.inputSources) {
             if ((source.handedness === 'left' || source.handedness === 'right') && source.hand) {
@@ -135,6 +144,7 @@ export class XRInputManager {
             off: g.PINCH_OFF_DISTANCE
         });
         const pinchStarted = !this.handPinchLatched[hand] && nextPinchState;
+        this.handPinchStarted[hand] = pinchStarted;
         this.handPinchLatched[hand] = nextPinchState;
 
         if (this.activeMoveHand === hand) {
@@ -290,6 +300,18 @@ export class XRInputManager {
         return this.activeMoveHand === hand;
     }
 
+    public getHandUiProbe(hand: 'left' | 'right'): ITrackedHandUiProbe {
+        return {
+            tracked: this.handTracked[hand],
+            currentLocal: {
+                x: this.handCurrentLocal[hand].x,
+                y: this.handCurrentLocal[hand].y,
+                z: this.handCurrentLocal[hand].z
+            },
+            pinchStarted: this.handPinchStarted[hand]
+        };
+    }
+
     private resetActiveMovement(): void {
         this.activeMoveHand = null;
         this.activeMoveAnchor = null;
@@ -304,6 +326,8 @@ export class XRInputManager {
         this.handTracked.right = false;
         this.handHovering.left = false;
         this.handHovering.right = false;
+        this.handPinchStarted.left = false;
+        this.handPinchStarted.right = false;
         this.handCurrentLocal.left.set(0, 0, 0);
         this.handCurrentLocal.right.set(0, 0, 0);
         this.resetActiveMovement();

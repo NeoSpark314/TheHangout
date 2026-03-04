@@ -21,6 +21,7 @@ export class VrUiRuntime implements IUpdatable {
     private handLocomotionAnchor: THREE.Mesh | null = null;
     private handLocomotionCurrent: THREE.Mesh | null = null;
     private handLocomotionLine: THREE.Line | null = null;
+    private menuOrb: THREE.Mesh | null = null;
 
     private peersTab: any = null; // Store UITab handle
     private sessionTab: any = null;
@@ -140,6 +141,19 @@ export class VrUiRuntime implements IUpdatable {
         this.handLocomotionAnchor = anchor;
         this.handLocomotionCurrent = current;
         this.handLocomotionLine = line;
+
+        const menuOrb = new THREE.Mesh(
+            new THREE.SphereGeometry(0.022, 16, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0x4a5d6b,
+                transparent: true,
+                opacity: 0.22,
+                depthWrite: false
+            })
+        );
+        menuOrb.visible = false;
+        render.scene.add(menuOrb);
+        this.menuOrb = menuOrb;
     }
 
     private updateHandLocomotionIndicator(): void {
@@ -193,16 +207,71 @@ export class VrUiRuntime implements IUpdatable {
         }
     }
 
+    private updateMenuOrb(): void {
+        const render = this.context.runtime.render;
+        const menuOrb = this.menuOrb;
+        const indicatorState = this.context.runtime.input?.xrInput.getLeftHandLocomotionIndicatorState() || null;
+
+        if (!render || !menuOrb || !render.isXRPresenting() || !indicatorState?.visible) {
+            if (menuOrb) menuOrb.visible = false;
+            return;
+        }
+
+        const headPosition = new THREE.Vector3();
+        const headQuaternion = new THREE.Quaternion();
+        const headEuler = new THREE.Euler();
+        const centerOffset = new THREE.Vector3(
+            indicatorState.centerOffsetHeadLocal.x,
+            indicatorState.centerOffsetHeadLocal.y,
+            indicatorState.centerOffsetHeadLocal.z
+        );
+        render.camera.getWorldPosition(headPosition);
+        render.camera.getWorldQuaternion(headQuaternion);
+        headEuler.setFromQuaternion(headQuaternion, 'YXZ');
+        centerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
+
+        const menuOffsetLocal = new THREE.Vector3(
+            -indicatorState.radius * 1.45,
+            indicatorState.radius * 1.45,
+            0
+        );
+
+        menuOrb.visible = true;
+        menuOrb.position.copy(headPosition).add(centerOffset).add(menuOffsetLocal.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y));
+
+        const menuRadius = indicatorState.radius * 0.33;
+        menuOrb.scale.setScalar(menuRadius / 0.022);
+
+        let isHovering = false;
+        for (const hand of ['left', 'right'] as const) {
+            const probe = this.context.runtime.input?.xrInput.getHandUiProbe(hand);
+            if (!probe?.tracked) continue;
+
+            const dx = probe.currentLocal.x - menuOffsetLocal.x;
+            const dy = probe.currentLocal.y - menuOffsetLocal.y;
+            const dz = probe.currentLocal.z - menuOffsetLocal.z;
+            const inside = (dx * dx + dy * dy + dz * dz) <= (menuRadius * menuRadius);
+            if (!inside) continue;
+
+            isHovering = true;
+            if (probe.pinchStarted) {
+                eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
+                break;
+            }
+        }
+
+        const menuMaterial = menuOrb.material as THREE.MeshBasicMaterial;
+        menuMaterial.color.setHex(isHovering ? 0xa8d7ff : 0x4a5d6b);
+        menuMaterial.opacity = isHovering ? 0.38 : 0.22;
+    }
+
     private setupMenuIntentHandler(): void {
         if (this.menuIntentHandler) {
             eventBus.off(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
         }
 
         this.menuIntentHandler = () => {
-            const render = this.context.runtime.render;
-            if (render && !render.isXRPresenting()) {
-                this.toggle2DMenu();
-            }
+            this.toggle2DMenu();
         };
 
         eventBus.on(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
@@ -260,7 +329,14 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     public toggle2DMenu(): void {
+        const isVR = !!this.context.runtime.render?.isXRPresenting();
         this.context.isMenuOpen = !this.context.isMenuOpen;
+
+        if (isVR) {
+            this.tablet?.setVisible(this.context.isMenuOpen);
+            return;
+        }
+
         if (this.context.isMenuOpen) {
             this.show2DMenu();
         } else {
@@ -1136,12 +1212,13 @@ export class VrUiRuntime implements IUpdatable {
 
     public update(delta: number): void {
         this.updateHandLocomotionIndicator();
+        this.updateMenuOrb();
 
         if (this.tablet) {
             // Update 3D visibility based on VR state vs Desktop Menu
             const isVR = this.context.runtime.render?.isXRPresenting();
             if (isVR) {
-                this.tablet.setVisible(true);
+                this.tablet.setVisible(!!this.context.isMenuOpen);
             } else if (!this.context.isMenuOpen) {
                 this.tablet.setVisible(false);
             }
@@ -1194,6 +1271,12 @@ export class VrUiRuntime implements IUpdatable {
             this.handLocomotionIndicator.removeFromParent();
             this.handLocomotionIndicator.clear();
             this.handLocomotionIndicator = null;
+        }
+        if (this.menuOrb) {
+            this.menuOrb.geometry.dispose();
+            (this.menuOrb.material as THREE.Material).dispose();
+            this.menuOrb.removeFromParent();
+            this.menuOrb = null;
         }
         if (this.tablet) {
             const canvas = this.tablet.ui.canvas;
