@@ -107,11 +107,22 @@ export class UIPointerSkill extends Skill {
         if (!render || !vrUi || !vrUi.tablet) return;
 
         const isXR = render.isXRPresenting();
+        const isTabletInteractive = vrUi.isTabletInteractionActive();
         const tabletMesh = vrUi.tablet.mesh;
 
         if (isXR) {
             this.mouseLine.visible = false;
             this.mouseDot.visible = false;
+
+            if (!isTabletInteractive) {
+                this.pointerLines.left.visible = false;
+                this.pointerLines.right.visible = false;
+                this.pointerDots.left.visible = false;
+                this.pointerDots.right.visible = false;
+                vrUi.tablet.ui.onPointerOut();
+                return;
+            }
+
             const trackingHands = runtime.tracking.getState().hands;
 
             for (const hand of ['left', 'right'] as const) {
@@ -199,7 +210,7 @@ export class UIPointerSkill extends Skill {
         const isXR = render.isXRPresenting();
         const tabletMesh = vrUi.tablet.mesh;
 
-        if (!isXR) return;
+        if (!isXR || !vrUi.isTabletInteractionActive()) return;
 
         const handState = player.appContext.runtime.tracking.getState().hands[hand];
         if (!handState.active) return;

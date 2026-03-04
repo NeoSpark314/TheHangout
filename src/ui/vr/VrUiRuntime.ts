@@ -1210,6 +1210,15 @@ export class VrUiRuntime implements IUpdatable {
         this.tablet?.ui.markDirty();
     }
 
+    public isTabletInteractionActive(): boolean {
+        const render = this.context.runtime.render;
+        return !!this.tablet &&
+            !!render &&
+            render.isXRPresenting() &&
+            !!this.context.isMenuOpen &&
+            this.tablet.mesh.visible;
+    }
+
     public update(delta: number): void {
         this.updateHandLocomotionIndicator();
         this.updateMenuOrb();
