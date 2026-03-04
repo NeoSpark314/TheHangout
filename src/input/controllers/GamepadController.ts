@@ -13,12 +13,14 @@ export class GamepadManager {
     constructor(private context: AppContext) { }
 
     public poll(delta: number): void {
-        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const gp = gamepads[0];
+        const gp = this.getActiveGamepad();
 
         if (!gp) {
             this.move = { x: 0, y: 0 };
             this.look = { x: 0, y: 0 };
+            this.lastButtons = { ...this.buttons };
+            this.buttons = {};
+            this.navCooldown = 0;
             return;
         }
 
@@ -34,6 +36,16 @@ export class GamepadManager {
         });
 
         this.handleUINavigation(delta, gp);
+    }
+
+    private getActiveGamepad(): Gamepad | null {
+        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (const candidate of gamepads) {
+            if (candidate && candidate.connected) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private handleUINavigation(delta: number, gp: Gamepad): void {

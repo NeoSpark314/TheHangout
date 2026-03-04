@@ -71,6 +71,10 @@ export class UIPointerSkill extends Skill {
         }
 
         const onInteractStart = (payload: IHandIntentPayload) => {
+            const render = player.appContext.runtime.render;
+            if (!render || !render.isXRPresenting()) {
+                return;
+            }
             this.handlePointerClick(player, payload.hand);
         };
 
@@ -159,23 +163,13 @@ export class UIPointerSkill extends Skill {
                 }
             }
         } else {
-            // Desktop fallback: cast from camera center
+            // Keep world-space tablet interaction XR-only. Desktop users should use
+            // the flat UI instead of sharing the same generic interact intent.
             this.pointerLines.left.visible = false;
             this.pointerLines.right.visible = false;
             this.pointerDots.left.visible = false;
             this.pointerDots.right.visible = false;
-
-            const origin = new THREE.Vector3();
-            const direction = new THREE.Vector3(0, 0, -1);
-
-            render.camera.getWorldPosition(origin);
-            render.camera.getWorldDirection(direction);
-
-            this.raycaster.set(origin, direction);
-
-            const camQuat = new THREE.Quaternion();
-            render.camera.getWorldQuaternion(camQuat);
-
+            vrUi.tablet.ui.onPointerOut();
             this.mouseDot.visible = false;
             return;
         }
@@ -205,25 +199,19 @@ export class UIPointerSkill extends Skill {
         const isXR = render.isXRPresenting();
         const tabletMesh = vrUi.tablet.mesh;
 
-        if (isXR) {
-            const handState = player.appContext.runtime.tracking.getState().hands[hand];
-            if (!handState.active) return;
+        if (!isXR) return;
 
-            const pos = handState.pointerPose.position || handState.pose.position;
-            const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
+        const handState = player.appContext.runtime.tracking.getState().hands[hand];
+        if (!handState.active) return;
 
-            const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
-            const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
-            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+        const pos = handState.pointerPose.position || handState.pose.position;
+        const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
-            this.raycaster.set(origin, direction);
-        } else {
-            const origin = new THREE.Vector3();
-            const direction = new THREE.Vector3(0, 0, -1);
-            render.camera.getWorldPosition(origin);
-            render.camera.getWorldDirection(direction);
-            this.raycaster.set(origin, direction);
-        }
+        const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
+        const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
+        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+
+        this.raycaster.set(origin, direction);
 
         const hits = this.raycaster.intersectObject(tabletMesh);
         if (hits.length > 0) {
