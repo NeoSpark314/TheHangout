@@ -23,11 +23,11 @@ export abstract class Skill {
 
     public abstract update(delta: number, player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void;
 
-    public getNetworkState(): any {
+    public getNetworkState(): Record<string, unknown> | null {
         return null;
     }
 
-    public setNetworkState(state: any): void {
+    public setNetworkState(state: Record<string, unknown>): void {
         // Optional
     }
 

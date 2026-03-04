@@ -1,5 +1,5 @@
 import { IEntity } from '../../shared/contracts/IEntity';
-import { EntityType, IPlayerEntityState } from '../../shared/contracts/IEntityState';
+import { EntityType, IPlayerEntityState, IStateUpdatePacket, IEntityState } from '../../shared/contracts/IEntityState';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { INetworkable } from '../../shared/contracts/INetworkable';
 import { EntityFactory } from '../spawning/EntityFactory';
@@ -16,7 +16,7 @@ export class EntityRegistry implements IUpdatable {
 
     public defaultType: string = 'unknown';
 
-    public discover(id: string, type: string, config: any = {}): IEntity | null {
+    public discover(id: string, type: string, config: Record<string, any> = {}): IEntity | null {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
         console.log(`[EntityRegistry] Discovering new ${type} with ID: ${id}`);
@@ -82,17 +82,17 @@ export class EntityRegistry implements IUpdatable {
         }
     }
 
-    public getAuthoritativeStates(fullSync: boolean = false): any[] {
-        const states: any[] = [];
+    public getAuthoritativeStates(fullSync: boolean = false): IStateUpdatePacket[] {
+        const states: IStateUpdatePacket[] = [];
         for (const entity of this.entities.values()) {
-            const networkable = entity as unknown as INetworkable<any>;
+            const networkable = entity as unknown as INetworkable<Partial<IEntityState>>;
             if (entity.isAuthority && !entity.isDestroyed && networkable.getNetworkState) {
                 const state = networkable.getNetworkState(fullSync);
                 if (state) {
                     states.push({
                         id: entity.id,
-                        type: entity.type,
-                        state: state
+                        type: entity.type as EntityType,
+                        state: state as IEntityState
                     });
                 }
             }
@@ -100,17 +100,17 @@ export class EntityRegistry implements IUpdatable {
         return states;
     }
 
-    public getWorldSnapshot(): any[] {
-        const states: any[] = [];
+    public getWorldSnapshot(): IStateUpdatePacket[] {
+        const states: IStateUpdatePacket[] = [];
         for (const entity of this.entities.values()) {
-            const networkable = entity as unknown as INetworkable<any>;
+            const networkable = entity as unknown as INetworkable<Partial<IEntityState>>;
             if (!entity.isDestroyed && networkable.getNetworkState) {
                 const state = networkable.getNetworkState(true);
                 if (state) {
                     states.push({
                         id: entity.id,
-                        type: entity.type,
-                        state: state
+                        type: entity.type as EntityType,
+                        state: state as IEntityState
                     });
                 }
             }

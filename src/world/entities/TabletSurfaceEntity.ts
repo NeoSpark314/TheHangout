@@ -6,6 +6,7 @@ import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
 import { IVector3, IQuaternion, IPose } from '../../shared/contracts/IMath';
 import { IEntity } from '../../shared/contracts/IEntity';
 import { CanvasUI } from '../../ui/shared/canvasui';
+import { PlayerAvatarEntity } from './PlayerAvatarEntity';
 
 export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
     public id: string;
@@ -98,7 +99,7 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
     }
 
     public update(delta: number): void {
-        const lp = this.context.localPlayer as any;
+        const lp = this.context.localPlayer as PlayerAvatarEntity;
         if (this.isRelative && lp && lp.headState) {
             const head = lp.headState;
             const tracking = this.context.runtime.tracking.getState();
@@ -171,7 +172,7 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
         this.isRelative = true;
 
         if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
-            const head = (this.context.localPlayer as any).headState;
+            const head = (this.context.localPlayer as PlayerAvatarEntity).headState;
             const tracking = this.context.runtime.tracking.getState();
 
             // Store the dropped transform relative to the user's current head yaw

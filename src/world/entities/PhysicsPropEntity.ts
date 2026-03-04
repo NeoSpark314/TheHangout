@@ -6,7 +6,7 @@ import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
 import { IView } from '../../shared/contracts/IView';
 import { IVector3, IQuaternion, IPose } from '../../shared/contracts/IMath';
 import { PhysicsPropView, IPhysicsPropState } from '../../render/views/PhysicsPropView';
-import { IPhysicsEntityState, EntityType } from '../../shared/contracts/IEntityState';
+import { IPhysicsEntityState, IEntityState, EntityType } from '../../shared/contracts/IEntityState';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
@@ -349,7 +349,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         }, delta);
     }
 
-    public getNetworkState(fullSync: boolean = false): any {
+    public getNetworkState(fullSync: boolean = false): Partial<IEntityState> | null {
         const isAwake = !this.rigidBody.isSleeping();
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
@@ -391,17 +391,18 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         };
     }
 
-    public applyNetworkState(state: any): void {
+    public applyNetworkState(state: Partial<IEntityState>): void {
         this.syncNetworkState(state);
 
         if (this.isAuthority) return;
 
+        const propState = state as Partial<IPhysicsEntityState>;
         const snapshot: INetworkSnapshot = {
             receivedAtMs: this.nowMs(),
-            position: state.p ? { x: state.p[0], y: state.p[1], z: state.p[2] } : { ...this.targetPos },
-            quaternion: state.q ? { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] } : { ...this.targetRot },
-            velocity: state.v ? { x: state.v[0], y: state.v[1], z: state.v[2] } : { x: 0, y: 0, z: 0 },
-            heldBy: state.b || null
+            position: propState.p ? { x: propState.p[0], y: propState.p[1], z: propState.p[2] } : { ...this.targetPos },
+            quaternion: propState.q ? { x: propState.q[0], y: propState.q[1], z: propState.q[2], w: propState.q[3] } : { ...this.targetRot },
+            velocity: propState.v ? { x: propState.v[0], y: propState.v[1], z: propState.v[2] } : { x: 0, y: 0, z: 0 },
+            heldBy: propState.b || null
         };
         this.snapshotBuffer.push(snapshot);
 
@@ -579,7 +580,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     private emitOwnershipReleaseNow(): void {
-        const state = this.getNetworkState(true);
+        const state = this.getNetworkState(true) as Partial<IPhysicsEntityState>;
         if (state) {
             eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
                 entityId: this.id,

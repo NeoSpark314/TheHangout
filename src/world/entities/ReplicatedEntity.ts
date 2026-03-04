@@ -3,6 +3,7 @@ import { INetworkable } from '../../shared/contracts/INetworkable';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
+import { IEntityState } from '../../shared/contracts/IEntityState';
 
 export abstract class ReplicatedEntity implements IEntity, INetworkable<any> {
     public id: string;
@@ -59,8 +60,8 @@ export abstract class ReplicatedEntity implements IEntity, INetworkable<any> {
     }
 
     abstract update(delta: number): void;
-    abstract getNetworkState(fullSync?: boolean): any;
-    abstract applyNetworkState(state: any): void;
+    abstract getNetworkState(fullSync?: boolean): Partial<IEntityState> | null;
+    abstract applyNetworkState(state: Partial<IEntityState>): void;
 
     /**
      * Called when a specialized network event occurs for this entity.

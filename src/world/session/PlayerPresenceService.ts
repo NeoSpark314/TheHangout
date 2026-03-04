@@ -26,21 +26,21 @@ export class PlayerPresenceService {
             spawnIndex = assignedSpawnIndex;
         }
 
-        const spawn = (runtime.session as any).getSpawnPoint ? (runtime.session as any).getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
+        const spawn = runtime.session?.getSpawnPoint ? runtime.session.getSpawnPoint(spawnIndex) : { position: { x: 0, y: 0, z: 0 }, yaw: 0 };
 
         this.context.localPlayer = EntityFactory.createPlayer(this.context, id, {
             isLocal: true,
             spawnPos: spawn.position || { x: 0, y: 0, z: 0 },
             spawnYaw: spawn.yaw || 0,
             color: this.context.avatarConfig.color || 0x00ffff
-        }) as any;
+        });
 
         if (this.context.localPlayer) {
-            (this.context.localPlayer as any).name = this.context.playerName || 'Player';
+            this.context.localPlayer.name = this.context.playerName || 'Player';
         }
 
-        runtime.animation.setLocalPlayer(this.context.localPlayer as any, runtime);
-        runtime.entity.addEntity(this.context.localPlayer as any);
+        runtime.animation.setLocalPlayer(this.context.localPlayer, runtime);
+        runtime.entity.addEntity(this.context.localPlayer);
         this.isInitialized = true;
     }
 
@@ -55,8 +55,8 @@ export class PlayerPresenceService {
 
         console.log(`[PlayerPresenceService] Removing entity for disconnected peer: ${peerId} (type: ${entity.type})`);
 
-        const name = (entity as any).name;
         const isPlayer = entity.type === EntityType.PLAYER_AVATAR;
+        const name = isPlayer ? (entity as any).name : 'A player'; // Handle gracefully until IPlayerAvatarEntity interface is wired
 
         // Critical: Always trigger destruction and removal
         runtime.entity.removeEntity(peerId);

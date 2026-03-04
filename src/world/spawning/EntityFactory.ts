@@ -9,11 +9,12 @@ import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { NullView } from '../../render/views/NullView';
 import { EntityType } from '../../shared/contracts/IEntityState';
+import { IEntity } from '../../shared/contracts/IEntity';
 import { LocalPlayerControlStrategy } from '../entities/strategies/LocalPlayerControlStrategy';
 import { RemotePlayerReplicationStrategy } from '../entities/strategies/RemotePlayerReplicationStrategy';
 
 export class EntityFactory {
-    private static registry: Map<string, (context: AppContext, id: string, config: any) => any> = new Map();
+    private static registry: Map<string, (context: AppContext, id: string, config: Record<string, any>) => IEntity | null> = new Map();
 
     static {
         // Register default types
@@ -36,11 +37,11 @@ export class EntityFactory {
         this.register('PEN', (context, id, config) => this.createPen(context, id, config));
     }
 
-    public static register(type: string, creator: (context: AppContext, id: string, config: any) => any): void {
+    public static register(type: string, creator: (context: AppContext, id: string, config: Record<string, any>) => IEntity | null): void {
         this.registry.set(type, creator);
     }
 
-    public static spawn(context: AppContext, type: string, id: string, config: any): any {
+    public static spawn(context: AppContext, type: string, id: string, config: Record<string, any>): IEntity | null {
         const creator = this.registry.get(type);
         if (!creator) {
             console.warn(`[EntityFactory] No creator registered for type: ${type}`);
@@ -49,7 +50,7 @@ export class EntityFactory {
         return creator(context, id, config);
     }
 
-    public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos, spawnYaw, color }: { isLocal: boolean, spawnPos: IVector3, spawnYaw: number, color?: string | number }): PlayerAvatarEntity {
+    public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos = { x: 0, y: 0, z: 0 }, spawnYaw = 0, color }: { isLocal: boolean, spawnPos?: IVector3, spawnYaw?: number, color?: string | number }): PlayerAvatarEntity {
         const render = context.runtime.render;
         const view = render
             ? new StickFigureView(context, {
@@ -111,7 +112,7 @@ export class EntityFactory {
         return runtime.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
     }
 
-    public static createPen(context: AppContext, id: string, config: any): PenToolEntity | null {
+    public static createPen(context: AppContext, id: string, config: Record<string, any>): PenToolEntity | null {
         const runtime = context.runtime;
         const render = runtime.render;
         const view = render ? new PenView(id) : new NullView(id);

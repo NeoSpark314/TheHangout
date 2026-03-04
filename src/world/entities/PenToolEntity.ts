@@ -3,7 +3,7 @@ import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
 import { IView } from '../../shared/contracts/IView';
-import { IPenEntityState, EntityType } from '../../shared/contracts/IEntityState';
+import { IPenEntityState, IEntityState, EntityType } from '../../shared/contracts/IEntityState';
 import { AppContext } from '../../app/AppContext';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -99,9 +99,9 @@ export class PenToolEntity extends PhysicsPropEntity {
         }
     }
 
-    public getNetworkState(fullSync: boolean = false): any {
+    public getNetworkState(fullSync: boolean = false): Partial<IEntityState> | null {
         // Base will return null if asleep/unchanged transforms, but we must also check our properties.
-        const base = super.getNetworkState(fullSync);
+        const base = super.getNetworkState(fullSync) as Partial<IPenEntityState> | null;
 
         const stateChanged = this.isDrawing !== this.lastSyncDrawing || this.color !== this.lastSyncColor;
 
@@ -109,13 +109,13 @@ export class PenToolEntity extends PhysicsPropEntity {
             return null;
         }
 
-        const state: IPenEntityState = {
+        const state = {
             // Guarantee base is populated if stateChanged triggered us
             ...(base || super.getNetworkState(true)!),
             type: EntityType.PEN,
             isDrawing: this.isDrawing,
             c: this.color
-        };
+        } as IPenEntityState;
 
         this.lastSyncDrawing = this.isDrawing;
         this.lastSyncColor = this.color;
@@ -123,9 +123,10 @@ export class PenToolEntity extends PhysicsPropEntity {
         return state;
     }
 
-    public applyNetworkState(state: any): void {
+    public applyNetworkState(state: Partial<IEntityState>): void {
         super.applyNetworkState(state);
-        this.isDrawing = !!state.isDrawing;
-        this.color = state.c || 0xffffff;
+        const penState = state as Partial<IPenEntityState>;
+        this.isDrawing = !!penState.isDrawing;
+        this.color = penState.c || 0xffffff;
     }
 }
