@@ -15,16 +15,22 @@ export interface IHandLocomotionIndicatorState {
     radius: number;
 }
 
+type HandId = 'left' | 'right';
+
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
-    private leftHandPinchLatched = false;
-    private leftHandMoveActive = false;
-    private leftHandMoveAnchor: THREE.Vector3 | null = null;
-    private leftHandMoveCurrentWorld: THREE.Vector3 | null = null;
-    private leftHandMoveCurrentLocal = new THREE.Vector3();
-    private leftHandMoveHovering = false;
-    private leftHandMoveYaw = 0;
+    private handPinchLatched: Record<HandId, boolean> = { left: false, right: false };
+    private handTracked: Record<HandId, boolean> = { left: false, right: false };
+    private handHovering: Record<HandId, boolean> = { left: false, right: false };
+    private handCurrentLocal: Record<HandId, THREE.Vector3> = {
+        left: new THREE.Vector3(),
+        right: new THREE.Vector3()
+    };
+    private activeMoveHand: HandId | null = null;
+    private activeMoveAnchor: THREE.Vector3 | null = null;
+    private activeMoveCurrentLocal = new THREE.Vector3();
+    private activeMoveYaw = 0;
     private readonly handActivationCenter = new THREE.Vector3(0, -0.28, -0.18);
     private readonly handActivationRadius = 0.065;
     private readonly _tempVec = new THREE.Vector3();
@@ -45,22 +51,25 @@ export class XRInputManager {
 
         const render = this.context.runtime.render;
         if (!render || !render.isXRPresenting()) {
-            this.resetLeftHandMovement();
+            this.resetAllHandMovement();
             return;
         }
 
         const session = render.getXRSession();
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !referenceSpace) {
-            this.resetLeftHandMovement();
+            this.resetAllHandMovement();
             return;
         }
 
-        let sawLeftHandSource = false;
+        this.handTracked.left = false;
+        this.handTracked.right = false;
+        this.handHovering.left = false;
+        this.handHovering.right = false;
+
         for (const source of session.inputSources) {
-            if (source.handedness === 'left' && source.hand) {
-                sawLeftHandSource = true;
-                this.pollLeftHandMovement(source, frame, referenceSpace);
+            if ((source.handedness === 'left' || source.handedness === 'right') && source.hand) {
+                this.pollHandMovement(source.handedness, source, frame, referenceSpace);
             }
 
             if (source.gamepad) {
@@ -79,67 +88,79 @@ export class XRInputManager {
             }
         }
 
-        if (!sawLeftHandSource) {
-            this.resetLeftHandMovement();
+        for (const hand of ['left', 'right'] as const) {
+            if (!this.handTracked[hand]) {
+                this.handPinchLatched[hand] = false;
+                this.handCurrentLocal[hand].set(0, 0, 0);
+                if (this.activeMoveHand === hand) {
+                    this.resetActiveMovement();
+                }
+            }
         }
     }
 
-    private pollLeftHandMovement(
+    private pollHandMovement(
+        hand: HandId,
         source: XRInputSource,
         frame: XRFrame | undefined,
         referenceSpace: XRReferenceSpace
     ): void {
-        const render = this.context.runtime.render;
         if (!frame) {
-            this.resetLeftHandMovement();
+            if (this.activeMoveHand === hand) {
+                this.resetActiveMovement();
+            }
+            this.handPinchLatched[hand] = false;
             return;
         }
 
         const pinchPoint = this.getHandPinchPoint(source, frame, referenceSpace);
         if (!pinchPoint) {
-            this.resetLeftHandMovement();
+            if (this.activeMoveHand === hand) {
+                this.resetActiveMovement();
+            }
+            this.handPinchLatched[hand] = false;
             return;
         }
-
-        this.leftHandMoveCurrentWorld = pinchPoint.clone();
 
         const currentYaw = this.getHeadYaw();
         const currentActivationOffset = this.getActivationLocalOffset(pinchPoint, currentYaw);
-        this.leftHandMoveCurrentLocal.copy(currentActivationOffset);
-        this.leftHandMoveHovering = currentActivationOffset.lengthSq() <= (this.handActivationRadius * this.handActivationRadius);
+        this.handTracked[hand] = true;
+        this.handCurrentLocal[hand].copy(currentActivationOffset);
+        this.handHovering[hand] = currentActivationOffset.lengthSq() <= (this.handActivationRadius * this.handActivationRadius);
 
         const pinchDistance = this.getHandPinchDistance(source, frame, referenceSpace);
         const g = INPUT_CONFIG.GESTURE;
-        const nextPinchState = GestureUtils.updateDistanceLatch(this.leftHandPinchLatched, pinchDistance, {
+        const nextPinchState = GestureUtils.updateDistanceLatch(this.handPinchLatched[hand], pinchDistance, {
             on: g.PINCH_ON_DISTANCE,
             off: g.PINCH_OFF_DISTANCE
         });
-        const pinchStarted = !this.leftHandPinchLatched && nextPinchState;
-        this.leftHandPinchLatched = nextPinchState;
+        const pinchStarted = !this.handPinchLatched[hand] && nextPinchState;
+        this.handPinchLatched[hand] = nextPinchState;
 
-        if (!nextPinchState) {
-            if (this.leftHandMoveActive) {
-                this.resetLeftHandMovement();
-                this.leftHandMoveCurrentWorld = pinchPoint.clone();
-                this.leftHandMoveCurrentLocal.copy(currentActivationOffset);
-                this.leftHandMoveHovering = currentActivationOffset.lengthSq() <= (this.handActivationRadius * this.handActivationRadius);
+        if (this.activeMoveHand === hand) {
+            if (!nextPinchState) {
+                this.resetActiveMovement();
+                return;
             }
-            return;
-        }
 
-        if (this.leftHandMoveActive) {
-            const pinnedActivationOffset = this.getActivationLocalOffset(pinchPoint, this.leftHandMoveYaw);
-            this.leftHandMoveCurrentLocal.copy(pinnedActivationOffset);
-            this._localDelta.copy(pinnedActivationOffset).sub(this.leftHandMoveAnchor!);
+            const pinnedActivationOffset = this.getActivationLocalOffset(pinchPoint, this.activeMoveYaw);
+            this.activeMoveCurrentLocal.copy(pinnedActivationOffset);
+            this._localDelta.copy(pinnedActivationOffset).sub(this.activeMoveAnchor!);
             this._localDelta.y = 0;
-        } else if (pinchStarted && this.leftHandMoveHovering) {
-            this.leftHandMoveActive = true;
-            this.leftHandMoveAnchor = currentActivationOffset.clone();
-            this.leftHandMoveCurrentLocal.copy(currentActivationOffset);
-            this.leftHandMoveYaw = currentYaw;
-            this._localDelta.set(0, 0, 0);
         } else {
-            return;
+            if (!nextPinchState) {
+                return;
+            }
+
+            if (pinchStarted && this.handHovering[hand] && !this.activeMoveHand) {
+                this.activeMoveHand = hand;
+                this.activeMoveAnchor = currentActivationOffset.clone();
+                this.activeMoveCurrentLocal.copy(currentActivationOffset);
+                this.activeMoveYaw = currentYaw;
+                this._localDelta.set(0, 0, 0);
+            } else {
+                return;
+            }
         }
 
         const distance = Math.hypot(this._localDelta.x, this._localDelta.z);
@@ -228,24 +249,28 @@ export class XRInputManager {
     }
 
     public getLeftHandLocomotionIndicatorState(): IHandLocomotionIndicatorState | null {
-        if (!this.leftHandMoveCurrentWorld) {
+        const hasTrackedHand = this.handTracked.left || this.handTracked.right;
+        if (!hasTrackedHand) {
             return null;
         }
 
-        const anchor = this.leftHandMoveActive && this.leftHandMoveAnchor
-            ? this.leftHandMoveAnchor
-            : this.leftHandMoveCurrentLocal;
+        const anchor = this.activeMoveHand && this.activeMoveAnchor
+            ? this.activeMoveAnchor
+            : new THREE.Vector3(0, 0, 0);
+        const current = this.activeMoveHand
+            ? this.activeMoveCurrentLocal
+            : new THREE.Vector3(0, 0, 0);
 
         return {
             visible: true,
-            isActive: this.leftHandMoveActive,
-            showMotion: this.leftHandMoveActive &&
+            isActive: !!this.activeMoveHand,
+            showMotion: !!this.activeMoveHand &&
                 Math.hypot(
-                    this.leftHandMoveCurrentLocal.x - anchor.x,
-                    this.leftHandMoveCurrentLocal.z - anchor.z
+                    current.x - anchor.x,
+                    current.z - anchor.z
                 ) > this.handMoveDeadzone,
-            isHovering: this.leftHandMoveHovering,
-            frameYaw: this.leftHandMoveActive ? this.leftHandMoveYaw : this.getHeadYaw(),
+            isHovering: this.handHovering.left || this.handHovering.right,
+            frameYaw: this.activeMoveHand ? this.activeMoveYaw : this.getHeadYaw(),
             centerOffsetHeadLocal: {
                 x: this.handActivationCenter.x,
                 y: this.handActivationCenter.y,
@@ -253,21 +278,34 @@ export class XRInputManager {
             },
             anchorLocal: { x: anchor.x, y: anchor.y, z: anchor.z },
             currentLocal: {
-                x: this.leftHandMoveCurrentLocal.x,
-                y: this.leftHandMoveCurrentLocal.y,
-                z: this.leftHandMoveCurrentLocal.z
+                x: current.x,
+                y: current.y,
+                z: current.z
             },
             radius: this.handActivationRadius
         };
     }
 
-    private resetLeftHandMovement(): void {
-        this.leftHandPinchLatched = false;
-        this.leftHandMoveActive = false;
-        this.leftHandMoveAnchor = null;
-        this.leftHandMoveCurrentWorld = null;
-        this.leftHandMoveCurrentLocal.set(0, 0, 0);
-        this.leftHandMoveHovering = false;
-        this.leftHandMoveYaw = 0;
+    public isHandLocomotionActive(hand: 'left' | 'right'): boolean {
+        return this.activeMoveHand === hand;
+    }
+
+    private resetActiveMovement(): void {
+        this.activeMoveHand = null;
+        this.activeMoveAnchor = null;
+        this.activeMoveCurrentLocal.set(0, 0, 0);
+        this.activeMoveYaw = 0;
+    }
+
+    private resetAllHandMovement(): void {
+        this.handPinchLatched.left = false;
+        this.handPinchLatched.right = false;
+        this.handTracked.left = false;
+        this.handTracked.right = false;
+        this.handHovering.left = false;
+        this.handHovering.right = false;
+        this.handCurrentLocal.left.set(0, 0, 0);
+        this.handCurrentLocal.right.set(0, 0, 0);
+        this.resetActiveMovement();
     }
 }

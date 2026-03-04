@@ -326,8 +326,8 @@ export class InputRuntime implements IUpdatable {
 
             return {
                 isSqueezing: latch.fist,
-                isInteracting: hand === 'left' ? false : latch.pinch,
-                triggerValue: hand === 'left' ? 0.0 : (latch.pinch ? 1.0 : 0.0)
+                isInteracting: this.xrInput.isHandLocomotionActive(hand) ? false : latch.pinch,
+                triggerValue: this.xrInput.isHandLocomotionActive(hand) ? 0.0 : (latch.pinch ? 1.0 : 0.0)
             };
         }
 
