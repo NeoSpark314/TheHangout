@@ -12,7 +12,7 @@
 
 <body>
   <div id="app">
-    <div id="desktop-controls" class="version-info top-left" style="display: none;">
+    <div id="desktop-controls" class="version-info top-left is-hidden">
       <b>Controls</b><br>
       Menu: M<br>
       Move: WASD<br>
@@ -32,8 +32,8 @@
 
       <div class="input-group">
         <label for="player-name">Name:</label>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="player-name" placeholder="Enter your name" style="flex: 1;" />
+        <div class="inline-row">
+          <input type="text" id="player-name" class="grow" placeholder="Enter your name" />
           <button id="avatar-btn" class="icon-btn" title="Customize Avatar">👤</button>
         </div>
       </div>
@@ -86,11 +86,11 @@
   </div>
 
   <!-- Mobile HUD (Joysticks) -->
-  <button id="mobile-menu-btn" style="display: none;" aria-label="Toggle menu">Menu</button>
-  <div id="mobile-hud" style="display: none;">
+  <button id="mobile-menu-btn" class="is-hidden" aria-label="Toggle menu">Menu</button>
+  <div id="mobile-hud" class="is-hidden">
     <div id="mobile-reticle" aria-hidden="true"></div>
-    <button id="mobile-action-btn" style="display: none;" aria-label="Primary action">Grab</button>
-    <button id="mobile-interact-btn" style="display: none;" aria-label="Secondary action">Use</button>
+    <button id="mobile-action-btn" class="is-hidden" aria-label="Primary action">Grab</button>
+    <button id="mobile-interact-btn" class="is-hidden" aria-label="Secondary action">Use</button>
     <div id="joystick-left" class="joy-container"></div>
     <div id="joystick-right" class="joy-container"></div>
   </div>

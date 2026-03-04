@@ -1,41 +1,29 @@
+import { SYNTH_THEME } from '../../shared/theme/SynthTheme';
+
 /**
- * 80s Synthwave / Outrun Color Palette and Styling Constants
- * Used globally across Canvas UI components to ensure consistency with HTML/CSS.
+ * Canvas UI adapter over the shared synth theme tokens.
  */
 export const UITheme = {
     colors: {
-        primary: '#00ffff',          // Neon Cyan
-        primaryHover: '#00cccc',
-
-        secondary: '#ff00ff',        // Neon Magenta
-        secondaryHover: '#cc00cc',
-
-        accent: '#ffaa00',           // Neon Orange/Gold
-        danger: '#ef4444',           // Error / Destructive
-        dangerHover: '#dc2626',
-
-        background: '#0a041c',       // Deep Space Violet
-        panelBg: 'rgba(10, 4, 28, 0.85)',
-        panelBgHover: 'rgba(20, 10, 50, 0.95)',
-
-        text: '#f8fafc',             // Off-white
-        textMuted: '#64748b',
-
-        border: '#ff00ff',           // Default Magenta
-        borderActive: '#00ffff',     // Active Cyan
+        primary: SYNTH_THEME.colors.primary,
+        primaryHover: SYNTH_THEME.colors.primaryHover,
+        secondary: SYNTH_THEME.colors.secondary,
+        secondaryHover: SYNTH_THEME.colors.secondaryHover,
+        accent: SYNTH_THEME.colors.accent,
+        danger: SYNTH_THEME.colors.danger,
+        dangerHover: SYNTH_THEME.colors.dangerHover,
+        background: SYNTH_THEME.colors.background,
+        panelBg: SYNTH_THEME.colors.panel,
+        panelBgHover: SYNTH_THEME.colors.panelHover,
+        text: SYNTH_THEME.colors.text,
+        textMuted: SYNTH_THEME.colors.textDim,
+        border: SYNTH_THEME.colors.secondary,
+        borderActive: SYNTH_THEME.colors.primary
     },
-    typography: {
-        fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-        sizes: {
-            title: 54,               // Balanced for 1280x800
-            header: 42,
-            body: 28,
-            small: 20
-        }
-    },
+    typography: SYNTH_THEME.typography,
     styling: {
-        borderWidth: 2,
-        cornerRadius: 12
+        borderWidth: SYNTH_THEME.styling.borderWidth,
+        cornerRadius: SYNTH_THEME.styling.cornerRadius
     }
 };
 

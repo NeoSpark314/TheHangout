@@ -1,19 +1,23 @@
 :root {
     color-scheme: dark;
     --synth-primary: #00ffff;
+    --synth-primary-hover: #00cccc;
     --synth-primary-soft: rgba(0, 255, 255, 0.14);
     --synth-primary-strong: rgba(0, 255, 255, 0.34);
     --synth-secondary: #ff00ff;
+    --synth-secondary-hover: #cc00cc;
     --synth-secondary-soft: rgba(255, 0, 255, 0.14);
     --synth-secondary-strong: rgba(255, 0, 255, 0.3);
     --synth-accent: #ffaa00;
     --synth-danger: #ef4444;
+    --synth-danger-hover: #dc2626;
     --synth-danger-soft: rgba(239, 68, 68, 0.16);
     --synth-danger-strong: rgba(239, 68, 68, 0.3);
+    --synth-success: #00ff64;
 
     --synth-bg: #0a041c;
     --synth-bg-deep: #12072c;
-    --synth-panel: rgba(10, 4, 28, 0.88);
+    --synth-panel: rgba(10, 4, 28, 0.85);
     --synth-panel-solid: #150a30;
     --synth-panel-strong: rgba(20, 10, 50, 0.95);
     --synth-border: rgba(255, 0, 255, 0.28);
@@ -230,7 +234,7 @@ body {
 }
 
 .synth-button.is-danger:hover:not(:disabled) {
-    background: var(--synth-danger);
+    background: var(--synth-danger-hover);
     color: #fff;
     box-shadow: 0 0 18px rgba(239, 68, 68, 0.28);
 }
