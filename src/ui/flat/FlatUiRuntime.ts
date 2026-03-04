@@ -6,6 +6,7 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 
 export class FlatUiRuntime implements IUpdatable {
     private overlay: HTMLElement;
+    private mainPanel: HTMLElement | null;
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;
     private joinBtn: HTMLButtonElement;
@@ -34,6 +35,7 @@ export class FlatUiRuntime implements IUpdatable {
 
     constructor(private context: AppContext) {
         this.overlay = document.getElementById('ui-overlay')!;
+        this.mainPanel = document.getElementById('main-panel');
         this.nameInput = document.getElementById('player-name') as HTMLInputElement;
         this.createBtn = document.getElementById('create-btn') as HTMLButtonElement;
         this.joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
@@ -202,6 +204,7 @@ export class FlatUiRuntime implements IUpdatable {
 
         this.loadFromStorage();
         this.renderMyScreensEditor();
+        this.markPanelReady();
 
         // Desktop screen sharing is only for dedicated server mode
         if (!this.context.isLocalServer) {
@@ -671,5 +674,11 @@ export class FlatUiRuntime implements IUpdatable {
 
     private isElementHidden(element: HTMLElement): boolean {
         return element.classList.contains('is-hidden');
+    }
+
+    private markPanelReady(): void {
+        if (!this.mainPanel) return;
+        this.mainPanel.classList.remove('panel-hydrating');
+        this.mainPanel.classList.add('panel-ready');
     }
 }

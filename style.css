@@ -126,6 +126,19 @@ body {
     text-align: center;
 }
 
+.panel-hydrating {
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+}
+
+.panel-ready {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
 .panel h1 {
     font-size: var(--font-size-title);
     margin-bottom: 0.75rem;
