@@ -8,14 +8,14 @@ import { EntityType } from '../../shared/contracts/IEntityState';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
-import { ControllerCursor } from '../shared/ControllerCursor';
+import { ControllerPointer } from '../shared/ControllerPointer';
 import * as THREE from 'three';
 
 export class VrUiRuntime implements IUpdatable {
     public tablet: TabletSurfaceEntity | null = null;
     private tabPanel: UITabPanel | null = null;
     private overlayContainer: HTMLDivElement | null = null;
-    private controllerCursor: ControllerCursor;
+    private controllerCursor: ControllerPointer;
 
     private peersTab: any = null; // Store UITab handle
     private sessionTab: any = null;
@@ -34,7 +34,7 @@ export class VrUiRuntime implements IUpdatable {
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(private context: AppContext) {
-        this.controllerCursor = new ControllerCursor('vr-menu-controller-cursor');
+        this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
     }
 
     public init(): void {

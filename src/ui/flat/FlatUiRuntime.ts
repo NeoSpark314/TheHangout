@@ -3,7 +3,7 @@ import { AppContext } from '../../app/AppContext';
 import { EVENTS } from '../../shared/constants/Constants';
 import { isMobile } from '../../shared/utils/DeviceUtils';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
-import { ControllerCursor } from '../shared/ControllerCursor';
+import { ControllerPointer } from '../shared/ControllerPointer';
 
 export class FlatUiRuntime implements IUpdatable {
     private overlay: HTMLElement;
@@ -30,7 +30,7 @@ export class FlatUiRuntime implements IUpdatable {
     private mobileActionBtn: HTMLButtonElement | null;
     private mobileInteractBtn: HTMLButtonElement | null;
     private mobileReticle: HTMLElement | null;
-    private controllerCursor: ControllerCursor;
+    private controllerCursor: ControllerPointer;
     private controllerCursorTarget: HTMLElement | null = null;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
@@ -61,7 +61,7 @@ export class FlatUiRuntime implements IUpdatable {
         this.mobileActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
         this.mobileInteractBtn = document.getElementById('mobile-interact-btn') as HTMLButtonElement | null;
         this.mobileReticle = document.getElementById('mobile-reticle');
-        this.controllerCursor = new ControllerCursor('controller-cursor');
+        this.controllerCursor = new ControllerPointer('controller-cursor');
         this.isMobile = isMobile;
 
         this.init();
