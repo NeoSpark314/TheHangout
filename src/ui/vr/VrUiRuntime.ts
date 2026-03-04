@@ -16,6 +16,11 @@ export class VrUiRuntime implements IUpdatable {
     private tabPanel: UITabPanel | null = null;
     private overlayContainer: HTMLDivElement | null = null;
     private controllerCursor: ControllerPointer;
+    private handLocomotionIndicator: THREE.Group | null = null;
+    private handLocomotionShell: THREE.Mesh | null = null;
+    private handLocomotionAnchor: THREE.Mesh | null = null;
+    private handLocomotionCurrent: THREE.Mesh | null = null;
+    private handLocomotionLine: THREE.Line | null = null;
 
     private peersTab: any = null; // Store UITab handle
     private sessionTab: any = null;
@@ -38,6 +43,8 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     public init(): void {
+        this.initHandLocomotionIndicator();
+
         // Create the Tablet Entity
         this.tablet = new TabletSurfaceEntity(this.context, 'local-tablet');
 
@@ -68,6 +75,116 @@ export class VrUiRuntime implements IUpdatable {
 
         this.setupMenuIntentHandler();
         this.setupKeyboardListeners();
+    }
+
+    private initHandLocomotionIndicator(): void {
+        const render = this.context.runtime.render;
+        if (!render || this.handLocomotionIndicator) return;
+
+        const group = new THREE.Group();
+        group.visible = false;
+
+        const shell = new THREE.Mesh(
+            new THREE.SphereGeometry(1, 24, 24),
+            new THREE.MeshBasicMaterial({
+                color: 0x66ffff,
+                transparent: true,
+                opacity: 0.12,
+                depthWrite: false
+            })
+        );
+
+        const anchor = new THREE.Mesh(
+            new THREE.SphereGeometry(0.008, 16, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false
+            })
+        );
+        anchor.visible = false;
+
+        const current = new THREE.Mesh(
+            new THREE.SphereGeometry(0.012, 16, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.95,
+                depthWrite: false
+            })
+        );
+
+        const lineGeometry = new THREE.BufferGeometry();
+        lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+        const line = new THREE.Line(
+            lineGeometry,
+            new THREE.LineBasicMaterial({
+                color: 0x99ffff,
+                transparent: true,
+                opacity: 0.55,
+                depthWrite: false
+            })
+        );
+        line.visible = false;
+
+        group.add(shell);
+        group.add(line);
+        group.add(anchor);
+        group.add(current);
+
+        render.scene.add(group);
+
+        this.handLocomotionIndicator = group;
+        this.handLocomotionShell = shell;
+        this.handLocomotionAnchor = anchor;
+        this.handLocomotionCurrent = current;
+        this.handLocomotionLine = line;
+    }
+
+    private updateHandLocomotionIndicator(): void {
+        const indicator = this.handLocomotionIndicator;
+        const shell = this.handLocomotionShell;
+        const anchor = this.handLocomotionAnchor;
+        const current = this.handLocomotionCurrent;
+        const line = this.handLocomotionLine;
+        const render = this.context.runtime.render;
+        const state = this.context.runtime.input?.xrInput.getLeftHandLocomotionIndicatorState() || null;
+
+        if (!indicator || !shell || !anchor || !current || !line || !render || !render.isXRPresenting() || !state?.visible) {
+            if (indicator) indicator.visible = false;
+            return;
+        }
+
+        const headPosition = new THREE.Vector3();
+        const headQuaternion = new THREE.Quaternion();
+        const headEuler = new THREE.Euler();
+        const chestOffset = new THREE.Vector3(0, -0.28, -0.18);
+        render.camera.getWorldPosition(headPosition);
+        render.camera.getWorldQuaternion(headQuaternion);
+        headEuler.setFromQuaternion(headQuaternion, 'YXZ');
+        chestOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
+
+        indicator.visible = true;
+        indicator.position.copy(headPosition).add(chestOffset);
+        indicator.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.frameYaw);
+        shell.scale.setScalar(state.radius * 0.45);
+        (shell.material as THREE.MeshBasicMaterial).opacity = state.isActive ? 0.08 : 0.12;
+
+        current.position.set(state.deflectionLocal.x, state.deflectionLocal.y, state.deflectionLocal.z);
+
+        anchor.visible = state.isActive;
+        current.visible = state.isActive;
+        line.visible = state.isActive;
+
+        if (state.isActive) {
+            anchor.position.set(0, 0, 0);
+            const positions = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+            positions.setXYZ(0, 0, 0, 0);
+            positions.setXYZ(1, current.position.x, current.position.y, current.position.z);
+            positions.needsUpdate = true;
+            line.geometry.computeBoundingSphere();
+        }
     }
 
     private setupMenuIntentHandler(): void {
@@ -1012,6 +1129,8 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     public update(delta: number): void {
+        this.updateHandLocomotionIndicator();
+
         if (this.tablet) {
             // Update 3D visibility based on VR state vs Desktop Menu
             const isVR = this.context.runtime.render?.isXRPresenting();
@@ -1041,6 +1160,35 @@ export class VrUiRuntime implements IUpdatable {
             this.menuIntentHandler = null;
         }
         this.controllerCursor.destroy();
+        if (this.handLocomotionLine) {
+            this.handLocomotionLine.geometry.dispose();
+            (this.handLocomotionLine.material as THREE.Material).dispose();
+            this.handLocomotionLine.removeFromParent();
+            this.handLocomotionLine = null;
+        }
+        if (this.handLocomotionShell) {
+            this.handLocomotionShell.geometry.dispose();
+            (this.handLocomotionShell.material as THREE.Material).dispose();
+            this.handLocomotionShell.removeFromParent();
+            this.handLocomotionShell = null;
+        }
+        if (this.handLocomotionAnchor) {
+            this.handLocomotionAnchor.geometry.dispose();
+            (this.handLocomotionAnchor.material as THREE.Material).dispose();
+            this.handLocomotionAnchor.removeFromParent();
+            this.handLocomotionAnchor = null;
+        }
+        if (this.handLocomotionCurrent) {
+            this.handLocomotionCurrent.geometry.dispose();
+            (this.handLocomotionCurrent.material as THREE.Material).dispose();
+            this.handLocomotionCurrent.removeFromParent();
+            this.handLocomotionCurrent = null;
+        }
+        if (this.handLocomotionIndicator) {
+            this.handLocomotionIndicator.removeFromParent();
+            this.handLocomotionIndicator.clear();
+            this.handLocomotionIndicator = null;
+        }
         if (this.tablet) {
             const canvas = this.tablet.ui.canvas;
             if (this.canvasMouseMoveHandler) {

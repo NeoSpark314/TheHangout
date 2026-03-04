@@ -3,11 +3,22 @@ import * as THREE from 'three';
 import { INPUT_CONFIG } from '../../shared/constants/Constants';
 import { GestureUtils } from '../../shared/utils/GestureUtils';
 
+export interface IHandLocomotionIndicatorState {
+    visible: boolean;
+    isActive: boolean;
+    frameYaw: number;
+    deflectionLocal: { x: number; y: number; z: number };
+    radius: number;
+}
+
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
     private leftHandMoveActive = false;
     private leftHandMoveAnchor: THREE.Vector3 | null = null;
+    private leftHandMoveCurrentWorld: THREE.Vector3 | null = null;
+    private leftHandMoveVisualOffset = new THREE.Vector3();
+    private leftHandMoveYaw = 0;
     private readonly _tempVec = new THREE.Vector3();
     private readonly _tempQuat = new THREE.Quaternion();
     private readonly _tempYawQuat = new THREE.Quaternion();
@@ -25,11 +36,17 @@ export class XRInputManager {
         this.turn = 0;
 
         const render = this.context.runtime.render;
-        if (!render || !render.isXRPresenting()) return;
+        if (!render || !render.isXRPresenting()) {
+            this.resetLeftHandMovement();
+            return;
+        }
 
         const session = render.getXRSession();
         const referenceSpace = render.getXRReferenceSpace();
-        if (!session || !referenceSpace) return;
+        if (!session || !referenceSpace) {
+            this.resetLeftHandMovement();
+            return;
+        }
 
         let sawLeftHandSource = false;
         for (const source of session.inputSources) {
@@ -76,7 +93,10 @@ export class XRInputManager {
             return;
         }
 
-        const localPinchOffset = this.getHeadLocalOffset(pinchPoint);
+        this.leftHandMoveCurrentWorld = pinchPoint.clone();
+
+        const currentYaw = this.getHeadYaw();
+        const localPinchOffset = this.getYawLocalOffset(pinchPoint, currentYaw);
 
         const pinchDistance = this.getHandPinchDistance(source, frame, referenceSpace);
         const g = INPUT_CONFIG.GESTURE;
@@ -91,21 +111,33 @@ export class XRInputManager {
         } else if (!this.leftHandMoveActive && nextPinchState) {
             this.leftHandMoveActive = true;
             this.leftHandMoveAnchor = localPinchOffset.clone();
+            this.leftHandMoveYaw = currentYaw;
         } else if (!nextPinchState) {
             return;
         }
 
         if (!this.leftHandMoveAnchor) {
             this.leftHandMoveAnchor = localPinchOffset.clone();
+            this.leftHandMoveYaw = currentYaw;
         }
 
-        this._localDelta.copy(localPinchOffset).sub(this.leftHandMoveAnchor);
+        const pinnedLocalOffset = this.getYawLocalOffset(pinchPoint, this.leftHandMoveYaw);
+        this._localDelta.copy(pinnedLocalOffset).sub(this.leftHandMoveAnchor);
         this._localDelta.y = 0;
 
         const distance = Math.hypot(this._localDelta.x, this._localDelta.z);
         if (distance <= this.handMoveDeadzone) {
+            this.leftHandMoveVisualOffset.set(0, 0, 0);
             return;
         }
+
+        const visualDistance = Math.min(distance, this.handMoveMaxDistance);
+        const visualNorm = 1 / distance;
+        this.leftHandMoveVisualOffset.set(
+            this._localDelta.x * visualNorm * visualDistance,
+            0,
+            this._localDelta.z * visualNorm * visualDistance
+        );
 
         const scaledDistance = Math.min(1, (distance - this.handMoveDeadzone) / (this.handMoveMaxDistance - this.handMoveDeadzone));
         const norm = 1 / distance;
@@ -166,20 +198,46 @@ export class XRInputManager {
         return this._tempVec.clone();
     }
 
-    private getHeadLocalOffset(worldPoint: THREE.Vector3): THREE.Vector3 {
+    private getHeadYaw(): number {
         const render = this.context.runtime.render;
-        render.camera.getWorldPosition(this._tempVec);
         render.camera.getWorldQuaternion(this._tempQuat);
         this._tempEuler.setFromQuaternion(this._tempQuat, 'YXZ');
-        this._tempYawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this._tempEuler.y);
+        return this._tempEuler.y;
+    }
+
+    private getYawLocalOffset(worldPoint: THREE.Vector3, yaw: number): THREE.Vector3 {
+        const render = this.context.runtime.render;
+        render.camera.getWorldPosition(this._tempVec);
+        this._tempYawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
         this._tempInvYawQuat.copy(this._tempYawQuat).invert();
 
         this._worldDelta.copy(worldPoint).sub(this._tempVec);
         return this._worldDelta.applyQuaternion(this._tempInvYawQuat).clone();
     }
 
+    public getLeftHandLocomotionIndicatorState(): IHandLocomotionIndicatorState | null {
+        if (!this.leftHandMoveCurrentWorld) {
+            return null;
+        }
+
+        return {
+            visible: true,
+            isActive: this.leftHandMoveActive,
+            frameYaw: this.leftHandMoveActive ? this.leftHandMoveYaw : this.getHeadYaw(),
+            deflectionLocal: {
+                x: this.leftHandMoveVisualOffset.x,
+                y: this.leftHandMoveVisualOffset.y,
+                z: this.leftHandMoveVisualOffset.z
+            },
+            radius: this.handMoveMaxDistance
+        };
+    }
+
     private resetLeftHandMovement(): void {
         this.leftHandMoveActive = false;
         this.leftHandMoveAnchor = null;
+        this.leftHandMoveCurrentWorld = null;
+        this.leftHandMoveVisualOffset.set(0, 0, 0);
+        this.leftHandMoveYaw = 0;
     }
 }
