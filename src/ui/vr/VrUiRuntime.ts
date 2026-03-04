@@ -1,7 +1,7 @@
 import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { TabletSurfaceEntity } from '../../world/entities/TabletSurfaceEntity';
-import { UITabPanel, UIElement, UIButton, UILabel } from '../shared/canvasui';
+import { UITabPanel, UIElement, UIButton, UILabel, UIToggle } from '../shared/canvasui';
 import { UITheme, getFont } from '../shared/UITheme';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import { EntityType } from '../../shared/contracts/IEntityState';
@@ -26,6 +26,8 @@ export class VrUiRuntime implements IUpdatable {
     private onDesktopUpdateHandler: (() => void) | null = null;
     private onDesktopResubscribeHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
+    private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+    private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(private context: AppContext) { }
@@ -137,19 +139,21 @@ export class VrUiRuntime implements IUpdatable {
             this.overlayContainer.appendChild(canvas);
 
             // Add events
-            canvas.addEventListener('mousemove', (e) => {
+            this.canvasMouseMoveHandler = (e: MouseEvent) => {
                 const rect = canvas.getBoundingClientRect();
                 const x = (e.clientX - rect.left) * (this.tablet!.ui.width / rect.width);
                 const y = (e.clientY - rect.top) * (this.tablet!.ui.height / rect.height);
                 this.tablet!.ui.onMouseMove(x, y);
-            });
+            };
+            canvas.addEventListener('mousemove', this.canvasMouseMoveHandler);
 
-            canvas.addEventListener('click', (e) => {
+            this.canvasClickHandler = (e: MouseEvent) => {
                 const rect = canvas.getBoundingClientRect();
                 const x = (e.clientX - rect.left) * (this.tablet!.ui.width / rect.width);
                 const y = (e.clientY - rect.top) * (this.tablet!.ui.height / rect.height);
                 this.tablet!.ui.onMouseClick(x, y);
-            });
+            };
+            canvas.addEventListener('click', this.canvasClickHandler);
         }
 
         // Always re-append to ensure it's in the DOM
@@ -196,7 +200,6 @@ export class VrUiRuntime implements IUpdatable {
         let currentPage = 0;
         const playersPerPage = 4;
 
-        import('../shared/canvasui').then(({ UIButton, UILabel }) => {
             // 1. Header Row (for actions like Copy Invite)
             const headerContainer = new UIElement(0, 20, 1280, 80);
             sessionContainer.addChild(headerContainer);
@@ -215,7 +218,7 @@ export class VrUiRuntime implements IUpdatable {
                     // If the list is no longer in the container (tab switched), skip
                     return;
                 }
-                listContainer.children = []; // Clear current list
+                listContainer.clearChildren();
 
                 // Gather all players (Local + Remote)
                 interface IPeerRow {
@@ -404,6 +407,13 @@ export class VrUiRuntime implements IUpdatable {
                         copyBtn.text = "Copy Invite Link";
                         this.tablet?.ui.markDirty();
                     }, 2000);
+                }).catch(() => {
+                    copyBtn.text = "Copy Failed";
+                    this.tablet?.ui.markDirty();
+                    setTimeout(() => {
+                        copyBtn.text = "Copy Invite Link";
+                        this.tablet?.ui.markDirty();
+                    }, 2000);
                 });
             });
             copyBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
@@ -442,7 +452,6 @@ export class VrUiRuntime implements IUpdatable {
 
             // Initial render
             renderList();
-        });
     }
 
     private addSystemTab() {
@@ -451,7 +460,6 @@ export class VrUiRuntime implements IUpdatable {
         this.systemTab = this.tabPanel.addTab('System');
         const systemContainer = this.systemTab.container;
 
-        import('../shared/canvasui').then(({ UIButton, UILabel }) => {
             const title = new UILabel("System", 50, 50, 1180, 80);
             title.font = getFont(UITheme.typography.sizes.title, 'bold');
             title.textColor = UITheme.colors.primary;
@@ -476,7 +484,6 @@ export class VrUiRuntime implements IUpdatable {
             leaveBtn.hoverColor = UITheme.colors.dangerHover;
             leaveBtn.cornerRadius = 10;
             systemContainer.addChild(leaveBtn);
-        });
     }
 
     private addSessionTab() {
@@ -485,7 +492,6 @@ export class VrUiRuntime implements IUpdatable {
         this.sessionTab = this.tabPanel.addTab('Session');
         const sessionContainer = this.sessionTab.container;
 
-        import('../shared/canvasui').then(({ UIButton, UILabel }) => {
             const desktop = this.context.runtime.remoteDesktop;
 
             const title = new UILabel('Remote Screens', 50, 30, 1180, 70);
@@ -510,7 +516,7 @@ export class VrUiRuntime implements IUpdatable {
             sessionContainer.addChild(listContainer);
 
             const renderList = () => {
-                listContainer.children = [];
+                listContainer.clearChildren();
                 const configs = desktop.getConfigs();
 
                 if (configs.length === 0) {
@@ -588,7 +594,6 @@ export class VrUiRuntime implements IUpdatable {
             eventBus.on(EVENTS.PEER_JOINED_SESSION, this.onDesktopResubscribeHandler);
             desktop.requestSourceStatus();
             renderList();
-        });
     }
 
     private addDebugTab() {
@@ -597,7 +602,6 @@ export class VrUiRuntime implements IUpdatable {
         const debugTab = this.tabPanel.addTab('Debug');
         const debugContainer = debugTab.container;
 
-        import('../shared/canvasui').then(({ UIButton, UILabel, UIToggle }) => {
             if (this.debugStatsInterval) {
                 clearInterval(this.debugStatsInterval);
                 this.debugStatsInterval = null;
@@ -765,7 +769,6 @@ export class VrUiRuntime implements IUpdatable {
 
             updateStats();
             this.debugStatsInterval = setInterval(updateStats, 500);
-        });
     }
 
     private addHelpTab() {
@@ -775,14 +778,13 @@ export class VrUiRuntime implements IUpdatable {
         const container = helpTab.container;
         let currentMode: 'VR' | 'Desktop' | 'Touch' = 'VR';
 
-        import('../shared/canvasui').then(() => {
             const contentArea = new UIElement(50, 150, 1180, 600);
             container.addChild(contentArea);
 
             const navButtons: UIButton[] = [];
 
             const renderHelp = () => {
-                contentArea.children = [];
+                contentArea.clearChildren();
 
                 const title = new UILabel(`${currentMode} CONTROLS`, 0, 0, 1180, 80);
                 title.font = getFont(UITheme.typography.sizes.title, 'bold');
@@ -821,7 +823,6 @@ export class VrUiRuntime implements IUpdatable {
             });
 
             renderHelp();
-        });
     }
 
     private getControlsForMode(mode: 'VR' | 'Desktop' | 'Touch'): string[] {
@@ -888,6 +889,7 @@ export class VrUiRuntime implements IUpdatable {
 
     public destroy(): void {
         this.teardownPeersTabSubscriptions();
+        this.hide2DMenu();
         if (this.debugStatsInterval) {
             clearInterval(this.debugStatsInterval);
             this.debugStatsInterval = null;
@@ -896,5 +898,23 @@ export class VrUiRuntime implements IUpdatable {
             window.removeEventListener('keydown', this.keyboardHandler);
             this.keyboardHandler = null;
         }
+        if (this.tablet) {
+            const canvas = this.tablet.ui.canvas;
+            if (this.canvasMouseMoveHandler) {
+                canvas.removeEventListener('mousemove', this.canvasMouseMoveHandler);
+                this.canvasMouseMoveHandler = null;
+            }
+            if (this.canvasClickHandler) {
+                canvas.removeEventListener('click', this.canvasClickHandler);
+                this.canvasClickHandler = null;
+            }
+
+            this.context.runtime.render?.scene.remove(this.tablet.mesh);
+            this.context.runtime.entity?.removeEntity(this.tablet.id);
+            this.tablet.destroy();
+            this.tablet = null;
+        }
+        this.tabPanel = null;
+        this.overlayContainer = null;
     }
 }
