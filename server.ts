@@ -17,7 +17,7 @@ import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import { HeadlessSession } from './src/server/HeadlessRoom.ts';
+import { HeadlessSession } from './src/server/HeadlessSession.ts';
 import { DedicatedSessionTransport } from './src/server/DedicatedSessionTransport.ts';
 import { PACKET_TYPES } from './src/shared/constants/Constants.ts';
 import {
