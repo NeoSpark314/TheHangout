@@ -26,6 +26,8 @@ type HandId = 'left' | 'right';
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
+    private menuPressed = false;
+    private menuJustPressed = false;
     private handPinchLatched: Record<HandId, boolean> = { left: false, right: false };
     private handPinchStarted: Record<HandId, boolean> = { left: false, right: false };
     private handTracked: Record<HandId, boolean> = { left: false, right: false };
@@ -55,9 +57,11 @@ export class XRInputManager {
     public poll(frame?: XRFrame): void {
         this.move = { x: 0, y: 0 };
         this.turn = 0;
+        this.menuJustPressed = false;
 
         const render = this.context.runtime.render;
         if (!render || !render.isXRPresenting()) {
+            this.menuPressed = false;
             this.resetAllHandMovement();
             return;
         }
@@ -65,6 +69,7 @@ export class XRInputManager {
         const session = render.getXRSession();
         const referenceSpace = render.getXRReferenceSpace();
         if (!session || !referenceSpace) {
+            this.menuPressed = false;
             this.resetAllHandMovement();
             return;
         }
@@ -75,6 +80,7 @@ export class XRInputManager {
         this.handHovering.right = false;
         this.handPinchStarted.left = false;
         this.handPinchStarted.right = false;
+        let sawMenuPressed = false;
 
         for (const source of session.inputSources) {
             if ((source.handedness === 'left' || source.handedness === 'right') && source.hand) {
@@ -82,6 +88,9 @@ export class XRInputManager {
             }
 
             if (source.gamepad) {
+                if (this.isMenuButtonPressed(source)) {
+                    sawMenuPressed = true;
+                }
                 const axes = source.gamepad.axes;
                 // Standard mapping: Left stick for move, Right stick for turn
                 if (source.handedness === 'left') {
@@ -96,6 +105,9 @@ export class XRInputManager {
                 }
             }
         }
+
+        this.menuJustPressed = sawMenuPressed && !this.menuPressed;
+        this.menuPressed = sawMenuPressed;
 
         for (const hand of ['left', 'right'] as const) {
             if (!this.handTracked[hand]) {
@@ -310,6 +322,29 @@ export class XRInputManager {
             },
             pinchStarted: this.handPinchStarted[hand]
         };
+    }
+
+    public wasMenuJustPressed(): boolean {
+        return this.menuJustPressed;
+    }
+
+    private isMenuButtonPressed(source: XRInputSource): boolean {
+        const buttons = source.gamepad?.buttons;
+        if (!buttons || buttons.length === 0) {
+            return false;
+        }
+
+        // On xr-standard controllers the dedicated face/menu buttons are commonly
+        // exposed after trigger/squeeze/touchpad/thumbstick.
+        const candidateIndices = source.handedness === 'left' ? [4, 5] : [4, 5];
+        for (const index of candidateIndices) {
+            const button = buttons[index];
+            if (button && (button.pressed || button.value > 0.5)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private resetActiveMovement(): void {

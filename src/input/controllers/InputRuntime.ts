@@ -156,10 +156,10 @@ export class InputRuntime implements IUpdatable {
 
     public update(delta: number, frame?: XRFrame): void {
         this.gamepad.poll(delta);
-        if (this.gamepad.wasPressed(3)) {
+        this.xrInput.poll(frame);
+        if (this.gamepad.wasPressed(3) || this.xrInput.wasMenuJustPressed()) {
             eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
         }
-        this.xrInput.poll(frame);
 
         const runtime = this.context.runtime;
         const render = runtime.render;
