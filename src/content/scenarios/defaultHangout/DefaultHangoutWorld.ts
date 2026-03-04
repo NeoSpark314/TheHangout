@@ -41,16 +41,16 @@ export class DefaultHangoutWorld {
         this.ensureDefaultCubes();
 
         const scene = this.session.scene;
-        if (!scene) return;
 
+        // Ensure we load the ground physics for headless network sync
         this.session.ensureGroundPhysics();
 
         if (!this.environment) {
-            this.environment = new EnvironmentBuilder(scene, () => this.session.randomFloat());
+            this.environment = new EnvironmentBuilder(scene as any, () => this.session.randomFloat());
         }
 
         if (!this.props) {
-            this.props = new PropBuilder(scene, () => this.session.randomFloat(), this.context);
+            this.props = new PropBuilder(scene as any, () => this.session.randomFloat(), this.context);
         }
 
         this.environment.applyConfig(config);
