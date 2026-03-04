@@ -165,13 +165,6 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
         });
     }
 
-    public spawnCube(): void {
-        const sessionMgr = this.context.runtime.session;
-        if (sessionMgr) {
-            sessionMgr.spawnObjectModule('grabbable-cube');
-        }
-    }
-
     public resetSession(): void {
         const entityMgr = this.context.runtime.entity;
         const entities = Array.from(entityMgr.entities.values());

@@ -234,9 +234,6 @@ app.post('/api/admin/session/:id/command', (req, res) => {
     console.log(`[Admin] Command received for ${id}: ${command}`, payload);
 
     switch (command) {
-        case 'spawn_cube':
-            session.network.spawnCube();
-            break;
         case 'reset':
             session.network.resetSession();
             break;

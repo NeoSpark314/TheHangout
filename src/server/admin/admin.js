@@ -93,17 +93,12 @@ function createSessionCard(sessionId) {
     const controlsRow = document.createElement('div');
     controlsRow.className = 'controls-row';
 
-    const spawnButton = document.createElement('button');
-    spawnButton.className = 'synth-button';
-    spawnButton.textContent = 'Spawn Cube';
-    spawnButton.addEventListener('click', () => sendCommand(sessionId, 'spawn_cube'));
-
     const resetButton = document.createElement('button');
     resetButton.className = 'synth-button is-danger';
     resetButton.textContent = 'Reset Session';
     resetButton.addEventListener('click', () => sendCommand(sessionId, 'reset'));
 
-    controlsRow.append(spawnButton, resetButton);
+    controlsRow.append(resetButton);
 
     const broadcastGroup = document.createElement('div');
     broadcastGroup.className = 'broadcast-group';
