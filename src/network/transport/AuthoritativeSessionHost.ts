@@ -179,8 +179,14 @@ export class AuthoritativeSessionHost {
     }
 
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
-        const applied = this.context.runtime.session.updateConfig(payload);
+        const applied = this.context.runtime.session.applySessionConfigUpdate(payload);
         if (!applied) {
+            if (payload.activeScenarioId) {
+                console.warn(
+                    `[AuthoritativeSessionHost] Rejected session config update` +
+                    ` (activeScenarioId=${payload.activeScenarioId})`
+                );
+            }
             return;
         }
 

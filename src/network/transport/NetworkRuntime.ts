@@ -116,7 +116,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 this.authoritativeHost.applySessionConfigUpdate(payload);
             },
             guest: (_senderId, payload) => {
-                this.context.runtime.session.updateConfig(payload);
+                this.context.runtime.session.applySessionConfigUpdate(payload);
                 const network = this.context.runtime.network as any;
                 const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
                 if (localId && !this.context.localPlayer) {
@@ -472,7 +472,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             return;
         }
 
-        this.context.runtime.session.updateConfig(payload);
+        this.context.runtime.session.applySessionConfigUpdate(payload);
         this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
     }
 

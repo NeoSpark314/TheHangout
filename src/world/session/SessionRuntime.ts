@@ -76,7 +76,7 @@ export class SessionRuntime implements IUpdatable {
         this.objectInstanceRegistry.update(delta);
     }
 
-    public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): boolean {
+    public applySessionConfigUpdate(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): boolean {
         const oldSeed = this.context.sessionConfig.seed;
         const oldScenarioId = this.context.sessionConfig.activeScenarioId;
 
@@ -95,23 +95,39 @@ export class SessionRuntime implements IUpdatable {
                 return false;
             }
 
+            const previousEntityCount = this.context.runtime.entity.entities.size;
+            console.info(
+                `[SessionRuntime] Switching scenario ${oldScenarioId} -> ${nextConfig.activeScenarioId}` +
+                ` (reason=scenario_switch, entities_before=${previousEntityCount})`
+            );
+
             // Validate the scenario before mutating shared session config so a bad
             // admin/client payload cannot leave the runtime advertising a scenario
             // that never actually became active.
             this.context.sessionConfig = nextConfig;
-            return this.switchScenario(this.context.sessionConfig.activeScenarioId, {
+            const applied = this.switchScenario(this.context.sessionConfig.activeScenarioId, {
                 seed: this.context.sessionConfig.seed,
                 reason: 'scenario_switch'
             });
+            console.info(
+                `[SessionRuntime] Scenario switch ${applied ? 'completed' : 'failed'}` +
+                ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+            );
+            return applied;
         }
 
         this.context.sessionConfig = nextConfig;
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this._seed = this.context.sessionConfig.seed;
+            const previousEntityCount = this.context.runtime.entity.entities.size;
+            console.info(
+                `[SessionRuntime] Reloading scenario ${this.activeScenario.id}` +
+                ` (reason=reload, seed=${this.context.sessionConfig.seed}, entities_before=${previousEntityCount})`
+            );
             if (this.isInitialized) {
                 this.activeScenario.unload(this.context);
-                this.clearScenarioEntities();
+                this.clearScenarioOwnedState();
                 this.activeScenario.load(this.context, {
                     isHost: this.context.isHost,
                     seed: this.context.sessionConfig.seed,
@@ -119,6 +135,10 @@ export class SessionRuntime implements IUpdatable {
                 });
                 this.refreshActiveObjectModules();
             }
+            console.info(
+                `[SessionRuntime] Scenario reload completed` +
+                ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+            );
             return true;
         }
 
@@ -188,7 +208,7 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.activeScenario.unload(this.context);
-        this.clearScenarioEntities();
+        this.clearScenarioOwnedState();
         this.activeScenario = nextScenario;
         this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
         this._seed = options.seed ?? this.context.sessionConfig.seed;
@@ -242,7 +262,7 @@ export class SessionRuntime implements IUpdatable {
         this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
     }
 
-    private clearScenarioEntities(): void {
+    private clearScenarioOwnedState(): void {
         this.context.runtime.drawing?.clear?.();
         this.objectInstanceRegistry.removeAll();
     }
