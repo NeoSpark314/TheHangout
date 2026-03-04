@@ -506,6 +506,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             const incomingOwnerId = hasOwnershipHint
                 ? (state.ownerId !== undefined ? state.ownerId : state.o)
                 : undefined;
+            const incomingHeldBy = state.b ?? undefined;
 
             if (entity && source === 'player_input' && stateData.type !== EntityType.PLAYER_AVATAR) {
                 const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
@@ -518,7 +519,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                     if (
                         currentOwnerId === null &&
                         incomingOwnerId !== undefined &&
-                        incomingOwnerId === senderId
+                        incomingOwnerId === senderId &&
+                        incomingHeldBy === senderId
                     ) {
                         (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
                         entity.isAuthority = false;

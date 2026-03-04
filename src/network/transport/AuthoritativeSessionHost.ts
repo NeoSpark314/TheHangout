@@ -146,11 +146,12 @@ export class AuthoritativeSessionHost {
                 entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
             }
 
-            const state = stateData.state as { ownerId?: string | null; o?: string | null };
+            const state = stateData.state as { ownerId?: string | null; o?: string | null; b?: string | null };
             const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
             const incomingOwnerId = hasOwnershipHint
                 ? (state.ownerId !== undefined ? state.ownerId : state.o)
                 : undefined;
+            const incomingHeldBy = state.b ?? undefined;
 
             if (entity && stateData.type !== EntityType.PLAYER_AVATAR) {
                 const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
@@ -160,11 +161,15 @@ export class AuthoritativeSessionHost {
                     continue;
                 }
 
-                // Allow the first packet after a local claim to establish owner identity on the host.
+                // Allow the first packet after a local claim to establish owner identity on the host,
+                // but only while the sender is actively holding the prop. Without the heldBy guard,
+                // a late post-release packet can silently reclaim ownership after the host already
+                // accepted the release, which leaves tools like the pen stuck with a stale owner.
                 if (
                     currentOwnerId === null &&
                     incomingOwnerId !== undefined &&
-                    incomingOwnerId === senderId
+                    incomingOwnerId === senderId &&
+                    incomingHeldBy === senderId
                 ) {
                     (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
                     entity.isAuthority = false;
