@@ -20,7 +20,6 @@ import {
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { NetworkDispatcher } from '../protocol/PacketDispatcher';
 import { NetworkSynchronizer, INetworkTransport } from '../replication/StateSynchronizer';
-import { IPacketHandler } from '../protocol/PacketHandler';
 import { NetworkEnvelope, PacketPayloadMap } from '../protocol/PacketTypes';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../replication/FeatureReplicationService';
 import { IAudioChunkPayload, IAudioChunkReceiver } from '../../shared/contracts/IVoice';
@@ -83,23 +82,161 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     private registerHandlers(): void {
-        this.dispatcher.registerHandler(PACKET_TYPES.STATE_UPDATE, new StateUpdateHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.PLAYER_INPUT, new PlayerInputHandler(this, this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.PEER_DISCONNECT, new PeerDisconnectHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, new SessionConfigHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, new OwnershipRequestHandler(this, this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, new OwnershipReleaseHandler(this, this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, new OwnershipTransferHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.PEER_JOINED, new PeerJoinedHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, new FeatureEventHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, new FeatureSnapshotHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, new FeatureSnapshotRequestHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE, new DesktopSourcesStatusHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_SUMMONED, new DesktopStreamSummonedHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_STOPPED, new DesktopStreamStoppedHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_OFFLINE, new DesktopStreamOfflineHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.DESKTOP_STREAM_FRAME, new DesktopStreamFrameHandler(this.context));
-        this.dispatcher.registerHandler(PACKET_TYPES.SESSION_NOTIFICATION, new SessionNotificationHandler(this.context));
+        // Keep packet routing in one place so host/guest behavior is easy to compare.
+        this.registerRoleAwareHandler(PACKET_TYPES.STATE_UPDATE, {
+            guest: (senderId, payload) => {
+                this.applyStateUpdate(payload, 'state_update', senderId);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.PLAYER_INPUT, {
+            host: (senderId, payload) => {
+                this.handleHostPlayerInput(senderId, payload);
+            },
+            guest: (senderId, payload) => {
+                this.applyStateUpdate(payload, 'player_input', senderId);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.PEER_DISCONNECT, {
+            guest: (_senderId, payload) => {
+                const peerId = typeof payload === 'string' ? payload : payload.peerId;
+                eventBus.emit(EVENTS.PEER_DISCONNECTED, peerId);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, {
+            host: (_senderId, payload) => {
+                this.authoritativeHost.applySessionConfigUpdate(payload);
+            },
+            guest: (_senderId, payload) => {
+                this.context.runtime.session.updateConfig(payload);
+                const network = this.context.runtime.network as any;
+                const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
+                if (localId && !this.context.localPlayer) {
+                    eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
+                }
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.OWNERSHIP_REQUEST, {
+            host: (senderId, payload) => {
+                this.authoritativeHost.handleOwnershipRequest(senderId, payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.OWNERSHIP_RELEASE, {
+            host: (senderId, payload) => {
+                this.authoritativeHost.handleOwnershipRelease(senderId, payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.OWNERSHIP_TRANSFER, {
+            guest: (_senderId, payload) => {
+                this.applyOwnershipTransfer(payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.PEER_JOINED, {
+            guest: (_senderId, payload) => {
+                if (!this.context.isLocalServer) return;
+                eventBus.emit(EVENTS.PEER_JOINED_SESSION, payload.peerId);
+            }
+        });
+
+        this.registerHandler(PACKET_TYPES.FEATURE_EVENT, (senderId, payload) => {
+            this.context.runtime.replication.handleIncomingFeatureEvent(senderId, payload);
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.FEATURE_SNAPSHOT, {
+            guest: (_senderId, payload) => {
+                this.context.runtime.replication.applySnapshotPayload(payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {
+            host: (senderId, _payload) => {
+                this.context.runtime.replication.sendSnapshotToPeer(senderId);
+            }
+        });
+
+        this.registerHandler(PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE, (_senderId, payload) => {
+            this.context.runtime.remoteDesktop.handleSourcesStatus(payload);
+        });
+
+        this.registerHandler(PACKET_TYPES.DESKTOP_STREAM_SUMMONED, (_senderId, payload) => {
+            this.context.runtime.remoteDesktop.handleStreamSummoned(payload);
+        });
+
+        this.registerHandler(PACKET_TYPES.DESKTOP_STREAM_STOPPED, (_senderId, payload) => {
+            this.context.runtime.remoteDesktop.handleStreamStopped(payload);
+        });
+
+        this.registerHandler(PACKET_TYPES.DESKTOP_STREAM_OFFLINE, (_senderId, payload) => {
+            this.context.runtime.remoteDesktop.handleStreamOffline(payload);
+        });
+
+        this.registerHandler(PACKET_TYPES.DESKTOP_STREAM_FRAME, (_senderId, payload) => {
+            this.context.runtime.remoteDesktop.handleStreamFrame(payload);
+        });
+
+        this.registerHandler(PACKET_TYPES.SESSION_NOTIFICATION, (_senderId, payload) => {
+            const localPeerId = this.context.localPlayer?.id;
+            if (payload.actorPeerId && localPeerId && payload.actorPeerId === localPeerId) return;
+
+            let message = payload.message || '';
+            if (!message) {
+                const actor = payload.actorName || 'Someone';
+                const subject = payload.subjectName || 'a screen';
+
+                switch (payload.kind) {
+                    case 'desktop_stream_started':
+                        message = `${actor} started sharing ${subject}.`;
+                        break;
+                    case 'desktop_stream_stopped':
+                        message = `${subject} sharing stopped.`;
+                        break;
+                    case 'desktop_stream_offline':
+                        message = `${subject} went offline.`;
+                        break;
+                    case 'system':
+                        message = payload.message || 'System Notification';
+                        break;
+                    default:
+                        message = payload.message || payload.kind;
+                }
+            }
+
+            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, message);
+        });
+    }
+
+    private registerHandler<K extends keyof PacketPayloadMap & number>(
+        type: K,
+        handle: (senderId: string, payload: PacketPayloadMap[K]) => void
+    ): void {
+        this.dispatcher.registerHandler(type, {
+            handle: (senderId, payload) => {
+                handle(senderId, payload as PacketPayloadMap[K]);
+            }
+        });
+    }
+
+    private registerRoleAwareHandler<K extends keyof PacketPayloadMap & number>(
+        type: K,
+        handlers: {
+            host?: (senderId: string, payload: PacketPayloadMap[K]) => void;
+            guest?: (senderId: string, payload: PacketPayloadMap[K]) => void;
+        }
+    ): void {
+        this.registerHandler(type, (senderId, payload) => {
+            if (this.context.isHost) {
+                handlers.host?.(senderId, payload);
+                return;
+            }
+
+            handlers.guest?.(senderId, payload);
+        });
     }
 
     private getPeerConfig(): any {
@@ -575,175 +712,6 @@ function isAudioChunkEnvelope(data: unknown): data is NetworkEnvelope<typeof PAC
         !!payload &&
         typeof payload.chunk === 'string' &&
         typeof payload.isHeader === 'boolean';
-}
-
-/**
- * HANDLERS
- */
-
-class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.STATE_UPDATE]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: IStateUpdatePacket[]): void {
-        if (!this.context.isHost) {
-            this.context.runtime.network.applyStateUpdate(payload, 'state_update', senderId);
-        }
-    }
-}
-
-class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PLAYER_INPUT]> {
-    constructor(private network: NetworkRuntime, private context: AppContext) { }
-    handle(senderId: string, payload: IStateUpdatePacket[]): void {
-        if (this.context.isHost) {
-            this.network.handleHostPlayerInput(senderId, payload);
-            return;
-        }
-
-        this.network.applyStateUpdate(payload, 'player_input', senderId);
-    }
-}
-
-class PeerDisconnectHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PEER_DISCONNECT]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: unknown): void {
-        if (!this.context.isHost) eventBus.emit(EVENTS.PEER_DISCONNECTED, payload);
-    }
-}
-
-class SessionConfigHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: ISessionConfigUpdatePayload): void {
-        if (this.context.isHost) {
-            this.context.runtime.network.applySessionConfigUpdate(payload);
-            return;
-        }
-
-        this.context.runtime.session.updateConfig(payload);
-        const network = this.context.runtime.network as any;
-        const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
-        if (localId && !this.context.localPlayer) {
-            eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
-        }
-    }
-}
-
-class OwnershipRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_REQUEST]> {
-    constructor(private network: NetworkRuntime, private context: AppContext) { }
-    handle(senderId: string, payload: IOwnershipRequestPayload): void {
-        if (this.context.isHost) this.network.handleOwnershipRequest(senderId, payload);
-    }
-}
-
-class OwnershipReleaseHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_RELEASE]> {
-    constructor(private network: NetworkRuntime, private context: AppContext) { }
-    handle(senderId: string, payload: IOwnershipReleasePayload): void {
-        if (this.context.isHost) this.network.handleOwnershipRelease(senderId, payload);
-    }
-}
-
-class OwnershipTransferHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.OWNERSHIP_TRANSFER]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: IOwnershipTransferPayload): void {
-        if (!this.context.isHost) this.context.runtime.network.applyOwnershipTransfer(payload);
-    }
-}
-
-class PeerJoinedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PEER_JOINED]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: { peerId: string }): void {
-        if (!this.context.isHost && this.context.isLocalServer) {
-            eventBus.emit(EVENTS.PEER_JOINED_SESSION, payload.peerId);
-        }
-    }
-}
-
-class FeatureEventHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_EVENT]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: IReplicatedFeatureEventPayload): void {
-        this.context.runtime.replication.handleIncomingFeatureEvent(senderId, payload);
-    }
-}
-
-class FeatureSnapshotHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: IReplicatedFeatureSnapshotPayload): void {
-        this.context.runtime.replication.applySnapshotPayload(payload);
-    }
-}
-
-class FeatureSnapshotRequestHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST]> {
-    constructor(private context: AppContext) { }
-    handle(senderId: string, payload: IFeatureSnapshotRequestPayload): void {
-        if (!this.context.isHost) return;
-        this.context.runtime.replication.sendSnapshotToPeer(senderId);
-    }
-}
-
-class DesktopSourcesStatusHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE]> {
-    constructor(private context: AppContext) { }
-    handle(_senderId: string, payload: IDesktopSourcesStatusResponsePayload): void {
-        this.context.runtime.remoteDesktop.handleSourcesStatus(payload);
-    }
-}
-
-class DesktopStreamSummonedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_SUMMONED]> {
-    constructor(private context: AppContext) { }
-    handle(_senderId: string, payload: IDesktopStreamSummonedPayload): void {
-        this.context.runtime.remoteDesktop.handleStreamSummoned(payload);
-    }
-}
-
-class DesktopStreamStoppedHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_STOPPED]> {
-    constructor(private context: AppContext) { }
-    handle(_senderId: string, payload: IDesktopStreamStoppedPayload): void {
-        this.context.runtime.remoteDesktop.handleStreamStopped(payload);
-    }
-}
-
-class DesktopStreamOfflineHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_OFFLINE]> {
-    constructor(private context: AppContext) { }
-    handle(_senderId: string, payload: IDesktopStreamOfflinePayload): void {
-        this.context.runtime.remoteDesktop.handleStreamOffline(payload);
-    }
-}
-
-class DesktopStreamFrameHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.DESKTOP_STREAM_FRAME]> {
-    constructor(private context: AppContext) { }
-    handle(_senderId: string, payload: IDesktopStreamFramePayload): void {
-        this.context.runtime.remoteDesktop.handleStreamFrame(payload);
-    }
-}
-
-class SessionNotificationHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.SESSION_NOTIFICATION]> {
-    constructor(private context: AppContext) { }
-    handle(_senderId: string, payload: ISessionNotificationPayload): void {
-        const localPeerId = this.context.localPlayer?.id;
-        if (payload.actorPeerId && localPeerId && payload.actorPeerId === localPeerId) return;
-
-        let message = payload.message || '';
-        if (!message) {
-            const actor = payload.actorName || 'Someone';
-            const subject = payload.subjectName || 'a screen';
-
-            switch (payload.kind) {
-                case 'desktop_stream_started':
-                    message = `${actor} started sharing ${subject}.`;
-                    break;
-                case 'desktop_stream_stopped':
-                    message = `${subject} sharing stopped.`;
-                    break;
-                case 'desktop_stream_offline':
-                    message = `${subject} went offline.`;
-                    break;
-                case 'system':
-                    message = payload.message || 'System Notification';
-                    break;
-                default:
-                    message = payload.message || payload.kind;
-            }
-        }
-
-        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, message);
-    }
 }
 
 /**
