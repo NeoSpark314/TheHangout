@@ -315,14 +315,9 @@ export class FlatUiRuntime implements IUpdatable {
 
         this.context.playerName = this.nameInput.value.trim();
 
-        const buildInfo = globalThis as typeof globalThis & {
-            __APP_VERSION__?: string;
-            __GIT_SHA__?: string;
-            __BUILD_TIME__?: string;
-        };
-        const appVersion = buildInfo.__APP_VERSION__ || 'dev';
-        const gitSha = buildInfo.__GIT_SHA__ || 'local';
-        const buildTime = buildInfo.__BUILD_TIME__ || 'unknown';
+        const appVersion = __APP_VERSION__ || 'dev';
+        const gitSha = __GIT_SHA__ || 'local';
+        const buildTime = __BUILD_TIME__ || 'unknown';
 
         if (this.versionInfo) this.versionInfo.textContent = `v${appVersion}`;
         if (this.shaInfo) this.shaInfo.textContent = `build: ${gitSha} (${buildTime})`;
