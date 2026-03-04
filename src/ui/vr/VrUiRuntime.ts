@@ -10,6 +10,7 @@ import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
 import { ControllerPointer } from '../shared/ControllerPointer';
 import * as THREE from 'three';
+import { GrabSkill } from '../../skills/GrabSkill';
 
 export class VrUiRuntime implements IUpdatable {
     public tablet: TabletSurfaceEntity | null = null;
@@ -22,6 +23,7 @@ export class VrUiRuntime implements IUpdatable {
     private handLocomotionCurrent: THREE.Mesh | null = null;
     private handLocomotionLine: THREE.Line | null = null;
     private menuOrb: THREE.Mesh | null = null;
+    private interactOrb: THREE.Mesh | null = null;
 
     private peersTab: any = null; // Store UITab handle
     private sessionTab: any = null;
@@ -154,6 +156,19 @@ export class VrUiRuntime implements IUpdatable {
         menuOrb.visible = false;
         render.scene.add(menuOrb);
         this.menuOrb = menuOrb;
+
+        const interactOrb = new THREE.Mesh(
+            new THREE.SphereGeometry(0.022, 16, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0x3f8f6b,
+                transparent: true,
+                opacity: 0.22,
+                depthWrite: false
+            })
+        );
+        interactOrb.visible = false;
+        render.scene.add(interactOrb);
+        this.interactOrb = interactOrb;
     }
 
     private updateHandLocomotionIndicator(): void {
@@ -263,6 +278,78 @@ export class VrUiRuntime implements IUpdatable {
         const menuMaterial = menuOrb.material as THREE.MeshBasicMaterial;
         menuMaterial.color.setHex(isHovering ? 0xa8d7ff : 0x4a5d6b);
         menuMaterial.opacity = isHovering ? 0.38 : 0.22;
+    }
+
+    private updateInteractionOrb(): void {
+        const render = this.context.runtime.render;
+        const interactOrb = this.interactOrb;
+        const indicatorState = this.context.runtime.input?.xrInput.getLeftHandLocomotionIndicatorState() || null;
+        const grabSkill = this.context.localPlayer?.getSkill('grab');
+
+        if (!render || !interactOrb || !render.isXRPresenting() || !indicatorState || !(grabSkill instanceof GrabSkill)) {
+            if (interactOrb) interactOrb.visible = false;
+            return;
+        }
+
+        const heldHand = grabSkill.getSingleInteractableHoldingHand();
+        if (!heldHand) {
+            interactOrb.visible = false;
+            return;
+        }
+
+        const bubbleHand = heldHand === 'left' ? 'right' : 'left';
+        const probe = this.context.runtime.input?.xrInput.getHandUiProbe(bubbleHand);
+        const heldHandState = this.context.runtime.tracking.getState().hands[heldHand];
+        if (!probe?.tracked || !heldHandState.active) {
+            interactOrb.visible = false;
+            return;
+        }
+
+        const wristPos = heldHandState.pose.position;
+        const wristQuat = heldHandState.pose.quaternion;
+        const wristWorld = new THREE.Vector3(wristPos.x, wristPos.y, wristPos.z);
+        const wristWorldQuat = new THREE.Quaternion(wristQuat.x, wristQuat.y, wristQuat.z, wristQuat.w);
+
+        const orbLocalOffset = new THREE.Vector3(
+            heldHand === 'left' ? 0.045 : -0.045,
+            0.015,
+            0
+        );
+        const orbWorld = wristWorld.clone().add(orbLocalOffset.applyQuaternion(wristWorldQuat));
+
+        interactOrb.visible = true;
+        interactOrb.position.copy(orbWorld);
+
+        const orbRadius = indicatorState.radius * 0.33;
+        interactOrb.scale.setScalar(orbRadius / 0.022);
+
+        const freeHandPos = probe.currentLocal;
+        const headPosition = new THREE.Vector3();
+        const headQuaternion = new THREE.Quaternion();
+        const headEuler = new THREE.Euler();
+        const centerOffset = new THREE.Vector3(
+            indicatorState.centerOffsetHeadLocal.x,
+            indicatorState.centerOffsetHeadLocal.y,
+            indicatorState.centerOffsetHeadLocal.z
+        );
+        render.camera.getWorldPosition(headPosition);
+        render.camera.getWorldQuaternion(headQuaternion);
+        headEuler.setFromQuaternion(headQuaternion, 'YXZ');
+        centerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
+        const freeHandWorld = headPosition.clone()
+            .add(centerOffset)
+            .add(new THREE.Vector3(freeHandPos.x, freeHandPos.y, freeHandPos.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y));
+
+        const isHovering = freeHandWorld.distanceToSquared(orbWorld) <= (orbRadius * orbRadius);
+
+        if (isHovering && probe.pinchStarted) {
+            this.context.runtime.input?.toggleXRBubbleInteraction(heldHand);
+        }
+
+        const isActive = !!this.context.runtime.input?.isXRBubbleInteractionLatched(heldHand);
+        const material = interactOrb.material as THREE.MeshBasicMaterial;
+        material.color.setHex(isActive ? 0x79ffb5 : (isHovering ? 0x8fe6bf : 0x3f8f6b));
+        material.opacity = isActive ? 0.45 : (isHovering ? 0.34 : 0.22);
     }
 
     private setupMenuIntentHandler(): void {
@@ -1222,6 +1309,7 @@ export class VrUiRuntime implements IUpdatable {
     public update(delta: number): void {
         this.updateHandLocomotionIndicator();
         this.updateMenuOrb();
+        this.updateInteractionOrb();
 
         if (this.tablet) {
             // Update 3D visibility based on VR state vs Desktop Menu
@@ -1286,6 +1374,12 @@ export class VrUiRuntime implements IUpdatable {
             (this.menuOrb.material as THREE.Material).dispose();
             this.menuOrb.removeFromParent();
             this.menuOrb = null;
+        }
+        if (this.interactOrb) {
+            this.interactOrb.geometry.dispose();
+            (this.interactOrb.material as THREE.Material).dispose();
+            this.interactOrb.removeFromParent();
+            this.interactOrb = null;
         }
         if (this.tablet) {
             const canvas = this.tablet.ui.canvas;

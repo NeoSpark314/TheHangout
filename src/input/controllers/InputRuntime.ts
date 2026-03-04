@@ -12,6 +12,7 @@ import { NonVRReachAssistController } from './DesktopReachAssistController';
 import { NonVRInteractionController } from './DesktopInteractionController';
 import { XRInputManager } from './XRInputController';
 import { GestureUtils } from '../../shared/utils/GestureUtils';
+import { GrabSkill } from '../../skills/GrabSkill';
 
 /**
  * Aggregates user input from multiple distinct hardware sources (Keyboard, Gamepad, Mobile Joysticks, XR).
@@ -145,6 +146,7 @@ export class InputRuntime implements IUpdatable {
     }
 
     private _wasSnapTurnPressed = false;
+    private xrInteractionLatchedHand: 'left' | 'right' | null = null;
     private previousHandStates = {
         left: { isSqueezing: false, isInteracting: false },
         right: { isSqueezing: false, isInteracting: false }
@@ -159,6 +161,9 @@ export class InputRuntime implements IUpdatable {
         this.xrInput.poll(frame);
         if (this.gamepad.wasPressed(3) || this.xrInput.wasMenuJustPressed()) {
             eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
+        }
+        if (this.xrInteractionLatchedHand && !this.isXRBubbleInteractionEligible(this.xrInteractionLatchedHand)) {
+            this.xrInteractionLatchedHand = null;
         }
 
         const runtime = this.context.runtime;
@@ -251,6 +256,11 @@ export class InputRuntime implements IUpdatable {
                     currentStates[source.handedness] = state;
                 }
             }
+
+            if (this.xrInteractionLatchedHand) {
+                currentStates[this.xrInteractionLatchedHand].isInteracting = true;
+                currentStates[this.xrInteractionLatchedHand].triggerValue = 1.0;
+            }
         } else {
             // Desktop/Mobile interactions
             const tracking = this.context.runtime.tracking;
@@ -298,6 +308,28 @@ export class InputRuntime implements IUpdatable {
             this.previousHandStates[hand].isSqueezing = curr.isSqueezing;
             this.previousHandStates[hand].isInteracting = curr.isInteracting;
         }
+    }
+
+    public toggleXRBubbleInteraction(hand: 'left' | 'right'): void {
+        if (!this.isXRBubbleInteractionEligible(hand)) {
+            return;
+        }
+
+        this.xrInteractionLatchedHand = this.xrInteractionLatchedHand === hand ? null : hand;
+    }
+
+    public isXRBubbleInteractionLatched(hand: 'left' | 'right'): boolean {
+        return this.xrInteractionLatchedHand === hand;
+    }
+
+    private isXRBubbleInteractionEligible(hand: 'left' | 'right'): boolean {
+        const render = this.context.runtime.render;
+        if (!render || !render.isXRPresenting()) {
+            return false;
+        }
+
+        const grabSkill = this.context.localPlayer?.getSkill('grab');
+        return grabSkill instanceof GrabSkill && grabSkill.getSingleInteractableHoldingHand() === hand;
     }
 
     /**
