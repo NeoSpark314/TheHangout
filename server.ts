@@ -17,15 +17,15 @@ import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import { HeadlessSession } from './src/server/HeadlessSession.js';
+import { HeadlessSession } from './src/server/HeadlessRoom.ts';
 import { ServerNetworkManager } from './src/server/ServerNetworkManager.ts';
-import { PACKET_TYPES } from './src/utils/Constants.js';
+import { PACKET_TYPES } from './src/shared/constants/Constants.ts';
 import {
     IDesktopSourcesStatusRequestPayload,
     IDesktopSourcesStatusResponsePayload,
     IDesktopStreamSummonPayload,
     IDesktopStreamStopPayload
-} from './src/interfaces/INetworkPacket.js';
+} from './src/shared/contracts/INetworkPacket.ts';
 
 const activeSessions = new Map<string, HeadlessSession>(); // sessionId -> HeadlessSession
 const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket

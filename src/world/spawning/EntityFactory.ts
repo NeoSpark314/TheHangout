@@ -111,10 +111,23 @@ export class EntityFactory {
         return runtime.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
     }
 
-    public static createPen(context: AppContext, id: string, config: any): PenToolEntity {
-        const render = context.runtime.render;
+    public static createPen(context: AppContext, id: string, config: any): PenToolEntity | null {
+        const runtime = context.runtime;
+        const render = runtime.render;
         const view = render ? new PenView(id) : new NullView(id);
-        const entity = new PenToolEntity(context, id, !!config.isAuthority, view);
+
+        if (!runtime.physics) {
+            console.error('[EntityFactory] Physics runtime not found');
+            return null;
+        }
+
+        const position = config.position || { x: 0, y: 1.15, z: 0 };
+        const extents = { x: 0.05, y: 0.05, z: 0.05 };
+
+        const physicsData = runtime.physics.createSensorBody(position, extents);
+        if (!physicsData) return null;
+
+        const entity = new PenToolEntity(context, id, !!config.isAuthority, physicsData.rigidBody, view, config);
 
         if (config.position) {
             entity.updateGrabbedPose({
@@ -122,6 +135,8 @@ export class EntityFactory {
                 quaternion: config.quaternion || { x: 0, y: 0, z: 0, w: 1 }
             });
         }
+
+        runtime.physics.registerPhysicsEntity(entity, physicsData.rigidBody, physicsData.collider);
 
         if (render && view instanceof PenView) {
             view.addToScene(render.scene);

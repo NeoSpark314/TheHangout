@@ -58,6 +58,7 @@ export interface IPenEntityState extends IBaseEntityState {
     type: EntityType.PEN;
     p: Vec3Arr; // position
     q: QuatArr; // quaternion
+    v: Vec3Arr; // velocity
     b: string | null; // heldBy (playerId)
     isDrawing: boolean; // isDrawing
     c: string | number; // color

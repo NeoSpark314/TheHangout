@@ -56,8 +56,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private proxyRenderRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private proxyInitialized: boolean = false;
 
-    private presentPos: IVector3 = { x: 0, y: 0, z: 0 };
-    private presentRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+    protected presentPos: IVector3 = { x: 0, y: 0, z: 0 };
+    protected presentRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private snapshotBuffer: INetworkSnapshot[] = [];
     private interpolationDelayMs: number = 120;
     private maxExtrapolationMs: number = 80;
@@ -76,7 +76,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private lastSyncOwnerId: string | null = null;
 
     constructor(protected context: AppContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
-        super(context, id, EntityType.PHYSICS_PROP, isAuthority);
+        super(context, id, options.type || EntityType.PHYSICS_PROP, isAuthority);
         this.rigidBody = rigidBody;
         this.view = options.view || null;
         this.isHoldable = options.grabbable || false;
@@ -349,7 +349,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         }, delta);
     }
 
-    public getNetworkState(fullSync: boolean = false): IPhysicsEntityState | null {
+    public getNetworkState(fullSync: boolean = false): any {
         const isAwake = !this.rigidBody.isSleeping();
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
@@ -391,7 +391,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         };
     }
 
-    public applyNetworkState(state: IPhysicsEntityState): void {
+    public applyNetworkState(state: any): void {
         this.syncNetworkState(state);
 
         if (this.isAuthority) return;

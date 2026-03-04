@@ -1,49 +1,38 @@
-import { ReplicatedEntity } from './ReplicatedEntity';
-import { IGrabbable } from '../../shared/contracts/IGrabbable';
-import { IInteractable } from '../../shared/contracts/IInteractable';
+import { PhysicsPropEntity } from './PhysicsPropEntity';
 import { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
-import { IVector3, IQuaternion, IPose } from '../../shared/contracts/IMath';
+import { IVector3 } from '../../shared/contracts/IMath';
 import { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
 import { IView } from '../../shared/contracts/IView';
 import { IPenEntityState, EntityType } from '../../shared/contracts/IEntityState';
 import { AppContext } from '../../app/AppContext';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
 import * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 
 /**
- * A non-physics grabbable object that can draw lines in the world.
+ * A tool that can draw lines in the world, now backed by a sensor physics rigid body
+ * for robust networking grab/release capability identical to standard physical props.
  */
-export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInteractable {
-    public isHoldable = true;
-    public isGrabbable = true;
-    private hoverSources: Set<string> = new Set();
-    public heldBy: string | null = null;
-    public view: IView<any> | null = null;
-
-    private position: IVector3 = { x: 0, y: 0, z: 0 };
-    private quaternion: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+export class PenToolEntity extends PhysicsPropEntity {
     private isDrawing = false;
     private color: string | number = 0xffffff;
 
     private lastDrawPosition: IVector3 | null = null;
-
-    private lastSyncPos: IVector3 = { x: 0, y: 0, z: 0 };
-    private lastSyncRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lastSyncDrawing: boolean = false;
-    private lastSyncHeldBy: string | null = null;
-    private lastSyncOwnerId: string | null = null;
     private lastSyncColor: string | number | null = null;
 
-    constructor(protected context: AppContext, id: string, isAuthority: boolean, view: IView<any> | null) {
-        super(context, id, EntityType.PEN, isAuthority);
-        this.view = view;
+    constructor(protected context: AppContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, view: IView<any> | null, options: any = {}) {
+        super(context, id, isAuthority, rigidBody, {
+            ...options,
+            type: EntityType.PEN,
+            grabbable: true,
+            view: view as any,
+            grabRadius: 0.1
+        });
     }
 
-    // --- IGrabbable ---
+    // --- IGrabbable overrides ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
-        this.heldBy = playerId;
-        this.requestOwnership();
+        super.onGrab(playerId, hand);
 
         // Use the player's avatar color for drawing
         if (this.context.localPlayer && playerId === this.context.localPlayer.id) {
@@ -52,45 +41,15 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
     }
 
     public onRelease(velocity?: IVector3): void {
-        this.heldBy = null;
+        super.onRelease(velocity);
         this.isDrawing = false;
         this.lastDrawPosition = null;
-
-        if (!this.isAuthority) return;
-
-        if (this.context.isHost) {
-            this.releaseOwnership();
-            this.context.runtime.network?.syncEntityNow(this.id);
-            return;
-        }
-
-        const state = this.getNetworkState(true);
-        if (state) {
-            eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
-                entityId: this.id,
-                position: state.p,
-                quaternion: state.q
-            });
-        }
     }
 
-    public updateGrabbedPose(pose: IPose): void {
-        this.position = { x: pose.position.x, y: pose.position.y, z: pose.position.z };
-        this.quaternion = { x: pose.quaternion.x, y: pose.quaternion.y, z: pose.quaternion.z, w: pose.quaternion.w };
-    }
-
-    // --- IInteractable ---
-    public onHoverEnter(playerId: string): void {
-        this.hoverSources.add(playerId);
-        if (this.view) this.view.setHighlight(true);
-    }
-
-    public onHoverExit(playerId: string): void {
-        this.hoverSources.delete(playerId);
-        if (this.view) this.view.setHighlight(this.hoverSources.size > 0);
-    }
-
+    // --- IInteractable overrides ---
     public onInteraction(event: IInteractionEvent): void {
+        super.onInteraction?.(event);
+
         if (event.type === 'trigger') {
             if (event.phase === 'start' && !this.isDrawing) {
                 this.isDrawing = true;
@@ -102,11 +61,13 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
         }
     }
 
-    public update(delta: number): void {
+    public update(delta: number, frame?: XRFrame): void {
+        super.update(delta, frame);
+
         if (this.view) {
-            this.view.applyState({
-                position: this.position,
-                quaternion: this.quaternion,
+            (this.view as any).applyState({
+                position: this.presentPos,
+                quaternion: this.presentRot,
                 isDrawing: this.isDrawing,
                 color: this.color
             }, delta);
@@ -116,8 +77,8 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
         if (this.isDrawing && this.isAuthority) {
             // Get current pen tip position (approximate)
             const tipOffset = new THREE.Vector3(0, 0, -0.12);
-            const quat = new THREE.Quaternion(this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w);
-            const tipPos = new THREE.Vector3(this.position.x, this.position.y, this.position.z).add(tipOffset.applyQuaternion(quat));
+            const quat = new THREE.Quaternion(this.presentRot.x, this.presentRot.y, this.presentRot.z, this.presentRot.w);
+            const tipPos = new THREE.Vector3(this.presentPos.x, this.presentPos.y, this.presentPos.z).add(tipOffset.applyQuaternion(quat));
 
             if (this.lastDrawPosition) {
                 const distSq = tipPos.distanceToSquared(new THREE.Vector3(this.lastDrawPosition.x, this.lastDrawPosition.y, this.lastDrawPosition.z));
@@ -138,63 +99,33 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
         }
     }
 
-    public getNetworkState(fullSync: boolean = false): IPenEntityState | null {
-        if (!fullSync) {
-            const posChanged = Math.abs(this.position.x - this.lastSyncPos.x) > 0.001 ||
-                Math.abs(this.position.y - this.lastSyncPos.y) > 0.001 ||
-                Math.abs(this.position.z - this.lastSyncPos.z) > 0.001;
+    public getNetworkState(fullSync: boolean = false): any {
+        // Base will return null if asleep/unchanged transforms, but we must also check our properties.
+        const base = super.getNetworkState(fullSync);
 
-            const rotChanged = Math.abs(this.quaternion.x - this.lastSyncRot.x) > 0.001 ||
-                Math.abs(this.quaternion.y - this.lastSyncRot.y) > 0.001 ||
-                Math.abs(this.quaternion.z - this.lastSyncRot.z) > 0.001 ||
-                Math.abs(this.quaternion.w - this.lastSyncRot.w) > 0.001;
+        const stateChanged = this.isDrawing !== this.lastSyncDrawing || this.color !== this.lastSyncColor;
 
-            const stateChanged = this.isDrawing !== this.lastSyncDrawing ||
-                this.heldBy !== this.lastSyncHeldBy ||
-                this.ownerId !== this.lastSyncOwnerId ||
-                this.color !== this.lastSyncColor;
-
-            if (!posChanged && !rotChanged && !stateChanged) {
-                return null;
-            }
+        if (!base && !stateChanged && !fullSync) {
+            return null;
         }
 
-        this.lastSyncPos = { x: this.position.x, y: this.position.y, z: this.position.z };
-        this.lastSyncRot = { x: this.quaternion.x, y: this.quaternion.y, z: this.quaternion.z, w: this.quaternion.w };
-        this.lastSyncDrawing = this.isDrawing;
-        this.lastSyncHeldBy = this.heldBy;
-        this.lastSyncOwnerId = this.ownerId;
-        this.lastSyncColor = this.color;
-
-        return {
-            id: this.id,
+        const state: IPenEntityState = {
+            // Guarantee base is populated if stateChanged triggered us
+            ...(base || super.getNetworkState(true)!),
             type: EntityType.PEN,
-            p: [this.position.x, this.position.y, this.position.z],
-            q: [this.quaternion.x, this.quaternion.y, this.quaternion.z, this.quaternion.w],
-            b: this.heldBy,
-            ownerId: this.ownerId,
             isDrawing: this.isDrawing,
             c: this.color
         };
+
+        this.lastSyncDrawing = this.isDrawing;
+        this.lastSyncColor = this.color;
+
+        return state;
     }
 
-    public applyNetworkState(state: IPenEntityState): void {
-        this.syncNetworkState(state);
-        if (this.isAuthority) return;
-
-        if (state.p) this.position = { x: state.p[0], y: state.p[1], z: state.p[2] };
-        if (state.q) this.quaternion = { x: state.q[0], y: state.q[1], z: state.q[2], w: state.q[3] };
-        this.heldBy = state.b || null;
+    public applyNetworkState(state: any): void {
+        super.applyNetworkState(state);
         this.isDrawing = !!state.isDrawing;
         this.color = state.c || 0xffffff;
-    }
-
-    public destroy(): void {
-        super.destroy();
-        const render = this.context.runtime.render;
-        if (render && this.view) {
-            this.view.removeFromScene(render.scene);
-            this.view.destroy();
-        }
     }
 }

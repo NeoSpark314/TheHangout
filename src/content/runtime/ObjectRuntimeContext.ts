@@ -26,21 +26,21 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         public readonly instanceId: string
     ) {
         this.scene = {
-            add: (object) => {
+            add: (object: any) => {
                 this.app.runtime.render?.scene.add(object);
             },
-            remove: (object) => {
+            remove: (object: any) => {
                 this.app.runtime.render?.scene.remove(object);
             }
         };
 
         this.physics = {
-            createStaticCuboidCollider: (hx, hy, hz, position, rotation) =>
+            createStaticCuboidCollider: (hx: number, hy: number, hz: number, position: any, rotation: any) =>
                 this.app.runtime.physics.createStaticCuboidCollider(hx, hy, hz, position, rotation),
-            registerInteractionCollider: (collider, target) => {
+            registerInteractionCollider: (collider: any, target: any) => {
                 this.app.runtime.physics.registerInteractionCollider(collider, target as any);
             },
-            unregisterInteractionCollider: (collider) => {
+            unregisterInteractionCollider: (collider: any) => {
                 this.app.runtime.physics.unregisterInteractionCollider(collider);
             },
             removeRigidBody: (body: IPhysicsBodyHandle | null | undefined) => {
@@ -49,7 +49,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.audio = {
-            playDrumPadHit: (options) => {
+            playDrumPadHit: (options: any) => {
                 this.app.runtime.audio?.playDrumPadHit(options);
             }
         };
@@ -64,13 +64,13 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.sync = {
-            emit: (eventType, data) => {
+            emit: (eventType: string, data: any) => {
                 this.app.runtime.session.emitObjectInstanceEvent(this.instanceId, eventType, data);
             }
         };
 
         this.mount = {
-            mountLocal: (options) => this.app.runtime.mount.mountLocal(options),
+            mountLocal: (options: any) => this.app.runtime.mount.mountLocal(options),
             unmountLocal: (ownerInstanceId?: string) => this.app.runtime.mount.unmountLocal(ownerInstanceId),
             isMountedLocal: (ownerInstanceId?: string) => this.app.runtime.mount.isMountedLocal(ownerInstanceId)
         };

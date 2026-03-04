@@ -192,6 +192,36 @@ export class PhysicsRuntime {
         return physicsEntity;
     }
 
+    public createSensorBody(
+        position: IVector3,
+        halfExtents: IVector3
+    ): { rigidBody: RAPIER.RigidBody; collider: RAPIER.Collider } | null {
+        if (!this.world) return null;
+
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(position.x, position.y, position.z)
+            .setLinearDamping(0.5)
+            .setAngularDamping(0.5)
+            .setGravityScale(0) // Floating for tools
+            .setCanSleep(true)
+            .setSleeping(true);
+
+        const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
+            .setSensor(true) // No collision response
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+
+        const collider = this.world.createCollider(colliderDesc, rigidBody);
+
+        return { rigidBody, collider };
+    }
+
+    public registerPhysicsEntity(entity: PhysicsPropEntity, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider): void {
+        entity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
+        this.registerDebugBody(entity.id, rigidBody, collider, entity);
+    }
+
     public step(delta: number): void {
         if (!this.world) return;
         this.touchQueryHitsThisFrame = 0;
