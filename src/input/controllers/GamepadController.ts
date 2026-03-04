@@ -7,6 +7,7 @@ export class GamepadManager {
     public lastButtons: Record<number, boolean> = {};
     public isConnected = false;
     private deadzone: number = INPUT_CONFIG.DEADZONE;
+    private activeGamepadIndex: number | null = null;
 
     constructor() { }
 
@@ -36,12 +37,71 @@ export class GamepadManager {
 
     private getActiveGamepad(): Gamepad | null {
         const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-        for (const candidate of gamepads) {
-            if (candidate && candidate.connected) {
-                return candidate;
-            }
+        const connected = Array.from(gamepads).filter((candidate): candidate is Gamepad => !!candidate && candidate.connected);
+        if (connected.length === 0) {
+            this.activeGamepadIndex = null;
+            return null;
         }
-        return null;
+
+        const likelyControllers = connected.filter((candidate) => this.isLikelyGameController(candidate));
+        const pool = likelyControllers.length > 0 ? likelyControllers : connected;
+
+        const current = this.activeGamepadIndex !== null
+            ? pool.find((candidate) => candidate.index === this.activeGamepadIndex) ?? null
+            : null;
+
+        const activeCandidate = pool.find((candidate) => this.hasMeaningfulInput(candidate)) ?? null;
+        if (activeCandidate) {
+            this.activeGamepadIndex = activeCandidate.index;
+            return activeCandidate;
+        }
+
+        if (current) {
+            return current;
+        }
+
+        const fallback = [...pool].sort((a, b) => this.scoreGamepad(b) - this.scoreGamepad(a))[0] ?? null;
+        this.activeGamepadIndex = fallback?.index ?? null;
+        return fallback;
+    }
+
+    private hasMeaningfulInput(gamepad: Gamepad): boolean {
+        if (gamepad.axes.some((axis) => Math.abs(axis) > this.deadzone)) {
+            return true;
+        }
+
+        return gamepad.buttons.some((button) => button.pressed || button.value > 0.5);
+    }
+
+    private isLikelyGameController(gamepad: Gamepad): boolean {
+        const id = gamepad.id.toLowerCase();
+        const hasStandardMapping = gamepad.mapping === 'standard';
+        const hasExpectedLayout = gamepad.axes.length >= 2 && gamepad.buttons.length >= 4;
+        const hasRichLayout = gamepad.axes.length >= 4 || gamepad.buttons.length >= 8;
+
+        const knownController = /(controller|gamepad|xinput|xbox|playstation|dualshock|dualsense|joy-?con|8bitdo|steam|switch pro)/.test(id);
+        const likelyAccessory = /(jabra|headset|headphone|audio|speaker|microphone|keyboard|mouse|consumer control|touchpad)/.test(id);
+
+        if (likelyAccessory && !hasStandardMapping) {
+            return false;
+        }
+
+        return hasStandardMapping || knownController || hasExpectedLayout || hasRichLayout;
+    }
+
+    private scoreGamepad(gamepad: Gamepad): number {
+        const id = gamepad.id.toLowerCase();
+        let score = 0;
+
+        if (gamepad.mapping === 'standard') score += 100;
+        if (gamepad.axes.length >= 4) score += 20;
+        else if (gamepad.axes.length >= 2) score += 10;
+        if (gamepad.buttons.length >= 8) score += 20;
+        else if (gamepad.buttons.length >= 4) score += 10;
+        if (/(controller|gamepad|xinput|xbox|playstation|dualshock|dualsense|joy-?con|8bitdo|steam|switch pro)/.test(id)) score += 30;
+        if (/(jabra|headset|headphone|audio|speaker|microphone|keyboard|mouse|consumer control|touchpad)/.test(id)) score -= 100;
+
+        return score;
     }
 
     public wasPressed(buttonIndex: number): boolean {
