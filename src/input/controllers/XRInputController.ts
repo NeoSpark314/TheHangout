@@ -330,21 +330,12 @@ export class XRInputManager {
 
     private isMenuButtonPressed(source: XRInputSource): boolean {
         const buttons = source.gamepad?.buttons;
-        if (!buttons || buttons.length === 0) {
+        if (source.handedness !== 'left' || !buttons || buttons.length <= 3) {
             return false;
         }
 
-        // On xr-standard controllers the dedicated face/menu buttons are commonly
-        // exposed after trigger/squeeze/touchpad/thumbstick.
-        const candidateIndices = source.handedness === 'left' ? [4, 5] : [4, 5];
-        for (const index of candidateIndices) {
-            const button = buttons[index];
-            if (button && (button.pressed || button.value > 0.5)) {
-                return true;
-            }
-        }
-
-        return false;
+        const menuButton = buttons[3];
+        return !!menuButton && (menuButton.pressed || menuButton.value > 0.5);
     }
 
     private resetActiveMovement(): void {
