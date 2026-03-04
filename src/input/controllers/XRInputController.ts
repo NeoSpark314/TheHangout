@@ -330,11 +330,12 @@ export class XRInputManager {
 
     private isMenuButtonPressed(source: XRInputSource): boolean {
         const buttons = source.gamepad?.buttons;
-        if (source.handedness !== 'left' || !buttons || buttons.length <= 3) {
+        if (source.handedness !== 'left' || !buttons || buttons.length <= 5) {
             return false;
         }
 
-        const menuButton = buttons[3];
+        // xr-standard: button[5] is the upper face button (B/Y-style secondary button).
+        const menuButton = buttons[5];
         return !!menuButton && (menuButton.pressed || menuButton.value > 0.5);
     }
 
