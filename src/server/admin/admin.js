@@ -98,7 +98,7 @@ async function fetchSessions() {
         const el = document.getElementById('sessions');
 
         if (sessions.length === 0) {
-            el.innerHTML = '<div class="synth-card synth-panel synth-empty">NO ACTIVE SESSIONS</div>';
+            el.innerHTML = '<div class="synth-card synth-panel synth-empty">No Active Sessions</div>';
             return;
         }
 

@@ -250,7 +250,7 @@ export class FlatUiRuntime implements IUpdatable {
 
         const storedSession = localStorage.getItem('hangout_lastSessionId');
         if (!storedSession) {
-            const defaultSession = 'TestSession';
+            const defaultSession = 'DefaultMeetingSession';
             this.sessionInput.value = defaultSession;
             localStorage.setItem('hangout_lastSessionId', defaultSession);
         } else {
@@ -358,7 +358,6 @@ export class FlatUiRuntime implements IUpdatable {
             this.hideElement(this.createBtn);
 
             this.joinBtn.textContent = 'Enter Hangout';
-            this.joinBtn.classList.remove('secondary-btn');
             this.joinBtn.classList.add('primary-btn');
 
             this.joinBtn.addEventListener('click', async () => {
@@ -475,14 +474,14 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     private handleInlineCopy(): void {
-        const sessionId = this.sessionInput.value.trim() || 'TestSession';
+        const sessionId = this.sessionInput.value.trim() || 'DefaultMeetingSession';
         const url = new URL(window.location.href);
         url.searchParams.set('session', sessionId);
         const originalIcon = this.copySessionBtn.textContent;
         navigator.clipboard.writeText(url.toString()).then(() => {
             this.copySessionBtn.textContent = '✅';
             setTimeout(() => { this.copySessionBtn.textContent = originalIcon; }, 2000);
-        }).catch(() => { this.setStatus('Copy failed.'); });
+        }).catch(() => { this.setStatus('Copy Failed'); });
     }
 
     public setStatus(msg: string): void {
@@ -559,10 +558,10 @@ export class FlatUiRuntime implements IUpdatable {
     private updateVoiceButton(enabled: boolean): void {
         if (!this.voiceBtn) return;
         if (enabled) {
-            this.voiceBtn.textContent = 'Auto Voice: ON';
+            this.voiceBtn.textContent = 'Auto Mic: On';
             this.voiceBtn.classList.add('ready');
         } else {
-            this.voiceBtn.textContent = 'Auto Voice: OFF';
+            this.voiceBtn.textContent = 'Auto Mic: Off';
             this.voiceBtn.classList.remove('ready');
         }
     }

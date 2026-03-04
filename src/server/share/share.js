@@ -12,7 +12,7 @@ const previewCanvas = document.getElementById('preview-canvas');
 const bandwidthText = document.getElementById('bandwidth-text');
 const resText = document.getElementById('res-text');
 
-const STORAGE_KEY = 'th_DesktopShapre_SecretKey';
+const STORAGE_KEY = 'th_DesktopShare_SecretKey';
 
 let socket = null;
 let activeKey = '';
@@ -81,7 +81,7 @@ function stopCapture(notifyServer = false) {
         }));
     }
 
-    setStatus(`Connected as "${activeKey}" (standby)`, 'ok');
+    setStatus(`Connected: "${activeKey}" (Standby)`, 'ok');
     updateButtons();
 }
 
@@ -126,10 +126,10 @@ function startCaptureLoop() {
 
         // Smart Transmission Optimization
         if (!isWatched) {
-            setStatus(`Streaming "${activeKey}" (PAUSED - No session is watching)`, 'warn');
+            setStatus(`Streaming: "${activeKey}" (Paused - No Session Watching)`, 'warn');
             return;
         }
-        setStatus(`Streaming "${activeKey}" (LIVE)`, 'ok');
+        setStatus(`Streaming: "${activeKey}" (Live)`, 'ok');
 
         captureCanvas.width = outW;
         captureCanvas.height = outH;
@@ -202,7 +202,7 @@ async function startCapture() {
             stopCapture(true);
         }, { once: true });
 
-        setStatus(`Streaming "${activeKey}"`, 'warn');
+        setStatus(`Streaming: "${activeKey}"`, 'warn');
 
         if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
@@ -236,7 +236,7 @@ function connect() {
 
     socket.onopen = () => {
         registerSource();
-        setStatus(`Connected as "${activeKey}" (standby)`, 'ok');
+        setStatus(`Connected: "${activeKey}" (Standby)`, 'ok');
         updateButtons();
     };
 
