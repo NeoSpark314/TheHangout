@@ -171,6 +171,17 @@ export class VrUiRuntime implements IUpdatable {
         this.interactOrb = interactOrb;
     }
 
+    private applyToggleOrbVisual(
+        mesh: THREE.Mesh,
+        isHovering: boolean,
+        isActive: boolean,
+        colors: { off: number; hover: number; on: number }
+    ): void {
+        const material = mesh.material as THREE.MeshBasicMaterial;
+        material.color.setHex(isActive ? colors.on : (isHovering ? colors.hover : colors.off));
+        material.opacity = isActive ? 0.45 : (isHovering ? 0.34 : 0.22);
+    }
+
     private updateHandLocomotionIndicator(): void {
         const indicator = this.handLocomotionIndicator;
         const shell = this.handLocomotionShell;
@@ -270,14 +281,18 @@ export class VrUiRuntime implements IUpdatable {
 
             isHovering = true;
             if (probe.pinchStarted) {
+                const nextState = !this.context.isMenuOpen;
                 eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
+                this.context.runtime.audio?.playUiToggle(nextState);
                 break;
             }
         }
 
-        const menuMaterial = menuOrb.material as THREE.MeshBasicMaterial;
-        menuMaterial.color.setHex(isHovering ? 0xa8d7ff : 0x4a5d6b);
-        menuMaterial.opacity = isHovering ? 0.38 : 0.22;
+        this.applyToggleOrbVisual(menuOrb, isHovering, !!this.context.isMenuOpen, {
+            off: 0x4a5d6b,
+            hover: 0xa8d7ff,
+            on: 0x79b8ff
+        });
     }
 
     private updateInteractionOrb(): void {
@@ -343,13 +358,17 @@ export class VrUiRuntime implements IUpdatable {
         const isHovering = freeHandWorld.distanceToSquared(orbWorld) <= (orbRadius * orbRadius);
 
         if (isHovering && probe.pinchStarted) {
+            const nextState = !this.context.runtime.input.isXRBubbleInteractionLatched(heldHand);
             this.context.runtime.input?.toggleXRBubbleInteraction(heldHand);
+            this.context.runtime.audio?.playUiToggle(!!nextState);
         }
 
         const isActive = !!this.context.runtime.input?.isXRBubbleInteractionLatched(heldHand);
-        const material = interactOrb.material as THREE.MeshBasicMaterial;
-        material.color.setHex(isActive ? 0x79ffb5 : (isHovering ? 0x8fe6bf : 0x3f8f6b));
-        material.opacity = isActive ? 0.45 : (isHovering ? 0.34 : 0.22);
+        this.applyToggleOrbVisual(interactOrb, isHovering, isActive, {
+            off: 0x3f8f6b,
+            hover: 0x8fe6bf,
+            on: 0x79ffb5
+        });
     }
 
     private setupMenuIntentHandler(): void {

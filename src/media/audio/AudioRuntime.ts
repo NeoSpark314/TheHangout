@@ -100,4 +100,9 @@ export class AudioRuntime {
 
         SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { pan, distance });
     }
+
+    public playUiToggle(isActive: boolean): void {
+        if (!this.isInitialized || !this.ctx) return;
+        SoundSynth.playUI(this.ctx, isActive ? 1046.5 : 784);
+    }
 }
