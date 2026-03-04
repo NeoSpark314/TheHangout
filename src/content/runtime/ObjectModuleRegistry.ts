@@ -6,6 +6,7 @@ import { ObjectRuntimeContext } from './ObjectRuntimeContext';
 
 class EntityBackedObjectInstance implements ISpawnedObjectInstance {
     constructor(
+        private app: AppContext,
         public readonly id: string,
         public readonly moduleId: string,
         private entity: IEntity
@@ -18,6 +19,13 @@ class EntityBackedObjectInstance implements ISpawnedObjectInstance {
     public update(): void { }
 
     public destroy(): void {
+        const physicsEntity = this.entity as { rigidBody?: unknown };
+        if (physicsEntity.rigidBody) {
+            // Engine-level physics entities wrapped as object instances still own
+            // Rapier bodies. Remove them here so scenario unload does not leave
+            // stale colliders/bodies behind across scenario switches.
+            this.app.runtime.physics.removeRigidBody(physicsEntity.rigidBody as any);
+        }
         this.entity.destroy();
     }
 }
@@ -70,6 +78,6 @@ export class ObjectModuleRegistry {
         }
 
         const entity = result as IEntity;
-        return new EntityBackedObjectInstance(entity.id, moduleId, entity);
+        return new EntityBackedObjectInstance(app, entity.id, moduleId, entity);
     }
 }

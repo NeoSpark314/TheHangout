@@ -47,37 +47,38 @@ export class PropBuilder {
     }
 
     private createTable(): void {
-        const tableGroup = new THREE.Group();
-        this.tableGroup = tableGroup;
-        const topGeo = new THREE.CylinderGeometry(2, 2, 0.1, 6);
-        const topMat = new THREE.MeshStandardMaterial({
-            color: 0x1a1a2e,
-            emissive: 0x001133,
-            metalness: 0.9,
-            roughness: 0.4
-        });
-        this.table = new THREE.Mesh(topGeo, topMat);
-        this.table.position.y = 1.0;
-        tableGroup.add(this.table);
-
-        const edges = new THREE.EdgesGeometry(topGeo);
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
-        const outline = new THREE.LineSegments(edges, lineMat);
-        this.table.add(outline);
-
-        const coreGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.15, 6);
-        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
-        const core = new THREE.Mesh(coreGeo, coreMat);
-        core.position.y = 0.05;
-        this.table.add(core);
-
-        const baseGeo = new THREE.CylinderGeometry(0.3, 0.8, 1.0, 6);
-        const baseMat = new THREE.MeshBasicMaterial({ color: 0x0a0a1a });
-        const base = new THREE.Mesh(baseGeo, baseMat);
-        base.position.y = 0.5;
-        tableGroup.add(base);
-
+        let tableGroup: THREE.Group | null = null;
         if (this.scene) {
+            tableGroup = new THREE.Group();
+            this.tableGroup = tableGroup;
+            const topGeo = new THREE.CylinderGeometry(2, 2, 0.1, 6);
+            const topMat = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                emissive: 0x001133,
+                metalness: 0.9,
+                roughness: 0.4
+            });
+            this.table = new THREE.Mesh(topGeo, topMat);
+            this.table.position.y = 1.0;
+            tableGroup.add(this.table);
+
+            const edges = new THREE.EdgesGeometry(topGeo);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
+            const outline = new THREE.LineSegments(edges, lineMat);
+            this.table.add(outline);
+
+            const coreGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.15, 6);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            core.position.y = 0.05;
+            this.table.add(core);
+
+            const baseGeo = new THREE.CylinderGeometry(0.3, 0.8, 1.0, 6);
+            const baseMat = new THREE.MeshBasicMaterial({ color: 0x0a0a1a });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.5;
+            tableGroup.add(base);
+
             this.scene.add(tableGroup);
         }
 
@@ -224,8 +225,10 @@ export class PropBuilder {
 
     public clearProcedural(): void {
         const remove = (obj: THREE.Object3D | null) => {
-            if (!obj || !this.scene) return;
-            this.scene.remove(obj);
+            if (!obj) return;
+            if (this.scene) {
+                this.scene.remove(obj);
+            }
             obj.traverse((child) => {
                 const mesh = child as THREE.Mesh;
                 if (mesh.geometry) mesh.geometry.dispose();

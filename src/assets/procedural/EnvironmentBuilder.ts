@@ -242,8 +242,10 @@ export class EnvironmentBuilder {
 
     public clearProcedural(): void {
         const remove = (obj: THREE.Object3D | null) => {
-            if (!obj || !this.scene) return;
-            this.scene.remove(obj);
+            if (!obj) return;
+            if (this.scene) {
+                this.scene.remove(obj);
+            }
             obj.traverse((child) => {
                 const mesh = child as THREE.Mesh;
                 if (mesh.geometry) mesh.geometry.dispose();
