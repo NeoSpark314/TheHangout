@@ -1,4 +1,4 @@
-// server.js — Local Node.js server for TheHangout
+// dedicatedServer.ts — Local Node.js server for TheHangout
 // Serves the built app + runs PeerJS signaling locally.
 //
 // Usage:

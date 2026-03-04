@@ -30,7 +30,7 @@ default starts on port 443 (tries to generate self-signed certs; give your own v
 
 ```bash
 npm run build        # Build the client
-npm run serve        # Start 
+npm run serve        # Start
 ```
 
 ### Desktop Sharing Page (`/share`)
