@@ -25,6 +25,7 @@ export class VrUiRuntime implements IUpdatable {
     private scheduleRenderHandler: (() => void) | null = null;
     private onDesktopUpdateHandler: (() => void) | null = null;
     private onDesktopResubscribeHandler: (() => void) | null = null;
+    private menuIntentHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -61,7 +62,23 @@ export class VrUiRuntime implements IUpdatable {
         this.addDebugTab();
         this.addHelpTab();
 
+        this.setupMenuIntentHandler();
         this.setupKeyboardListeners();
+    }
+
+    private setupMenuIntentHandler(): void {
+        if (this.menuIntentHandler) {
+            eventBus.off(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
+        }
+
+        this.menuIntentHandler = () => {
+            const render = this.context.runtime.render;
+            if (render && !render.isXRPresenting()) {
+                this.toggle2DMenu();
+            }
+        };
+
+        eventBus.on(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
     }
 
     private setupKeyboardListeners(): void {
@@ -71,10 +88,7 @@ export class VrUiRuntime implements IUpdatable {
 
         this.keyboardHandler = (e: KeyboardEvent) => {
             if (e.key.toLowerCase() === 'm') {
-                const render = this.context.runtime.render;
-                if (render && !render.isXRPresenting()) {
-                    this.toggle2DMenu();
-                }
+                eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
             }
         };
         window.addEventListener('keydown', this.keyboardHandler);
@@ -971,6 +985,10 @@ export class VrUiRuntime implements IUpdatable {
         if (this.keyboardHandler) {
             window.removeEventListener('keydown', this.keyboardHandler);
             this.keyboardHandler = null;
+        }
+        if (this.menuIntentHandler) {
+            eventBus.off(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
+            this.menuIntentHandler = null;
         }
         if (this.tablet) {
             const canvas = this.tablet.ui.canvas;

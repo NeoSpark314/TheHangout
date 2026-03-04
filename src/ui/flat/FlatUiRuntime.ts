@@ -201,12 +201,6 @@ export class FlatUiRuntime implements IUpdatable {
             this.handleLeave();
         });
 
-        eventBus.on(EVENTS.INTENT_MENU_TOGGLE, () => {
-            const render = this.context.runtime.render;
-            if (!render || render.isXRPresenting()) return;
-            this.toggleOverlay();
-        });
-
         eventBus.on(EVENTS.VOICE_STATE_UPDATED, () => {
             this.updateVoiceButton(this.context.voiceAutoEnable);
         });
