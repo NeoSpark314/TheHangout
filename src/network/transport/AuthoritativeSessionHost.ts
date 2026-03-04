@@ -179,7 +179,11 @@ export class AuthoritativeSessionHost {
     }
 
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
-        this.context.runtime.session.updateConfig(payload);
+        const applied = this.context.runtime.session.updateConfig(payload);
+        if (!applied) {
+            return;
+        }
+
         this.transport.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
         this.broadcastAuthoritativeWorldState();
     }

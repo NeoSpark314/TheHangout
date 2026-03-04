@@ -76,7 +76,7 @@ export class SessionRuntime implements IUpdatable {
         this.objectInstanceRegistry.update(delta);
     }
 
-    public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): void {
+    public updateConfig(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): boolean {
         const oldSeed = this.context.sessionConfig.seed;
         const oldScenarioId = this.context.sessionConfig.activeScenarioId;
 
@@ -85,16 +85,27 @@ export class SessionRuntime implements IUpdatable {
             delete newConfig.assignedSpawnIndex;
         }
 
-        this.context.sessionConfig = { ...this.context.sessionConfig, ...newConfig as ISessionConfig };
-        const scenarioChanged = this.context.sessionConfig.activeScenarioId !== oldScenarioId;
+        const nextConfig = { ...this.context.sessionConfig, ...newConfig as ISessionConfig };
+
+        const scenarioChanged = nextConfig.activeScenarioId !== oldScenarioId;
 
         if (scenarioChanged) {
-            this.switchScenario(this.context.sessionConfig.activeScenarioId, {
+            if (!this.scenarioRegistry.has(nextConfig.activeScenarioId)) {
+                console.warn(`[SessionRuntime] Cannot apply config with unknown scenario: ${nextConfig.activeScenarioId}`);
+                return false;
+            }
+
+            // Validate the scenario before mutating shared session config so a bad
+            // admin/client payload cannot leave the runtime advertising a scenario
+            // that never actually became active.
+            this.context.sessionConfig = nextConfig;
+            return this.switchScenario(this.context.sessionConfig.activeScenarioId, {
                 seed: this.context.sessionConfig.seed,
                 reason: 'scenario_switch'
             });
-            return;
         }
+
+        this.context.sessionConfig = nextConfig;
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this._seed = this.context.sessionConfig.seed;
@@ -108,10 +119,11 @@ export class SessionRuntime implements IUpdatable {
                 });
                 this.refreshActiveObjectModules();
             }
-            return;
+            return true;
         }
 
         this.activeScenario.applyConfig?.(this.context, this.context.sessionConfig);
+        return true;
     }
 
     public getSpawnPoint(index: number): { position: THREE.Vector3, yaw: number } {
