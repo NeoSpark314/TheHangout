@@ -159,28 +159,34 @@ export class VrUiRuntime implements IUpdatable {
         const headPosition = new THREE.Vector3();
         const headQuaternion = new THREE.Quaternion();
         const headEuler = new THREE.Euler();
-        const chestOffset = new THREE.Vector3(0, -0.28, -0.18);
+        const centerOffset = new THREE.Vector3(
+            state.centerOffsetHeadLocal.x,
+            state.centerOffsetHeadLocal.y,
+            state.centerOffsetHeadLocal.z
+        );
         render.camera.getWorldPosition(headPosition);
         render.camera.getWorldQuaternion(headQuaternion);
         headEuler.setFromQuaternion(headQuaternion, 'YXZ');
-        chestOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
+        centerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
 
         indicator.visible = true;
-        indicator.position.copy(headPosition).add(chestOffset);
+        indicator.position.copy(headPosition).add(centerOffset);
         indicator.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.frameYaw);
-        shell.scale.setScalar(state.radius * 0.45);
-        (shell.material as THREE.MeshBasicMaterial).opacity = state.isActive ? 0.08 : 0.12;
+        shell.scale.setScalar(state.radius);
+        const shellMaterial = shell.material as THREE.MeshBasicMaterial;
+        shellMaterial.opacity = state.isActive ? 0.08 : 0.12;
+        shellMaterial.color.setHex(state.isHovering ? 0x99ffff : 0x66ffff);
 
-        current.position.set(state.deflectionLocal.x, state.deflectionLocal.y, state.deflectionLocal.z);
+        anchor.position.set(state.anchorLocal.x, state.anchorLocal.y, state.anchorLocal.z);
+        current.position.set(state.currentLocal.x, state.currentLocal.y, state.currentLocal.z);
 
-        anchor.visible = state.isActive;
-        current.visible = state.isActive;
-        line.visible = state.isActive;
+        anchor.visible = state.showMotion;
+        current.visible = state.showMotion;
+        line.visible = state.showMotion;
 
-        if (state.isActive) {
-            anchor.position.set(0, 0, 0);
+        if (state.showMotion) {
             const positions = line.geometry.getAttribute('position') as THREE.BufferAttribute;
-            positions.setXYZ(0, 0, 0, 0);
+            positions.setXYZ(0, anchor.position.x, anchor.position.y, anchor.position.z);
             positions.setXYZ(1, current.position.x, current.position.y, current.position.z);
             positions.needsUpdate = true;
             line.geometry.computeBoundingSphere();
