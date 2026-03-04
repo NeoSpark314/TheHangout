@@ -73,6 +73,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         }
 
         runtime.tracking.update(delta, frame);
+        runtime.input?.processInteractions();
 
         const trackingState = runtime.tracking.getState();
         const worldHeadPos = trackingState.head.pose.position;

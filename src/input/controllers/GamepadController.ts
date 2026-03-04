@@ -37,7 +37,11 @@ export class GamepadManager {
 
     private getActiveGamepad(): Gamepad | null {
         const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const connected = Array.from(gamepads).filter((candidate): candidate is Gamepad => !!candidate && candidate.connected);
+        const connected = Array.from(gamepads).filter((candidate): candidate is Gamepad =>
+            !!candidate &&
+            candidate.connected &&
+            !this.isXRGamepad(candidate)
+        );
         if (connected.length === 0) {
             this.activeGamepadIndex = null;
             return null;
@@ -63,6 +67,10 @@ export class GamepadManager {
         const fallback = [...pool].sort((a, b) => this.scoreGamepad(b) - this.scoreGamepad(a))[0] ?? null;
         this.activeGamepadIndex = fallback?.index ?? null;
         return fallback;
+    }
+
+    private isXRGamepad(gamepad: Gamepad): boolean {
+        return gamepad.mapping === 'xr-standard';
     }
 
     private hasMeaningfulInput(gamepad: Gamepad): boolean {

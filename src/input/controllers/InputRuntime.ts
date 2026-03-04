@@ -224,11 +224,9 @@ export class InputRuntime implements IUpdatable {
             this._wasSnapTurnPressed = false;
         }
 
-        // 3. Process discrete buttons and XR tracking
-        this._processInteractions();
     }
 
-    private _processInteractions(): void {
+    public processInteractions(): void {
         const render = this.context.runtime.render;
 
         const currentStates = {
