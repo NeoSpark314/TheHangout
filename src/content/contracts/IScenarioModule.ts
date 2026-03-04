@@ -21,8 +21,11 @@ export interface IScenarioModule extends IUpdatable {
     kind?: 'social' | 'minigame' | 'exploration' | 'puzzle';
     maxPlayers?: number;
 
-    load(context: AppContext, options: IScenarioLoadOptions): Promise<void> | void;
-    unload(context: AppContext): Promise<void> | void;
+    // Scenario transitions are intentionally synchronous and atomic for now.
+    // If async loading is needed later, it should use a dedicated transition flow
+    // with explicit locking/failure handling rather than implicit Promise returns.
+    load(context: AppContext, options: IScenarioLoadOptions): void;
+    unload(context: AppContext): void;
     getSpawnPoint(index: number): IScenarioSpawnPoint;
 
     applyConfig?(context: AppContext, config: ISessionConfig): void;
