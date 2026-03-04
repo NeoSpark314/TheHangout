@@ -1,162 +1,122 @@
-:root {
-    --bg: #0b0c10;
-    --card: #1f2833;
-    --text: #c5c6c7;
-    --primary: #66fcf1;
-    --secondary: #45a29e;
-    --danger: #ff4c4c;
-}
-
-body {
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    margin: 0;
-    padding: 20px;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 2px solid var(--card);
-    padding-bottom: 20px;
-    margin-bottom: 30px;
-}
-
-h1 {
-    margin: 0;
-    color: var(--primary);
-    font-weight: 300;
-    letter-spacing: 2px;
+body.admin-page {
+    min-height: 100vh;
 }
 
 .server-stats {
     display: flex;
-    gap: 20px;
-    font-size: 0.9em;
-    opacity: 0.8;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.server-stats span {
+    color: var(--synth-primary);
 }
 
 .session-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 20px;
 }
 
 .session-card {
-    background: var(--card);
-    border-radius: 12px;
-    padding: 24px;
-    border: 1px solid #333;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .session-id {
-    color: var(--primary);
-    font-size: 1.4em;
-    margin-bottom: 15px;
     display: block;
+    color: var(--synth-primary);
+    font-size: 1.22rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.stats-list {
+    display: grid;
+    gap: 8px;
 }
 
 .stat-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 8px;
-    font-size: 0.95em;
+    gap: 12px;
+    align-items: baseline;
 }
 
 .stat-label {
-    opacity: 0.6;
+    color: var(--synth-text-dim);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .stat-value {
+    color: var(--synth-text);
     font-weight: 600;
-    color: #fff;
+    text-align: right;
 }
 
-.controls {
-    margin-top: 20px;
+.peer-section {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 10px;
-    border-top: 1px solid #333;
-    padding-top: 15px;
 }
 
-button {
-    background: #333;
-    color: #fff;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.85em;
-    transition: all 0.2s;
-}
-
-button:hover {
-    background: #444;
-    color: var(--primary);
-}
-
-button.primary {
-    background: var(--secondary);
-}
-
-button.danger {
-    background: #551a1a;
-}
-
-button.danger:hover {
-    background: var(--danger);
-}
-
-.broadcast-group {
+.peer-list {
     display: flex;
-    gap: 5px;
-    width: 100%;
-    margin-top: 10px;
-}
-
-.broadcast-group input {
-    flex: 1;
-    background: #111;
-    border: 1px solid #333;
-    color: #fff;
-    padding: 8px;
-    border-radius: 6px;
-    font-size: 0.85em;
-}
-
-.tag {
-    font-size: 0.7em;
-    background: #333;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-right: 4px;
-    color: var(--secondary);
-    font-family: monospace;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .peer-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 0.9em;
 }
 
 .peer-name {
-    color: #fff;
-    font-weight: 500;
+    color: var(--synth-text);
+    font-weight: 600;
 }
 
-.network-badge {
-    font-size: 0.75em;
-    opacity: 0.8;
+.peer-empty {
+    color: var(--synth-text-dim);
+    font-size: 0.86rem;
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.controls-row,
+.broadcast-group {
+    display: flex;
+    gap: 10px;
+}
+
+.broadcast-group .synth-input {
+    flex: 1;
+}
+
+.controls-row .synth-button,
+.broadcast-group .synth-button {
+    flex: 1;
+}
+
+@media (max-width: 640px) {
+    .session-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .controls-row,
+    .broadcast-group {
+        flex-direction: column;
+    }
 }

@@ -5,42 +5,44 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The Hangout - Share Desktop</title>
+    <link rel="stylesheet" href="/server-ui/synth.css" />
     <link rel="stylesheet" href="./share.css" />
 </head>
 
-<body>
-    <main class="wrap">
-        <section class="card share-container">
+<body class="share-page">
+    <main class="server-shell share-shell">
+        <section class="share-container synth-card">
             <div class="settings-pane">
-                <h1>Desktop Share</h1>
-                <p class="lead">Register your secret key and connect. Start the capture and then summon your screen in
+                <p class="synth-eyebrow">Dedicated Server</p>
+                <h1 class="share-title">Desktop Share</h1>
+                <p class="synth-lead">Register your secret key and connect. Start the capture and then summon your screen in
                     The Hangout app (configure same secret key in avatar config)</p>
 
                 <div class="control-group">
-                    <label for="share-key">Secret Key</label>
-                    <input id="share-key" type="text"
+                    <label for="share-key" class="synth-field-label">Secret Key</label>
+                    <input id="share-key" type="text" class="synth-input"
                         placeholder="a secret key that you will use in the avatar config" />
                 </div>
 
                 <div class="row">
-                    <button id="connect-btn">Connect</button>
-                    <button id="start-btn" class="muted" disabled>Start Capture</button>
-                    <button id="stop-btn" class="danger" disabled>Stop Capture</button>
+                    <button id="connect-btn" class="synth-button">Connect</button>
+                    <button id="start-btn" class="synth-button is-secondary" disabled>Start Capture</button>
+                    <button id="stop-btn" class="synth-button is-danger" disabled>Stop Capture</button>
                 </div>
 
-                <div class="status-group">
-                    <div class="status">
+                <div class="status-group synth-status-panel">
+                    <div class="status synth-stat-chip">
                         <strong>Status:</strong> <span id="status-text">Disconnected</span>
                     </div>
-                    <div class="status">
+                    <div class="status synth-stat-chip">
                         <strong>Codec:</strong> <span id="codec-text">unknown</span>
                     </div>
                 </div>
 
                 <div class="controls-grid">
                     <div class="control-group">
-                        <label for="quality-select">Compression</label>
-                        <select id="quality-select">
+                        <label for="quality-select" class="synth-field-label">Compression</label>
+                        <select id="quality-select" class="synth-select">
                             <option value="0.4">Low (Small size)</option>
                             <option value="0.65" selected>Medium (Standard)</option>
                             <option value="0.8">High (Crisp)</option>
@@ -48,8 +50,8 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label for="res-select">Resolution</label>
-                        <select id="res-select">
+                        <label for="res-select" class="synth-field-label">Resolution</label>
+                        <select id="res-select" class="synth-select">
                             <option value="480">Low (480p)</option>
                             <option value="720" selected>Medium (720p)</option>
                             <option value="1080">High (1080p)</option>
@@ -57,8 +59,8 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label for="fps-select">Target FPS</label>
-                        <select id="fps-select">
+                        <label for="fps-select" class="synth-field-label">Target FPS</label>
+                        <select id="fps-select" class="synth-select">
                             <option value="5">5 FPS (Low Power)</option>
                             <option value="12" selected>12 FPS (Smooth)</option>
                             <option value="24">24 FPS (Cinema)</option>
@@ -68,7 +70,7 @@
                     </div>
                 </div>
 
-                <div class="status stats">
+                <div class="stats synth-divider">
                     <div><strong>Bandwidth:</strong> <span id="bandwidth-text">0 KB/s</span></div>
                     <div><strong>Resolution:</strong> <span id="res-text">0x0</span></div>
                 </div>

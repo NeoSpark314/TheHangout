@@ -7,7 +7,6 @@ async function sendCommand(sessionId, command, payload = null) {
         });
         const data = await res.json();
         if (data.success) {
-            console.log('Command successful');
             fetchSessions();
         }
     } catch (e) {
@@ -34,6 +33,64 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function renderSessionCard(session) {
+    const peersHtml = session.peers.map((peer) => `
+        <div class="peer-row">
+            <span class="synth-tag">${peer.id.slice(0, 8)}</span>
+            <span class="peer-name">${peer.name}</span>
+        </div>
+    `).join('') || '<span class="peer-empty">None</span>';
+
+    return `
+        <div class="session-card synth-card synth-panel">
+            <span class="session-id">${session.id}</span>
+            <div class="stats-list">
+                <div class="stat-row">
+                    <span class="stat-label">Uptime</span>
+                    <span class="stat-value">${session.uptime}s</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Clients</span>
+                    <span class="stat-value">${session.clients}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Network</span>
+                    <span class="stat-value">IN ${formatBytes(session.network.in)} / OUT ${formatBytes(session.network.out)}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Entities</span>
+                    <span class="stat-value">${session.entityCount} (${session.entityBreakdown.players}P / ${session.entityBreakdown.props}E)</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Physics</span>
+                    <span class="stat-value">${session.physics.bodies} bodies / ${session.physics.colliders} colliders</span>
+                </div>
+            </div>
+
+            <div class="peer-section synth-divider">
+                <span class="stat-label">Active Peers</span>
+                <div class="peer-list">${peersHtml}</div>
+            </div>
+
+            <div class="controls synth-divider">
+                <div class="controls-row">
+                    <button onclick="sendCommand('${session.id}', 'spawn_cube')" class="synth-button">Spawn Cube</button>
+                    <button onclick="sendCommand('${session.id}', 'reset')" class="synth-button is-danger">Reset Session</button>
+                </div>
+                <div class="broadcast-group">
+                    <input type="text" id="bc-${session.id}" class="synth-input" placeholder="System message...">
+                    <button
+                        onclick="const m = document.getElementById('bc-${session.id}').value; sendCommand('${session.id}', 'broadcast', m); document.getElementById('bc-${session.id}').value=''"
+                        class="synth-button is-secondary"
+                    >
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 async function fetchSessions() {
     try {
         const res = await fetch('/api/admin/sessions');
@@ -41,57 +98,11 @@ async function fetchSessions() {
         const el = document.getElementById('sessions');
 
         if (sessions.length === 0) {
-            el.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 50px; opacity: 0.5;">NO ACTIVE SESSIONS</div>';
+            el.innerHTML = '<div class="synth-card synth-panel synth-empty">NO ACTIVE SESSIONS</div>';
             return;
         }
 
-        el.innerHTML = sessions.map(r => `
-            <div class="session-card">
-                <span class="session-id">${r.id}</span>
-                <div class="stat-row">
-                    <span class="stat-label">Uptime</span>
-                    <span class="stat-value">${r.uptime}s</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Clients</span>
-                    <span class="stat-value">${r.clients}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Network</span>
-                    <span class="stat-value">↓${formatBytes(r.network.in)} / ↑${formatBytes(r.network.out)}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Entities</span>
-                    <span class="stat-value">${r.entityCount} (${r.entityBreakdown.players}P / ${r.entityBreakdown.props}E)</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Physics</span>
-                    <span class="stat-value">${r.physics.bodies} bodies / ${r.physics.colliders} colliders</span>
-                </div>
-                
-                <div style="margin-top: 15px; border-top: 1px solid #333; padding-top: 10px;">
-                    <span class="stat-label" style="display: block; margin-bottom: 8px;">Active Peers:</span> 
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        ${r.peers.map(p => `
-                            <div class="peer-row">
-                                <span class="tag">${p.id.slice(0, 8)}</span>
-                                <span class="peer-name">${p.name}</span>
-                            </div>
-                        `).join('') || '<span style="opacity: 0.5; font-size: 0.8em;">None</span>'}
-                    </div>
-                </div>
-
-                <div class="controls">
-                    <button onclick="sendCommand('${r.id}', 'spawn_cube')" class="primary">Spawn Cube</button>
-                    <button onclick="sendCommand('${r.id}', 'reset')" class="danger">Reset Session</button>
-                    
-                    <div class="broadcast-group">
-                        <input type="text" id="bc-${r.id}" placeholder="System message...">
-                        <button onclick="const m = document.getElementById('bc-${r.id}').value; sendCommand('${r.id}', 'broadcast', m); document.getElementById('bc-${r.id}').value=''">Send</button>
-                    </div>
-                </div>
-            </div>
-        `).join('');
+        el.innerHTML = sessions.map(renderSessionCard).join('');
     } catch (e) {
         console.error('Failed to fetch sessions:', e);
     }

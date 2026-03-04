@@ -4,15 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TheHangout Admin — Dashboard</title>
+    <title>TheHangout Admin - Dashboard</title>
+    <link rel="stylesheet" href="/server-ui/synth.css">
     <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
-    <div class="container">
-        <header>
-            <h1>TH_ADMIN <span style="font-size: 0.5em; opacity: 0.5;">v1.0-headless</span></h1>
-            <div class="server-stats">
+<body class="admin-page">
+    <div class="server-shell">
+        <header class="server-header">
+            <div>
+                <p class="synth-eyebrow">Dedicated Server</p>
+                <h1 class="server-title">TH_ADMIN <span class="server-subtitle">v1.0-headless</span></h1>
+            </div>
+            <div class="server-stats synth-card synth-panel">
                 <div>UPTIME: <span id="server-uptime">...</span></div>
                 <div>RAM: <span id="server-ram">...</span></div>
             </div>

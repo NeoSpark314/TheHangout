@@ -258,6 +258,10 @@ app.use('/admin', express.static(adminPath));
 const sharePath = path.join(__dirname, 'src', 'server', 'share');
 app.use('/share', express.static(sharePath));
 
+// Serve shared styling primitives for server-hosted UIs
+const serverUiPath = path.join(__dirname, 'src', 'server', 'ui');
+app.use('/server-ui', express.static(serverUiPath));
+
 // Serve the built client
 const distPath = path.join(__dirname, 'dist');
 if (!fs.existsSync(distPath)) {
