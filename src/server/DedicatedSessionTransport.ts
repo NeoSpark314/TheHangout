@@ -165,17 +165,10 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
         });
     }
 
-    public resetSession(): void {
-        const entityMgr = this.context.runtime.entity;
-        const entities = Array.from(entityMgr.entities.values());
-        entities.forEach(entity => {
-            if (entity.type === EntityType.PHYSICS_PROP) {
-                entityMgr.removeEntity(entity.id);
-            }
-        });
-        // Re-init the session props
-        this.context.runtime.session.init(null as any);
-        this.broadcast(PACKET_TYPES.STATE_UPDATE, entityMgr.getWorldSnapshot());
+    public requestSessionConfigUpdate(payload: PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]): void {
+        // Reuse the shared host-side config transition path so admin-triggered
+        // scenario changes behave exactly like any other authoritative update.
+        this.authoritativeHost.applySessionConfigUpdate(payload);
     }
 
     private nowMs(): number {

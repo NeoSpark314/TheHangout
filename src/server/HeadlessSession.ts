@@ -100,6 +100,11 @@ export class HeadlessSession {
                 in: this.network.bytesReceived,
                 out: this.network.bytesSent
             },
+            activeScenarioId: this.context.sessionConfig.activeScenarioId,
+            availableScenarios: this.context.runtime.session.getAvailableScenarios().map((scenario) => ({
+                id: scenario.id,
+                displayName: scenario.displayName
+            })),
             entityCount: entities.length,
             entityBreakdown: {
                 players: players.length,

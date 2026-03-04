@@ -242,7 +242,7 @@ export class EnvironmentBuilder {
 
     public clearProcedural(): void {
         const remove = (obj: THREE.Object3D | null) => {
-            if (!obj) return;
+            if (!obj || !this.scene) return;
             this.scene.remove(obj);
             obj.traverse((child) => {
                 const mesh = child as THREE.Mesh;
@@ -266,7 +266,9 @@ export class EnvironmentBuilder {
         this.lights = null;
         this.sun = null;
         this.gridUniforms = null;
-        this.scene.background = null;
-        this.scene.fog = null;
+        if (this.scene) {
+            this.scene.background = null;
+            this.scene.fog = null;
+        }
     }
 }

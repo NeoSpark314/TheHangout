@@ -45,7 +45,9 @@ export class DefaultHangoutWorld {
         // Ensure we load the ground physics for headless network sync
         this.session.ensureGroundPhysics();
 
-        if (!this.environment) {
+        // Headless dedicated sessions still need gameplay objects and static physics,
+        // but they do not own a Three.js scene and should skip visual-only builders.
+        if (scene && !this.environment) {
             this.environment = new EnvironmentBuilder(scene as any, () => this.session.randomFloat());
         }
 

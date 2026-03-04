@@ -90,15 +90,15 @@ function createSessionCard(sessionId) {
     const controls = document.createElement('div');
     controls.className = 'controls synth-divider';
 
+    const scenarioGroup = document.createElement('div');
+    scenarioGroup.className = 'controls-row';
+
     const controlsRow = document.createElement('div');
     controlsRow.className = 'controls-row';
 
-    const resetButton = document.createElement('button');
-    resetButton.className = 'synth-button is-danger';
-    resetButton.textContent = 'Reset Session';
-    resetButton.addEventListener('click', () => sendCommand(sessionId, 'reset'));
-
-    controlsRow.append(resetButton);
+    const scenarioButtons = document.createElement('div');
+    scenarioButtons.className = 'scenario-buttons';
+    scenarioGroup.append(scenarioButtons);
 
     const broadcastGroup = document.createElement('div');
     broadcastGroup.className = 'broadcast-group';
@@ -119,7 +119,7 @@ function createSessionCard(sessionId) {
     });
 
     broadcastGroup.append(broadcastInput, sendButton);
-    controls.append(controlsRow, broadcastGroup);
+    controls.append(scenarioGroup, controlsRow, broadcastGroup);
 
     card.append(id, statsList, peerSection, controls);
 
@@ -130,7 +130,8 @@ function createSessionCard(sessionId) {
         network: network.value,
         entities: entities.value,
         physics: physics.value,
-        peerList
+        peerList,
+        scenarioButtons
     };
 
     sessionCardState.set(sessionId, refs);
@@ -171,6 +172,20 @@ function updateSessionCard(session) {
     refs.entities.textContent = `${session.entityCount} (${session.entityBreakdown.players}P / ${session.entityBreakdown.props}E)`;
     refs.physics.textContent = `${session.physics.bodies} bodies / ${session.physics.colliders} colliders`;
 
+    refs.scenarioButtons.replaceChildren();
+    (session.availableScenarios || []).forEach((scenario) => {
+        const button = document.createElement('button');
+        button.className = scenario.id === session.activeScenarioId
+            ? 'synth-button is-secondary'
+            : 'synth-button';
+        button.textContent = scenario.displayName;
+        button.disabled = scenario.id === session.activeScenarioId;
+        button.addEventListener('click', () => {
+            sendCommand(session.id, 'switch_scenario', scenario.id);
+        });
+        refs.scenarioButtons.append(button);
+    });
+
     refs.peerList.replaceChildren();
     if (session.peers.length === 0) {
         const empty = document.createElement('span');
@@ -198,6 +213,19 @@ async function fetchSessions() {
             return;
         }
 
+        // Remove initial placeholder text or stale empty-state panels without
+        // detaching any live session cards that may currently contain focused inputs.
+        Array.from(el.childNodes).forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                node.remove();
+                return;
+            }
+
+            if (!(node instanceof HTMLElement)) return;
+            if (node.dataset.sessionId) return;
+            node.remove();
+        });
+
         const incomingIds = new Set(sessions.map((session) => session.id));
         for (const [sessionId, refs] of sessionCardState.entries()) {
             if (incomingIds.has(sessionId)) continue;
@@ -205,12 +233,12 @@ async function fetchSessions() {
             sessionCardState.delete(sessionId);
         }
 
-        const fragment = document.createDocumentFragment();
         sessions.forEach((session) => {
-            fragment.append(updateSessionCard(session));
+            const card = updateSessionCard(session);
+            if (card.parentElement !== el) {
+                el.append(card);
+            }
         });
-
-        el.replaceChildren(fragment);
     } catch (e) {
         console.error('Failed to fetch sessions:', e);
     }

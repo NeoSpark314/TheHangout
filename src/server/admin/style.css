@@ -101,6 +101,17 @@ body.admin-page {
     gap: 10px;
 }
 
+.scenario-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.scenario-buttons .synth-button {
+    flex: 1 1 140px;
+}
+
 .broadcast-group .synth-input {
     flex: 1;
 }

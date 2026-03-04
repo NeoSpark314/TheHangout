@@ -234,9 +234,16 @@ app.post('/api/admin/session/:id/command', (req, res) => {
     console.log(`[Admin] Command received for ${id}: ${command}`, payload);
 
     switch (command) {
-        case 'reset':
-            session.network.resetSession();
+        case 'switch_scenario': {
+            const scenarioId = typeof payload === 'string' ? payload : payload?.scenarioId;
+            if (typeof scenarioId !== 'string' || scenarioId.trim().length === 0) {
+                return res.status(400).json({ error: 'Missing scenarioId' });
+            }
+            session.network.requestSessionConfigUpdate({
+                activeScenarioId: scenarioId.trim()
+            });
             break;
+        }
         case 'broadcast':
             session.network.broadcastNotification(payload || 'System Announcement');
             break;

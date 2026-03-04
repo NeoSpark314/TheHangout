@@ -181,6 +181,7 @@ export class AuthoritativeSessionHost {
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
         this.context.runtime.session.updateConfig(payload);
         this.transport.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
+        this.broadcastAuthoritativeWorldState();
     }
 
     public reclaimOwnership(peerId: string): void {
@@ -290,6 +291,18 @@ export class AuthoritativeSessionHost {
         const next = (this.ownershipSeqByEntity.get(entityId) ?? 0) + 1;
         this.ownershipSeqByEntity.set(entityId, next);
         return next;
+    }
+
+    private broadcastAuthoritativeWorldState(): void {
+        const fullSnapshot = this.context.runtime.entity.getWorldSnapshot();
+        if (fullSnapshot.length > 0) {
+            // After a scenario/config transition, push a full authoritative snapshot
+            // immediately so all guests converge on the new world in one step.
+            this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, fullSnapshot);
+        }
+
+        const featureSnapshot = this.context.runtime.replication.createSnapshotPayload();
+        this.transport.broadcast(PACKET_TYPES.FEATURE_SNAPSHOT, featureSnapshot);
     }
 
     private nowMs(): number {
