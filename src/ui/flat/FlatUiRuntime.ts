@@ -29,6 +29,11 @@ export class FlatUiRuntime implements IUpdatable {
     private mobileActionBtn: HTMLButtonElement | null;
     private mobileInteractBtn: HTMLButtonElement | null;
     private mobileReticle: HTMLElement | null;
+    private controllerCursor: HTMLDivElement | null;
+    private controllerCursorTarget: HTMLElement | null = null;
+    private controllerCursorX = window.innerWidth * 0.5;
+    private controllerCursorY = window.innerHeight * 0.5;
+    private readonly controllerCursorSpeed = 880;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
     private _mobileHudEnabled: boolean = false;
@@ -58,6 +63,7 @@ export class FlatUiRuntime implements IUpdatable {
         this.mobileActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
         this.mobileInteractBtn = document.getElementById('mobile-interact-btn') as HTMLButtonElement | null;
         this.mobileReticle = document.getElementById('mobile-reticle');
+        this.controllerCursor = this.createControllerCursor();
         this.isMobile = isMobile;
 
         this.init();
@@ -195,6 +201,12 @@ export class FlatUiRuntime implements IUpdatable {
             this.handleLeave();
         });
 
+        eventBus.on(EVENTS.INTENT_MENU_TOGGLE, () => {
+            const render = this.context.runtime.render;
+            if (!render || render.isXRPresenting()) return;
+            this.toggleOverlay();
+        });
+
         eventBus.on(EVENTS.VOICE_STATE_UPDATED, () => {
             this.updateVoiceButton(this.context.voiceAutoEnable);
         });
@@ -221,6 +233,37 @@ export class FlatUiRuntime implements IUpdatable {
 
         if (this.isMobile) {
             this.updateMobileHudState();
+        }
+    }
+
+    public handleControllerCursor(
+        delta: number,
+        stick: { x: number; y: number },
+        confirmPressed: boolean,
+        controllerConnected: boolean
+    ): void {
+        if (!this.controllerCursor) return;
+
+        if (!controllerConnected || this.isElementHidden(this.overlay)) {
+            this.hideControllerCursor();
+            return;
+        }
+
+        this.showControllerCursor();
+
+        const nextX = this.controllerCursorX + (stick.x * this.controllerCursorSpeed * delta);
+        const nextY = this.controllerCursorY + (stick.y * this.controllerCursorSpeed * delta);
+        this.controllerCursorX = Math.max(12, Math.min(window.innerWidth - 12, nextX));
+        this.controllerCursorY = Math.max(12, Math.min(window.innerHeight - 12, nextY));
+
+        this.controllerCursor.style.transform = `translate(${this.controllerCursorX}px, ${this.controllerCursorY}px)`;
+
+        const target = this.resolveControllerCursorTarget(this.controllerCursorX, this.controllerCursorY);
+        this.updateControllerCursorTarget(target);
+
+        if (confirmPressed && target) {
+            target.focus?.();
+            target.click();
         }
     }
 
@@ -508,6 +551,7 @@ export class FlatUiRuntime implements IUpdatable {
     public hideOverlay(): void {
         console.log('[FlatUiRuntime] hideOverlay() called');
         this.context.isMenuOpen = false;
+        this.hideControllerCursor();
         if (this.overlay) {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
@@ -580,6 +624,7 @@ export class FlatUiRuntime implements IUpdatable {
     public showOverlay(): void {
         console.log('[FlatUiRuntime] showOverlay() called');
         this.context.isMenuOpen = true;
+        this.resetControllerCursorPosition();
         if (this.overlay) {
             this.showElement(this.overlay);
             this.overlay.offsetHeight;
@@ -656,6 +701,15 @@ export class FlatUiRuntime implements IUpdatable {
         }
     }
 
+    public toggleOverlay(): void {
+        if (this.context.isMenuOpen) {
+            this.hideOverlay();
+            return;
+        }
+
+        this.showOverlay();
+    }
+
     private hideElement(element: HTMLElement): void {
         element.classList.add('is-hidden');
     }
@@ -680,5 +734,60 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.mainPanel) return;
         this.mainPanel.classList.remove('panel-hydrating');
         this.mainPanel.classList.add('panel-ready');
+    }
+
+    private createControllerCursor(): HTMLDivElement | null {
+        if (typeof document === 'undefined') return null;
+
+        const cursor = document.createElement('div');
+        cursor.id = 'controller-cursor';
+        cursor.className = 'controller-cursor is-hidden';
+        document.body.appendChild(cursor);
+        return cursor;
+    }
+
+    private showControllerCursor(): void {
+        if (!this.controllerCursor) return;
+        this.controllerCursor.classList.remove('is-hidden');
+    }
+
+    private hideControllerCursor(): void {
+        if (!this.controllerCursor) return;
+        this.controllerCursor.classList.add('is-hidden');
+        this.updateControllerCursorTarget(null);
+    }
+
+    private resetControllerCursorPosition(): void {
+        this.controllerCursorX = window.innerWidth * 0.5;
+        this.controllerCursorY = window.innerHeight * 0.5;
+        if (this.controllerCursor) {
+            this.controllerCursor.style.transform = `translate(${this.controllerCursorX}px, ${this.controllerCursorY}px)`;
+        }
+    }
+
+    private resolveControllerCursorTarget(x: number, y: number): HTMLElement | null {
+        const hit = document.elementFromPoint(x, y);
+        if (!(hit instanceof HTMLElement)) return null;
+
+        const target = hit.closest('button, input, select, textarea, [role="button"], [tabindex]') as HTMLElement | null;
+        if (!target || !this.overlay.contains(target) || target.hasAttribute('disabled')) {
+            return null;
+        }
+
+        return target;
+    }
+
+    private updateControllerCursorTarget(nextTarget: HTMLElement | null): void {
+        if (this.controllerCursorTarget === nextTarget) return;
+
+        if (this.controllerCursorTarget) {
+            this.controllerCursorTarget.classList.remove('gamepad-focus');
+        }
+
+        this.controllerCursorTarget = nextTarget;
+
+        if (this.controllerCursorTarget) {
+            this.controllerCursorTarget.classList.add('gamepad-focus');
+        }
     }
 }

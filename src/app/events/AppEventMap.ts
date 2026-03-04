@@ -55,5 +55,6 @@ export interface AppEventMap {
     INTENT_INTERACT_END: IHandIntentPayload;
     INTENT_GRAB_START: IHandIntentPayload;
     INTENT_GRAB_END: IHandIntentPayload;
+    INTENT_MENU_TOGGLE: void;
     INTENT_VR_SNAP_TURN: IVRSnapTurnPayload;
 }

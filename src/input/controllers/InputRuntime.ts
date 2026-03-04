@@ -28,7 +28,7 @@ export class InputRuntime implements IUpdatable {
 
     constructor(private context: AppContext) {
         this.keyboard = new KeyboardManager();
-        this.gamepad = new GamepadManager(context);
+        this.gamepad = new GamepadManager();
         this.mobileJoystick = new MobileJoystickManager();
         this.nonVRReachAssist = new NonVRReachAssistController(context);
         this.nonVRInteraction = new NonVRInteractionController(context);
@@ -156,6 +156,9 @@ export class InputRuntime implements IUpdatable {
 
     public update(delta: number, frame?: XRFrame): void {
         this.gamepad.poll(delta);
+        if (this.gamepad.wasPressed(3)) {
+            eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
+        }
         this.xrInput.poll(frame);
 
         const runtime = this.context.runtime;
@@ -195,6 +198,13 @@ export class InputRuntime implements IUpdatable {
         if (look.x !== 0 || look.y !== 0) {
             eventBus.emit(EVENTS.INTENT_LOOK, { delta: look } as ILookIntentPayload);
         }
+
+        runtime.ui?.handleControllerCursor(
+            delta,
+            this.gamepad.move,
+            this.gamepad.wasPressed(0),
+            this.gamepad.isConnected
+        );
 
         // 2. VR Snap turning intent
         const xrTurn = this.xrInput.turn;

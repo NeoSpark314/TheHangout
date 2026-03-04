@@ -115,6 +115,32 @@ body {
     padding: 20px 0;
 }
 
+.controller-cursor {
+    position: fixed;
+    top: -12px;
+    left: -12px;
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(248, 250, 252, 0.95);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0, 255, 255, 0.28) 0%, rgba(0, 255, 255, 0.08) 55%, rgba(0, 255, 255, 0) 70%);
+    box-shadow:
+        0 0 0 2px rgba(0, 255, 255, 0.18),
+        0 0 18px rgba(0, 255, 255, 0.4);
+    pointer-events: none;
+    z-index: 2200;
+    transform: translate(-9999px, -9999px);
+    transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.controller-cursor::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: rgba(248, 250, 252, 0.9);
+}
+
 .panel {
     background: var(--panel-bg);
     padding: 2.5rem;

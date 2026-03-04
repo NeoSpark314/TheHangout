@@ -1,4 +1,3 @@
-import { AppContext } from '../../app/AppContext';
 import { INPUT_CONFIG } from '../../shared/constants/Constants';
 
 export class GamepadManager {
@@ -6,21 +5,20 @@ export class GamepadManager {
     public look = { x: 0, y: 0 };
     public buttons: Record<number, boolean> = {};
     public lastButtons: Record<number, boolean> = {};
-    public navIndex = -1;
-    public navCooldown = 0;
+    public isConnected = false;
     private deadzone: number = INPUT_CONFIG.DEADZONE;
 
-    constructor(private context: AppContext) { }
+    constructor() { }
 
-    public poll(delta: number): void {
+    public poll(_delta: number): void {
         const gp = this.getActiveGamepad();
+        this.isConnected = !!gp;
 
         if (!gp) {
             this.move = { x: 0, y: 0 };
             this.look = { x: 0, y: 0 };
             this.lastButtons = { ...this.buttons };
             this.buttons = {};
-            this.navCooldown = 0;
             return;
         }
 
@@ -34,8 +32,6 @@ export class GamepadManager {
         gp.buttons.forEach((btn, i) => {
             this.buttons[i] = btn.pressed;
         });
-
-        this.handleUINavigation(delta, gp);
     }
 
     private getActiveGamepad(): Gamepad | null {
@@ -48,51 +44,7 @@ export class GamepadManager {
         return null;
     }
 
-    private handleUINavigation(delta: number, gp: Gamepad): void {
-        const ui = this.context.runtime.ui;
-        if (!ui || !(ui as any).overlay || (ui as any).overlay.style.display === 'none') {
-            this.navIndex = -1;
-            return;
-        }
-
-        const elements = ui.getNavigableElements();
-        if (elements.length === 0) return;
-
-        if (this.navIndex === -1 && Math.abs(this.move.y) > 0.5) {
-            this.navIndex = 0;
-            this.updateUIFocus(elements);
-        }
-
-        if (this.navCooldown > 0) {
-            this.navCooldown -= delta;
-            return;
-        }
-
-        let moved = false;
-        if (this.move.y < -0.6) { this.navIndex--; moved = true; }
-        else if (this.move.y > 0.6) { this.navIndex++; moved = true; }
-
-        if (moved) {
-            if (this.navIndex < 0) this.navIndex = elements.length - 1;
-            if (this.navIndex >= elements.length) this.navIndex = 0;
-            this.updateUIFocus(elements);
-            this.navCooldown = 0.25;
-        }
-
-        if (this.buttons[0] && !this.lastButtons[0]) {
-            const focused = elements[this.navIndex];
-            if (focused) focused.click();
-        }
-    }
-
-    private updateUIFocus(elements: HTMLElement[]): void {
-        elements.forEach((el, i) => {
-            if (i === this.navIndex) {
-                el.classList.add('gamepad-focus');
-                el.focus();
-            } else {
-                el.classList.remove('gamepad-focus');
-            }
-        });
+    public wasPressed(buttonIndex: number): boolean {
+        return !!this.buttons[buttonIndex] && !this.lastButtons[buttonIndex];
     }
 }
