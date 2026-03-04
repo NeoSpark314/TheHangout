@@ -69,6 +69,12 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private pendingReleaseMinHoldMs: number = 220;
     private pendingReleaseMaxHoldMs: number = 900;
 
+    private lastSyncPos: IVector3 = { x: 0, y: 0, z: 0 };
+    private lastSyncRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+    private lastSyncAwake: boolean = true;
+    private lastSyncHeldBy: string | null = null;
+    private lastSyncOwnerId: string | null = null;
+
     constructor(protected context: AppContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, EntityType.PHYSICS_PROP, isAuthority);
         this.rigidBody = rigidBody;
@@ -343,10 +349,36 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         }, delta);
     }
 
-    public getNetworkState(fullSync: boolean = false): IPhysicsEntityState {
+    public getNetworkState(fullSync: boolean = false): IPhysicsEntityState | null {
+        const isAwake = !this.rigidBody.isSleeping();
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
         const vel = this.rigidBody.linvel();
+
+        if (!fullSync) {
+            const posChanged = Math.abs(pos.x - this.lastSyncPos.x) > 0.001 ||
+                Math.abs(pos.y - this.lastSyncPos.y) > 0.001 ||
+                Math.abs(pos.z - this.lastSyncPos.z) > 0.001;
+
+            const rotChanged = Math.abs(rot.x - this.lastSyncRot.x) > 0.001 ||
+                Math.abs(rot.y - this.lastSyncRot.y) > 0.001 ||
+                Math.abs(rot.z - this.lastSyncRot.z) > 0.001 ||
+                Math.abs(rot.w - this.lastSyncRot.w) > 0.001;
+
+            const stateChanged = isAwake !== this.lastSyncAwake ||
+                this.heldBy !== this.lastSyncHeldBy ||
+                this.ownerId !== this.lastSyncOwnerId;
+
+            if (!isAwake && !posChanged && !rotChanged && !stateChanged) {
+                return null;
+            }
+        }
+
+        this.lastSyncPos = { x: pos.x, y: pos.y, z: pos.z };
+        this.lastSyncRot = { x: rot.x, y: rot.y, z: rot.z, w: rot.w };
+        this.lastSyncAwake = isAwake;
+        this.lastSyncHeldBy = this.heldBy;
+        this.lastSyncOwnerId = this.ownerId;
 
         return {
             id: this.id,
@@ -547,13 +579,15 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     private emitOwnershipReleaseNow(): void {
-        const state = this.getNetworkState();
-        eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
-            entityId: this.id,
-            velocity: state.v,
-            position: state.p,
-            quaternion: state.q
-        });
+        const state = this.getNetworkState(true);
+        if (state) {
+            eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
+                entityId: this.id,
+                velocity: state.v,
+                position: state.p,
+                quaternion: state.q
+            });
+        }
     }
 
     private clearSnapshotBuffer(): void {

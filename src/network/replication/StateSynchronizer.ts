@@ -36,11 +36,17 @@ export class NetworkSynchronizer {
         const runtime = this.context.runtime;
         if (!runtime.entity) return;
 
-        // If forceAll is true, we send a full snapshot to keep connections alive and names synced
-        if (forceAll || this.context.isHost) {
-            const allStates = runtime.entity.getWorldSnapshot();
-            if (allStates.length > 0) {
-                this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
+        if (this.context.isHost) {
+            if (forceAll) {
+                const allStates = runtime.entity.getWorldSnapshot();
+                if (allStates.length > 0) {
+                    this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, allStates);
+                }
+            } else {
+                const authoritativeStates = runtime.entity.getAuthoritativeStates(false);
+                if (authoritativeStates.length > 0) {
+                    this.transport.broadcast(PACKET_TYPES.STATE_UPDATE, authoritativeStates);
+                }
             }
         } else {
             // For guests, heartbeat sends a fuller snapshot to recover from missed deltas.

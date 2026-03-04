@@ -28,6 +28,13 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
 
     private lastDrawPosition: IVector3 | null = null;
 
+    private lastSyncPos: IVector3 = { x: 0, y: 0, z: 0 };
+    private lastSyncRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
+    private lastSyncDrawing: boolean = false;
+    private lastSyncHeldBy: string | null = null;
+    private lastSyncOwnerId: string | null = null;
+    private lastSyncColor: string | number | null = null;
+
     constructor(protected context: AppContext, id: string, isAuthority: boolean, view: IView<any> | null) {
         super(context, id, EntityType.PEN, isAuthority);
         this.view = view;
@@ -57,12 +64,14 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
             return;
         }
 
-        const state = this.getNetworkState();
-        eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
-            entityId: this.id,
-            position: state.p,
-            quaternion: state.q
-        });
+        const state = this.getNetworkState(true);
+        if (state) {
+            eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
+                entityId: this.id,
+                position: state.p,
+                quaternion: state.q
+            });
+        }
     }
 
     public updateGrabbedPose(pose: IPose): void {
@@ -129,7 +138,34 @@ export class PenToolEntity extends ReplicatedEntity implements IGrabbable, IInte
         }
     }
 
-    public getNetworkState(fullSync: boolean = false): IPenEntityState {
+    public getNetworkState(fullSync: boolean = false): IPenEntityState | null {
+        if (!fullSync) {
+            const posChanged = Math.abs(this.position.x - this.lastSyncPos.x) > 0.001 ||
+                Math.abs(this.position.y - this.lastSyncPos.y) > 0.001 ||
+                Math.abs(this.position.z - this.lastSyncPos.z) > 0.001;
+
+            const rotChanged = Math.abs(this.quaternion.x - this.lastSyncRot.x) > 0.001 ||
+                Math.abs(this.quaternion.y - this.lastSyncRot.y) > 0.001 ||
+                Math.abs(this.quaternion.z - this.lastSyncRot.z) > 0.001 ||
+                Math.abs(this.quaternion.w - this.lastSyncRot.w) > 0.001;
+
+            const stateChanged = this.isDrawing !== this.lastSyncDrawing ||
+                this.heldBy !== this.lastSyncHeldBy ||
+                this.ownerId !== this.lastSyncOwnerId ||
+                this.color !== this.lastSyncColor;
+
+            if (!posChanged && !rotChanged && !stateChanged) {
+                return null;
+            }
+        }
+
+        this.lastSyncPos = { x: this.position.x, y: this.position.y, z: this.position.z };
+        this.lastSyncRot = { x: this.quaternion.x, y: this.quaternion.y, z: this.quaternion.z, w: this.quaternion.w };
+        this.lastSyncDrawing = this.isDrawing;
+        this.lastSyncHeldBy = this.heldBy;
+        this.lastSyncOwnerId = this.ownerId;
+        this.lastSyncColor = this.color;
+
         return {
             id: this.id,
             type: EntityType.PEN,
