@@ -22,7 +22,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 | `features/` | Cross-cutting gameplay/runtime features such as social and remote desktop |
 | `assets/` | Procedural world builders and asset runtime helpers |
 | `content/` | Content authoring layer for scenarios and self-contained object modules |
-| `server/` | Headless session and server-side network runtime |
+| `server/` | Headless session, dedicated transport, and server-side admin/runtime plumbing |
 
 ## Core Principles
 
@@ -55,7 +55,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 
 ### Content, Scenarios, and Object Modules
 
-- [IScenarioModule.ts](/c:/programming/TheHangout/src/content/contracts/IScenarioModule.ts) defines a loadable world package.
+- [IScenarioModule.ts](/c:/programming/TheHangout/src/content/contracts/IScenarioModule.ts) defines a loadable world package with a synchronous scenario lifecycle.
 - [IObjectModule.ts](/c:/programming/TheHangout/src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
 - [IObjectRuntimeContext.ts](/c:/programming/TheHangout/src/content/contracts/IObjectRuntimeContext.ts) is the narrow contributor-facing authoring context for content objects.
 - Content interaction is XR-first: objects are typically `IHoldable` first, and only some holdables are movable (`IMovableHoldable` / legacy `IGrabbable`).
@@ -74,12 +74,15 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - The same pattern now applies to default physics props: [GrabbableCubeObject.ts](/c:/programming/TheHangout/src/content/objects/GrabbableCubeObject.ts) wraps the low-level grabbable physics-entity spawn path for scenario-owned cubes.
 - Shared drawing is now content-owned: [DrawingSurfaceObject.ts](/c:/programming/TheHangout/src/content/objects/DrawingSurfaceObject.ts) is a replicated object instance that owns stroke state and late-join snapshots.
 - The drum pads now follow the same content-owned model: [DrumPadArcObject.ts](/c:/programming/TheHangout/src/content/objects/DrumPadArcObject.ts) is a self-contained replicated object that owns its own meshes, colliders, hit detection, audio, and sync.
+- Scenario-owned runtime state should either be tracked through `ObjectInstanceRegistry` or be explicitly cleaned up in the scenario's `unload()` path.
 
 ### Networking
 
 - [NetworkRuntime.ts](/c:/programming/TheHangout/src/network/transport/NetworkRuntime.ts) owns the client transport layer.
+- [AuthoritativeSessionHost.ts](/c:/programming/TheHangout/src/network/transport/AuthoritativeSessionHost.ts) owns the shared host-authoritative rules for ownership, state acceptance, snapshots, and session-config-driven scenario changes.
 - [StateSynchronizer.ts](/c:/programming/TheHangout/src/network/replication/StateSynchronizer.ts) handles continuous authoritative state sync.
 - [FeatureReplicationService.ts](/c:/programming/TheHangout/src/network/replication/FeatureReplicationService.ts) handles semantic feature events and snapshots.
+- [DedicatedSessionTransport.ts](/c:/programming/TheHangout/src/server/DedicatedSessionTransport.ts) owns dedicated-server socket plumbing and delegates authoritative gameplay rules to the shared host coordinator.
 - Replicated content objects now reuse that transport through per-instance replication keys (`object:<moduleId>:<instanceId>`) instead of requiring a new hardcoded engine feature per object type.
 - Player tokens are unified under `EntityType.PLAYER_AVATAR`; local vs remote avatar mode is runtime state (`controlMode`), not a separate entity type.
 
@@ -91,6 +94,10 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - Spawn points come from the active scenario, not from a hardcoded global room implementation.
 - The active scenario can expose its own object modules, and `SessionRuntime` can spawn them through the content-facing object module registry.
 - `SessionRuntime` now tracks spawned object instances, not just entity ids, so scenario unload can destroy content-owned runtime state as well as entity-backed objects.
+- Scenario changes are driven through shared session config updates, and `SessionRuntime` is the single owner of scenario switching.
+- Scenario transitions are intentionally synchronous and atomic for now; unload, cleanup, load, and the follow-up host resync happen as one ordered lifecycle path.
+- After an authoritative scenario change, the host immediately rebroadcasts the full world snapshot plus feature snapshot so guests converge on the new scenario state quickly.
+- Dedicated/headless sessions run the same `SessionRuntime` lifecycle without a render scene, so render-only setup should stay separate from gameplay/state setup.
 - Contributors writing new objects should start from `IObjectRuntimeContext` plus `BaseObjectInstance` / `BaseReplicatedObjectInstance`, not from raw `AppContext`.
 
 ### Input and Tracking
@@ -119,12 +126,14 @@ src/
   network/   # transport, protocol, replication
   physics/   # physics runtime and systems
   render/    # renderer, views, avatar, effects, debug
-  server/    # headless session / server-side runtime
+  server/    # headless session, dedicated transport, admin UI
   shared/    # contracts, types, constants, utilities
   skills/    # local avatar interaction skills
   ui/        # flat UI, VR UI, HUD
   world/     # session, entities, spawning, world systems
 ```
+
+- [dedicatedServer.ts](/c:/programming/TheHangout/dedicatedServer.ts) is the dedicated server entrypoint.
 
 ## Naming Conventions
 
@@ -134,6 +143,8 @@ src/
 - `*Registry`: id/type-backed storage
 - `*Provider`: pluggable implementation behind a contract
 - `*Feature`: self-contained gameplay capability
+- `*Transport`: connection/socket/WebRTC/WebSocket plumbing
+- `*Host`: authoritative host-side rules shared across transports
 - `*Scenario`: loadable world/experience package
 - `*Object`: content-facing self-contained spawnable module
 - `*Instance`: runtime object instance owned by a scenario/session
