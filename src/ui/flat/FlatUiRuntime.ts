@@ -273,8 +273,7 @@ export class FlatUiRuntime implements IUpdatable {
         if (storedColor) {
             this.context.avatarConfig.color = storedColor;
         } else {
-            const palette = ['#00ffff', '#ff00ff', '#39ff14', '#fffd01', '#ff3131', '#bc13fe', '#ff5e00', '#00ff08'];
-            const randomColor = palette[Math.floor(Math.random() * palette.length)];
+            const randomColor = this.generateRandomAvatarColor();
             this.context.avatarConfig.color = randomColor;
             localStorage.setItem('hangout_avatarColor', randomColor);
         }
@@ -321,6 +320,11 @@ export class FlatUiRuntime implements IUpdatable {
         const adj = adjs[Math.floor(Math.random() * adjs.length)];
         const noun = nouns[Math.floor(Math.random() * nouns.length)];
         return `${adj}-${noun}-${Math.floor(Math.random() * 100)}`;
+    }
+
+    private generateRandomAvatarColor(): string {
+        const value = Math.floor(Math.random() * 0x1000000);
+        return `#${value.toString(16).padStart(6, '0')}`;
     }
 
     private disableAllButtons(): void {
