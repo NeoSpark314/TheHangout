@@ -8,12 +8,14 @@ import { EntityType } from '../../shared/contracts/IEntityState';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
+import { ControllerCursor } from '../shared/ControllerCursor';
 import * as THREE from 'three';
 
 export class VrUiRuntime implements IUpdatable {
     public tablet: TabletSurfaceEntity | null = null;
     private tabPanel: UITabPanel | null = null;
     private overlayContainer: HTMLDivElement | null = null;
+    private controllerCursor: ControllerCursor;
 
     private peersTab: any = null; // Store UITab handle
     private sessionTab: any = null;
@@ -31,7 +33,9 @@ export class VrUiRuntime implements IUpdatable {
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
 
-    constructor(private context: AppContext) { }
+    constructor(private context: AppContext) {
+        this.controllerCursor = new ControllerCursor('vr-menu-controller-cursor');
+    }
 
     public init(): void {
         // Create the Tablet Entity
@@ -143,6 +147,7 @@ export class VrUiRuntime implements IUpdatable {
 
     private show2DMenu(): void {
         if (!this.tablet) return;
+        this.controllerCursor.reset();
 
         // Create container if it doesn't exist
         if (!this.overlayContainer) {
@@ -189,6 +194,7 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     private hide2DMenu(): void {
+        this.controllerCursor.hide();
         if (this.overlayContainer && this.overlayContainer.parentElement) {
             this.overlayContainer.parentElement.removeChild(this.overlayContainer);
         }
@@ -203,6 +209,50 @@ export class VrUiRuntime implements IUpdatable {
         if (controls && !this.context.runtime.render?.isXRPresenting()) {
             controls.style.display = 'block';
         }
+    }
+
+    public handleControllerCursor(
+        delta: number,
+        stick: { x: number; y: number },
+        confirmPressed: boolean,
+        controllerConnected: boolean
+    ): void {
+        if (!this.overlayContainer || !this.overlayContainer.parentElement || !this.tablet) {
+            this.controllerCursor.hide();
+            return;
+        }
+
+        const render = this.context.runtime.render;
+        if (!controllerConnected || !render || render.isXRPresenting()) {
+            this.controllerCursor.hide();
+            return;
+        }
+
+        this.controllerCursor.show();
+        const position = this.controllerCursor.move(delta, stick);
+        if (!position) return;
+
+        const canvas = this.tablet.ui.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const withinCanvas = rect.width > 0
+            && rect.height > 0
+            && position.x >= rect.left
+            && position.x <= rect.right
+            && position.y >= rect.top
+            && position.y <= rect.bottom;
+
+        if (withinCanvas) {
+            const x = (position.x - rect.left) * (this.tablet.ui.width / rect.width);
+            const y = (position.y - rect.top) * (this.tablet.ui.height / rect.height);
+            this.tablet.ui.onMouseMove(x, y);
+
+            if (confirmPressed) {
+                this.tablet.ui.onMouseClick(x, y);
+            }
+            return;
+        }
+
+        this.tablet.ui.onPointerOut();
     }
 
     private addPeersTab() {
@@ -990,6 +1040,7 @@ export class VrUiRuntime implements IUpdatable {
             eventBus.off(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
             this.menuIntentHandler = null;
         }
+        this.controllerCursor.destroy();
         if (this.tablet) {
             const canvas = this.tablet.ui.canvas;
             if (this.canvasMouseMoveHandler) {
@@ -1009,4 +1060,5 @@ export class VrUiRuntime implements IUpdatable {
         this.tabPanel = null;
         this.overlayContainer = null;
     }
+
 }

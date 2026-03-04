@@ -205,6 +205,12 @@ export class InputRuntime implements IUpdatable {
             this.gamepad.wasPressed(0),
             this.gamepad.isConnected
         );
+        runtime.vrUi?.handleControllerCursor(
+            delta,
+            this.gamepad.move,
+            this.gamepad.wasPressed(0),
+            this.gamepad.isConnected
+        );
 
         // 2. VR Snap turning intent
         const xrTurn = this.xrInput.turn;

@@ -3,6 +3,7 @@ import { AppContext } from '../../app/AppContext';
 import { EVENTS } from '../../shared/constants/Constants';
 import { isMobile } from '../../shared/utils/DeviceUtils';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
+import { ControllerCursor } from '../shared/ControllerCursor';
 
 export class FlatUiRuntime implements IUpdatable {
     private overlay: HTMLElement;
@@ -29,11 +30,8 @@ export class FlatUiRuntime implements IUpdatable {
     private mobileActionBtn: HTMLButtonElement | null;
     private mobileInteractBtn: HTMLButtonElement | null;
     private mobileReticle: HTMLElement | null;
-    private controllerCursor: HTMLDivElement | null;
+    private controllerCursor: ControllerCursor;
     private controllerCursorTarget: HTMLElement | null = null;
-    private controllerCursorX = window.innerWidth * 0.5;
-    private controllerCursorY = window.innerHeight * 0.5;
-    private readonly controllerCursorSpeed = 880;
     private isMobile: boolean;
     private _joysticksInitialized: boolean = false;
     private _mobileHudEnabled: boolean = false;
@@ -63,7 +61,7 @@ export class FlatUiRuntime implements IUpdatable {
         this.mobileActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
         this.mobileInteractBtn = document.getElementById('mobile-interact-btn') as HTMLButtonElement | null;
         this.mobileReticle = document.getElementById('mobile-reticle');
-        this.controllerCursor = this.createControllerCursor();
+        this.controllerCursor = new ControllerCursor('controller-cursor');
         this.isMobile = isMobile;
 
         this.init();
@@ -236,23 +234,17 @@ export class FlatUiRuntime implements IUpdatable {
         confirmPressed: boolean,
         controllerConnected: boolean
     ): void {
-        if (!this.controllerCursor) return;
-
         if (!controllerConnected || this.isElementHidden(this.overlay)) {
-            this.hideControllerCursor();
+            this.controllerCursor.hide();
+            this.updateControllerCursorTarget(null);
             return;
         }
 
-        this.showControllerCursor();
+        this.controllerCursor.show();
+        const position = this.controllerCursor.move(delta, stick);
+        if (!position) return;
 
-        const nextX = this.controllerCursorX + (stick.x * this.controllerCursorSpeed * delta);
-        const nextY = this.controllerCursorY + (stick.y * this.controllerCursorSpeed * delta);
-        this.controllerCursorX = Math.max(12, Math.min(window.innerWidth - 12, nextX));
-        this.controllerCursorY = Math.max(12, Math.min(window.innerHeight - 12, nextY));
-
-        this.controllerCursor.style.transform = `translate(${this.controllerCursorX}px, ${this.controllerCursorY}px)`;
-
-        const target = this.resolveControllerCursorTarget(this.controllerCursorX, this.controllerCursorY);
+        const target = this.resolveControllerCursorTarget(position.x, position.y);
         this.updateControllerCursorTarget(target);
 
         if (confirmPressed && target) {
@@ -545,7 +537,8 @@ export class FlatUiRuntime implements IUpdatable {
     public hideOverlay(): void {
         console.log('[FlatUiRuntime] hideOverlay() called');
         this.context.isMenuOpen = false;
-        this.hideControllerCursor();
+        this.controllerCursor.hide();
+        this.updateControllerCursorTarget(null);
         if (this.overlay) {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
@@ -618,7 +611,7 @@ export class FlatUiRuntime implements IUpdatable {
     public showOverlay(): void {
         console.log('[FlatUiRuntime] showOverlay() called');
         this.context.isMenuOpen = true;
-        this.resetControllerCursorPosition();
+        this.controllerCursor.reset();
         if (this.overlay) {
             this.showElement(this.overlay);
             this.overlay.offsetHeight;
@@ -728,35 +721,6 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.mainPanel) return;
         this.mainPanel.classList.remove('panel-hydrating');
         this.mainPanel.classList.add('panel-ready');
-    }
-
-    private createControllerCursor(): HTMLDivElement | null {
-        if (typeof document === 'undefined') return null;
-
-        const cursor = document.createElement('div');
-        cursor.id = 'controller-cursor';
-        cursor.className = 'controller-cursor is-hidden';
-        document.body.appendChild(cursor);
-        return cursor;
-    }
-
-    private showControllerCursor(): void {
-        if (!this.controllerCursor) return;
-        this.controllerCursor.classList.remove('is-hidden');
-    }
-
-    private hideControllerCursor(): void {
-        if (!this.controllerCursor) return;
-        this.controllerCursor.classList.add('is-hidden');
-        this.updateControllerCursorTarget(null);
-    }
-
-    private resetControllerCursorPosition(): void {
-        this.controllerCursorX = window.innerWidth * 0.5;
-        this.controllerCursorY = window.innerHeight * 0.5;
-        if (this.controllerCursor) {
-            this.controllerCursor.style.transform = `translate(${this.controllerCursorX}px, ${this.controllerCursorY}px)`;
-        }
     }
 
     private resolveControllerCursorTarget(x: number, y: number): HTMLElement | null {
