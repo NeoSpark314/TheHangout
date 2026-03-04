@@ -58,8 +58,8 @@ export class HeadlessSession {
 
         await this.context.runtime.physics.init();
 
-        // Pass null for scene in headless environment
-        this.context.runtime.session.init(null as any);
+        // Headless sessions initialize the same scenario runtime, but without a render scene.
+        this.context.runtime.session.init(null);
 
         console.log(`[HeadlessSession] Entity List AFTER Session Init:`, Array.from(this.context.runtime.entity.entities.keys()));
 

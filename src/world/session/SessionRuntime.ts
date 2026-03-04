@@ -15,6 +15,7 @@ export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
     private hasGroundPhysics: boolean = false;
+    private isInitialized: boolean = false;
     private readonly objectInstanceRegistry: ObjectInstanceRegistry;
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
     private readonly scenarioRegistry = new ScenarioRegistry();
@@ -43,7 +44,7 @@ export class SessionRuntime implements IUpdatable {
         return this.random();
     }
 
-    public init(scene: THREE.Scene): void {
+    public init(scene: THREE.Scene | null): void {
         try {
             this.scene = scene;
             this._seed = this.context.sessionConfig.seed;
@@ -57,6 +58,7 @@ export class SessionRuntime implements IUpdatable {
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
             });
+            this.isInitialized = true;
         } catch (e) {
             console.error('[SessionRuntime] init crashed:', e);
         }
@@ -96,7 +98,7 @@ export class SessionRuntime implements IUpdatable {
 
         if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
             this._seed = this.context.sessionConfig.seed;
-            if (this.scene) {
+            if (this.isInitialized) {
                 this.activeScenario.unload(this.context);
                 this.clearScenarioEntities();
                 this.activeScenario.load(this.context, {
@@ -180,7 +182,7 @@ export class SessionRuntime implements IUpdatable {
         this._seed = options.seed ?? this.context.sessionConfig.seed;
         this.refreshActiveObjectModules();
 
-        if (this.scene) {
+        if (this.isInitialized) {
             this.activeScenario.load(this.context, {
                 isHost: this.context.isHost,
                 seed: options.seed ?? this.context.sessionConfig.seed,

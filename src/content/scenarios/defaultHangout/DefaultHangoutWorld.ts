@@ -55,17 +55,17 @@ export class DefaultHangoutWorld {
             this.props = new PropBuilder(scene as any, () => this.session.randomFloat(), this.context);
         }
 
-        this.environment.applyConfig(config);
-        this.props.applyConfig(config);
+        this.environment?.applyConfig(config);
+        this.props?.applyConfig(config);
     }
 
     public applyConfig(config: ISessionConfig): void {
-        if (!this.environment || !this.props) {
+        if (!this.props) {
             this.load(config);
             return;
         }
 
-        this.environment.applyConfig(config);
+        this.environment?.applyConfig(config);
         this.props.applyConfig(config);
     }
 
