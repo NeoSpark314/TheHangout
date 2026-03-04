@@ -311,27 +311,23 @@ export class InputRuntime implements IUpdatable {
             const g = INPUT_CONFIG.GESTURE;
 
             const pinchDist = GestureUtils.getPinchDistance(handState);
-            const pinchOn = pinchDist !== null && pinchDist < g.PINCH_ON_DISTANCE;
-            const pinchOff = pinchDist === null || pinchDist > g.PINCH_OFF_DISTANCE;
-            if (latch.pinch) {
-                if (pinchOff) latch.pinch = false;
-            } else if (pinchOn) {
-                latch.pinch = true;
-            }
+            latch.pinch = GestureUtils.updateDistanceLatch(latch.pinch, pinchDist, {
+                on: g.PINCH_ON_DISTANCE,
+                off: g.PINCH_OFF_DISTANCE
+            });
 
             const curlCount = GestureUtils.getFistCurlCount(handState, g.FIST_CURL_THRESHOLD);
-            const fistOn = curlCount >= g.FIST_ON_CURL_COUNT;
-            const fistOff = curlCount <= g.FIST_OFF_CURL_COUNT;
-            if (latch.fist) {
-                if (fistOff) latch.fist = false;
-            } else if (fistOn) {
-                latch.fist = true;
-            }
+            latch.fist = GestureUtils.updateCountLatch(
+                latch.fist,
+                curlCount,
+                g.FIST_ON_CURL_COUNT,
+                g.FIST_OFF_CURL_COUNT
+            );
 
             return {
                 isSqueezing: latch.fist,
-                isInteracting: latch.pinch,
-                triggerValue: latch.pinch ? 1.0 : 0.0
+                isInteracting: hand === 'left' ? false : latch.pinch,
+                triggerValue: hand === 'left' ? 0.0 : (latch.pinch ? 1.0 : 0.0)
             };
         }
 

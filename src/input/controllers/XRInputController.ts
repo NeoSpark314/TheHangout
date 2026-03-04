@@ -1,8 +1,22 @@
 import { AppContext } from '../../app/AppContext';
+import * as THREE from 'three';
+import { INPUT_CONFIG } from '../../shared/constants/Constants';
+import { GestureUtils } from '../../shared/utils/GestureUtils';
 
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
+    private leftHandMoveActive = false;
+    private leftHandMoveAnchor: THREE.Vector3 | null = null;
+    private readonly _tempVec = new THREE.Vector3();
+    private readonly _tempQuat = new THREE.Quaternion();
+    private readonly _tempYawQuat = new THREE.Quaternion();
+    private readonly _tempInvYawQuat = new THREE.Quaternion();
+    private readonly _tempEuler = new THREE.Euler();
+    private readonly _worldDelta = new THREE.Vector3();
+    private readonly _localDelta = new THREE.Vector3();
+    private readonly handMoveDeadzone = 0.02;
+    private readonly handMoveMaxDistance = 0.14;
 
     constructor(private context: AppContext) { }
 
@@ -14,9 +28,16 @@ export class XRInputManager {
         if (!render || !render.isXRPresenting()) return;
 
         const session = render.getXRSession();
-        if (!session) return;
+        const referenceSpace = render.getXRReferenceSpace();
+        if (!session || !referenceSpace) return;
 
+        let sawLeftHandSource = false;
         for (const source of session.inputSources) {
+            if (source.handedness === 'left' && source.hand) {
+                sawLeftHandSource = true;
+                this.pollLeftHandMovement(source, frame, referenceSpace);
+            }
+
             if (source.gamepad) {
                 const axes = source.gamepad.axes;
                 // Standard mapping: Left stick for move, Right stick for turn
@@ -32,5 +53,133 @@ export class XRInputManager {
                 }
             }
         }
+
+        if (!sawLeftHandSource) {
+            this.resetLeftHandMovement();
+        }
+    }
+
+    private pollLeftHandMovement(
+        source: XRInputSource,
+        frame: XRFrame | undefined,
+        referenceSpace: XRReferenceSpace
+    ): void {
+        const render = this.context.runtime.render;
+        if (!frame) {
+            this.resetLeftHandMovement();
+            return;
+        }
+
+        const pinchPoint = this.getHandPinchPoint(source, frame, referenceSpace);
+        if (!pinchPoint) {
+            this.resetLeftHandMovement();
+            return;
+        }
+
+        const localPinchOffset = this.getHeadLocalOffset(pinchPoint);
+
+        const pinchDistance = this.getHandPinchDistance(source, frame, referenceSpace);
+        const g = INPUT_CONFIG.GESTURE;
+        const nextPinchState = GestureUtils.updateDistanceLatch(this.leftHandMoveActive, pinchDistance, {
+            on: g.PINCH_ON_DISTANCE,
+            off: g.PINCH_OFF_DISTANCE
+        });
+
+        if (this.leftHandMoveActive && !nextPinchState) {
+            this.resetLeftHandMovement();
+            return;
+        } else if (!this.leftHandMoveActive && nextPinchState) {
+            this.leftHandMoveActive = true;
+            this.leftHandMoveAnchor = localPinchOffset.clone();
+        } else if (!nextPinchState) {
+            return;
+        }
+
+        if (!this.leftHandMoveAnchor) {
+            this.leftHandMoveAnchor = localPinchOffset.clone();
+        }
+
+        this._localDelta.copy(localPinchOffset).sub(this.leftHandMoveAnchor);
+        this._localDelta.y = 0;
+
+        const distance = Math.hypot(this._localDelta.x, this._localDelta.z);
+        if (distance <= this.handMoveDeadzone) {
+            return;
+        }
+
+        const scaledDistance = Math.min(1, (distance - this.handMoveDeadzone) / (this.handMoveMaxDistance - this.handMoveDeadzone));
+        const norm = 1 / distance;
+        this.move.x += this._localDelta.x * norm * scaledDistance;
+        this.move.y += this._localDelta.z * norm * scaledDistance;
+    }
+
+    private getHandPinchPoint(
+        source: XRInputSource,
+        frame: XRFrame,
+        referenceSpace: XRReferenceSpace
+    ): THREE.Vector3 | null {
+        const thumbTip = source.hand?.get('thumb-tip');
+        const indexTip = source.hand?.get('index-finger-tip');
+        if (!thumbTip || !indexTip) {
+            return null;
+        }
+
+        const thumbPose = frame.getJointPose(thumbTip, referenceSpace);
+        const indexPose = frame.getJointPose(indexTip, referenceSpace);
+        if (!thumbPose || !indexPose) {
+            return null;
+        }
+
+        const thumbWorld = this.jointPoseToWorldPosition(thumbPose);
+        const indexWorld = this.jointPoseToWorldPosition(indexPose);
+        return thumbWorld.add(indexWorld).multiplyScalar(0.5);
+    }
+
+    private getHandPinchDistance(
+        source: XRInputSource,
+        frame: XRFrame,
+        referenceSpace: XRReferenceSpace
+    ): number | null {
+        const thumbTip = source.hand?.get('thumb-tip');
+        const indexTip = source.hand?.get('index-finger-tip');
+        if (!thumbTip || !indexTip) {
+            return null;
+        }
+
+        const thumbPose = frame.getJointPose(thumbTip, referenceSpace);
+        const indexPose = frame.getJointPose(indexTip, referenceSpace);
+        if (!thumbPose || !indexPose) {
+            return null;
+        }
+
+        return GestureUtils.getDistance3D(thumbPose.transform.position, indexPose.transform.position);
+    }
+
+    private jointPoseToWorldPosition(pose: XRJointPose): THREE.Vector3 {
+        const render = this.context.runtime.render;
+        this._tempVec.set(
+            pose.transform.position.x,
+            pose.transform.position.y,
+            pose.transform.position.z
+        );
+        this._tempVec.applyMatrix4(render.cameraGroup.matrixWorld);
+        return this._tempVec.clone();
+    }
+
+    private getHeadLocalOffset(worldPoint: THREE.Vector3): THREE.Vector3 {
+        const render = this.context.runtime.render;
+        render.camera.getWorldPosition(this._tempVec);
+        render.camera.getWorldQuaternion(this._tempQuat);
+        this._tempEuler.setFromQuaternion(this._tempQuat, 'YXZ');
+        this._tempYawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this._tempEuler.y);
+        this._tempInvYawQuat.copy(this._tempYawQuat).invert();
+
+        this._worldDelta.copy(worldPoint).sub(this._tempVec);
+        return this._worldDelta.applyQuaternion(this._tempInvYawQuat).clone();
+    }
+
+    private resetLeftHandMovement(): void {
+        this.leftHandMoveActive = false;
+        this.leftHandMoveAnchor = null;
     }
 }

@@ -1,4 +1,10 @@
 import { IHandState } from '../contracts/ITrackingProvider';
+import { INPUT_CONFIG } from '../constants/Constants';
+
+export interface IGestureLatchThresholds {
+    on: number;
+    off: number;
+}
 
 export class GestureUtils {
     // WebXR hand-joint indices used by the gesture helpers.
@@ -21,10 +27,7 @@ export class GestureUtils {
             return null;
         }
 
-        const dx = thumbTip.x - indexTip.x;
-        const dy = thumbTip.y - indexTip.y;
-        const dz = thumbTip.z - indexTip.z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return this.getDistance3D(thumbTip, indexTip);
     }
 
     /**
@@ -46,5 +49,43 @@ export class GestureUtils {
             if (distSq < thresholdSq) closeCount++;
         }
         return closeCount;
+    }
+
+    public static getDistance3D(a: { x: number, y: number, z: number }, b: { x: number, y: number, z: number }): number {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const dz = a.z - b.z;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    public static updateDistanceLatch(
+        latched: boolean,
+        distance: number | null,
+        thresholds: IGestureLatchThresholds = {
+            on: INPUT_CONFIG.GESTURE.PINCH_ON_DISTANCE,
+            off: INPUT_CONFIG.GESTURE.PINCH_OFF_DISTANCE
+        }
+    ): boolean {
+        const isOn = distance !== null && distance < thresholds.on;
+        const isOff = distance === null || distance > thresholds.off;
+
+        if (latched) {
+            return isOff ? false : true;
+        }
+
+        return isOn;
+    }
+
+    public static updateCountLatch(
+        latched: boolean,
+        count: number,
+        onCount: number,
+        offCount: number
+    ): boolean {
+        if (latched) {
+            return count <= offCount ? false : true;
+        }
+
+        return count >= onCount;
     }
 }
