@@ -786,20 +786,58 @@ export class VrUiRuntime implements IUpdatable {
             const renderHelp = () => {
                 contentArea.clearChildren();
 
-                const title = new UILabel(`${currentMode} CONTROLS`, 0, 0, 1180, 80);
+                const panel = new UIElement(40, 10, 1100, 520);
+                panel.cornerRadius = 18;
+                panel.backgroundColor = UITheme.colors.panelBg;
+                panel.borderColor = UITheme.colors.primary;
+                panel.borderWidth = 3;
+                contentArea.addChild(panel);
+
+                const help = this.getHelpContentForMode(currentMode);
+                const title = new UILabel(`${currentMode} Controls`, 0, 18, 1100, 54);
                 title.font = getFont(UITheme.typography.sizes.title, 'bold');
                 title.textColor = UITheme.colors.primary;
                 title.textAlign = 'center';
-                contentArea.addChild(title);
+                panel.addChild(title);
 
-                const controls = this.getControlsForMode(currentMode);
-                controls.forEach((text, i) => {
+                const divider = new UIElement(548, 92, 4, 310);
+                divider.backgroundColor = UITheme.colors.panelBgHover;
+                divider.borderWidth = 0;
+                divider.cornerRadius = 2;
+                panel.addChild(divider);
+
+                const leftTitle = new UILabel(help.leftTitle, 50, 96, 430, 40);
+                leftTitle.font = getFont(UITheme.typography.sizes.body, 'bold');
+                leftTitle.textColor = UITheme.colors.accent;
+                leftTitle.textAlign = 'left';
+                panel.addChild(leftTitle);
+
+                const rightTitle = new UILabel(help.rightTitle, 620, 96, 430, 40);
+                rightTitle.font = getFont(UITheme.typography.sizes.body, 'bold');
+                rightTitle.textColor = UITheme.colors.accent;
+                rightTitle.textAlign = 'left';
+                panel.addChild(rightTitle);
+                help.leftItems.forEach((item, index) => {
+                    const text = item;
                     const isHeader = !text.startsWith('•') && text.trim() !== '';
-                    const line = new UILabel(text, 50, 100 + i * 45, 1080, 40);
-                    line.font = getFont(isHeader ? UITheme.typography.sizes.body : UITheme.typography.sizes.small, isHeader ? 'bold' : 'normal');
-                    line.textColor = isHeader ? UITheme.colors.accent : UITheme.colors.text;
-                    contentArea.addChild(line);
+                    const line = new UILabel(text, 50, 144 + index * 38, 430, 34);
+                    line.font = getFont(UITheme.typography.sizes.small);
+                    line.textColor = UITheme.colors.text;
+                    panel.addChild(line);
                 });
+
+                help.rightItems.forEach((item, index) => {
+                    const line = new UILabel(item, 620, 144 + index * 38, 430, 34);
+                    line.font = getFont(UITheme.typography.sizes.small);
+                    line.textColor = UITheme.colors.text;
+                    panel.addChild(line);
+                });
+
+                const footer = new UILabel(help.footer, 60, 448, 980, 42);
+                footer.font = getFont(UITheme.typography.sizes.small, 'bold');
+                footer.textColor = UITheme.colors.textMuted;
+                footer.textAlign = 'center';
+                panel.addChild(footer);
 
                 navButtons.forEach(btn => {
                     const isSelected = btn.text === currentMode;
@@ -858,6 +896,71 @@ export class VrUiRuntime implements IUpdatable {
                     "• Interaction: Tap on objects",
                     "• Multi-Touch: Supports dual joystick control"
                 ];
+        }
+    }
+
+    private getHelpContentForMode(mode: 'VR' | 'Desktop' | 'Touch'): {
+        leftTitle: string;
+        leftItems: string[];
+        rightTitle: string;
+        rightItems: string[];
+        footer: string;
+    } {
+        switch (mode) {
+            case 'VR':
+                return {
+                    leftTitle: 'Controllers',
+                    leftItems: [
+                        'Move: Left thumbstick',
+                        'Turn: Right thumbstick',
+                        'Grab / Hold: Left or right grip',
+                        'Use / Select: Left or right trigger',
+                        'Menu: Left controller menu button'
+                    ],
+                    rightTitle: 'Hand Tracking',
+                    rightItems: [
+                        'Select / Click: Pinch thumb + index',
+                        'Grab / Hold: Close fist (grasp)',
+                        'Menu: Look at left palm, then flip up',
+                        'Aim: Point with open hand',
+                        'Release: Open hand again'
+                    ],
+                    footer: 'Keep this tab compact in VR. It is a quick reference, not a manual.'
+                };
+            case 'Desktop':
+                return {
+                    leftTitle: 'Movement',
+                    leftItems: [
+                        'Move: W, A, S, D',
+                        'Look: Mouse',
+                        'Menu: M',
+                        'Reach Distance: Mouse wheel'
+                    ],
+                    rightTitle: 'Hands / Actions',
+                    rightItems: [
+                        'Grab: Left click',
+                        'Interact: Right click',
+                        'Left Hand Active: Q',
+                        'Right Hand Active: E'
+                    ],
+                    footer: 'Desktop mode is best for setup, testing, and fast iteration.'
+                };
+            case 'Touch':
+                return {
+                    leftTitle: 'Movement',
+                    leftItems: [
+                        'Move: Left virtual joystick',
+                        'Look: Right virtual joystick',
+                        'Menu: HUD toggle button'
+                    ],
+                    rightTitle: 'Interaction',
+                    rightItems: [
+                        'Tap objects to interact',
+                        'Use two thumbs for dual-stick control',
+                        'Best results in landscape mode'
+                    ],
+                    footer: 'Touch mode works best for simple interactions and short sessions.'
+                };
         }
     }
 
