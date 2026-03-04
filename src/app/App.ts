@@ -75,7 +75,7 @@ export class App {
                 const info = await resp.json();
                 if (info.local) {
                     this.context.isLocalServer = true;
-                    console.log('[App] Local server detected — using local PeerJS signaling.');
+                    console.log('[App] Dedicated server detected — using local PeerJS signaling.');
                 }
             }
         } catch (e) {

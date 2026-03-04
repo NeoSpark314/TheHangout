@@ -13,7 +13,7 @@ export class VoiceRuntime {
     private localAnalyser: AnalyserNode | null = null;
     private freqData: Uint8Array | null = null;
 
-    // WebSocket / Local Server properties
+    // WebSocket / Dedicated Server properties
     private websocket: WebSocket | null = null;
     private mediaRecorder: MediaRecorder | null = null;
 
