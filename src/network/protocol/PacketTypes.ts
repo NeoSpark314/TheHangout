@@ -8,6 +8,8 @@ import {
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonPayload,
     IDesktopStreamSummonedPayload,
+    IRttPingPayload,
+    IRttPongPayload,
     ISessionNotificationPayload,
     IFeatureSnapshotRequestPayload,
     IOwnershipReleasePayload,
@@ -42,6 +44,8 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.DESKTOP_STREAM_OFFLINE]: IDesktopStreamOfflinePayload;
     [PACKET_TYPES.DESKTOP_STREAM_FRAME]: IDesktopStreamFramePayload;
     [PACKET_TYPES.SESSION_NOTIFICATION]: ISessionNotificationPayload;
+    [PACKET_TYPES.RTT_PING]: IRttPingPayload;
+    [PACKET_TYPES.RTT_PONG]: IRttPongPayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {

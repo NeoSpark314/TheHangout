@@ -690,13 +690,19 @@ export class VrUiRuntime implements IUpdatable {
         networkLineTwo.textAlign = 'left';
         debugContainer.addChild(networkLineTwo);
 
-        const networkEventLine = new UILabel("", 90, 336, 1080, 38);
+        const networkLatencyLine = new UILabel("", 90, 336, 1080, 38);
+        networkLatencyLine.font = getFont(UITheme.typography.sizes.small, 'bold');
+        networkLatencyLine.textColor = UITheme.colors.text;
+        networkLatencyLine.textAlign = 'left';
+        debugContainer.addChild(networkLatencyLine);
+
+        const networkEventLine = new UILabel("", 90, 374, 1080, 38);
         networkEventLine.font = getFont(UITheme.typography.sizes.small);
         networkEventLine.textColor = UITheme.colors.textMuted;
         networkEventLine.textAlign = 'left';
         debugContainer.addChild(networkEventLine);
 
-        const scenarioLabel = new UILabel("Scenarios", 90, 410, 300, 42);
+        const scenarioLabel = new UILabel("Scenarios", 90, 438, 300, 42);
         scenarioLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
         scenarioLabel.textColor = UITheme.colors.accent;
         scenarioLabel.textAlign = 'left';
@@ -704,7 +710,7 @@ export class VrUiRuntime implements IUpdatable {
 
         const scenarios = this.context.runtime.session.getAvailableScenarios().slice(0, 3);
         scenarios.forEach((scenario, index) => {
-            const button = new UIButton(scenario.displayName, 90 + (index * 340), 450, 320, 58, () => {
+            const button = new UIButton(scenario.displayName, 90 + (index * 340), 478, 320, 58, () => {
                 this.context.runtime.network.requestSessionConfigUpdate({
                     activeScenarioId: scenario.id
                 });
@@ -715,7 +721,7 @@ export class VrUiRuntime implements IUpdatable {
             debugContainer.addChild(button);
         });
 
-        const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 550, 360, 60, () => {
+        const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 578, 360, 60, () => {
             const localPlayer = this.context.localPlayer;
             const targetPosition = localPlayer
                 ? {
@@ -748,7 +754,7 @@ export class VrUiRuntime implements IUpdatable {
         spawnBeaconBtn.borderColor = UITheme.colors.secondary;
         debugContainer.addChild(spawnBeaconBtn);
 
-        const statsLabel = new UILabel("", 90, 650, 1080, 42);
+        const statsLabel = new UILabel("", 90, 678, 1080, 42);
         statsLabel.font = getFont(UITheme.typography.sizes.small, 'bold');
         statsLabel.textColor = UITheme.colors.accent;
         statsLabel.textAlign = 'left';
@@ -760,6 +766,9 @@ export class VrUiRuntime implements IUpdatable {
             const avg = physics.getTouchQueryAverageHitsPerFrame();
             networkLineOne.text = `Role: ${network.role}  Transport: ${network.transport}  Peers: ${network.peers}`;
             networkLineTwo.text = `TX: ${formatBytes(network.txBps)}/s (${formatBytes(network.txTotal)})  RX: ${formatBytes(network.rxBps)}/s (${formatBytes(network.rxTotal)})`;
+            networkLatencyLine.text = network.lastRttMs !== null
+                ? `Latency: RTT ${network.lastRttMs.toFixed(0)} ms  Avg ${network.avgRttMs?.toFixed(0) ?? '-'} ms  Jitter ${network.jitterMs?.toFixed(0) ?? '-'} ms  Samples ${network.latencySamples}`
+                : 'Latency: waiting for probe data';
             networkEventLine.text = recentEntry
                 ? truncate(`Last ${recentEntry.category}/${recentEntry.level}: ${recentEntry.message}`, 110)
                 : 'Last: no recent events';

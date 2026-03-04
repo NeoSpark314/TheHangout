@@ -134,6 +134,20 @@ function isSessionNotificationPayload(payload: unknown): boolean {
     return true;
 }
 
+function isRttPingPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.probeId === 'string' &&
+        typeof payload.clientSentAt === 'number';
+}
+
+function isRttPongPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.probeId === 'string' &&
+        typeof payload.clientSentAt === 'number' &&
+        typeof payload.serverReceivedAt === 'number' &&
+        typeof payload.serverSentAt === 'number';
+}
+
 export function isValidPayloadForType(type: number, payload: unknown): boolean {
     switch (type) {
         case PACKET_TYPES.STATE_UPDATE:
@@ -175,6 +189,10 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isDesktopStreamFramePayload(payload);
         case PACKET_TYPES.SESSION_NOTIFICATION:
             return isSessionNotificationPayload(payload);
+        case PACKET_TYPES.RTT_PING:
+            return isRttPingPayload(payload);
+        case PACKET_TYPES.RTT_PONG:
+            return isRttPongPayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

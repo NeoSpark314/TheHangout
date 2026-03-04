@@ -14,6 +14,10 @@ export interface INetworkMetricsSnapshot {
     rxBps: number;
     txTotal: number;
     rxTotal: number;
+    lastRttMs: number | null;
+    avgRttMs: number | null;
+    jitterMs: number | null;
+    latencySamples: number;
 }
 
 interface IByteSample {
@@ -21,13 +25,20 @@ interface IByteSample {
     bytes: number;
 }
 
+interface ILatencySample {
+    at: number;
+    rttMs: number;
+}
+
 export class RuntimeDiagnostics {
     private readonly entries: IDiagnosticEntry[] = [];
     private readonly txSamples: IByteSample[] = [];
     private readonly rxSamples: IByteSample[] = [];
+    private readonly latencySamples: ILatencySample[] = [];
     private nextEntryId = 1;
     private readonly maxEntries = 64;
     private readonly sampleWindowMs = 1000;
+    private readonly latencyWindowMs = 30000;
     private txTotal = 0;
     private rxTotal = 0;
 
@@ -67,6 +78,15 @@ export class RuntimeDiagnostics {
         this.pruneSamples(this.rxSamples);
     }
 
+    public recordRoundTripTime(rttMs: number): void {
+        if (!Number.isFinite(rttMs) || rttMs < 0) return;
+        this.latencySamples.push({
+            at: this.nowMs(),
+            rttMs
+        });
+        this.pruneLatencySamples();
+    }
+
     public getRecentEntries(limit: number = 5): IDiagnosticEntry[] {
         if (limit <= 0) return [];
         return this.entries.slice(-limit).reverse();
@@ -75,12 +95,28 @@ export class RuntimeDiagnostics {
     public getNetworkMetricsSnapshot(): INetworkMetricsSnapshot {
         this.pruneSamples(this.txSamples);
         this.pruneSamples(this.rxSamples);
+        this.pruneLatencySamples();
+
+        const lastRttMs = this.latencySamples.length > 0
+            ? this.latencySamples[this.latencySamples.length - 1].rttMs
+            : null;
+
+        let avgRttMs: number | null = null;
+        if (this.latencySamples.length > 0) {
+            let total = 0;
+            for (const sample of this.latencySamples) total += sample.rttMs;
+            avgRttMs = total / this.latencySamples.length;
+        }
 
         return {
             txBps: this.sumBytes(this.txSamples),
             rxBps: this.sumBytes(this.rxSamples),
             txTotal: this.txTotal,
-            rxTotal: this.rxTotal
+            rxTotal: this.rxTotal,
+            lastRttMs,
+            avgRttMs,
+            jitterMs: this.computeJitterMs(),
+            latencySamples: this.latencySamples.length
         };
     }
 
@@ -97,6 +133,24 @@ export class RuntimeDiagnostics {
             total += sample.bytes;
         }
         return total;
+    }
+
+    private pruneLatencySamples(): void {
+        const cutoff = this.nowMs() - this.latencyWindowMs;
+        while (this.latencySamples.length > 0 && this.latencySamples[0].at < cutoff) {
+            this.latencySamples.shift();
+        }
+    }
+
+    private computeJitterMs(): number | null {
+        if (this.latencySamples.length < 2) return null;
+
+        let totalDelta = 0;
+        for (let i = 1; i < this.latencySamples.length; i++) {
+            totalDelta += Math.abs(this.latencySamples[i].rttMs - this.latencySamples[i - 1].rttMs);
+        }
+
+        return totalDelta / (this.latencySamples.length - 1);
     }
 
     private nowMs(): number {

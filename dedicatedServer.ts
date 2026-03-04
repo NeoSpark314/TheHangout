@@ -691,7 +691,7 @@ server.listen(PORT, '0.0.0.0', () => {
 
     console.log('');
     console.log('  ╔══════════════════════════════════════════╗');
-    console.log('  ║        TheHangout — Local Server         ║');
+    console.log('  ║        TheHangout — Dedicated Server         ║');
     console.log('  ╠══════════════════════════════════════════╣');
     console.log(`  ║  Local:   https://localhost:${PORT}/`);
     for (const iface of interfaces) {

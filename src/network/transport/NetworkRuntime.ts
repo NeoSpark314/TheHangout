@@ -43,6 +43,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     // Host mode delegates authoritative rules to the shared coordinator so PeerJS
     // host behavior stays aligned with the dedicated server implementation.
     private authoritativeHost: AuthoritativeSessionHost;
+    private probeSeq = 0;
+    private timeSinceLastProbe = 0;
+    private readonly probeIntervalSec = 2.0;
+    private readonly maxProbeAgeMs = 15000;
+    private readonly pendingLatencyProbes = new Map<string, number>();
     private ownershipSeqByEntity: Map<string, number> = new Map();
     private lastAppliedOwnershipSeqByEntity: Map<string, number> = new Map();
 
@@ -157,6 +162,18 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.registerRoleAwareHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {
             host: (senderId, _payload) => {
                 this.context.runtime.replication.sendSnapshotToPeer(senderId);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.RTT_PING, {
+            host: (senderId, payload) => {
+                this.authoritativeHost.handleRttPing(senderId, payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.RTT_PONG, {
+            guest: (_senderId, payload) => {
+                this.handleRttPong(payload);
             }
         });
 
@@ -395,6 +412,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         }
 
         this.synchronizer.update(delta);
+        this.updateLatencyProbe(delta);
     }
 
     public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
@@ -411,6 +429,10 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         rxBps: number;
         txTotal: number;
         rxTotal: number;
+        lastRttMs: number | null;
+        avgRttMs: number | null;
+        jitterMs: number | null;
+        latencySamples: number;
     } {
         const metrics = this.context.runtime.diagnostics.getNetworkMetricsSnapshot();
         return {
@@ -424,7 +446,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             txBps: metrics.txBps,
             rxBps: metrics.rxBps,
             txTotal: metrics.txTotal,
-            rxTotal: metrics.rxTotal
+            rxTotal: metrics.rxTotal,
+            lastRttMs: metrics.lastRttMs,
+            avgRttMs: metrics.avgRttMs,
+            jitterMs: metrics.jitterMs,
+            latencySamples: metrics.latencySamples
         };
     }
 
@@ -628,8 +654,55 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             this.peer.destroy();
             this.peer = null;
         }
+        this.pendingLatencyProbes.clear();
+        this.timeSinceLastProbe = 0;
         this.connections.clear();
         this.context.sessionId = null;
+    }
+
+    private updateLatencyProbe(delta: number): void {
+        this.timeSinceLastProbe += delta;
+        this.pruneStaleLatencyProbes();
+
+        if (this.timeSinceLastProbe < this.probeIntervalSec) return;
+        this.timeSinceLastProbe = 0;
+
+        const hostId = this.context.sessionId;
+        if (!hostId || this.connections.size === 0) return;
+
+        const probeId = this.nextProbeId();
+        const sentAt = this.nowMs();
+        this.pendingLatencyProbes.set(probeId, sentAt);
+        this.sendData(hostId, PACKET_TYPES.RTT_PING, {
+            probeId,
+            clientSentAt: sentAt
+        });
+    }
+
+    private handleRttPong(payload: PacketPayloadMap[typeof PACKET_TYPES.RTT_PONG]): void {
+        const sentAt = this.pendingLatencyProbes.get(payload.probeId);
+        if (sentAt === undefined) return;
+
+        this.pendingLatencyProbes.delete(payload.probeId);
+        this.context.runtime.diagnostics.recordRoundTripTime(Math.max(0, this.nowMs() - sentAt));
+    }
+
+    private pruneStaleLatencyProbes(): void {
+        const cutoff = this.nowMs() - this.maxProbeAgeMs;
+        for (const [probeId, sentAt] of this.pendingLatencyProbes.entries()) {
+            if (sentAt < cutoff) {
+                this.pendingLatencyProbes.delete(probeId);
+            }
+        }
+    }
+
+    private nextProbeId(): string {
+        this.probeSeq += 1;
+        return `${this.getLocalTransportId()}:${this.probeSeq}`;
+    }
+
+    private getLocalTransportId(): string {
+        return this.localPeerId || this.peer?.id || this.context.localPlayer?.id || 'guest';
     }
 
     private nextOwnershipSeq(entityId: string): number {

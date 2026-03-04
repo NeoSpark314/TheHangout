@@ -101,6 +101,18 @@ export interface ISessionNotificationPayload {
     sentAt?: number;
 }
 
+export interface IRttPingPayload {
+    probeId: string;
+    clientSentAt: number;
+}
+
+export interface IRttPongPayload {
+    probeId: string;
+    clientSentAt: number;
+    serverReceivedAt: number;
+    serverSentAt: number;
+}
+
 // A discriminated union of all possible packet payloads
 export type NetworkPayload =
     | IOwnershipTransferPayload
@@ -120,4 +132,6 @@ export type NetworkPayload =
     | IDesktopStreamOfflinePayload
     | IDesktopStreamFramePayload
     | ISessionNotificationPayload
+    | IRttPingPayload
+    | IRttPongPayload
     | any; // Fallback for unsupported packets

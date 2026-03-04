@@ -6,6 +6,7 @@ import { PACKET_TYPES } from '../../shared/constants/Constants';
 import { EntityType, IStateUpdatePacket } from '../../shared/contracts/IEntityState';
 import {
     IFeatureSnapshotRequestPayload,
+    IRttPingPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
     ISessionConfigUpdatePayload
@@ -78,6 +79,12 @@ export class AuthoritativeSessionHost {
         dispatcher.registerHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, {
             handle: (_senderId: string, payload: ISessionConfigUpdatePayload) => {
                 this.applySessionConfigUpdate(payload);
+            }
+        });
+
+        dispatcher.registerHandler(PACKET_TYPES.RTT_PING, {
+            handle: (senderId: string, payload: IRttPingPayload) => {
+                this.handleRttPing(senderId, payload);
             }
         });
     }
@@ -243,6 +250,16 @@ export class AuthoritativeSessionHost {
             newOwnerId: null,
             seq,
             sentAt: this.nowMs()
+        });
+    }
+
+    public handleRttPing(senderId: string, payload: IRttPingPayload): void {
+        const serverReceivedAt = this.nowMs();
+        this.transport.sendData(senderId, PACKET_TYPES.RTT_PONG, {
+            probeId: payload.probeId,
+            clientSentAt: payload.clientSentAt,
+            serverReceivedAt,
+            serverSentAt: this.nowMs()
         });
     }
 
