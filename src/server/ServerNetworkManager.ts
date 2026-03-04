@@ -2,23 +2,18 @@ import { AppContext } from '../app/AppContext';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
 import { PACKET_TYPES } from '../shared/constants/Constants';
 import { NetworkDispatcher } from '../network/protocol/PacketDispatcher';
-import { NetworkSynchronizer, INetworkTransport } from '../network/replication/StateSynchronizer';
-import { IStateUpdatePacket, EntityType } from '../shared/contracts/IEntityState';
+import { INetworkTransport } from '../network/replication/StateSynchronizer';
+import { EntityType } from '../shared/contracts/IEntityState';
 import { PacketPayloadMap } from '../network/protocol/PacketTypes';
-import {
-    IFeatureSnapshotRequestPayload,
-    IOwnershipReleasePayload,
-    IOwnershipRequestPayload,
-    ISessionConfigUpdatePayload
-} from '../shared/contracts/INetworkPacket';
-import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../network/replication/FeatureReplicationService';
+import { AuthoritativeSessionHost } from '../network/transport/AuthoritativeSessionHost';
 
 export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     private context!: AppContext;
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
-    private synchronizer!: NetworkSynchronizer;
+    // Dedicated server transport keeps socket bookkeeping here, but the actual
+    // host-authoritative sync rules live in the shared coordinator.
+    private authoritativeHost!: AuthoritativeSessionHost;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
-    private ownershipSeqByEntity: Map<string, number> = new Map();
 
     // Traffic metrics
     public bytesReceived: number = 0;
@@ -30,66 +25,13 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
     public setContext(context: AppContext): void {
         this.context = context;
-        this.synchronizer = new NetworkSynchronizer(this, this.context);
-
-        // Register server handlers
-        this.dispatcher.registerHandler(PACKET_TYPES.PLAYER_INPUT, {
-            handle: (senderId: string, payload: IStateUpdatePacket[]) => {
-                this.applyStateUpdate(payload, senderId);
-                // Headless server broadcasts its own authoritative state via synchronizer.
-                // We must relay avatars AND any objects the server has given ownership to!
-                const relayPackets = payload.filter(p => {
-                    if (p.type === EntityType.PLAYER_AVATAR) return true;
-                    const entity = this.context.runtime.entity.getEntity(p.id);
-                    return entity && !entity.isAuthority;
-                });
-
-                if (relayPackets.length > 0) {
-                    this.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, relayPackets);
-                }
-            }
-        });
-
-        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_REQUEST, {
-            handle: (senderId: string, payload: IOwnershipRequestPayload) => {
-                this.handleOwnershipRequest(senderId, payload);
-            }
-        });
-
-        this.dispatcher.registerHandler(PACKET_TYPES.OWNERSHIP_RELEASE, {
-            handle: (senderId: string, payload: IOwnershipReleasePayload) => {
-                this.handleOwnershipRelease(senderId, payload);
-            }
-        });
-
-        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_EVENT, {
-            handle: (senderId: string, payload: IReplicatedFeatureEventPayload) => {
-                this.context.runtime.replication.handleIncomingFeatureEvent(senderId, payload);
-            }
-        });
-
-        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {
-            handle: (senderId: string, payload: IFeatureSnapshotRequestPayload) => {
-                this.context.runtime.replication.sendSnapshotToPeer(senderId);
-            }
-        });
-
-        this.dispatcher.registerHandler(PACKET_TYPES.FEATURE_SNAPSHOT, {
-            handle: (_senderId: string, _payload: IReplicatedFeatureSnapshotPayload) => {
-                // Host-owned source of truth; clients should not push snapshots upstream.
-            }
-        });
-
-        this.dispatcher.registerHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, {
-            handle: (_senderId: string, payload: ISessionConfigUpdatePayload) => {
-                this.applySessionConfigUpdate(payload);
-            }
-        });
+        this.authoritativeHost = new AuthoritativeSessionHost(this.context, this);
+        this.authoritativeHost.registerHandlers(this.dispatcher);
     }
 
     public update(delta: number): void {
-        if (this.synchronizer) {
-            this.synchronizer.update(delta);
+        if (this.authoritativeHost) {
+            this.authoritativeHost.update(delta);
         }
     }
 
@@ -97,25 +39,19 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         this.connections.set(peerId, ws);
         this.context.runtime.diagnostics.record('info', 'network', `Relay client joined (${peerId})`);
 
-        const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
-        this.sendData(peerId, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
+        this.authoritativeHost.sendWelcomeState(peerId, this.connections.size);
 
-        const snapshot = this.context.runtime.entity.getWorldSnapshot();
-        this.sendData(peerId, PACKET_TYPES.STATE_UPDATE, snapshot);
-        this.context.runtime.replication.sendSnapshotToPeer(peerId);
-
-        // Broadcast to everyone else that a new peer joined, so they can restart their media recorders to generate a fresh audio header
-        this.relayToOthers(peerId, PACKET_TYPES.PEER_JOINED, { peerId });
+        this.authoritativeHost.notifyPeerJoined(peerId);
     }
 
     public removeClient(peerId: string): void {
         this.connections.delete(peerId);
         this.context.runtime.diagnostics.record('info', 'network', `Relay client left (${peerId})`);
-        this.reclaimOwnership(peerId);
+        this.authoritativeHost.reclaimOwnership(peerId);
         if (this.context.runtime.entity) {
             this.context.runtime.entity.removeEntity(peerId);
         }
-        this.broadcast(PACKET_TYPES.PEER_DISCONNECT, peerId);
+        this.authoritativeHost.notifyPeerDisconnected(peerId);
     }
 
     public handleMessage(peerId: string, messageData: any): void {
@@ -164,99 +100,6 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         }
     }
 
-    // --- State and Ownership Methods ---
-    public applyStateUpdate(entityStates: IStateUpdatePacket[], senderId?: string): void {
-        const runtime = this.context.runtime;
-        const localId = this.context.localPlayer?.id || 'local';
-        for (const stateData of entityStates) {
-            let entity = runtime.entity.getEntity(stateData.id);
-            if (!entity) {
-                const config = {
-                    spawnPos: { x: 0, y: 0, z: 0 },
-                    spawnYaw: 0,
-                    isAuthority: false,
-                    controlMode: stateData.type === EntityType.PLAYER_AVATAR ? 'remote' : undefined
-                };
-                entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
-            }
-            const state = stateData.state as { ownerId?: string | null; o?: string | null };
-            const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
-            const incomingOwnerId = hasOwnershipHint
-                ? (state.ownerId !== undefined ? state.ownerId : state.o)
-                : undefined;
-            if (entity && stateData.type !== EntityType.PLAYER_AVATAR) {
-                const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
-
-                if (currentOwnerId && senderId && currentOwnerId !== senderId) {
-                    continue;
-                }
-
-                if (
-                    currentOwnerId === null &&
-                    incomingOwnerId !== undefined &&
-                    incomingOwnerId === senderId
-                ) {
-                    (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
-                    entity.isAuthority = false;
-                }
-            }
-            if (entity && !entity.isAuthority) {
-                const networkable = entity as any;
-                if (networkable.applyNetworkState) networkable.applyNetworkState(stateData.state);
-            }
-        }
-    }
-
-    public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
-        this.context.runtime.session.updateConfig(payload);
-        this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
-    }
-
-    public reclaimOwnership(peerId: string): void {
-        for (const entity of this.context.runtime.entity.entities.values()) {
-            const logicEntity = entity as any;
-            if (logicEntity.ownerId === peerId) {
-                logicEntity.ownerId = null;
-                if (logicEntity.heldBy !== undefined) logicEntity.heldBy = null;
-                entity.isAuthority = true;
-                const seq = this.nextOwnershipSeq(entity.id);
-                this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
-            }
-        }
-    }
-
-    public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {
-        const entity = this.context.runtime.entity.getEntity(payload.entityId);
-        if (!entity) return;
-        const logicEntity = entity as any;
-        if (!logicEntity.ownerId || logicEntity.ownerId === senderId) {
-            logicEntity.ownerId = senderId;
-            entity.isAuthority = false; // Server gives up authority
-            const seq = this.nextOwnershipSeq(entity.id);
-            const transferPayload = { entityId: entity.id, newOwnerId: senderId, seq, sentAt: this.nowMs() };
-            logicEntity.onNetworkEvent?.('OWNERSHIP_TRANSFER', transferPayload);
-            this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, transferPayload);
-        }
-    }
-
-    public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
-        const entity = this.context.runtime.entity.getEntity(payload.entityId);
-        if (!entity) return;
-        const logicEntity = entity as any;
-        if (logicEntity.ownerId !== senderId) return;
-
-        logicEntity.ownerId = null;
-        entity.isAuthority = true; // Server reclaims authority
-
-        if (logicEntity.onNetworkEvent) {
-            logicEntity.onNetworkEvent('OWNERSHIP_RELEASE', payload);
-        }
-
-        const seq = this.nextOwnershipSeq(entity.id);
-        this.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, { entityId: entity.id, newOwnerId: null, seq, sentAt: this.nowMs() });
-
-    }
-
     public broadcastNotification(message: string): void {
         this.broadcast(PACKET_TYPES.SESSION_NOTIFICATION, {
             kind: 'system',
@@ -284,12 +127,6 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         // Re-init the session props
         this.context.runtime.session.init(null as any);
         this.broadcast(PACKET_TYPES.STATE_UPDATE, entityMgr.getWorldSnapshot());
-    }
-
-    private nextOwnershipSeq(entityId: string): number {
-        const next = (this.ownershipSeqByEntity.get(entityId) ?? 0) + 1;
-        this.ownershipSeqByEntity.set(entityId, next);
-        return next;
     }
 
     private nowMs(): number {

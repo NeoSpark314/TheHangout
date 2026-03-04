@@ -24,6 +24,7 @@ import { IPacketHandler } from '../protocol/PacketHandler';
 import { NetworkEnvelope, PacketPayloadMap } from '../protocol/PacketTypes';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../replication/FeatureReplicationService';
 import { IAudioChunkPayload, IAudioChunkReceiver } from '../../shared/contracts/IVoice';
+import { AuthoritativeSessionHost } from './AuthoritativeSessionHost';
 
 /**
  * Architectural Role: Responsible for establishing and managing peer-to-peer WebRTC connections.
@@ -40,12 +41,16 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     private synchronizer: NetworkSynchronizer;
+    // Host mode delegates authoritative rules to the shared coordinator so PeerJS
+    // host behavior stays aligned with the dedicated server implementation.
+    private authoritativeHost: AuthoritativeSessionHost;
     private ownershipSeqByEntity: Map<string, number> = new Map();
     private lastAppliedOwnershipSeqByEntity: Map<string, number> = new Map();
 
     constructor(private context: AppContext) {
         this.dispatcher = new NetworkDispatcher<PacketPayloadMap>();
         this.synchronizer = new NetworkSynchronizer(this, context);
+        this.authoritativeHost = new AuthoritativeSessionHost(this.context, this);
 
         this.registerHandlers();
 
@@ -203,11 +208,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             this.connections.set(conn.peer, conn);
             this.context.runtime.diagnostics.record('info', 'network', `Connection opened (${conn.peer})`);
             if (this.context.isHost) {
-                const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
-                this.sendData(conn.peer, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
-                const snapshot = this.context.runtime.entity.getWorldSnapshot();
-                this.sendData(conn.peer, PACKET_TYPES.STATE_UPDATE, snapshot);
-                this.context.runtime.replication.sendSnapshotToPeer(conn.peer);
+                this.authoritativeHost.sendWelcomeState(conn.peer, this.connections.size);
             } else {
                 this.context.runtime.replication.requestSnapshotFromHost();
             }
@@ -242,7 +243,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             eventBus.emit(EVENTS.PEER_DISCONNECTED, conn.peer);
             if (this.context.isHost) {
                 this.reclaimOwnership(conn.peer);
-                this.broadcast(PACKET_TYPES.PEER_DISCONNECT, conn.peer);
+                this.authoritativeHost.notifyPeerDisconnected(conn.peer);
             }
             if (!this.context.isHost && conn.peer === this.context.sessionId) {
                 eventBus.emit(EVENTS.HOST_DISCONNECTED);
@@ -251,6 +252,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public update(delta: number): void {
+        if (this.context.isHost) {
+            this.authoritativeHost.update(delta);
+            return;
+        }
+
         this.synchronizer.update(delta);
     }
 
@@ -297,8 +303,17 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+        if (this.context.isHost) {
+            this.authoritativeHost.applySessionConfigUpdate(payload);
+            return;
+        }
+
         this.context.runtime.session.updateConfig(payload);
         this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
+    }
+
+    public handleHostPlayerInput(senderId: string, payload: IStateUpdatePacket[]): void {
+        this.authoritativeHost.handlePlayerInput(senderId, payload);
     }
 
     public applyStateUpdate(
@@ -357,7 +372,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public relayToOthers(senderId: string, type: number, payload: unknown): void {
-        const data = JSON.stringify({ type, payload });
+        const data = JSON.stringify({ type, payload, senderId });
         for (const [peerId, conn] of this.connections.entries()) {
             if (conn.open && peerId !== senderId) {
                 conn.send(data);
@@ -367,6 +382,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public reclaimOwnership(peerId: string): void {
+        if (this.context.isHost) {
+            this.authoritativeHost.reclaimOwnership(peerId);
+            return;
+        }
+
         for (const entity of this.context.runtime.entity.entities.values()) {
             const logicEntity = entity as any;
             if (logicEntity.ownerId === peerId && !logicEntity.isLocallyControlled) {
@@ -402,6 +422,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {
+        if (this.context.isHost) {
+            this.authoritativeHost.handleOwnershipRequest(senderId, payload);
+            return;
+        }
+
         const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
@@ -416,6 +441,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
+        if (this.context.isHost) {
+            this.authoritativeHost.handleOwnershipRelease(senderId, payload);
+            return;
+        }
+
         const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
         const logicEntity = entity as any;
@@ -563,18 +593,12 @@ class StateUpdateHandler implements IPacketHandler<PacketPayloadMap[typeof PACKE
 class PlayerInputHandler implements IPacketHandler<PacketPayloadMap[typeof PACKET_TYPES.PLAYER_INPUT]> {
     constructor(private network: NetworkRuntime, private context: AppContext) { }
     handle(senderId: string, payload: IStateUpdatePacket[]): void {
-        this.network.applyStateUpdate(payload, 'player_input', senderId);
         if (this.context.isHost) {
-            // Only relay player avatars and objects the host is NOT authoritative over
-            const relayPackets = payload.filter(p => {
-                if (p.type === EntityType.PLAYER_AVATAR) return true;
-                const entity = this.context.runtime.entity.getEntity(p.id);
-                return entity && !entity.isAuthority;
-            });
-            if (relayPackets.length > 0) {
-                this.network.relayToOthers(senderId, PACKET_TYPES.PLAYER_INPUT, relayPackets);
-            }
+            this.network.handleHostPlayerInput(senderId, payload);
+            return;
         }
+
+        this.network.applyStateUpdate(payload, 'player_input', senderId);
     }
 }
 

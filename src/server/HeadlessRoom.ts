@@ -44,13 +44,13 @@ export class HeadlessSession {
         this.context.setRuntime('network', this.network as any);
 
         this.engine = new Engine(this.context);
+        this.engine.addSystem(this.network);
+        this.engine.addSystem(entityMgr);
         this.engine.addSystem({
             update: (delta) => physicsMgr.step(delta)
         });
         this.engine.addSystem(sessionMgr);
         this.engine.addSystem(this.context.runtime.mount);
-        this.engine.addSystem(entityMgr);
-        this.engine.addSystem(this.network);
     }
 
     public async start(): Promise<void> {

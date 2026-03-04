@@ -33,7 +33,11 @@ export class NetworkDispatcher<TPacketMap extends PacketMapBase = PacketMapBase>
                     console.warn(`[NetworkDispatcher] Dropping invalid payload for packet type ${envelope.type}`);
                     return;
                 }
-                handler.handle(senderId, envelope.payload);
+                const effectiveSenderId =
+                    (typeof envelope.senderId === 'string' && envelope.senderId.length > 0)
+                        ? envelope.senderId
+                        : senderId;
+                handler.handle(effectiveSenderId, envelope.payload);
             }
         } catch (e) {
             console.error('[NetworkDispatcher] Failed to dispatch packet:', e);
