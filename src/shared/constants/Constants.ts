@@ -78,7 +78,8 @@ export const PACKET_TYPES = {
     DESKTOP_STREAM_FRAME: 19,
     SESSION_NOTIFICATION: 20,
     RTT_PING: 21,
-    RTT_PONG: 22
+    RTT_PONG: 22,
+    PEER_LATENCY_REPORT: 23
 } as const;
 
 export const INPUT_CONFIG = {

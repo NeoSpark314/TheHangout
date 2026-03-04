@@ -113,6 +113,14 @@ export interface IRttPongPayload {
     serverSentAt: number;
 }
 
+export interface IPeerLatencyReportPayload {
+    lastRttMs: number;
+    avgRttMs?: number;
+    jitterMs?: number;
+    samples?: number;
+    reportedAt: number;
+}
+
 // A discriminated union of all possible packet payloads
 export type NetworkPayload =
     | IOwnershipTransferPayload
@@ -134,4 +142,5 @@ export type NetworkPayload =
     | ISessionNotificationPayload
     | IRttPingPayload
     | IRttPongPayload
+    | IPeerLatencyReportPayload
     | any; // Fallback for unsupported packets

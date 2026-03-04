@@ -85,9 +85,15 @@ export class HeadlessSession {
             clients: this.network.connections.size,
             peers: Array.from(this.network.connections.keys()).map(id => {
                 const entity = entityMgr.getEntity(id);
+                const peerStats = this.network.getPeerAdminStats(id);
                 return {
                     id,
-                    name: (entity as any)?.name || 'Connecting...'
+                    name: (entity as any)?.name || 'Connecting...',
+                    connectedAt: peerStats?.connectedAt ?? null,
+                    lastMessageAt: peerStats?.lastMessageAt ?? null,
+                    bytesIn: peerStats?.bytesIn ?? 0,
+                    bytesOut: peerStats?.bytesOut ?? 0,
+                    latency: peerStats?.latency ?? null
                 };
             }),
             network: {

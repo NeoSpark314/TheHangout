@@ -6,6 +6,15 @@ import { INetworkTransport } from '../network/replication/StateSynchronizer';
 import { EntityType } from '../shared/contracts/IEntityState';
 import { PacketPayloadMap } from '../network/protocol/PacketTypes';
 import { AuthoritativeSessionHost } from '../network/transport/AuthoritativeSessionHost';
+import { IPeerLatencyReportPayload } from '../shared/contracts/INetworkPacket';
+
+interface IPeerAdminStats {
+    connectedAt: number;
+    lastMessageAt: number;
+    bytesIn: number;
+    bytesOut: number;
+    latency: IPeerLatencyReportPayload | null;
+}
 
 export class DedicatedSessionTransport implements IUpdatable, INetworkTransport {
     private context!: AppContext;
@@ -14,6 +23,7 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
     // host-authoritative sync rules live in the shared coordinator.
     private authoritativeHost!: AuthoritativeSessionHost;
     public connections: Map<string, any> = new Map(); // peerId -> WebSocket
+    private peerStats: Map<string, IPeerAdminStats> = new Map();
 
     // Traffic metrics
     public bytesReceived: number = 0;
@@ -37,6 +47,13 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
 
     public addClient(peerId: string, ws: any): void {
         this.connections.set(peerId, ws);
+        this.peerStats.set(peerId, {
+            connectedAt: Date.now(),
+            lastMessageAt: Date.now(),
+            bytesIn: 0,
+            bytesOut: 0,
+            latency: null
+        });
         this.context.runtime.diagnostics.record('info', 'network', `Relay client joined (${peerId})`);
 
         this.authoritativeHost.sendWelcomeState(peerId, this.connections.size);
@@ -52,10 +69,17 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
             this.context.runtime.entity.removeEntity(peerId);
         }
         this.authoritativeHost.notifyPeerDisconnected(peerId);
+        this.peerStats.delete(peerId);
     }
 
     public handleMessage(peerId: string, messageData: any): void {
-        this.context.runtime.diagnostics.recordNetworkReceived(this.measurePayloadSize(messageData));
+        const messageSize = this.measurePayloadSize(messageData);
+        this.context.runtime.diagnostics.recordNetworkReceived(messageSize);
+        const peerStats = this.peerStats.get(peerId);
+        if (peerStats) {
+            peerStats.lastMessageAt = Date.now();
+            peerStats.bytesIn += messageSize;
+        }
         if (messageData.type === PACKET_TYPES.AUDIO_CHUNK) {
             this.relayToOthers(peerId, PACKET_TYPES.AUDIO_CHUNK, messageData.payload);
             return;
@@ -72,6 +96,7 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
             const data = JSON.stringify({ type, payload, senderId });
             ws.send(data);
             this.bytesSent += data.length;
+            this.notePeerBytesOut(targetId, data.length);
             this.context.runtime.diagnostics.recordNetworkSent(data.length);
         }
     }
@@ -86,6 +111,9 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
                 this.context.runtime.diagnostics.recordNetworkSent(dataLength);
             }
         }
+        for (const peerId of this.connections.keys()) {
+            this.notePeerBytesOut(peerId, dataLength);
+        }
     }
 
     public relayToOthers(senderId: string, type: number, payload: unknown): void {
@@ -95,9 +123,37 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
             if (peerId !== senderId && ws?.readyState === 1) {
                 ws.send(data);
                 this.bytesSent += dataLength;
+                this.notePeerBytesOut(peerId, dataLength);
                 this.context.runtime.diagnostics.recordNetworkSent(dataLength);
             }
         }
+    }
+
+    public handlePeerLatencyReport(peerId: string, payload: IPeerLatencyReportPayload): void {
+        const stats = this.peerStats.get(peerId);
+        if (!stats) return;
+
+        stats.lastMessageAt = Date.now();
+        stats.latency = payload;
+    }
+
+    public getPeerAdminStats(peerId: string): {
+        connectedAt: number;
+        lastMessageAt: number;
+        bytesIn: number;
+        bytesOut: number;
+        latency: IPeerLatencyReportPayload | null;
+    } | null {
+        const stats = this.peerStats.get(peerId);
+        if (!stats) return null;
+
+        return {
+            connectedAt: stats.connectedAt,
+            lastMessageAt: stats.lastMessageAt,
+            bytesIn: stats.bytesIn,
+            bytesOut: stats.bytesOut,
+            latency: stats.latency
+        };
     }
 
     public broadcastNotification(message: string): void {
@@ -146,5 +202,12 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
         } catch {
             return 0;
         }
+    }
+
+    private notePeerBytesOut(peerId: string, bytes: number): void {
+        const stats = this.peerStats.get(peerId);
+        if (!stats || bytes <= 0) return;
+
+        stats.bytesOut += bytes;
     }
 }

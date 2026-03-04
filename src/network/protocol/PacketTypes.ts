@@ -8,6 +8,7 @@ import {
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonPayload,
     IDesktopStreamSummonedPayload,
+    IPeerLatencyReportPayload,
     IRttPingPayload,
     IRttPongPayload,
     ISessionNotificationPayload,
@@ -46,6 +47,7 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.SESSION_NOTIFICATION]: ISessionNotificationPayload;
     [PACKET_TYPES.RTT_PING]: IRttPingPayload;
     [PACKET_TYPES.RTT_PONG]: IRttPongPayload;
+    [PACKET_TYPES.PEER_LATENCY_REPORT]: IPeerLatencyReportPayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {

@@ -6,6 +6,7 @@ import { PACKET_TYPES } from '../../shared/constants/Constants';
 import { EntityType, IStateUpdatePacket } from '../../shared/contracts/IEntityState';
 import {
     IFeatureSnapshotRequestPayload,
+    IPeerLatencyReportPayload,
     IRttPingPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
@@ -85,6 +86,12 @@ export class AuthoritativeSessionHost {
         dispatcher.registerHandler(PACKET_TYPES.RTT_PING, {
             handle: (senderId: string, payload: IRttPingPayload) => {
                 this.handleRttPing(senderId, payload);
+            }
+        });
+
+        dispatcher.registerHandler(PACKET_TYPES.PEER_LATENCY_REPORT, {
+            handle: (senderId: string, payload: IPeerLatencyReportPayload) => {
+                this.handlePeerLatencyReport(senderId, payload);
             }
         });
     }
@@ -261,6 +268,13 @@ export class AuthoritativeSessionHost {
             serverReceivedAt,
             serverSentAt: this.nowMs()
         });
+    }
+
+    public handlePeerLatencyReport(senderId: string, payload: IPeerLatencyReportPayload): void {
+        const transport = this.transport as {
+            handlePeerLatencyReport?: (peerId: string, payload: IPeerLatencyReportPayload) => void;
+        };
+        transport.handlePeerLatencyReport?.(senderId, payload);
     }
 
     private filterRelayedPlayerInput(payload: IStateUpdatePacket[]): IStateUpdatePacket[] {

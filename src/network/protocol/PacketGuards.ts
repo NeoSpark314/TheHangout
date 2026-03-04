@@ -148,6 +148,15 @@ function isRttPongPayload(payload: unknown): boolean {
         typeof payload.serverSentAt === 'number';
 }
 
+function isPeerLatencyReportPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.lastRttMs === 'number' &&
+        typeof payload.reportedAt === 'number' &&
+        (payload.avgRttMs === undefined || typeof payload.avgRttMs === 'number') &&
+        (payload.jitterMs === undefined || typeof payload.jitterMs === 'number') &&
+        (payload.samples === undefined || typeof payload.samples === 'number');
+}
+
 export function isValidPayloadForType(type: number, payload: unknown): boolean {
     switch (type) {
         case PACKET_TYPES.STATE_UPDATE:
@@ -193,6 +202,8 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isRttPingPayload(payload);
         case PACKET_TYPES.RTT_PONG:
             return isRttPongPayload(payload);
+        case PACKET_TYPES.PEER_LATENCY_REPORT:
+            return isPeerLatencyReportPayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

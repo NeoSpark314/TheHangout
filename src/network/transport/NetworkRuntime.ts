@@ -10,6 +10,7 @@ import {
     IDesktopStreamOfflinePayload,
     IDesktopStreamStoppedPayload,
     IDesktopStreamSummonedPayload,
+    IPeerLatencyReportPayload,
     ISessionNotificationPayload,
     IFeatureSnapshotRequestPayload,
     ISessionConfigUpdatePayload,
@@ -685,6 +686,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
         this.pendingLatencyProbes.delete(payload.probeId);
         this.context.runtime.diagnostics.recordRoundTripTime(Math.max(0, this.nowMs() - sentAt));
+        this.reportLatencyToHost();
     }
 
     private pruneStaleLatencyProbes(): void {
@@ -699,6 +701,24 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     private nextProbeId(): string {
         this.probeSeq += 1;
         return `${this.getLocalTransportId()}:${this.probeSeq}`;
+    }
+
+    private reportLatencyToHost(): void {
+        const hostId = this.context.sessionId;
+        if (!hostId || this.context.isHost) return;
+
+        const metrics = this.context.runtime.diagnostics.getNetworkMetricsSnapshot();
+        if (metrics.lastRttMs === null) return;
+
+        const payload: IPeerLatencyReportPayload = {
+            lastRttMs: metrics.lastRttMs,
+            avgRttMs: metrics.avgRttMs ?? undefined,
+            jitterMs: metrics.jitterMs ?? undefined,
+            samples: metrics.latencySamples,
+            reportedAt: this.nowMs()
+        };
+
+        this.sendData(hostId, PACKET_TYPES.PEER_LATENCY_REPORT, payload);
     }
 
     private getLocalTransportId(): string {

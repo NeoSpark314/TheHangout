@@ -33,11 +33,24 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function formatAgeMs(ageMs) {
+    if (ageMs === null || ageMs === undefined || !Number.isFinite(ageMs)) return 'n/a';
+    if (ageMs < 1000) return Math.round(ageMs) + ' ms';
+    return (ageMs / 1000).toFixed(1) + ' s';
+}
+
 function renderSessionCard(session) {
     const peersHtml = session.peers.map((peer) => `
         <div class="peer-row">
             <span class="synth-tag">${peer.id.slice(0, 8)}</span>
             <span class="peer-name">${peer.name}</span>
+            <span class="peer-name">
+                RTT ${peer.latency?.lastRttMs?.toFixed?.(0) ?? 'n/a'} ms
+                | J ${peer.latency?.jitterMs?.toFixed?.(0) ?? 'n/a'} ms
+                | IN ${formatBytes(peer.bytesIn)}
+                | OUT ${formatBytes(peer.bytesOut)}
+                | Last ${formatAgeMs(Date.now() - (peer.lastMessageAt || Date.now()))}
+            </span>
         </div>
     `).join('') || '<span class="peer-empty">None</span>';
 
