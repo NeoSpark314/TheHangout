@@ -90,16 +90,26 @@ function sendPacketToSession(sessionId: string, type: number, payload: unknown):
     const session = activeSessions.get(sessionId);
     if (!session) return;
     const envelope = JSON.stringify({ type, payload });
+    const envelopeLength = envelope.length;
     for (const ws of session.network.connections.values()) {
-        if (ws?.readyState === 1) ws.send(envelope);
+        if (ws?.readyState === 1) {
+            ws.send(envelope);
+            session.network.bytesSent += envelopeLength;
+            session.context.runtime.diagnostics.recordNetworkSent(envelopeLength);
+        }
     }
 }
 
 function sendBinaryToSession(sessionId: string, data: Buffer): void {
     const session = activeSessions.get(sessionId);
     if (!session) return;
+    const dataLength = data.length;
     for (const ws of session.network.connections.values()) {
-        if (ws?.readyState === 1) ws.send(data);
+        if (ws?.readyState === 1) {
+            ws.send(data);
+            session.network.bytesSent += dataLength;
+            session.context.runtime.diagnostics.recordNetworkSent(dataLength);
+        }
     }
 }
 
@@ -520,6 +530,11 @@ desktopSourceWss.on('connection', (ws) => {
                     if (capturingKeys.has(key)) {
                         const route = desktopRoutes.get(key);
                         if (route && route.sessionId) {
+                            const session = activeSessions.get(route.sessionId);
+                            if (session) {
+                                session.network.bytesReceived += message.length;
+                                session.context.runtime.diagnostics.recordNetworkReceived(message.length);
+                            }
                             sendBinaryToSession(route.sessionId, message);
                         }
                     }
@@ -584,6 +599,13 @@ desktopSourceWss.on('connection', (ws) => {
                     desktopRoutes.delete(key);
                     notifySubscribedClientsForKey(key);
                     return;
+                }
+
+                const session = activeSessions.get(route.sessionId);
+                if (session) {
+                    const rawLength = JSON.stringify(data).length;
+                    session.network.bytesReceived += rawLength;
+                    session.context.runtime.diagnostics.recordNetworkReceived(rawLength);
                 }
 
                 sendPacketToSession(route.sessionId, PACKET_TYPES.DESKTOP_STREAM_FRAME, {

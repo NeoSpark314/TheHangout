@@ -208,13 +208,15 @@ export class VoiceRuntime {
                         console.log(`[VoiceRuntime] Sending audio header chunk (${base64.length} chars)`);
                     }
 
-                    this.websocket.send(JSON.stringify({
+                    const payload = JSON.stringify({
                         type: PACKET_TYPES.AUDIO_CHUNK,
                         payload: {
                             chunk: base64,
                             isHeader: isHeader
                         }
-                    }));
+                    });
+                    this.websocket.send(payload);
+                    this.context.runtime.diagnostics.recordNetworkSent(payload.length);
                 }
             };
             this.mediaRecorder.start(100); // 100ms chunks for lower latency

@@ -227,7 +227,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             if (isAudioChunkEnvelope(data)) {
                 const senderId = data.senderId || conn.peer;
                 const entity = this.context.runtime.entity.getEntity(senderId);
-                const audioEntity = entity as (IAudioChunkReceiver | undefined);
+                const audioEntity = entity as unknown as (IAudioChunkReceiver | undefined);
                 if (audioEntity && typeof audioEntity.onAudioChunk === 'function') {
                     audioEntity.onAudioChunk(data.payload);
                 }
