@@ -603,19 +603,13 @@ export class VrUiRuntime implements IUpdatable {
                 this.debugStatsInterval = null;
             }
 
-            const title = new UILabel("Debug", 50, 30, 1180, 70);
-            title.font = getFont(UITheme.typography.sizes.title, 'bold');
-            title.textColor = UITheme.colors.primary;
-            title.textAlign = 'center';
-            debugContainer.addChild(title);
-
             const debugManager = this.context.runtime.debugRender;
             const debugSettings = debugManager?.getSettings();
 
             const overlayToggle = new UIToggle(
                 "Enable Debug Overlay",
                 debugSettings?.enabled ?? false,
-                90, 120, 620, 52,
+                90, 70, 620, 52,
                 (checked) => {
                     debugManager?.setEnabled(checked);
                     this.tablet?.ui.markDirty();
@@ -623,76 +617,82 @@ export class VrUiRuntime implements IUpdatable {
             );
             debugContainer.addChild(overlayToggle);
 
+            const collidersToggle = new UIToggle(
+                "Show Colliders",
+                debugSettings?.showColliders ?? true,
+                760, 70, 420, 52,
+                (checked) => {
+                    debugManager?.setShowColliders(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            debugContainer.addChild(collidersToggle);
+
+            const axesToggle = new UIToggle(
+                "Show Axes",
+                debugSettings?.showAxes ?? true,
+                760, 126, 420, 52,
+                (checked) => {
+                    debugManager?.setShowAxes(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            debugContainer.addChild(axesToggle);
+
+            const authorityToggle = new UIToggle(
+                "Show Authority Labels",
+                debugSettings?.showAuthorityLabels ?? true,
+                90, 126, 620, 52,
+                (checked) => {
+                    debugManager?.setShowAuthorityLabels(checked);
+                    this.tablet?.ui.markDirty();
+                }
+            );
+            debugContainer.addChild(authorityToggle);
+
             const physics = this.context.runtime.physics;
-            const makeStepper = (
-                label: string,
-                y: number,
-                getValue: () => string,
-                onDec: () => void,
-                onInc: () => void
-            ) => {
-                const rowLabel = new UILabel(label, 90, y, 540, 54);
-                rowLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
-                rowLabel.textAlign = 'left';
-                rowLabel.textColor = UITheme.colors.text;
-                debugContainer.addChild(rowLabel);
+            const diagnostics = this.context.runtime.diagnostics;
 
-                const valueLabel = new UILabel(getValue(), 660, y, 220, 54);
-                valueLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
-                valueLabel.textAlign = 'center';
-                valueLabel.textColor = UITheme.colors.accent;
-                debugContainer.addChild(valueLabel);
-
-                const decBtn = new UIButton("-", 900, y - 6, 120, 64, () => {
-                    onDec();
-                    valueLabel.text = getValue();
-                    this.tablet?.ui.markDirty();
-                });
-                decBtn.cornerRadius = 10;
-                debugContainer.addChild(decBtn);
-
-                const incBtn = new UIButton("+", 1040, y - 6, 120, 64, () => {
-                    onInc();
-                    valueLabel.text = getValue();
-                    this.tablet?.ui.markDirty();
-                });
-                incBtn.cornerRadius = 10;
-                debugContainer.addChild(incBtn);
+            const formatBytes = (bytes: number): string => {
+                if (bytes >= 1024 * 1024) {
+                    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                }
+                if (bytes >= 1024) {
+                    return `${(bytes / 1024).toFixed(1)} KB`;
+                }
+                return `${Math.round(bytes)} B`;
             };
 
-            makeStepper(
-                "Touch Lease Claim Interval",
-                220,
-                () => `${physics.getTouchLeaseClaimIntervalMs()} ms`,
-                () => physics.setTouchLeaseClaimIntervalMs(physics.getTouchLeaseClaimIntervalMs() - 25),
-                () => physics.setTouchLeaseClaimIntervalMs(physics.getTouchLeaseClaimIntervalMs() + 25)
-            );
+            const truncate = (text: string, maxLen: number): string => {
+                if (text.length <= maxLen) return text;
+                return `${text.slice(0, Math.max(0, maxLen - 3))}...`;
+            };
 
-            makeStepper(
-                "Touch Lease Proximity",
-                300,
-                () => `${physics.getTouchLeaseProximityDistance().toFixed(2)} m`,
-                () => physics.setTouchLeaseProximityDistance(physics.getTouchLeaseProximityDistance() - 0.05),
-                () => physics.setTouchLeaseProximityDistance(physics.getTouchLeaseProximityDistance() + 0.05)
-            );
+            const networkLabel = new UILabel("Network", 90, 220, 300, 42);
+            networkLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+            networkLabel.textColor = UITheme.colors.accent;
+            networkLabel.textAlign = 'left';
+            debugContainer.addChild(networkLabel);
 
-            makeStepper(
-                "Release Hold Min",
-                380,
-                () => `${physics.getPendingReleaseMinHoldMs()} ms`,
-                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs() - 20, physics.getPendingReleaseMaxHoldMs()),
-                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs() + 20, physics.getPendingReleaseMaxHoldMs())
-            );
+            const networkLineOne = new UILabel("", 90, 260, 1080, 38);
+            networkLineOne.font = getFont(UITheme.typography.sizes.small, 'bold');
+            networkLineOne.textColor = UITheme.colors.text;
+            networkLineOne.textAlign = 'left';
+            debugContainer.addChild(networkLineOne);
 
-            makeStepper(
-                "Release Hold Max",
-                460,
-                () => `${physics.getPendingReleaseMaxHoldMs()} ms`,
-                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs(), physics.getPendingReleaseMaxHoldMs() - 40),
-                () => physics.setPendingReleaseHoldWindow(physics.getPendingReleaseMinHoldMs(), physics.getPendingReleaseMaxHoldMs() + 40)
-            );
+            const networkLineTwo = new UILabel("", 90, 298, 1080, 38);
+            networkLineTwo.font = getFont(UITheme.typography.sizes.small, 'bold');
+            networkLineTwo.textColor = UITheme.colors.text;
+            networkLineTwo.textAlign = 'left';
+            debugContainer.addChild(networkLineTwo);
 
-            const scenarioLabel = new UILabel("Scenarios", 90, 530, 300, 42);
+            const networkEventLine = new UILabel("", 90, 336, 1080, 38);
+            networkEventLine.font = getFont(UITheme.typography.sizes.small);
+            networkEventLine.textColor = UITheme.colors.textMuted;
+            networkEventLine.textAlign = 'left';
+            debugContainer.addChild(networkEventLine);
+
+            const scenarioLabel = new UILabel("Scenarios", 90, 410, 300, 42);
             scenarioLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
             scenarioLabel.textColor = UITheme.colors.accent;
             scenarioLabel.textAlign = 'left';
@@ -700,7 +700,7 @@ export class VrUiRuntime implements IUpdatable {
 
             const scenarios = this.context.runtime.session.getAvailableScenarios().slice(0, 3);
             scenarios.forEach((scenario, index) => {
-                const button = new UIButton(scenario.displayName, 90 + (index * 340), 570, 320, 58, () => {
+                const button = new UIButton(scenario.displayName, 90 + (index * 340), 450, 320, 58, () => {
                     this.context.runtime.network.requestSessionConfigUpdate({
                         activeScenarioId: scenario.id
                     });
@@ -711,7 +711,7 @@ export class VrUiRuntime implements IUpdatable {
                 debugContainer.addChild(button);
             });
 
-            const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 650, 360, 60, () => {
+            const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 550, 360, 60, () => {
                 const localPlayer = this.context.localPlayer;
                 const targetPosition = localPlayer
                     ? {
@@ -744,14 +744,21 @@ export class VrUiRuntime implements IUpdatable {
             spawnBeaconBtn.borderColor = UITheme.colors.secondary;
             debugContainer.addChild(spawnBeaconBtn);
 
-            const statsLabel = new UILabel("", 90, 730, 1080, 42);
+            const statsLabel = new UILabel("", 90, 650, 1080, 42);
             statsLabel.font = getFont(UITheme.typography.sizes.small, 'bold');
             statsLabel.textColor = UITheme.colors.accent;
             statsLabel.textAlign = 'left';
             debugContainer.addChild(statsLabel);
 
             const updateStats = () => {
+                const network = this.context.runtime.network.getDebugStatus();
+                const recentEntry = diagnostics.getRecentEntries(1)[0];
                 const avg = physics.getTouchQueryAverageHitsPerFrame();
+                networkLineOne.text = `Role: ${network.role}  Transport: ${network.transport}  Peers: ${network.peers}`;
+                networkLineTwo.text = `TX: ${formatBytes(network.txBps)}/s (${formatBytes(network.txTotal)})  RX: ${formatBytes(network.rxBps)}/s (${formatBytes(network.rxTotal)})`;
+                networkEventLine.text = recentEntry
+                    ? truncate(`Last ${recentEntry.category}/${recentEntry.level}: ${recentEntry.message}`, 110)
+                    : 'Last: no recent events';
                 statsLabel.text = `Touch Query Hits/frame (avg 1s): ${avg.toFixed(2)}`;
                 this.tablet?.ui.markDirty();
             };

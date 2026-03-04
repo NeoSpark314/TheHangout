@@ -95,6 +95,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
     public addClient(peerId: string, ws: any): void {
         this.connections.set(peerId, ws);
+        this.context.runtime.diagnostics.record('info', 'network', `Relay client joined (${peerId})`);
 
         const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
         this.sendData(peerId, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
@@ -109,6 +110,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
 
     public removeClient(peerId: string): void {
         this.connections.delete(peerId);
+        this.context.runtime.diagnostics.record('info', 'network', `Relay client left (${peerId})`);
         this.reclaimOwnership(peerId);
         if (this.context.runtime.entity) {
             this.context.runtime.entity.removeEntity(peerId);
@@ -117,6 +119,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
     }
 
     public handleMessage(peerId: string, messageData: any): void {
+        this.context.runtime.diagnostics.recordNetworkReceived(this.measurePayloadSize(messageData));
         if (messageData.type === PACKET_TYPES.AUDIO_CHUNK) {
             this.relayToOthers(peerId, PACKET_TYPES.AUDIO_CHUNK, messageData.payload);
             return;
@@ -133,6 +136,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             const data = JSON.stringify({ type, payload, senderId });
             ws.send(data);
             this.bytesSent += data.length;
+            this.context.runtime.diagnostics.recordNetworkSent(data.length);
         }
     }
 
@@ -143,6 +147,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             if (ws?.readyState === 1) {
                 ws.send(data);
                 this.bytesSent += dataLength;
+                this.context.runtime.diagnostics.recordNetworkSent(dataLength);
             }
         }
     }
@@ -154,6 +159,7 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
             if (peerId !== senderId && ws?.readyState === 1) {
                 ws.send(data);
                 this.bytesSent += dataLength;
+                this.context.runtime.diagnostics.recordNetworkSent(dataLength);
             }
         }
     }
@@ -290,5 +296,18 @@ export class ServerNetworkManager implements IUpdatable, INetworkTransport {
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private measurePayloadSize(data: unknown): number {
+        if (!data) return 0;
+        if (typeof data === 'string') return data.length;
+        if (data instanceof ArrayBuffer) return data.byteLength;
+        if (ArrayBuffer.isView(data)) return data.byteLength;
+
+        try {
+            return JSON.stringify(data).length;
+        } catch {
+            return 0;
+        }
     }
 }

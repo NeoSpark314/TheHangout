@@ -22,6 +22,7 @@ import type { ParticleEffectSystem } from '../render/effects/ParticleEffectSyste
 import type { SocialFeature } from '../features/social/SocialFeature';
 import type { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import type { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
+import type { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -60,6 +61,7 @@ export interface IRuntimeRegistry {
     particles: ParticleEffectSystem;
     social: SocialFeature;
     remoteDesktop: RemoteDesktopFeature;
+    diagnostics: RuntimeDiagnostics;
 }
 
 /**

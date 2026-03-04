@@ -72,7 +72,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                console.warn('[NetworkRuntime] Tab hidden.');
+                this.context.runtime.diagnostics.record('debug', 'network', 'Tab hidden.');
             }
         });
     }
@@ -123,7 +123,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.peer.on('error', (err) => this.handlePeerError(err));
 
         this.peer.on('open', async (id) => {
-            console.log(`[NetworkRuntime] Host Peer ID: ${id}`);
+            this.context.runtime.diagnostics.record('info', 'network', `Host ready (${id})`);
             this.context.sessionId = id;
 
             if (this.context.runtime.media) {
@@ -149,7 +149,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.peer.on('error', (err) => this.handlePeerError(err));
 
         this.peer.on('open', async (id) => {
-            console.log(`[NetworkRuntime] Guest Peer ID: ${id}`);
+            this.context.runtime.diagnostics.record('info', 'network', `Guest ready (${id})`);
             this.context.sessionId = hostId;
             if (this.context.runtime.media) {
                 this.context.runtime.media.bindPeer(this.peer!);
@@ -175,8 +175,10 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
             this.localPeerId = peerId;
 
             this.relaySocket.onopen = () => {
-                console.log('[NetworkRuntime] Connected to Headless Server WebSocket');
-                this.relaySocket!.send(JSON.stringify({ type: 'join', sessionId: sessionId, peerId: peerId }));
+                this.context.runtime.diagnostics.record('info', 'network', 'Connected to headless relay.');
+                const joinPayload = JSON.stringify({ type: 'join', sessionId: sessionId, peerId: peerId });
+                this.relaySocket!.send(joinPayload);
+                this.context.runtime.diagnostics.recordNetworkSent(joinPayload.length);
                 this.context.sessionId = sessionId;
 
                 const serverConn = new ServerConnection(this.relaySocket!, peerId);
@@ -199,6 +201,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     private setupConnection(conn: DataConnection | ServerConnection): void {
         conn.on('open', () => {
             this.connections.set(conn.peer, conn);
+            this.context.runtime.diagnostics.record('info', 'network', `Connection opened (${conn.peer})`);
             if (this.context.isHost) {
                 const welcomeConfig = { ...this.context.sessionConfig, assignedSpawnIndex: this.connections.size };
                 this.sendData(conn.peer, PACKET_TYPES.SESSION_CONFIG_UPDATE, welcomeConfig);
@@ -211,6 +214,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         });
 
         conn.on('data', (data: unknown) => {
+            this.noteIncomingTraffic(data);
+
             if (data instanceof ArrayBuffer) {
                 const view = new DataView(data);
                 if (view.getUint8(0) === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
@@ -233,6 +238,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
         conn.on('close', () => {
             this.connections.delete(conn.peer);
+            this.context.runtime.diagnostics.record('info', 'network', `Connection closed (${conn.peer})`);
             eventBus.emit(EVENTS.PEER_DISCONNECTED, conn.peer);
             if (this.context.isHost) {
                 this.reclaimOwnership(conn.peer);
@@ -250,6 +256,33 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
     public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
         this.synchronizer.syncEntityNow(entityId, forceFullState);
+    }
+
+    public getDebugStatus(): {
+        role: 'host' | 'guest';
+        transport: 'peerjs' | 'relay' | 'disconnected';
+        peers: number;
+        sessionId: string | null;
+        localPeerId: string | null;
+        txBps: number;
+        rxBps: number;
+        txTotal: number;
+        rxTotal: number;
+    } {
+        const metrics = this.context.runtime.diagnostics.getNetworkMetricsSnapshot();
+        return {
+            role: this.context.isHost ? 'host' : 'guest',
+            transport: this.relaySocket
+                ? 'relay'
+                : (this.peer ? 'peerjs' : 'disconnected'),
+            peers: this.connections.size,
+            sessionId: this.context.sessionId,
+            localPeerId: this.localPeerId || this.peer?.id || null,
+            txBps: metrics.txBps,
+            rxBps: metrics.rxBps,
+            txTotal: metrics.txTotal,
+            rxTotal: metrics.rxTotal
+        };
     }
 
     public requestSessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
@@ -326,7 +359,10 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     public relayToOthers(senderId: string, type: number, payload: unknown): void {
         const data = JSON.stringify({ type, payload });
         for (const [peerId, conn] of this.connections.entries()) {
-            if (conn.open && peerId !== senderId) conn.send(data);
+            if (conn.open && peerId !== senderId) {
+                conn.send(data);
+                this.context.runtime.diagnostics.recordNetworkSent(data.length);
+            }
         }
     }
 
@@ -399,13 +435,20 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
     public sendData(targetId: string, type: number, payload: unknown): void {
         const conn = this.connections.get(targetId) || (this.context.isLocalServer ? this.connections.get('SERVER') : undefined);
-        if (conn && conn.open) conn.send(JSON.stringify({ type, payload }));
+        if (conn && conn.open) {
+            const data = JSON.stringify({ type, payload });
+            conn.send(data);
+            this.context.runtime.diagnostics.recordNetworkSent(data.length);
+        }
     }
 
     public broadcast(type: number, payload: unknown): void {
         const data = JSON.stringify({ type, payload });
         for (const conn of this.connections.values()) {
-            if (conn.open) conn.send(data);
+            if (conn.open) {
+                conn.send(data);
+                this.context.runtime.diagnostics.recordNetworkSent(data.length);
+            }
         }
     }
 
@@ -435,7 +478,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     private handlePeerError(err: any): void {
-        console.error('[NetworkRuntime] PeerJS Error:', err);
+        this.context.runtime.diagnostics.record('error', 'network', `Peer error (${err?.type || 'unknown'})`);
         let userMessage = 'Network connection error.';
 
         switch (err.type) {
@@ -461,6 +504,33 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         // If we haven't successfully opened yet, cleanup
         if (this.peer && !this.peer.open) {
             this.disconnect();
+        }
+    }
+
+    private noteIncomingTraffic(data: unknown): void {
+        const bytes = this.measurePayloadSize(data);
+        if (bytes > 0) {
+            this.context.runtime.diagnostics.recordNetworkReceived(bytes);
+        }
+    }
+
+    private measurePayloadSize(data: unknown): number {
+        if (typeof data === 'string') {
+            return data.length;
+        }
+
+        if (data instanceof ArrayBuffer) {
+            return data.byteLength;
+        }
+
+        if (ArrayBuffer.isView(data)) {
+            return data.byteLength;
+        }
+
+        try {
+            return JSON.stringify(data).length;
+        } catch {
+            return 0;
         }
     }
 }
