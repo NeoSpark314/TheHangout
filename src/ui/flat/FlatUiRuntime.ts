@@ -106,13 +106,13 @@ export class FlatUiRuntime implements IUpdatable {
 
         if (this.avatarBtn) {
             this.avatarBtn.addEventListener('click', () => {
-                this.avatarDialog.style.display = 'flex';
+                this.showElement(this.avatarDialog);
             });
         }
 
         if (this.closeAvatarBtn) {
             this.closeAvatarBtn.addEventListener('click', () => {
-                this.avatarDialog.style.display = 'none';
+                this.hideElement(this.avatarDialog);
             });
         }
 
@@ -206,12 +206,12 @@ export class FlatUiRuntime implements IUpdatable {
         // Desktop screen sharing is only for dedicated server mode
         if (!this.context.isLocalServer) {
             const screensGroup = document.getElementById('avatar-screens-group');
-            if (screensGroup) screensGroup.style.display = 'none';
+            if (screensGroup) this.hideElement(screensGroup);
         }
     }
 
     public update(delta: number): void {
-        if (this.overlay.style.display === 'none' && this.isMobile && !this._joysticksInitialized) {
+        if (this.isElementHidden(this.overlay) && this.isMobile && !this._joysticksInitialized) {
             this.context.runtime.input?.initMobileJoysticks();
             this._joysticksInitialized = true;
         }
@@ -335,7 +335,7 @@ export class FlatUiRuntime implements IUpdatable {
 
     private setupGuestMode(sessionId: string): void {
         this.context.isHost = false;
-        if (this.createBtn) this.createBtn.style.display = 'none';
+        if (this.createBtn) this.hideElement(this.createBtn);
         this.sessionInput.value = sessionId;
         this.joinBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
@@ -351,7 +351,7 @@ export class FlatUiRuntime implements IUpdatable {
 
     private setupDefaultMode(): void {
         if (this.context.isLocalServer) {
-            this.createBtn.style.display = 'none';
+            this.hideElement(this.createBtn);
 
             this.joinBtn.textContent = 'Enter Hangout';
             this.joinBtn.classList.remove('secondary-btn');
@@ -505,15 +505,15 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.overlay) {
             this.overlay.style.opacity = '0';
             setTimeout(() => {
-                this.overlay.style.display = 'none';
+                this.hideElement(this.overlay);
                 if (this.desktopControls && !this.isMobile) {
                     console.log('[FlatUiRuntime] Showing desktop controls');
-                    this.desktopControls.style.display = 'block';
+                    this.showElement(this.desktopControls);
                 }
                 if (this.isMobile) {
                     this._mobileHudEnabled = true;
-                    if (this.mobileHud) this.mobileHud.style.display = 'block';
-                    if (this.mobileMenuBtn) this.mobileMenuBtn.style.display = 'block';
+                    if (this.mobileHud) this.showElement(this.mobileHud);
+                    if (this.mobileMenuBtn) this.showElement(this.mobileMenuBtn);
                     this.context.runtime.input?.initMobileJoysticks();
                     this._joysticksInitialized = true;
                     this.updateMobileHudState();
@@ -531,7 +531,7 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     public getNavigableElements(): HTMLElement[] {
-        if (!this.overlay || this.overlay.style.display === 'none') return [];
+        if (!this.overlay || this.isElementHidden(this.overlay)) return [];
         const elements: HTMLElement[] = [];
         if (this.nameInput && this.nameInput.offsetParent) elements.push(this.nameInput);
         if (this.sessionInput && this.sessionInput.offsetParent) elements.push(this.sessionInput);
@@ -575,20 +575,20 @@ export class FlatUiRuntime implements IUpdatable {
         console.log('[FlatUiRuntime] showOverlay() called');
         this.context.isMenuOpen = true;
         if (this.overlay) {
-            this.overlay.style.display = 'flex';
+            this.showElement(this.overlay);
             this.overlay.offsetHeight;
             this.overlay.style.opacity = '1';
         }
         if (this.desktopControls) {
             console.log('[FlatUiRuntime] Hiding desktop controls');
-            this.desktopControls.style.display = 'none';
+            this.hideElement(this.desktopControls);
         }
-        if (this.mobileHud) this.mobileHud.style.display = 'none';
-        if (this.mobileActionBtn) this.mobileActionBtn.style.display = 'none';
-        if (this.mobileInteractBtn) this.mobileInteractBtn.style.display = 'none';
+        if (this.mobileHud) this.hideElement(this.mobileHud);
+        if (this.mobileActionBtn) this.hideElement(this.mobileActionBtn);
+        if (this.mobileInteractBtn) this.hideElement(this.mobileInteractBtn);
         if (this.mobileReticle) this.mobileReticle.classList.remove('active');
         if (this.mobileMenuBtn) {
-            this.mobileMenuBtn.style.display = this.isMobile && this._mobileHudEnabled ? 'block' : 'none';
+            this.setElementVisible(this.mobileMenuBtn, this.isMobile && this._mobileHudEnabled);
         }
     }
 
@@ -605,7 +605,7 @@ export class FlatUiRuntime implements IUpdatable {
         }
         this.context.isDedicatedHost = false;
         this._mobileHudEnabled = false;
-        if (this.mobileMenuBtn) this.mobileMenuBtn.style.display = 'none';
+        if (this.mobileMenuBtn) this.hideElement(this.mobileMenuBtn);
         this.showOverlay();
         this.setStatus('Ready');
         this.enableAllButtons();
@@ -615,28 +615,29 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.isMobile || !this._mobileHudEnabled) return;
 
         const input = this.context.runtime.input;
-        const showAction = this.overlay.style.display === 'none' && !!input?.hasMobilePrimaryAction();
-        const showInteract = this.overlay.style.display === 'none' && !!input?.hasMobileSecondaryAction();
+        const overlayHidden = this.isElementHidden(this.overlay);
+        const showAction = overlayHidden && !!input?.hasMobilePrimaryAction();
+        const showInteract = overlayHidden && !!input?.hasMobileSecondaryAction();
 
         if (this.mobileHud) {
-            this.mobileHud.style.display = this.overlay.style.display === 'none' ? 'block' : 'none';
+            this.setElementVisible(this.mobileHud, overlayHidden);
         }
 
         if (this.mobileActionBtn) {
             if (showAction) {
                 this.mobileActionBtn.textContent = input!.getMobilePrimaryActionLabel() || 'Use';
-                this.mobileActionBtn.style.display = 'block';
+                this.showElement(this.mobileActionBtn);
             } else {
-                this.mobileActionBtn.style.display = 'none';
+                this.hideElement(this.mobileActionBtn);
             }
         }
 
         if (this.mobileInteractBtn) {
             if (showInteract) {
                 this.mobileInteractBtn.textContent = input!.getMobileSecondaryActionLabel() || 'Use';
-                this.mobileInteractBtn.style.display = 'block';
+                this.showElement(this.mobileInteractBtn);
             } else {
-                this.mobileInteractBtn.style.display = 'none';
+                this.hideElement(this.mobileInteractBtn);
             }
         }
 
@@ -647,5 +648,25 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.mobileMenuBtn) {
             this.mobileMenuBtn.textContent = this.context.isMenuOpen ? 'Close' : 'Menu';
         }
+    }
+
+    private hideElement(element: HTMLElement): void {
+        element.classList.add('is-hidden');
+    }
+
+    private showElement(element: HTMLElement): void {
+        element.classList.remove('is-hidden');
+    }
+
+    private setElementVisible(element: HTMLElement, visible: boolean): void {
+        if (visible) {
+            this.showElement(element);
+            return;
+        }
+        this.hideElement(element);
+    }
+
+    private isElementHidden(element: HTMLElement): boolean {
+        return element.classList.contains('is-hidden');
     }
 }
