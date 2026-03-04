@@ -109,4 +109,17 @@ export class CanvasUI {
         }
         return handled;
     }
+
+    public destroy(): void {
+        this.root.clearChildren();
+        this.texture.dispose();
+
+        if (this.canvas.parentElement) {
+            this.canvas.parentElement.removeChild(this.canvas);
+        }
+
+        // Reset dimensions to encourage browser-side backing store cleanup.
+        this.canvas.width = 1;
+        this.canvas.height = 1;
+    }
 }

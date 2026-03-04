@@ -225,9 +225,10 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
         this.rightHandle.geometry.dispose();
         (this.rightHandle.material as THREE.Material).dispose();
 
-        // Cleanup UI elements explicitly
-        if (this.ui) {
-            // Need to cleanup canvas texture etc.
-        }
+        this.mesh.removeFromParent();
+        this.leftHandle.removeFromParent();
+        this.rightHandle.removeFromParent();
+
+        this.ui.destroy();
     }
 }
