@@ -7,7 +7,7 @@ import { EntityType } from '../shared/contracts/IEntityState';
 import { PacketPayloadMap } from '../network/protocol/PacketTypes';
 import { AuthoritativeSessionHost } from '../network/transport/AuthoritativeSessionHost';
 
-export class ServerNetworkManager implements IUpdatable, INetworkTransport {
+export class DedicatedSessionTransport implements IUpdatable, INetworkTransport {
     private context!: AppContext;
     private dispatcher: NetworkDispatcher<PacketPayloadMap>;
     // Dedicated server transport keeps socket bookkeeping here, but the actual

@@ -3,7 +3,7 @@ import { Engine } from '../app/Engine';
 import { EntityRegistry } from '../world/entities/EntityRegistry';
 import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
 import { SessionRuntime } from '../world/session/SessionRuntime';
-import { ServerNetworkManager } from './ServerNetworkManager';
+import { DedicatedSessionTransport } from './DedicatedSessionTransport';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
 import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
 import { MountRuntime } from '../content/runtime/MountRuntime';
@@ -13,10 +13,10 @@ import { RuntimeDiagnostics } from '../app/diagnostics/RuntimeDiagnostics';
 export class HeadlessSession {
     public context: AppContext;
     public engine: Engine;
-    public network: ServerNetworkManager;
+    public network: DedicatedSessionTransport;
     public startTime: number = Date.now();
 
-    constructor(public sessionId: string, networkTransport: ServerNetworkManager) {
+    constructor(public sessionId: string, networkTransport: DedicatedSessionTransport) {
         this.context = new AppContext();
         this.context.isHost = true;
         this.context.isDedicatedHost = true;

@@ -18,7 +18,7 @@ import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 
 import { HeadlessSession } from './src/server/HeadlessRoom.ts';
-import { ServerNetworkManager } from './src/server/ServerNetworkManager.ts';
+import { DedicatedSessionTransport } from './src/server/DedicatedSessionTransport.ts';
 import { PACKET_TYPES } from './src/shared/constants/Constants.ts';
 import {
     IDesktopSourcesStatusRequestPayload,
@@ -362,7 +362,7 @@ wss.on('connection', (ws) => {
                 if (!currentSessionId || !currentPeerId) return;
 
                 if (!activeSessions.has(currentSessionId)) {
-                    const networkMgr = new ServerNetworkManager();
+                    const networkMgr = new DedicatedSessionTransport();
                     const session = new HeadlessSession(currentSessionId, networkMgr);
                     activeSessions.set(currentSessionId, session);
                     session.start();
