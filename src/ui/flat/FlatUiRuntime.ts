@@ -11,8 +11,8 @@ export class FlatUiRuntime implements IUpdatable {
     private nameInput: HTMLInputElement;
     private createBtn: HTMLButtonElement;
     private joinBtn: HTMLButtonElement;
-    private sessionInput: HTMLInputElement;
-    private copySessionBtn: HTMLButtonElement;
+    private sessionIdInput: HTMLInputElement;
+    private copyInviteLinkBtn: HTMLButtonElement;
     private avatarBtn: HTMLButtonElement;
     private avatarDialog: HTMLElement;
     private closeAvatarBtn: HTMLButtonElement;
@@ -27,14 +27,15 @@ export class FlatUiRuntime implements IUpdatable {
     private addScreenBtn: HTMLButtonElement | null;
     private mobileHud: HTMLElement | null;
     private mobileMenuBtn: HTMLButtonElement | null;
-    private mobileActionBtn: HTMLButtonElement | null;
-    private mobileInteractBtn: HTMLButtonElement | null;
+    private mobilePrimaryActionBtn: HTMLButtonElement | null;
+    private mobileSecondaryActionBtn: HTMLButtonElement | null;
     private mobileReticle: HTMLElement | null;
     private controllerCursor: ControllerPointer;
     private controllerCursorTarget: HTMLElement | null = null;
     private isMobile: boolean;
-    private _joysticksInitialized: boolean = false;
-    private _mobileHudEnabled: boolean = false;
+    private joysticksInitialized: boolean = false;
+    private mobileHudEnabled: boolean = false;
+    private inviteSessionId: string | null = null;
 
     constructor(private context: AppContext) {
         this.overlay = document.getElementById('ui-overlay')!;
@@ -42,8 +43,8 @@ export class FlatUiRuntime implements IUpdatable {
         this.nameInput = document.getElementById('player-name') as HTMLInputElement;
         this.createBtn = document.getElementById('create-btn') as HTMLButtonElement;
         this.joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
-        this.sessionInput = document.getElementById('session-id') as HTMLInputElement;
-        this.copySessionBtn = document.getElementById('copy-session-btn') as HTMLButtonElement;
+        this.sessionIdInput = document.getElementById('session-id') as HTMLInputElement;
+        this.copyInviteLinkBtn = document.getElementById('copy-session-btn') as HTMLButtonElement;
         this.avatarBtn = document.getElementById('avatar-btn') as HTMLButtonElement;
         this.avatarDialog = document.getElementById('avatar-dialog')!;
         this.closeAvatarBtn = document.getElementById('close-avatar-btn') as HTMLButtonElement;
@@ -58,8 +59,8 @@ export class FlatUiRuntime implements IUpdatable {
         this.addScreenBtn = document.getElementById('add-screen-btn') as HTMLButtonElement | null;
         this.mobileHud = document.getElementById('mobile-hud');
         this.mobileMenuBtn = document.getElementById('mobile-menu-btn') as HTMLButtonElement | null;
-        this.mobileActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
-        this.mobileInteractBtn = document.getElementById('mobile-interact-btn') as HTMLButtonElement | null;
+        this.mobilePrimaryActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
+        this.mobileSecondaryActionBtn = document.getElementById('mobile-interact-btn') as HTMLButtonElement | null;
         this.mobileReticle = document.getElementById('mobile-reticle');
         this.controllerCursor = new ControllerPointer('controller-cursor');
         this.isMobile = isMobile;
@@ -70,7 +71,8 @@ export class FlatUiRuntime implements IUpdatable {
 
     private init(): void {
         const urlParams = new URLSearchParams(window.location.search);
-        const sessionIdToJoin = urlParams.get('session');
+        const sessionIdToJoin = urlParams.get('session')?.trim() || null;
+        this.inviteSessionId = sessionIdToJoin;
 
         if (sessionIdToJoin) {
             this.setupGuestMode(sessionIdToJoin);
@@ -89,8 +91,8 @@ export class FlatUiRuntime implements IUpdatable {
             }
         }
 
-        if (this.copySessionBtn) {
-            this.copySessionBtn.addEventListener('click', () => this.handleInlineCopy());
+        if (this.copyInviteLinkBtn) {
+            this.copyInviteLinkBtn.addEventListener('click', () => this.handleInlineCopy());
         }
 
         if (this.voiceBtn) {
@@ -106,7 +108,7 @@ export class FlatUiRuntime implements IUpdatable {
             this.saveToStorage();
         });
 
-        this.sessionInput.addEventListener('input', () => {
+        this.sessionIdInput.addEventListener('input', () => {
             this.saveToStorage();
         });
 
@@ -142,13 +144,13 @@ export class FlatUiRuntime implements IUpdatable {
 
         if (this.mobileMenuBtn) {
             this.mobileMenuBtn.addEventListener('click', () => {
-                if (this._mobileHudEnabled) {
+                if (this.mobileHudEnabled) {
                     this.context.runtime.vrUi?.toggle2DMenu();
                 }
             });
         }
 
-        if (this.mobileActionBtn) {
+        if (this.mobilePrimaryActionBtn) {
             const beginAction = (e: Event) => {
                 e.preventDefault();
                 this.context.runtime.input?.beginMobilePrimaryAction();
@@ -158,14 +160,14 @@ export class FlatUiRuntime implements IUpdatable {
                 this.context.runtime.input?.endMobilePrimaryAction();
             };
 
-            this.mobileActionBtn.addEventListener('pointerdown', beginAction);
-            this.mobileActionBtn.addEventListener('pointerup', endAction);
-            this.mobileActionBtn.addEventListener('pointercancel', endAction);
-            this.mobileActionBtn.addEventListener('pointerleave', endAction);
+            this.mobilePrimaryActionBtn.addEventListener('pointerdown', beginAction);
+            this.mobilePrimaryActionBtn.addEventListener('pointerup', endAction);
+            this.mobilePrimaryActionBtn.addEventListener('pointercancel', endAction);
+            this.mobilePrimaryActionBtn.addEventListener('pointerleave', endAction);
         }
 
-        if (this.mobileInteractBtn) {
-            this.mobileInteractBtn.addEventListener('click', (e) => {
+        if (this.mobileSecondaryActionBtn) {
+            this.mobileSecondaryActionBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.context.runtime.input?.toggleMobileSecondaryAction();
             });
@@ -218,9 +220,9 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     public update(delta: number): void {
-        if (this.isElementHidden(this.overlay) && this.isMobile && !this._joysticksInitialized) {
+        if (this.isElementHidden(this.overlay) && this.isMobile && !this.joysticksInitialized) {
             this.context.runtime.input?.initMobileJoysticks();
-            this._joysticksInitialized = true;
+            this.joysticksInitialized = true;
         }
 
         if (this.isMobile) {
@@ -283,10 +285,15 @@ export class FlatUiRuntime implements IUpdatable {
         const storedSession = localStorage.getItem('hangout_lastSessionId');
         if (!storedSession) {
             const defaultSession = 'DefaultMeetingSession';
-            this.sessionInput.value = defaultSession;
+            this.sessionIdInput.value = defaultSession;
             localStorage.setItem('hangout_lastSessionId', defaultSession);
         } else {
-            this.sessionInput.value = storedSession;
+            this.sessionIdInput.value = storedSession;
+        }
+        // Invite links should win over previous local defaults/history.
+        if (this.inviteSessionId) {
+            this.sessionIdInput.value = this.inviteSessionId;
+            localStorage.setItem('hangout_lastSessionId', this.inviteSessionId);
         }
 
         const storedVoice = localStorage.getItem('hangout_voiceEnabled');
@@ -326,7 +333,7 @@ export class FlatUiRuntime implements IUpdatable {
 
     private saveToStorage(): void {
         const name = this.nameInput.value.trim();
-        const session = this.sessionInput.value.trim();
+        const session = this.sessionIdInput.value.trim();
         if (name) {
             localStorage.setItem('hangout_playerName', name);
             this.context.playerName = name;
@@ -367,7 +374,7 @@ export class FlatUiRuntime implements IUpdatable {
     private setupGuestMode(sessionId: string): void {
         this.context.isHost = false;
         if (this.createBtn) this.hideElement(this.createBtn);
-        this.sessionInput.value = sessionId;
+        this.sessionIdInput.value = sessionId;
         this.joinBtn.addEventListener('click', async () => {
             this.ensureAudioContextResumed();
             this.context.playerName = this.nameInput.value.trim() || 'Guest';
@@ -376,7 +383,7 @@ export class FlatUiRuntime implements IUpdatable {
             }
             this.setStatus('Connecting to host...');
             this.joinBtn.disabled = true;
-            eventBus.emit(EVENTS.JOIN_SESSION, this.sessionInput.value.trim() || sessionId);
+            eventBus.emit(EVENTS.JOIN_SESSION, this.sessionIdInput.value.trim() || sessionId);
         });
     }
 
@@ -393,8 +400,8 @@ export class FlatUiRuntime implements IUpdatable {
                 if (this.context.voiceAutoEnable) {
                     await this.context.runtime.media.ensureMicrophoneEnabled();
                 }
-                const targetId = this.sessionInput.value.trim() || this.generateReadableSessionId();
-                this.sessionInput.value = targetId; // populate if random generated
+                const targetId = this.sessionIdInput.value.trim() || this.generateReadableSessionId();
+                this.sessionIdInput.value = targetId; // populate if random generated
                 this.disableAllButtons();
                 this.clearError();
                 this.saveToStorage();
@@ -412,7 +419,7 @@ export class FlatUiRuntime implements IUpdatable {
             if (this.context.voiceAutoEnable) {
                 await this.context.runtime.media.ensureMicrophoneEnabled();
             }
-            const customId = this.sessionInput.value.trim() || this.generateReadableSessionId();
+            const customId = this.sessionIdInput.value.trim() || this.generateReadableSessionId();
             this.disableAllButtons();
             this.clearError();
             this.saveToStorage();
@@ -428,7 +435,7 @@ export class FlatUiRuntime implements IUpdatable {
             if (this.context.voiceAutoEnable) {
                 await this.context.runtime.media.ensureMicrophoneEnabled();
             }
-            const targetId = this.sessionInput.value.trim();
+            const targetId = this.sessionIdInput.value.trim();
             if (!targetId) {
                 this.setStatus('Please enter a Session Name to join.');
                 return;
@@ -501,13 +508,13 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     private handleInlineCopy(): void {
-        const sessionId = this.sessionInput.value.trim() || 'DefaultMeetingSession';
+        const sessionId = this.sessionIdInput.value.trim() || 'DefaultMeetingSession';
         const url = new URL(window.location.href);
         url.searchParams.set('session', sessionId);
-        const originalIcon = this.copySessionBtn.textContent;
+        const originalIcon = this.copyInviteLinkBtn.textContent;
         navigator.clipboard.writeText(url.toString()).then(() => {
-            this.copySessionBtn.textContent = '✅';
-            setTimeout(() => { this.copySessionBtn.textContent = originalIcon; }, 2000);
+            this.copyInviteLinkBtn.textContent = '✅';
+            setTimeout(() => { this.copyInviteLinkBtn.textContent = originalIcon; }, 2000);
         }).catch(() => { this.setStatus('Copy Failed'); });
     }
 
@@ -543,11 +550,11 @@ export class FlatUiRuntime implements IUpdatable {
                     this.showElement(this.desktopControls);
                 }
                 if (this.isMobile) {
-                    this._mobileHudEnabled = true;
+                    this.mobileHudEnabled = true;
                     if (this.mobileHud) this.showElement(this.mobileHud);
                     if (this.mobileMenuBtn) this.showElement(this.mobileMenuBtn);
                     this.context.runtime.input?.initMobileJoysticks();
-                    this._joysticksInitialized = true;
+                    this.joysticksInitialized = true;
                     this.updateMobileHudState();
                 }
             }, 500);
@@ -566,8 +573,8 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.overlay || this.isElementHidden(this.overlay)) return [];
         const elements: HTMLElement[] = [];
         if (this.nameInput && this.nameInput.offsetParent) elements.push(this.nameInput);
-        if (this.sessionInput && this.sessionInput.offsetParent) elements.push(this.sessionInput);
-        if (this.copySessionBtn && this.copySessionBtn.offsetParent) elements.push(this.copySessionBtn);
+        if (this.sessionIdInput && this.sessionIdInput.offsetParent) elements.push(this.sessionIdInput);
+        if (this.copyInviteLinkBtn && this.copyInviteLinkBtn.offsetParent) elements.push(this.copyInviteLinkBtn);
         if (this.createBtn && this.createBtn.offsetParent) elements.push(this.createBtn);
         if (this.joinBtn && this.joinBtn.offsetParent) elements.push(this.joinBtn);
         if (this.voiceBtn && this.voiceBtn.offsetParent) elements.push(this.voiceBtn);
@@ -617,11 +624,11 @@ export class FlatUiRuntime implements IUpdatable {
             this.hideElement(this.desktopControls);
         }
         if (this.mobileHud) this.hideElement(this.mobileHud);
-        if (this.mobileActionBtn) this.hideElement(this.mobileActionBtn);
-        if (this.mobileInteractBtn) this.hideElement(this.mobileInteractBtn);
+        if (this.mobilePrimaryActionBtn) this.hideElement(this.mobilePrimaryActionBtn);
+        if (this.mobileSecondaryActionBtn) this.hideElement(this.mobileSecondaryActionBtn);
         if (this.mobileReticle) this.mobileReticle.classList.remove('active');
         if (this.mobileMenuBtn) {
-            this.setElementVisible(this.mobileMenuBtn, this.isMobile && this._mobileHudEnabled);
+            this.setElementVisible(this.mobileMenuBtn, this.isMobile && this.mobileHudEnabled);
         }
     }
 
@@ -637,7 +644,7 @@ export class FlatUiRuntime implements IUpdatable {
             });
         }
         this.context.isDedicatedHost = false;
-        this._mobileHudEnabled = false;
+        this.mobileHudEnabled = false;
         if (this.mobileMenuBtn) this.hideElement(this.mobileMenuBtn);
         this.showOverlay();
         this.setStatus('Ready');
@@ -645,7 +652,7 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     private updateMobileHudState(): void {
-        if (!this.isMobile || !this._mobileHudEnabled) return;
+        if (!this.isMobile || !this.mobileHudEnabled) return;
 
         const input = this.context.runtime.input;
         const overlayHidden = this.isElementHidden(this.overlay);
@@ -656,21 +663,21 @@ export class FlatUiRuntime implements IUpdatable {
             this.setElementVisible(this.mobileHud, overlayHidden);
         }
 
-        if (this.mobileActionBtn) {
+        if (this.mobilePrimaryActionBtn) {
             if (showAction) {
-                this.mobileActionBtn.textContent = input!.getMobilePrimaryActionLabel() || 'Use';
-                this.showElement(this.mobileActionBtn);
+                this.mobilePrimaryActionBtn.textContent = input!.getMobilePrimaryActionLabel() || 'Use';
+                this.showElement(this.mobilePrimaryActionBtn);
             } else {
-                this.hideElement(this.mobileActionBtn);
+                this.hideElement(this.mobilePrimaryActionBtn);
             }
         }
 
-        if (this.mobileInteractBtn) {
+        if (this.mobileSecondaryActionBtn) {
             if (showInteract) {
-                this.mobileInteractBtn.textContent = input!.getMobileSecondaryActionLabel() || 'Use';
-                this.showElement(this.mobileInteractBtn);
+                this.mobileSecondaryActionBtn.textContent = input!.getMobileSecondaryActionLabel() || 'Use';
+                this.showElement(this.mobileSecondaryActionBtn);
             } else {
-                this.hideElement(this.mobileInteractBtn);
+                this.hideElement(this.mobileSecondaryActionBtn);
             }
         }
 
@@ -744,3 +751,4 @@ export class FlatUiRuntime implements IUpdatable {
         }
     }
 }
+
