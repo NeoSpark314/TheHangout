@@ -36,6 +36,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly padById = new Map<string, { index: number; frequency: number; position: THREE.Vector3 }>();
     private readonly handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandPadHitAtMs = new Map<string, number>();
+    private readonly handPadArmed = new Map<string, boolean>();
     private readonly group: THREE.Group | null;
 
     private readonly stationCenter = new THREE.Vector3(6.2, 1.25, -1.8);
@@ -61,6 +62,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private readonly handLastTogglePos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandToggleAtMs = new Map<string, number>();
+    private readonly handToggleArmed = new Map<string, boolean>();
 
     constructor(context: IObjectSpawnContext, moduleId: string) {
         super(context, moduleId);
@@ -99,6 +101,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.padFlash.length = 0;
         this.lastHandPadHitAtMs.clear();
         this.lastHandToggleAtMs.clear();
+        this.handPadArmed.clear();
+        this.handToggleArmed.clear();
         this.handLastPos.left = null;
         this.handLastPos.right = null;
         this.handLastTogglePos.left = null;
@@ -148,9 +152,9 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         // E minor pentatonic across two octaves for a melodic, always-musical layout.
         const notes = [164.81, 196.0, 220.0, 246.94, 293.66, 329.63, 392.0, 440.0];
         const padCount = notes.length;
-        const radius = 1.85;
+        const radius = 1.74;
         const center = new THREE.Vector3(6.2, 1.1, -1.8);
-        this.stationCenter.set(center.x, center.y + 0.16, center.z);
+        this.stationCenter.set(center.x, center.y + 0.24, center.z);
 
         for (let i = 0; i < padCount; i++) {
             const t = (i / (padCount - 1));
@@ -161,16 +165,18 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
             if (this.group) {
                 const color = new THREE.Color().setHSL(0.72 - t * 0.6, 1.0, 0.54);
-                const geo = new THREE.BoxGeometry(0.42, 0.08, 0.42);
+                const geo = new THREE.BoxGeometry(0.52, 0.065, 0.29);
                 const mat = new THREE.MeshStandardMaterial({
                     color,
                     emissive: color.clone().multiplyScalar(0.8),
                     emissiveIntensity: 0.18,
-                    metalness: 0.2,
-                    roughness: 0.38
+                    metalness: 0.24,
+                    roughness: 0.32
                 });
                 const pad = new THREE.Mesh(geo, mat);
                 pad.position.set(px, padY, pz);
+                pad.rotation.y = angle + Math.PI / 2;
+                pad.rotation.x = THREE.MathUtils.degToRad(-8);
                 pad.add(new THREE.LineSegments(
                     new THREE.EdgesGeometry(geo),
                     new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.45 })
@@ -185,7 +191,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.padById.set(`pad-${i}`, { index: i, frequency: notes[i], position });
 
             const collider = this.context.physics.createStaticCuboidCollider(
-                0.21, 0.04, 0.21,
+                0.26, 0.04, 0.15,
                 { x: px, y: padY, z: pz }
             );
             if (collider) {
@@ -199,9 +205,9 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private createLaneToggles(): void {
-        const baseY = this.stationCenter.y + 0.58;
-        const baseZ = this.stationCenter.z - 0.18;
-        const xOffsets: Record<TBeatLane, number> = {
+        const toggleRadius = 1.84;
+        const baseY = this.stationCenter.y + 0.48;
+        const laneAngles: Record<TBeatLane, number> = {
             kick: -0.58,
             snare: 0,
             hat: 0.58
@@ -213,11 +219,16 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         };
 
         for (const lane of BEAT_LANES) {
-            const position = new THREE.Vector3(this.stationCenter.x + xOffsets[lane], baseY, baseZ);
+            const angle = laneAngles[lane];
+            const position = new THREE.Vector3(
+                this.stationCenter.x - Math.cos(angle) * toggleRadius,
+                baseY,
+                this.stationCenter.z + Math.sin(angle) * toggleRadius
+            );
             this.laneTogglePositions.set(lane, position);
 
             if (this.group) {
-                const geo = new THREE.BoxGeometry(0.24, 0.24, 0.24);
+                const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
                 const color = new THREE.Color(colors[lane]);
                 const mat = new THREE.MeshStandardMaterial({
                     color,
@@ -228,6 +239,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 });
                 const mesh = new THREE.Mesh(geo, mat);
                 mesh.position.copy(position);
+                mesh.rotation.y = angle + Math.PI / 2;
                 mesh.name = `drum-lane-toggle:${lane}:${this.id}`;
                 mesh.add(new THREE.LineSegments(
                     new THREE.EdgesGeometry(geo),
@@ -238,7 +250,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             }
 
             const collider = this.context.physics.createStaticCuboidCollider(
-                0.12, 0.12, 0.12,
+                0.1, 0.1, 0.1,
                 { x: position.x, y: position.y, z: position.z }
             );
             if (collider) {
@@ -305,8 +317,9 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
         const dt = Math.max(0.0001, delta);
         const now = this.nowMs();
-        const padRadius = 0.27;
-        const strikeCooldownMs = 120;
+        const padEnterRadius = 0.28;
+        const padLeaveRadius = 0.38;
+        const strikeCooldownMs = 145;
 
         for (const hand of ['left', 'right'] as const) {
             const state = tracking.hands[hand];
@@ -337,7 +350,13 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 const dx = pos.x - padPos.x;
                 const dz = pos.z - padPos.z;
                 const distXZ = Math.hypot(dx, dz);
-                if (distXZ > padRadius) continue;
+                const armKey = `${hand}:pad:${i}`;
+                const armed = this.handPadArmed.get(armKey) ?? true;
+                if (distXZ > padLeaveRadius) {
+                    this.handPadArmed.set(armKey, true);
+                    continue;
+                }
+                if (!armed || distXZ > padEnterRadius) continue;
 
                 const crossedTop = prev.y > (padPos.y + 0.1) && pos.y <= (padPos.y + 0.12);
                 const nearTop = Math.abs(pos.y - padPos.y) <= 0.14;
@@ -347,6 +366,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 const lastHit = this.lastHandPadHitAtMs.get(key) ?? 0;
                 if ((now - lastHit) < strikeCooldownMs) continue;
                 this.lastHandPadHitAtMs.set(key, now);
+                this.handPadArmed.set(armKey, false);
 
                 const strikeSpeed = Math.max(0, -vy) + speed * 0.22;
                 const intensity = Math.min(1.0, Math.max(0.12, strikeSpeed * 0.12));
@@ -371,8 +391,9 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
         const dt = Math.max(0.0001, delta);
         const now = this.nowMs();
-        const radius = 0.2;
-        const cooldownMs = 260;
+        const enterRadius = 0.16;
+        const leaveRadius = 0.24;
+        const cooldownMs = 300;
 
         for (const hand of ['left', 'right'] as const) {
             const state = tracking.hands[hand];
@@ -400,7 +421,14 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 const lanePos = this.laneTogglePositions.get(lane);
                 if (!lanePos) continue;
 
-                if (pos.distanceTo(lanePos) > radius) continue;
+                const dist = pos.distanceTo(lanePos);
+                const armKey = `${hand}:toggle:${lane}`;
+                const armed = this.handToggleArmed.get(armKey) ?? true;
+                if (dist > leaveRadius) {
+                    this.handToggleArmed.set(armKey, true);
+                    continue;
+                }
+                if (!armed || dist > enterRadius) continue;
 
                 const crossedTop = prev.y > (lanePos.y + 0.11) && pos.y <= (lanePos.y + 0.11);
                 const nearTop = Math.abs(pos.y - lanePos.y) <= 0.15;
@@ -410,6 +438,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 const lastHit = this.lastHandToggleAtMs.get(key) ?? 0;
                 if ((now - lastHit) < cooldownMs) continue;
                 this.lastHandToggleAtMs.set(key, now);
+                this.handToggleArmed.set(armKey, false);
 
                 this.requestLaneToggle(lane);
             }
