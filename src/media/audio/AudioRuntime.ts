@@ -49,26 +49,17 @@ export class AudioRuntime {
             }
         });
 
-        eventBus.on(EVENTS.ENTITY_COLLIDED, (data: { intensity: number }) => {
+        eventBus.on(EVENTS.ENTITY_COLLIDED, (data: { intensity: number; position?: IVector3 }) => {
             if (this.isInitialized && this.ctx) {
-                SoundSynth.playCollision(this.ctx, data.intensity);
+                const destination = this.createSpatialDestination(data.position);
+                SoundSynth.playCollision(this.ctx, data.intensity, destination);
             }
         });
 
         eventBus.on(EVENTS.SOCIAL_HIGH_FIVE, (data: { position?: IVector3; intensity: number }) => {
             if (this.isInitialized && this.ctx) {
-                const headPos = this.context.runtime.tracking.getState().head.pose.position;
-                const hitPos = data.position;
-                let distance = 0;
-                let pan = 0;
-                if (hitPos) {
-                    const dx = hitPos.x - headPos.x;
-                    const dy = hitPos.y - headPos.y;
-                    const dz = hitPos.z - headPos.z;
-                    distance = Math.hypot(dx, dy, dz);
-                    pan = Math.max(-1, Math.min(1, dx / 5));
-                }
-                SoundSynth.playHighFive(this.ctx, data.intensity, { pan, distance });
+                const destination = this.createSpatialDestination(data.position);
+                SoundSynth.playHighFive(this.ctx, data.intensity, { destination });
             }
         });
     }
@@ -85,24 +76,33 @@ export class AudioRuntime {
      */
     public playDrumPadHit(data: { frequency: number; intensity: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
-
-        const headPos = this.context.runtime.tracking.getState().head.pose.position;
-        const hitPos = data.position;
-        let distance = 0;
-        let pan = 0;
-        if (hitPos) {
-            const dx = hitPos.x - headPos.x;
-            const dy = hitPos.y - headPos.y;
-            const dz = hitPos.z - headPos.z;
-            distance = Math.hypot(dx, dy, dz);
-            pan = Math.max(-1, Math.min(1, dx / 6));
-        }
-
-        SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { pan, distance });
+        const destination = this.createSpatialDestination(data.position);
+        SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { destination });
     }
 
     public playUiToggle(isActive: boolean): void {
         if (!this.isInitialized || !this.ctx) return;
         SoundSynth.playUI(this.ctx, isActive ? 1046.5 : 784);
+    }
+
+    private createSpatialDestination(position?: IVector3): AudioNode | undefined {
+        if (!this.ctx) return undefined;
+        if (!position) return this.ctx.destination;
+
+        const now = this.ctx.currentTime;
+        const panner = this.ctx.createPanner();
+        panner.panningModel = 'HRTF';
+        panner.distanceModel = 'inverse';
+        panner.refDistance = 0.8;
+        panner.maxDistance = 26;
+        panner.rolloffFactor = 1.25;
+        panner.coneInnerAngle = 360;
+        panner.coneOuterAngle = 0;
+        panner.coneOuterGain = 0;
+        panner.positionX.setValueAtTime(position.x, now);
+        panner.positionY.setValueAtTime(position.y, now);
+        panner.positionZ.setValueAtTime(position.z, now);
+        panner.connect(this.ctx.destination);
+        return panner;
     }
 }

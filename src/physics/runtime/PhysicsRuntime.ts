@@ -508,7 +508,23 @@ export class PhysicsRuntime {
             const intensity = Math.min(0.35, Math.max(0.05, impactSpeed * 0.09));
             if (intensity <= 0.05) return;
 
-            eventBus.emit(EVENTS.ENTITY_COLLIDED, { intensity });
+            const posA = bodyA?.translation() || colliderA?.translation();
+            const posB = bodyB?.translation() || colliderB?.translation();
+            const position = posA && posB
+                ? {
+                    x: (posA.x + posB.x) * 0.5,
+                    y: (posA.y + posB.y) * 0.5,
+                    z: (posA.z + posB.z) * 0.5
+                }
+                : (posA || posB)
+                    ? {
+                        x: (posA || posB)!.x,
+                        y: (posA || posB)!.y,
+                        z: (posA || posB)!.z
+                    }
+                    : undefined;
+
+            eventBus.emit(EVENTS.ENTITY_COLLIDED, { intensity, position });
         });
     }
 

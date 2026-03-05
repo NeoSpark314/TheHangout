@@ -1,4 +1,8 @@
 export class SoundSynth {
+    private static resolveOutput(ctx: AudioContext, destination?: AudioNode): AudioNode {
+        return destination || ctx.destination;
+    }
+
     public static playArpeggio(ctx: AudioContext, freqs: number[], type: OscillatorType = 'square', speed: number = 0.08): void {
         if (!ctx) return;
         const now = ctx.currentTime;
@@ -22,9 +26,9 @@ export class SoundSynth {
         });
     }
 
-    public static playCollision(ctx: AudioContext, intensity: number): void {
+    public static playCollision(ctx: AudioContext, intensity: number, destination?: AudioNode): void {
         if (!ctx || intensity < 0.05) return;
-        
+        const output = this.resolveOutput(ctx, destination);
         const now = ctx.currentTime;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -39,7 +43,7 @@ export class SoundSynth {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(output);
         
         osc.start();
         osc.stop(now + 0.2);
@@ -68,28 +72,32 @@ export class SoundSynth {
         ctx: AudioContext,
         freq: number,
         intensity: number = 0.5,
-        options?: { pan?: number; distance?: number }
+        options?: { pan?: number; distance?: number; destination?: AudioNode }
     ): void {
         if (!ctx) return;
         const now = ctx.currentTime;
 
+        const output = this.resolveOutput(ctx, options?.destination);
         const distance = Math.max(0, options?.distance ?? 0);
         const pan = Math.max(-1, Math.min(1, options?.pan ?? 0));
-        const distanceAtten = Math.max(0.26, 1 / (1 + distance * 0.14));
+        const useFallbackStereo = !options?.destination;
+        const distanceAtten = useFallbackStereo
+            ? Math.max(0.26, 1 / (1 + distance * 0.14))
+            : 1.0;
         const drive = Math.min(1.0, Math.max(0.12, intensity));
 
         const out = ctx.createGain();
         out.gain.setValueAtTime(distanceAtten, now);
 
-        const stereo = (typeof (ctx as any).createStereoPanner === 'function')
+        const stereo = useFallbackStereo && (typeof (ctx as any).createStereoPanner === 'function')
             ? (ctx as any).createStereoPanner() as StereoPannerNode
             : null;
         if (stereo) {
             stereo.pan.setValueAtTime(pan, now);
             out.connect(stereo);
-            stereo.connect(ctx.destination);
+            stereo.connect(output);
         } else {
-            out.connect(ctx.destination);
+            out.connect(output);
         }
 
         const toneFilter = ctx.createBiquadFilter();
@@ -155,27 +163,31 @@ export class SoundSynth {
     public static playHighFive(
         ctx: AudioContext,
         intensity: number = 0.6,
-        options?: { pan?: number; distance?: number }
+        options?: { pan?: number; distance?: number; destination?: AudioNode }
     ): void {
         if (!ctx) return;
         const now = ctx.currentTime;
+        const output = this.resolveOutput(ctx, options?.destination);
         const pan = Math.max(-1, Math.min(1, options?.pan ?? 0));
         const distance = Math.max(0, options?.distance ?? 0);
-        const distanceAtten = Math.max(0.35, 1 / (1 + distance * 0.16));
+        const useFallbackStereo = !options?.destination;
+        const distanceAtten = useFallbackStereo
+            ? Math.max(0.35, 1 / (1 + distance * 0.16))
+            : 1.0;
         const drive = Math.min(1.0, Math.max(0.2, intensity));
 
         const out = ctx.createGain();
         out.gain.setValueAtTime(distanceAtten, now);
 
-        const stereo = (typeof (ctx as any).createStereoPanner === 'function')
+        const stereo = useFallbackStereo && (typeof (ctx as any).createStereoPanner === 'function')
             ? (ctx as any).createStereoPanner() as StereoPannerNode
             : null;
         if (stereo) {
             stereo.pan.setValueAtTime(pan, now);
             out.connect(stereo);
-            stereo.connect(ctx.destination);
+            stereo.connect(output);
         } else {
-            out.connect(ctx.destination);
+            out.connect(output);
         }
 
         // Crash-like bright noise body.
