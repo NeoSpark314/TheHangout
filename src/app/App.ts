@@ -162,7 +162,7 @@ export class App {
 
         // Register systems to Engine in the exact desired execution order
         this.addAlwaysSystem(runtime.network);
-        this.addGameplaySystem(runtime.input);
+        this.addAlwaysSystem(runtime.input);
         this.addGameplaySystem(runtime.entity);
 
         // Physics needs a small wrapper because its update method is called 'step' and only takes delta
@@ -199,10 +199,7 @@ export class App {
 
         // Tasks at the end of the frame
         if (runtime.input) {
-            this.engine.onEndFrame(() => {
-                if (!this.gameplayStarted) return;
-                runtime.input!.clearJustPressed();
-            });
+            this.engine.onEndFrame(() => runtime.input!.clearJustPressed());
         }
     }
 
