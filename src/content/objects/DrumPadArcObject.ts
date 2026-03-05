@@ -15,6 +15,8 @@ interface IDrumPadHitPayload {
 type TBeatLane = 'kick' | 'snare' | 'hat' | 'bass';
 const BEAT_LANES: TBeatLane[] = ['kick', 'snare', 'hat', 'bass'];
 type TPadPhraseId = `pad-${number}`;
+type TArpStripId = 'arp-0' | 'arp-1' | 'arp-2';
+const ARP_STRIPS: TArpStripId[] = ['arp-0', 'arp-1', 'arp-2'];
 
 interface IStationTogglePayload {
     lane: TBeatLane;
@@ -29,6 +31,17 @@ interface IPadPhraseStartPayload {
     startStep: number;
 }
 
+interface IArpTouchPayload {
+    stripId: TArpStripId;
+    sourceId: string;
+    active: boolean;
+}
+
+interface IArpTouchStatePayload {
+    stripId: TArpStripId;
+    active: boolean;
+}
+
 interface ISequencerSnapshot {
     version: 1;
     bpm: number;
@@ -36,6 +49,7 @@ interface ISequencerSnapshot {
     stepIndex: number;
     stepPhaseMs: number;
     laneEnabled: Record<TBeatLane, boolean>;
+    arpActive: Record<TArpStripId, boolean>;
 }
 
 interface IActivePadPhrase {
@@ -80,6 +94,11 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly laneToggleMeshes = new Map<TBeatLane, THREE.Mesh>();
     private readonly laneTogglePositions = new Map<TBeatLane, THREE.Vector3>();
     private readonly laneToggleByHandle = new Map<number, TBeatLane>();
+    private readonly arpStripMeshes = new Map<TArpStripId, THREE.Mesh>();
+    private readonly arpStripPositions = new Map<TArpStripId, THREE.Vector3>();
+    private readonly arpStripByHandle = new Map<number, TArpStripId>();
+    private readonly arpStripActive: Record<TArpStripId, boolean> = { 'arp-0': false, 'arp-1': false, 'arp-2': false };
+    private readonly arpTouchSourcesByStrip = new Map<TArpStripId, Set<string>>();
     private readonly lanePulse: Record<TBeatLane, number> = { kick: 0, snare: 0, hat: 0, bass: 0 };
     private readonly lanePattern: Record<TBeatLane, ReadonlySet<number>> = {
         kick: new Set([0, 4, 8, 12]),
@@ -102,6 +121,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly handLastTogglePos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandToggleAtMs = new Map<string, number>();
     private readonly handToggleArmed = new Map<string, boolean>();
+    private readonly handActiveArpStripByHand: Record<'left' | 'right', TArpStripId | null> = { left: null, right: null };
 
     constructor(context: IObjectSpawnContext, moduleId: string) {
         super(context, moduleId);
@@ -114,6 +134,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
         this.createDrumPads();
         this.createLaneToggles();
+        this.createArpStrips();
         this.bindCollisionListener();
     }
 
@@ -131,6 +152,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.updateSequencer();
         this.updateHandPadTouches(delta);
         this.updateHandToggleHits(delta);
+        this.updateHandArpTouches();
     }
 
     public destroy(): void {
@@ -148,10 +170,16 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.handLastPos.right = null;
         this.handLastTogglePos.left = null;
         this.handLastTogglePos.right = null;
+        this.handActiveArpStripByHand.left = null;
+        this.handActiveArpStripByHand.right = null;
         this.padMeshes.length = 0;
         this.laneToggleMeshes.clear();
         this.laneTogglePositions.clear();
         this.laneToggleByHandle.clear();
+        this.arpStripMeshes.clear();
+        this.arpStripPositions.clear();
+        this.arpStripByHandle.clear();
+        this.arpTouchSourcesByStrip.clear();
         this.lastProcessedAbsoluteStep = null;
         super.destroy();
     }
@@ -178,6 +206,28 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             const start = data as IPadPhraseStartPayload;
             if (!this.isValidPadPhraseStart(start)) return;
             this.applyPadPhraseStart(start);
+            return;
+        }
+
+        if (eventType === 'arp-touch-request') {
+            const req = data as IArpTouchPayload;
+            if (!this.isValidArpTouchPayload(req)) return;
+            if (!this.context.app.isHost) return;
+            const changed = this.applyArpTouchSource(req.stripId, req.sourceId, req.active);
+            if (changed) {
+                this.emitSyncEvent('arp-touch-state', {
+                    stripId: req.stripId,
+                    active: this.arpStripActive[req.stripId]
+                } satisfies IArpTouchStatePayload);
+            }
+            return;
+        }
+
+        if (eventType === 'arp-touch-state') {
+            if (meta.local) return;
+            const state = data as IArpTouchStatePayload;
+            if (!this.isValidArpTouchStatePayload(state)) return;
+            this.applyArpStripActive(state.stripId, state.active);
             return;
         }
 
@@ -322,6 +372,66 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
     }
 
+    private createArpStrips(): void {
+        const stripRadius = 1.8;
+        const baseY = this.stationCenter.y + 0.34;
+        const stripAngles: Record<TArpStripId, number> = {
+            'arp-0': -0.5,
+            'arp-1': 0,
+            'arp-2': 0.5
+        };
+        const colors: Record<TArpStripId, number> = {
+            'arp-0': 0x63e5ff,
+            'arp-1': 0x79ffcf,
+            'arp-2': 0xff8ae8
+        };
+
+        for (const stripId of ARP_STRIPS) {
+            const angle = stripAngles[stripId];
+            const position = new THREE.Vector3(
+                this.stationCenter.x - Math.cos(angle) * stripRadius,
+                baseY,
+                this.stationCenter.z + Math.sin(angle) * stripRadius
+            );
+            this.arpStripPositions.set(stripId, position);
+
+            if (this.group) {
+                const geo = new THREE.BoxGeometry(0.5, 0.07, 0.13);
+                const color = new THREE.Color(colors[stripId]);
+                const mat = new THREE.MeshStandardMaterial({
+                    color,
+                    emissive: color.clone().multiplyScalar(0.85),
+                    emissiveIntensity: 0.16,
+                    metalness: 0.28,
+                    roughness: 0.26
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(position);
+                mesh.rotation.y = angle + Math.PI / 2;
+                mesh.rotation.x = THREE.MathUtils.degToRad(-10);
+                mesh.name = `drum-arp-strip:${stripId}:${this.id}`;
+                mesh.add(new THREE.LineSegments(
+                    new THREE.EdgesGeometry(geo),
+                    new THREE.LineBasicMaterial({ color: 0x9dfcff, transparent: true, opacity: 0.48 })
+                ));
+                this.group.add(mesh);
+                this.arpStripMeshes.set(stripId, mesh);
+            }
+
+            const collider = this.context.physics.createStaticCuboidCollider(
+                0.25, 0.04, 0.07,
+                { x: position.x, y: position.y, z: position.z }
+            );
+            if (collider) {
+                this.arpStripByHandle.set(collider.id, stripId);
+                const body = collider.body;
+                if (body) {
+                    this.ownPhysicsBody(body);
+                }
+            }
+        }
+    }
+
     private bindCollisionListener(): void {
         this.context.onPhysicsCollisionStarted((data) => {
             const laneA = this.laneToggleByHandle.get(data.handleA);
@@ -416,7 +526,14 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 this.lastHandPadHitAtMs.set(key, now);
                 this.handPadArmed.set(armKey, false);
 
-                this.requestPadPhraseTrigger(`pad-${i}` as TPadPhraseId);
+                const padId = `pad-${i}` as TPadPhraseId;
+                const padInfo = this.padById.get(padId);
+                this.applyDrumHit({
+                    padId,
+                    frequency: padInfo?.frequency ?? 220,
+                    intensity: 0.74,
+                    position: padInfo ? { x: padInfo.position.x, y: padInfo.position.y, z: padInfo.position.z } : undefined
+                }, true);
             }
         }
     }
@@ -483,6 +600,111 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 this.requestLaneToggle(lane);
             }
         }
+    }
+
+    private updateHandArpTouches(): void {
+        const tracking = this.context.tracking.getState?.();
+        for (const hand of ['left', 'right'] as const) {
+            const previousStrip = this.handActiveArpStripByHand[hand];
+            const sourceId = this.getHandTouchSourceId(hand);
+
+            if (!tracking || !tracking.hands[hand].active) {
+                if (previousStrip) {
+                    this.requestArpTouch(previousStrip, sourceId, false);
+                    this.handActiveArpStripByHand[hand] = null;
+                }
+                continue;
+            }
+
+            const strikePose = this.getAvatarHandStrikePosition(hand);
+            if (!strikePose) {
+                if (previousStrip) {
+                    this.requestArpTouch(previousStrip, sourceId, false);
+                    this.handActiveArpStripByHand[hand] = null;
+                }
+                continue;
+            }
+
+            const pos = new THREE.Vector3(strikePose.x, strikePose.y, strikePose.z);
+            const nextStrip = this.findTouchedArpStrip(pos);
+            if (nextStrip === previousStrip) {
+                continue;
+            }
+
+            if (previousStrip) {
+                this.requestArpTouch(previousStrip, sourceId, false);
+            }
+            if (nextStrip) {
+                this.requestArpTouch(nextStrip, sourceId, true);
+            }
+            this.handActiveArpStripByHand[hand] = nextStrip;
+        }
+    }
+
+    private findTouchedArpStrip(handPos: THREE.Vector3): TArpStripId | null {
+        let bestStrip: TArpStripId | null = null;
+        let bestScore = Number.POSITIVE_INFINITY;
+        for (const stripId of ARP_STRIPS) {
+            const stripPos = this.arpStripPositions.get(stripId);
+            if (!stripPos) continue;
+            const dy = Math.abs(handPos.y - stripPos.y);
+            if (dy > 0.18) continue;
+            const dx = handPos.x - stripPos.x;
+            const dz = handPos.z - stripPos.z;
+            const distXZ = Math.hypot(dx, dz);
+            if (distXZ > 0.31) continue;
+            const score = distXZ + dy * 0.6;
+            if (score < bestScore) {
+                bestScore = score;
+                bestStrip = stripId;
+            }
+        }
+        return bestStrip;
+    }
+
+    private requestArpTouch(stripId: TArpStripId, sourceId: string, active: boolean): void {
+        if (!this.isValidArpStripId(stripId) || !sourceId) return;
+        if (this.context.app.isHost) {
+            const changed = this.applyArpTouchSource(stripId, sourceId, active);
+            if (changed) {
+                this.emitSyncEvent('arp-touch-state', { stripId, active: this.arpStripActive[stripId] } satisfies IArpTouchStatePayload);
+            }
+            return;
+        }
+        this.emitSyncEvent('arp-touch-request', { stripId, sourceId, active } satisfies IArpTouchPayload);
+    }
+
+    private applyArpTouchSource(stripId: TArpStripId, sourceId: string, active: boolean): boolean {
+        let set = this.arpTouchSourcesByStrip.get(stripId);
+        if (!set) {
+            set = new Set<string>();
+            this.arpTouchSourcesByStrip.set(stripId, set);
+        }
+        const wasActive = this.arpStripActive[stripId];
+        if (active) set.add(sourceId);
+        else set.delete(sourceId);
+        const nextActive = set.size > 0;
+        this.applyArpStripActive(stripId, nextActive);
+        return wasActive !== nextActive;
+    }
+
+    private applyArpStripActive(stripId: TArpStripId, active: boolean): void {
+        this.arpStripActive[stripId] = !!active;
+        const mesh = this.arpStripMeshes.get(stripId);
+        if (mesh) {
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            mat.emissiveIntensity = active ? Math.max(mat.emissiveIntensity, 0.6) : Math.min(mat.emissiveIntensity, 0.2);
+        }
+        if (active && !this.isPlaying) {
+            this.isPlaying = true;
+            this.sequencerAnchorMs = this.nowMs();
+            this.lastProcessedAbsoluteStep = 0;
+        }
+    }
+
+    private getHandTouchSourceId(hand: 'left' | 'right'): string {
+        const id = this.context.tracking.getLocalPlayer()?.id || this.context.app.localPlayer?.id || 'local';
+        return `${id}:${hand}`;
     }
 
     private requestPadPhraseTrigger(padId: TPadPhraseId): void {
@@ -609,7 +831,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.padFlash[idx] = Math.max(this.padFlash[idx], Math.min(1.0, hit.intensity * 1.2));
         }
 
-        this.context.audio.playDrumPadHit({
+        this.context.audio.playMelodyNote({
             frequency: hit.frequency,
             intensity: hit.intensity,
             position: hit.position
@@ -637,6 +859,17 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             mesh.scale.z += (targetScale - mesh.scale.z) * 0.2;
 
             this.lanePulse[lane] = Math.max(0, pulse - delta * 4.2);
+        }
+
+        for (const stripId of ARP_STRIPS) {
+            const mesh = this.arpStripMeshes.get(stripId);
+            if (!mesh) continue;
+            const active = this.arpStripActive[stripId];
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            const target = active ? 0.72 : 0.14;
+            mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.22;
+            const targetScaleY = active ? 1.1 : 1.0;
+            mesh.scale.y += (targetScaleY - mesh.scale.y) * 0.2;
         }
     }
 
@@ -699,7 +932,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
 
         // Keep the transport alive for active phrases even if all lanes are off.
-        if (!this.anyLaneEnabled() && this.padPhraseById.size === 0) {
+        if (!this.anyLaneEnabled() && !this.anyArpActive() && this.padPhraseById.size === 0) {
             this.isPlaying = false;
             this.lastProcessedAbsoluteStep = null;
         }
@@ -725,7 +958,35 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.context.audio.playSequencerBeat({ beat: 'bass', intensity: 0.72, position: pos });
         }
 
+        this.triggerArpStep(absoluteStep);
         this.triggerPadPhraseNotes(absoluteStep);
+    }
+
+    private triggerArpStep(absoluteStep: number): void {
+        const arpOffsets: Record<TArpStripId, readonly number[]> = {
+            'arp-0': [0, 7, 12, 7],
+            'arp-1': [0, 3, 7, 10],
+            'arp-2': [0, 5, 9, 12]
+        };
+        const arpRoots: Record<TArpStripId, number> = {
+            'arp-0': 261.63,
+            'arp-1': 293.66,
+            'arp-2': 329.63
+        };
+
+        for (const stripId of ARP_STRIPS) {
+            if (!this.arpStripActive[stripId]) continue;
+            const pattern = arpOffsets[stripId];
+            const noteIdx = absoluteStep % pattern.length;
+            const semitone = pattern[noteIdx];
+            const freq = arpRoots[stripId] * Math.pow(2, semitone / 12);
+            const pos = this.arpStripPositions.get(stripId);
+            this.context.audio.playArpNote({
+                frequency: freq,
+                intensity: 0.62,
+                position: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
+            });
+        }
     }
 
     private captureSequencerSnapshot(): ISequencerSnapshot {
@@ -741,17 +1002,24 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             isPlaying: this.isPlaying,
             stepIndex: absoluteStep % 16,
             stepPhaseMs,
-            laneEnabled: { ...this.laneEnabled }
+            laneEnabled: { ...this.laneEnabled },
+            arpActive: { ...this.arpStripActive }
         };
     }
 
     private applySequencerSnapshot(snapshot: ISequencerSnapshot | undefined): void {
         if (!snapshot || snapshot.version !== 1) return;
         if (!this.isValidLaneEnabled(snapshot.laneEnabled)) return;
+        const arpActive = this.isValidArpActive(snapshot.arpActive)
+            ? snapshot.arpActive
+            : ({ 'arp-0': false, 'arp-1': false, 'arp-2': false } as Record<TArpStripId, boolean>);
 
         this.bpm = Math.max(80, Math.min(170, snapshot.bpm || 124));
         this.laneEnabled = { ...snapshot.laneEnabled };
-        this.isPlaying = !!snapshot.isPlaying && this.anyLaneEnabled();
+        this.arpStripActive['arp-0'] = !!arpActive['arp-0'];
+        this.arpStripActive['arp-1'] = !!arpActive['arp-1'];
+        this.arpStripActive['arp-2'] = !!arpActive['arp-2'];
+        this.isPlaying = !!snapshot.isPlaying && (this.anyLaneEnabled() || this.anyArpActive());
 
         const stepDurationMs = this.getStepDurationMs();
         const clampedStep = this.normalizeStep(snapshot.stepIndex);
@@ -804,6 +1072,28 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         return Number.isFinite(data.startStep);
     }
 
+    private isValidArpTouchPayload(data: IArpTouchPayload | undefined): data is IArpTouchPayload {
+        if (!data || !this.isValidArpStripId(data.stripId)) return false;
+        return typeof data.sourceId === 'string' && typeof data.active === 'boolean';
+    }
+
+    private isValidArpTouchStatePayload(data: IArpTouchStatePayload | undefined): data is IArpTouchStatePayload {
+        if (!data || !this.isValidArpStripId(data.stripId)) return false;
+        return typeof data.active === 'boolean';
+    }
+
+    private isValidArpStripId(stripId: unknown): stripId is TArpStripId {
+        return stripId === 'arp-0' || stripId === 'arp-1' || stripId === 'arp-2';
+    }
+
+    private isValidArpActive(data: unknown): data is Record<TArpStripId, boolean> {
+        if (!data || typeof data !== 'object') return false;
+        const v = data as Record<string, unknown>;
+        return typeof v['arp-0'] === 'boolean'
+            && typeof v['arp-1'] === 'boolean'
+            && typeof v['arp-2'] === 'boolean';
+    }
+
     private isValidPadId(padId: unknown): padId is TPadPhraseId {
         if (typeof padId !== 'string') return false;
         const idx = this.parsePadIndex(padId);
@@ -816,6 +1106,10 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private anyLaneEnabled(): boolean {
         return this.laneEnabled.kick || this.laneEnabled.snare || this.laneEnabled.hat || this.laneEnabled.bass;
+    }
+
+    private anyArpActive(): boolean {
+        return this.arpStripActive['arp-0'] || this.arpStripActive['arp-1'] || this.arpStripActive['arp-2'];
     }
 
     private normalizeStep(stepIndex: number): number {

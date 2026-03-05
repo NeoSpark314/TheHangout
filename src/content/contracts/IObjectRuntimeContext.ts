@@ -47,6 +47,11 @@ export interface IObjectRuntimeContext {
             intensity?: number;
             position?: { x: number; y: number; z: number };
         }): void;
+        playArpNote(options: {
+            frequency: number;
+            intensity?: number;
+            position?: { x: number; y: number; z: number };
+        }): void;
     };
 
     entity: {

@@ -489,6 +489,53 @@ export class SoundSynth {
         click.stop(now + 0.026);
     }
 
+    public static playArpNote(ctx: AudioContext, frequency: number, intensity: number = 0.62, destination?: AudioNode): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const output = this.resolveOutput(ctx, destination);
+        const drive = Math.min(1.0, Math.max(0.2, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.86, now);
+        out.connect(output);
+
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.setValueAtTime(280, now);
+        hp.connect(out);
+
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(4200, now);
+        lp.frequency.exponentialRampToValueAtTime(1400, now + 0.22);
+        lp.Q.setValueAtTime(0.6, now);
+        lp.connect(hp);
+
+        const oscA = ctx.createOscillator();
+        oscA.type = 'triangle';
+        oscA.frequency.setValueAtTime(frequency, now);
+        const gainA = ctx.createGain();
+        gainA.gain.setValueAtTime(0.0001, now);
+        gainA.gain.linearRampToValueAtTime(0.09 * drive, now + 0.008);
+        gainA.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        oscA.connect(gainA);
+        gainA.connect(lp);
+        oscA.start(now);
+        oscA.stop(now + 0.32);
+
+        const oscB = ctx.createOscillator();
+        oscB.type = 'sawtooth';
+        oscB.frequency.setValueAtTime(frequency * 1.002, now);
+        const gainB = ctx.createGain();
+        gainB.gain.setValueAtTime(0.0001, now);
+        gainB.gain.linearRampToValueAtTime(0.045 * drive, now + 0.008);
+        gainB.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+        oscB.connect(gainB);
+        gainB.connect(lp);
+        oscB.start(now);
+        oscB.stop(now + 0.26);
+    }
+
     public static playHighFive(
         ctx: AudioContext,
         intensity: number = 0.6,

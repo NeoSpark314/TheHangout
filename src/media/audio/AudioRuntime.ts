@@ -18,6 +18,7 @@ export class AudioRuntime {
     private readonly drumTimbreVersion = 3;
     private readonly beatTimbreVersion = 1;
     private readonly melodyTimbreVersion = 1;
+    private readonly arpTimbreVersion = 1;
 
     constructor(private context: AppContext) {
         this.setupListeners();
@@ -99,6 +100,11 @@ export class AudioRuntime {
     public playMelodyNote(data: { frequency: number; intensity?: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
         void this.playMelodyBuffered(data.frequency, data.intensity ?? 0.7, data.position);
+    }
+
+    public playArpNote(data: { frequency: number; intensity?: number; position?: IVector3 }): void {
+        if (!this.isInitialized || !this.ctx) return;
+        void this.playArpBuffered(data.frequency, data.intensity ?? 0.62, data.position);
     }
 
     private createSpatialDestination(position?: IVector3): AudioNode | undefined {
@@ -233,6 +239,29 @@ export class AudioRuntime {
             this.playSpatialBuffer(buffer, position);
         } catch (error) {
             console.error('[AudioRuntime] Melody pre-render failed:', error);
+        }
+    }
+
+    private async playArpBuffered(frequency: number, intensity: number, position?: IVector3): Promise<void> {
+        const runtimeCtx = this.ctx;
+        if (!runtimeCtx || !this.isInitialized) return;
+
+        const level = this.bucketIntensity(intensity);
+        const freqKey = Number.isFinite(frequency) ? frequency.toFixed(2) : '220.00';
+        const key = `arp:v${this.arpTimbreVersion}:${freqKey}:${level.toFixed(2)}`;
+
+        try {
+            const buffer = await this.sfxCache.getOrCreate(key, async () => {
+                const durationSec = 0.38;
+                const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
+                const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
+                SoundSynth.playArpNote(offline as unknown as AudioContext, frequency, level);
+                return offline.startRendering();
+            });
+
+            this.playSpatialBuffer(buffer, position);
+        } catch (error) {
+            console.error('[AudioRuntime] Arp pre-render failed:', error);
         }
     }
 

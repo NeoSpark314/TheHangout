@@ -57,6 +57,9 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             },
             playMelodyNote: (options: any) => {
                 this.app.runtime.audio?.playMelodyNote(options);
+            },
+            playArpNote: (options: any) => {
+                this.app.runtime.audio?.playArpNote(options);
             }
         };
 
