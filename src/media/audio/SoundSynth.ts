@@ -1,6 +1,31 @@
 export class SoundSynth {
+    private static softClipCurve: Float32Array | null = null;
+
     private static resolveOutput(ctx: AudioContext, destination?: AudioNode): AudioNode {
         return destination || ctx.destination;
+    }
+
+    private static getSoftClipCurve(): Float32Array {
+        if (this.softClipCurve) return this.softClipCurve;
+        const samples = 512;
+        const curve = new Float32Array(samples);
+        for (let i = 0; i < samples; i++) {
+            const x = (i / (samples - 1)) * 2 - 1;
+            curve[i] = Math.tanh(x * 1.8);
+        }
+        this.softClipCurve = curve;
+        return curve;
+    }
+
+    private static createSoftClipper(ctx: AudioContext, drive: number): { input: GainNode; output: WaveShaperNode } {
+        const shaper = ctx.createWaveShaper();
+        shaper.curve = this.getSoftClipCurve();
+        shaper.oversample = '2x';
+
+        const inputGain = ctx.createGain();
+        inputGain.gain.value = Math.max(1.0, Math.min(2.6, drive));
+        inputGain.connect(shaper);
+        return { input: inputGain, output: shaper };
     }
 
     public static playArpeggio(ctx: AudioContext, freqs: number[], type: OscillatorType = 'square', speed: number = 0.08): void {
@@ -30,23 +55,58 @@ export class SoundSynth {
         if (!ctx || intensity < 0.05) return;
         const output = this.resolveOutput(ctx, destination);
         const now = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        
-        osc.type = 'triangle';
-        const startFreq = 100 + (intensity * 300);
-        osc.frequency.setValueAtTime(startFreq, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
-        
-        const volume = Math.min(intensity * 0.4, 0.6);
-        gain.gain.setValueAtTime(volume, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-        
-        osc.connect(gain);
-        gain.connect(output);
-        
-        osc.start();
-        osc.stop(now + 0.2);
+        const drive = Math.min(1.0, Math.max(0.12, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.95, now);
+        out.connect(output);
+
+        const clipper = this.createSoftClipper(ctx, 1.15 + drive * 0.9);
+        const contour = ctx.createBiquadFilter();
+        contour.type = 'lowpass';
+        contour.frequency.setValueAtTime(2200, now);
+        contour.frequency.exponentialRampToValueAtTime(520 + (drive * 220), now + 0.2);
+        contour.Q.setValueAtTime(0.8, now);
+        clipper.output.connect(contour);
+        contour.connect(out);
+
+        const body = ctx.createOscillator();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(140 + drive * 180, now);
+        body.frequency.exponentialRampToValueAtTime(52, now + 0.22);
+        const bodyGain = ctx.createGain();
+        bodyGain.gain.setValueAtTime(0.0001, now);
+        bodyGain.gain.linearRampToValueAtTime(0.22 * drive, now + 0.004);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+        body.connect(bodyGain);
+        bodyGain.connect(clipper.input);
+        body.start(now);
+        body.stop(now + 0.26);
+
+        const sub = ctx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(86 + drive * 44, now);
+        sub.frequency.exponentialRampToValueAtTime(34, now + 0.28);
+        const subGain = ctx.createGain();
+        subGain.gain.setValueAtTime(0.0001, now);
+        subGain.gain.linearRampToValueAtTime(0.26 * drive, now + 0.006);
+        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        sub.connect(subGain);
+        subGain.connect(out);
+        sub.start(now);
+        sub.stop(now + 0.31);
+
+        const tick = ctx.createOscillator();
+        tick.type = 'square';
+        tick.frequency.setValueAtTime(1300 + (drive * 500), now);
+        tick.frequency.exponentialRampToValueAtTime(280, now + 0.022);
+        const tickGain = ctx.createGain();
+        tickGain.gain.setValueAtTime(0.018 + drive * 0.012, now);
+        tickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028);
+        tick.connect(tickGain);
+        tickGain.connect(out);
+        tick.start(now);
+        tick.stop(now + 0.03);
     }
 
     public static playUI(ctx: AudioContext, freq: number = 880): void {
@@ -103,23 +163,31 @@ export class SoundSynth {
         const toneFilter = ctx.createBiquadFilter();
         toneFilter.type = 'lowpass';
         toneFilter.frequency.setValueAtTime(2600, now);
-        toneFilter.frequency.exponentialRampToValueAtTime(650 + (drive * 350), now + 0.28);
+        toneFilter.frequency.exponentialRampToValueAtTime(720 + (drive * 420), now + 0.3);
         toneFilter.Q.setValueAtTime(0.95, now);
-        toneFilter.connect(out);
+
+        const clipper = this.createSoftClipper(ctx, 1.12 + drive * 0.95);
+        const lowShelf = ctx.createBiquadFilter();
+        lowShelf.type = 'lowshelf';
+        lowShelf.frequency.setValueAtTime(160, now);
+        lowShelf.gain.setValueAtTime(2.6 + drive * 3.4, now);
+        toneFilter.connect(clipper.input);
+        clipper.output.connect(lowShelf);
+        lowShelf.connect(out);
 
         const bodyGain = ctx.createGain();
         bodyGain.gain.setValueAtTime(0.0001, now);
-        bodyGain.gain.linearRampToValueAtTime(0.18 * drive, now + 0.003);
-        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+        bodyGain.gain.linearRampToValueAtTime(0.22 * drive, now + 0.003);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
         bodyGain.connect(toneFilter);
 
         const oscMain = ctx.createOscillator();
         oscMain.type = 'sawtooth';
-        oscMain.frequency.setValueAtTime(freq * 0.92, now);
-        oscMain.frequency.exponentialRampToValueAtTime(Math.max(48, freq * 0.48), now + 0.26);
+        oscMain.frequency.setValueAtTime(freq * 0.9, now);
+        oscMain.frequency.exponentialRampToValueAtTime(Math.max(48, freq * 0.44), now + 0.3);
         oscMain.connect(bodyGain);
         oscMain.start(now);
-        oscMain.stop(now + 0.36);
+        oscMain.stop(now + 0.41);
 
         const oscLayer = ctx.createOscillator();
         oscLayer.type = 'square';
@@ -127,32 +195,32 @@ export class SoundSynth {
         oscLayer.frequency.exponentialRampToValueAtTime(Math.max(70, freq * 1.08), now + 0.2);
         const layerGain = ctx.createGain();
         layerGain.gain.setValueAtTime(0.0001, now);
-        layerGain.gain.linearRampToValueAtTime(0.045 * drive, now + 0.003);
-        layerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+        layerGain.gain.linearRampToValueAtTime(0.055 * drive, now + 0.003);
+        layerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
         oscLayer.connect(layerGain);
         layerGain.connect(toneFilter);
         oscLayer.start(now);
-        oscLayer.stop(now + 0.2);
+        oscLayer.stop(now + 0.22);
 
         const sub = ctx.createOscillator();
         sub.type = 'sine';
-        sub.frequency.setValueAtTime(freq * 0.33, now);
-        sub.frequency.exponentialRampToValueAtTime(Math.max(30, freq * 0.23), now + 0.32);
+        sub.frequency.setValueAtTime(freq * 0.3, now);
+        sub.frequency.exponentialRampToValueAtTime(Math.max(28, freq * 0.2), now + 0.38);
         const subGain = ctx.createGain();
         subGain.gain.setValueAtTime(0.0001, now);
-        subGain.gain.linearRampToValueAtTime(0.16 * drive, now + 0.005);
-        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+        subGain.gain.linearRampToValueAtTime(0.22 * drive, now + 0.005);
+        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.41);
         sub.connect(subGain);
         subGain.connect(out);
         sub.start(now);
-        sub.stop(now + 0.3);
+        sub.stop(now + 0.43);
 
         const click = ctx.createOscillator();
         click.type = 'triangle';
-        click.frequency.setValueAtTime(Math.min(1600, freq * 4.5), now);
+        click.frequency.setValueAtTime(Math.min(1800, freq * 4.9), now);
         click.frequency.exponentialRampToValueAtTime(Math.max(320, freq), now + 0.03);
         const clickGain = ctx.createGain();
-        clickGain.gain.setValueAtTime(0.022 * drive, now);
+        clickGain.gain.setValueAtTime(0.028 * drive, now);
         clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
         click.connect(clickGain);
         clickGain.connect(out);

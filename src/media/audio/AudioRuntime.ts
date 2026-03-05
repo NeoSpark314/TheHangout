@@ -3,6 +3,7 @@ import { EVENTS } from '../../shared/constants/Constants';
 import { SoundSynth } from './SoundSynth';
 import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
+import { SfxRenderCache } from './SfxRenderCache';
 
 export class AudioRuntime {
     public ctx: AudioContext | null = null;
@@ -10,6 +11,8 @@ export class AudioRuntime {
 
     private readonly JOIN_FREQS = [440, 554.37, 659.25, 880];
     private readonly LEAVE_FREQS = [880, 659.25, 554.37, 440];
+    private readonly sfxCache = new SfxRenderCache(96);
+    private readonly renderSampleRate = 32000;
 
     constructor(private context: AppContext) {
         this.setupListeners();
@@ -51,8 +54,7 @@ export class AudioRuntime {
 
         eventBus.on(EVENTS.ENTITY_COLLIDED, (data: { intensity: number; position?: IVector3 }) => {
             if (this.isInitialized && this.ctx) {
-                const destination = this.createSpatialDestination(data.position);
-                SoundSynth.playCollision(this.ctx, data.intensity, destination);
+                void this.playCollisionBuffered(data.intensity, data.position);
             }
         });
 
@@ -76,8 +78,7 @@ export class AudioRuntime {
      */
     public playDrumPadHit(data: { frequency: number; intensity: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
-        const destination = this.createSpatialDestination(data.position);
-        SoundSynth.playPadTone(this.ctx, data.frequency, data.intensity, { destination });
+        void this.playDrumBuffered(data.frequency, data.intensity, data.position);
     }
 
     public playUiToggle(isActive: boolean): void {
@@ -104,5 +105,77 @@ export class AudioRuntime {
         panner.positionZ.setValueAtTime(position.z, now);
         panner.connect(this.ctx.destination);
         return panner;
+    }
+
+    private bucketIntensity(value: number): number {
+        if (value <= 0.28) return 0.25;
+        if (value <= 0.52) return 0.5;
+        if (value <= 0.78) return 0.75;
+        return 1.0;
+    }
+
+    private async playCollisionBuffered(intensity: number, position?: IVector3): Promise<void> {
+        const runtimeCtx = this.ctx;
+        if (!runtimeCtx || !this.isInitialized) return;
+
+        const level = this.bucketIntensity(intensity);
+        const key = `collision:${level.toFixed(2)}`;
+
+        try {
+            const buffer = await this.sfxCache.getOrCreate(key, async () => {
+                const durationSec = 0.36;
+                const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
+                const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
+                SoundSynth.playCollision(offline as unknown as AudioContext, level);
+                return offline.startRendering();
+            });
+
+            this.playSpatialBuffer(buffer, position);
+        } catch (error) {
+            console.error('[AudioRuntime] Collision pre-render failed:', error);
+        }
+    }
+
+    private async playDrumBuffered(frequency: number, intensity: number, position?: IVector3): Promise<void> {
+        const runtimeCtx = this.ctx;
+        if (!runtimeCtx || !this.isInitialized) return;
+
+        const level = this.bucketIntensity(intensity);
+        const freqKey = Number.isFinite(frequency) ? frequency.toFixed(2) : '220.00';
+        const key = `drum:${freqKey}:${level.toFixed(2)}`;
+
+        try {
+            const buffer = await this.sfxCache.getOrCreate(key, async () => {
+                const durationSec = 0.5;
+                const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
+                const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
+                SoundSynth.playPadTone(offline as unknown as AudioContext, frequency, level);
+                return offline.startRendering();
+            });
+
+            this.playSpatialBuffer(buffer, position);
+        } catch (error) {
+            console.error('[AudioRuntime] Drum pre-render failed:', error);
+        }
+    }
+
+    private playSpatialBuffer(buffer: AudioBuffer, position?: IVector3): void {
+        if (!this.ctx || !this.isInitialized) return;
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+
+        const destination = this.createSpatialDestination(position);
+        if (!destination) return;
+
+        source.connect(destination);
+        source.start();
+
+        source.onended = () => {
+            source.disconnect();
+            if (destination instanceof PannerNode) {
+                destination.disconnect();
+            }
+        };
     }
 }
