@@ -1,9 +1,6 @@
 import * as THREE from 'three';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import type { IRuntimeRegistry } from '../../app/AppContext';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
-import { IMoveIntentPayload } from '../../shared/contracts/IIntents';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 
 /**
@@ -15,20 +12,14 @@ export class AnimationSystem implements IUpdatable {
     private localPlayer: PlayerAvatarEntity | null = null;
     private runtime: IRuntimeRegistry | null = null;
 
-    private _isMoving: boolean = false;
     private _bobTime: number = 0;
+    private _smoothedMoveSpeed = 0;
 
-    constructor() {
-        eventBus.on(EVENTS.INTENT_MOVE, this._onMove.bind(this));
-    }
+    constructor() { }
 
     public setLocalPlayer(player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
         this.localPlayer = player;
         this.runtime = runtime;
-    }
-
-    private _onMove(payload: IMoveIntentPayload): void {
-        this._isMoving = (payload.direction.x !== 0 || payload.direction.y !== 0);
     }
 
     public update(delta: number): void {
@@ -40,14 +31,19 @@ export class AnimationSystem implements IUpdatable {
             return;
         }
 
-        // Desktop / Mobile Procedural Animation
-        this._bobTime += this._isMoving ? delta * 15 : 0;
+        // Desktop / Mobile Procedural Animation driven by actual movement speed.
+        const move = this.localPlayer._lastMoveVector;
+        const moveSpeed = Math.min(1, Math.sqrt(move.x * move.x + move.z * move.z));
+        const smoothing = 10;
+        this._smoothedMoveSpeed = THREE.MathUtils.damp(this._smoothedMoveSpeed, moveSpeed, smoothing, delta);
+        this._bobTime += delta * (4 + this._smoothedMoveSpeed * 9);
 
         const originPos = new THREE.Vector3(this.localPlayer.xrOrigin.position.x, this.localPlayer.xrOrigin.position.y, this.localPlayer.xrOrigin.position.z);
         const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
 
         // 1. Update Head State (World Space)
-        const headBobY = this._isMoving ? Math.sin(this._bobTime) * 0.05 : 0;
+        const bobAmplitude = 0.06 * this._smoothedMoveSpeed;
+        const headBobY = Math.sin(this._bobTime) * bobAmplitude;
         const headLocalPos = new THREE.Vector3(0, (this.localPlayer as any).headHeight + headBobY, 0);
         const worldHeadPos = headLocalPos.clone().applyQuaternion(originQuat).add(originPos);
 
