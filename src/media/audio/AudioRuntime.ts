@@ -5,7 +5,7 @@ import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { SfxRenderCache } from './SfxRenderCache';
 
-export type SequencerBeatType = 'kick' | 'snare' | 'hat';
+export type SequencerBeatType = 'kick' | 'snare' | 'hat' | 'bass';
 
 export class AudioRuntime {
     public ctx: AudioContext | null = null;
@@ -15,8 +15,9 @@ export class AudioRuntime {
     private readonly LEAVE_FREQS = [880, 659.25, 554.37, 440];
     private readonly sfxCache = new SfxRenderCache(96);
     private readonly renderSampleRate = 32000;
-    private readonly drumTimbreVersion = 2;
+    private readonly drumTimbreVersion = 3;
     private readonly beatTimbreVersion = 1;
+    private readonly melodyTimbreVersion = 1;
 
     constructor(private context: AppContext) {
         this.setupListeners();
@@ -93,6 +94,11 @@ export class AudioRuntime {
     public playSequencerBeat(data: { beat: SequencerBeatType; intensity?: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
         void this.playBeatBuffered(data.beat, data.intensity ?? 0.8, data.position);
+    }
+
+    public playMelodyNote(data: { frequency: number; intensity?: number; position?: IVector3 }): void {
+        if (!this.isInitialized || !this.ctx) return;
+        void this.playMelodyBuffered(data.frequency, data.intensity ?? 0.7, data.position);
     }
 
     private createSpatialDestination(position?: IVector3): AudioNode | undefined {
@@ -177,7 +183,11 @@ export class AudioRuntime {
 
         try {
             const buffer = await this.sfxCache.getOrCreate(key, async () => {
-                const durationSec = beat === 'kick' ? 0.5 : (beat === 'snare' ? 0.32 : 0.14);
+                const durationSec = beat === 'kick'
+                    ? 0.5
+                    : (beat === 'snare'
+                        ? 0.32
+                        : (beat === 'bass' ? 0.44 : 0.14));
                 const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
                 const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
                 switch (beat) {
@@ -190,6 +200,9 @@ export class AudioRuntime {
                     case 'hat':
                         SoundSynth.playHat(offline as unknown as AudioContext, level);
                         break;
+                    case 'bass':
+                        SoundSynth.playBass(offline as unknown as AudioContext, level);
+                        break;
                 }
                 return offline.startRendering();
             });
@@ -197,6 +210,29 @@ export class AudioRuntime {
             this.playSpatialBuffer(buffer, position);
         } catch (error) {
             console.error(`[AudioRuntime] Beat pre-render failed (${beat}):`, error);
+        }
+    }
+
+    private async playMelodyBuffered(frequency: number, intensity: number, position?: IVector3): Promise<void> {
+        const runtimeCtx = this.ctx;
+        if (!runtimeCtx || !this.isInitialized) return;
+
+        const level = this.bucketIntensity(intensity);
+        const freqKey = Number.isFinite(frequency) ? frequency.toFixed(2) : '220.00';
+        const key = `melody:v${this.melodyTimbreVersion}:${freqKey}:${level.toFixed(2)}`;
+
+        try {
+            const buffer = await this.sfxCache.getOrCreate(key, async () => {
+                const durationSec = 0.44;
+                const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
+                const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
+                SoundSynth.playMelodyNote(offline as unknown as AudioContext, frequency, level);
+                return offline.startRendering();
+            });
+
+            this.playSpatialBuffer(buffer, position);
+        } catch (error) {
+            console.error('[AudioRuntime] Melody pre-render failed:', error);
         }
     }
 

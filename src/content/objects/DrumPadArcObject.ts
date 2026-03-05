@@ -12,11 +12,21 @@ interface IDrumPadHitPayload {
     position?: { x: number; y: number; z: number };
 }
 
-type TBeatLane = 'kick' | 'snare' | 'hat';
-const BEAT_LANES: TBeatLane[] = ['kick', 'snare', 'hat'];
+type TBeatLane = 'kick' | 'snare' | 'hat' | 'bass';
+const BEAT_LANES: TBeatLane[] = ['kick', 'snare', 'hat', 'bass'];
+type TPadPhraseId = `pad-${number}`;
 
 interface IStationTogglePayload {
     lane: TBeatLane;
+}
+
+interface IPadPhraseRequestPayload {
+    padId: TPadPhraseId;
+}
+
+interface IPadPhraseStartPayload {
+    padId: TPadPhraseId;
+    startStep: number;
 }
 
 interface ISequencerSnapshot {
@@ -28,6 +38,11 @@ interface ISequencerSnapshot {
     laneEnabled: Record<TBeatLane, boolean>;
 }
 
+interface IActivePadPhrase {
+    padId: TPadPhraseId;
+    startStep: number;
+}
+
 class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplicatedObjectInstance {
     private readonly padMeshes: THREE.Mesh[] = [];
     private readonly padPositions: THREE.Vector3[] = [];
@@ -37,22 +52,46 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandPadHitAtMs = new Map<string, number>();
     private readonly handPadArmed = new Map<string, boolean>();
+    private readonly padTouchCooldownAtMs = new Map<string, number>();
+    private readonly padPhraseById = new Map<TPadPhraseId, IActivePadPhrase>();
+    private readonly padPhraseRootFreqById: Record<TPadPhraseId, number> = {
+        'pad-0': 164.81,
+        'pad-1': 196.0,
+        'pad-2': 220.0,
+        'pad-3': 246.94,
+        'pad-4': 293.66,
+        'pad-5': 329.63,
+        'pad-6': 392.0,
+        'pad-7': 440.0
+    };
+    private readonly padPhrasePatternById: Record<TPadPhraseId, ReadonlyArray<{ offsetSemitones: number; stepOffset: number; intensity: number }>> = {
+        'pad-0': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.68 }, { offsetSemitones: 12, stepOffset: 4, intensity: 0.66 }, { offsetSemitones: 7, stepOffset: 6, intensity: 0.64 }],
+        'pad-1': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 3, stepOffset: 2, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 4, intensity: 0.66 }, { offsetSemitones: 10, stepOffset: 6, intensity: 0.64 }],
+        'pad-2': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 7, stepOffset: 1, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 3, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 5, intensity: 0.62 }],
+        'pad-3': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 5, stepOffset: 2, intensity: 0.66 }, { offsetSemitones: 10, stepOffset: 4, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 7, intensity: 0.6 }],
+        'pad-4': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.67 }, { offsetSemitones: 12, stepOffset: 3, intensity: 0.65 }, { offsetSemitones: 15, stepOffset: 6, intensity: 0.62 }],
+        'pad-5': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 3, stepOffset: 1, intensity: 0.66 }, { offsetSemitones: 7, stepOffset: 3, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 5, intensity: 0.62 }],
+        'pad-6': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.7 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.66 }, { offsetSemitones: 12, stepOffset: 4, intensity: 0.64 }, { offsetSemitones: 19, stepOffset: 6, intensity: 0.6 }],
+        'pad-7': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.7 }, { offsetSemitones: 5, stepOffset: 1, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 3, intensity: 0.66 }, { offsetSemitones: 17, stepOffset: 5, intensity: 0.6 }]
+    };
     private readonly group: THREE.Group | null;
 
     private readonly stationCenter = new THREE.Vector3(6.2, 1.25, -1.8);
     private readonly laneToggleMeshes = new Map<TBeatLane, THREE.Mesh>();
     private readonly laneTogglePositions = new Map<TBeatLane, THREE.Vector3>();
     private readonly laneToggleByHandle = new Map<number, TBeatLane>();
-    private readonly lanePulse: Record<TBeatLane, number> = { kick: 0, snare: 0, hat: 0 };
+    private readonly lanePulse: Record<TBeatLane, number> = { kick: 0, snare: 0, hat: 0, bass: 0 };
     private readonly lanePattern: Record<TBeatLane, ReadonlySet<number>> = {
         kick: new Set([0, 4, 8, 12]),
         snare: new Set([4, 12]),
-        hat: new Set([2, 6, 10, 14])
+        hat: new Set([2, 6, 10, 14]),
+        bass: new Set([0, 6, 8, 12])
     };
     private laneEnabled: Record<TBeatLane, boolean> = {
         kick: false,
         snare: false,
-        hat: false
+        hat: false,
+        bass: false
     };
     private bpm: number = 124;
     private isPlaying: boolean = false;
@@ -90,7 +129,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
         this.updateToggleVisuals(delta);
         this.updateSequencer();
-        this.updateHandDrumHits(delta);
+        this.updateHandPadTouches(delta);
         this.updateHandToggleHits(delta);
     }
 
@@ -103,6 +142,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.lastHandToggleAtMs.clear();
         this.handPadArmed.clear();
         this.handToggleArmed.clear();
+        this.padTouchCooldownAtMs.clear();
+        this.padPhraseById.clear();
         this.handLastPos.left = null;
         this.handLastPos.right = null;
         this.handLastTogglePos.left = null;
@@ -121,6 +162,22 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             const hit = data as IDrumPadHitPayload;
             if (!this.isValidHit(hit)) return;
             this.applyDrumHit(hit, false);
+            return;
+        }
+
+        if (eventType === 'phrase-request') {
+            const req = data as IPadPhraseRequestPayload;
+            if (!this.isValidPadPhraseRequest(req)) return;
+            if (!this.context.app.isHost) return;
+            this.startPadPhrase(req.padId);
+            return;
+        }
+
+        if (eventType === 'phrase-start') {
+            if (meta.local) return;
+            const start = data as IPadPhraseStartPayload;
+            if (!this.isValidPadPhraseStart(start)) return;
+            this.applyPadPhraseStart(start);
             return;
         }
 
@@ -208,14 +265,16 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         const toggleRadius = 1.84;
         const baseY = this.stationCenter.y + 0.48;
         const laneAngles: Record<TBeatLane, number> = {
-            kick: -0.58,
-            snare: 0,
-            hat: 0.58
+            kick: -0.78,
+            snare: -0.24,
+            hat: 0.24,
+            bass: 0.78
         };
         const colors: Record<TBeatLane, number> = {
             kick: 0xff4b6e,
             snare: 0x30d0ff,
-            hat: 0xffd447
+            hat: 0xffd447,
+            bass: 0x9d7bff
         };
 
         for (const lane of BEAT_LANES) {
@@ -308,18 +367,17 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         });
     }
 
-    private updateHandDrumHits(delta: number): void {
+    private updateHandPadTouches(_delta: number): void {
         const tracking = this.context.tracking.getState?.();
         if (!tracking) {
             this.handLastPos.left = null;
             this.handLastPos.right = null;
             return;
         }
-        const dt = Math.max(0.0001, delta);
         const now = this.nowMs();
-        const padEnterRadius = 0.28;
-        const padLeaveRadius = 0.38;
-        const strikeCooldownMs = 145;
+        const padEnterRadius = 0.24;
+        const padLeaveRadius = 0.36;
+        const touchCooldownMs = 220;
 
         for (const hand of ['left', 'right'] as const) {
             const state = tracking.hands[hand];
@@ -335,15 +393,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             }
 
             const pos = new THREE.Vector3(strikePose.x, strikePose.y, strikePose.z);
-            const prev = this.handLastPos[hand];
             this.handLastPos[hand] = pos;
-            if (!prev) continue;
-
-            const vx = (pos.x - prev.x) / dt;
-            const vy = (pos.y - prev.y) / dt;
-            const vz = (pos.z - prev.z) / dt;
-            const speed = Math.hypot(vx, vy, vz);
-            if (vy > -0.08 || speed < 0.28) continue;
 
             for (let i = 0; i < this.padPositions.length; i++) {
                 const padPos = this.padPositions[i];
@@ -357,26 +407,15 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                     continue;
                 }
                 if (!armed || distXZ > padEnterRadius) continue;
-
-                const crossedTop = prev.y > (padPos.y + 0.1) && pos.y <= (padPos.y + 0.12);
-                const nearTop = Math.abs(pos.y - padPos.y) <= 0.14;
-                if (!crossedTop && !nearTop) continue;
+                if (Math.abs(pos.y - padPos.y) > 0.22) continue;
 
                 const key = `${hand}:${i}`;
                 const lastHit = this.lastHandPadHitAtMs.get(key) ?? 0;
-                if ((now - lastHit) < strikeCooldownMs) continue;
+                if ((now - lastHit) < touchCooldownMs) continue;
                 this.lastHandPadHitAtMs.set(key, now);
                 this.handPadArmed.set(armKey, false);
 
-                const strikeSpeed = Math.max(0, -vy) + speed * 0.22;
-                const intensity = Math.min(1.0, Math.max(0.12, strikeSpeed * 0.12));
-                const freq = this.padById.get(`pad-${i}`)?.frequency ?? 220;
-                this.applyDrumHit({
-                    padId: `pad-${i}`,
-                    frequency: freq,
-                    intensity,
-                    position: { x: padPos.x, y: padPos.y, z: padPos.z }
-                }, true);
+                this.requestPadPhraseTrigger(`pad-${i}` as TPadPhraseId);
             }
         }
     }
@@ -441,6 +480,88 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 this.handToggleArmed.set(armKey, false);
 
                 this.requestLaneToggle(lane);
+            }
+        }
+    }
+
+    private requestPadPhraseTrigger(padId: TPadPhraseId): void {
+        const now = this.nowMs();
+        const lastAt = this.padTouchCooldownAtMs.get(padId) ?? 0;
+        if ((now - lastAt) < 140) return;
+        this.padTouchCooldownAtMs.set(padId, now);
+
+        if (this.context.app.isHost) {
+            this.startPadPhrase(padId);
+            return;
+        }
+
+        this.emitSyncEvent('phrase-request', { padId } satisfies IPadPhraseRequestPayload);
+    }
+
+    private startPadPhrase(padId: TPadPhraseId): void {
+        if (!this.isValidPadId(padId)) return;
+        const now = this.nowMs();
+        const stepDurationMs = this.getStepDurationMs();
+        const elapsedMs = Math.max(0, now - this.sequencerAnchorMs);
+        const absoluteStep = Math.floor(elapsedMs / stepDurationMs);
+        const phaseMs = elapsedMs - (absoluteStep * stepDurationMs);
+        const quantizedStart = phaseMs < (stepDurationMs * 0.35)
+            ? absoluteStep
+            : absoluteStep + 1;
+
+        const payload: IPadPhraseStartPayload = {
+            padId,
+            startStep: quantizedStart
+        };
+
+        this.applyPadPhraseStart(payload);
+        this.emitSyncEvent('phrase-start', payload);
+    }
+
+    private applyPadPhraseStart(start: IPadPhraseStartPayload): void {
+        if (!this.isValidPadPhraseStart(start)) return;
+        this.padPhraseById.set(start.padId, {
+            padId: start.padId,
+            startStep: Math.max(0, Math.floor(start.startStep))
+        });
+        const idx = this.parsePadIndex(start.padId);
+        if (idx >= 0 && idx < this.padFlash.length) {
+            this.padFlash[idx] = Math.max(this.padFlash[idx], 0.9);
+        }
+    }
+
+    private triggerPadPhraseNotes(absoluteStep: number): void {
+        if (this.padPhraseById.size === 0) return;
+
+        for (const [padId, phrase] of this.padPhraseById.entries()) {
+            const relStep = absoluteStep - phrase.startStep;
+            if (relStep < 0) continue;
+            if (relStep > 15) {
+                this.padPhraseById.delete(padId);
+                continue;
+            }
+
+            const pattern = this.padPhrasePatternById[padId];
+            if (!pattern || pattern.length === 0) continue;
+            const root = this.padPhraseRootFreqById[padId];
+            if (!root) continue;
+
+            for (const note of pattern) {
+                if (note.stepOffset !== relStep) continue;
+
+                const frequency = root * Math.pow(2, note.offsetSemitones / 12);
+                const padInfo = this.padById.get(padId);
+                this.context.audio.playMelodyNote({
+                    frequency,
+                    intensity: note.intensity,
+                    position: padInfo
+                        ? { x: padInfo.position.x, y: padInfo.position.y + 0.08, z: padInfo.position.z }
+                        : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
+                });
+                const idx = this.parsePadIndex(padId);
+                if (idx >= 0 && idx < this.padFlash.length) {
+                    this.padFlash[idx] = Math.max(this.padFlash[idx], 0.82);
+                }
             }
         }
     }
@@ -528,7 +649,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.isPlaying = true;
             this.sequencerAnchorMs = this.nowMs();
             this.lastProcessedAbsoluteStep = 0;
-            this.triggerSequencerStep(0);
+            this.triggerSequencerStep(0, 0);
         } else if (wasAnyEnabled && !nowAnyEnabled) {
             this.isPlaying = false;
             this.lastProcessedAbsoluteStep = null;
@@ -554,8 +675,9 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         } else if (absoluteStep > this.lastProcessedAbsoluteStep) {
             const deltaSteps = Math.min(absoluteStep - this.lastProcessedAbsoluteStep, 16);
             for (let i = 1; i <= deltaSteps; i++) {
-                const step = (this.lastProcessedAbsoluteStep + i) % 16;
-                this.triggerSequencerStep(step);
+                const absStep = this.lastProcessedAbsoluteStep + i;
+                const step = absStep % 16;
+                this.triggerSequencerStep(step, absStep);
             }
             this.lastProcessedAbsoluteStep = absoluteStep;
         }
@@ -565,7 +687,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
     }
 
-    private triggerSequencerStep(step: number): void {
+    private triggerSequencerStep(step: number, absoluteStep: number): void {
         const pos = { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z };
 
         if (this.laneEnabled.kick && this.lanePattern.kick.has(step)) {
@@ -580,6 +702,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.lanePulse.hat = Math.max(this.lanePulse.hat, 0.78);
             this.context.audio.playSequencerBeat({ beat: 'hat', intensity: 0.62, position: pos });
         }
+        if (this.laneEnabled.bass && this.lanePattern.bass.has(step)) {
+            this.lanePulse.bass = Math.max(this.lanePulse.bass, 0.9);
+            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: 0.72, position: pos });
+        }
+
+        this.triggerPadPhraseNotes(absoluteStep);
     }
 
     private captureSequencerSnapshot(): ISequencerSnapshot {
@@ -641,19 +769,35 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         const v = laneEnabled as Record<string, unknown>;
         return typeof v.kick === 'boolean'
             && typeof v.snare === 'boolean'
-            && typeof v.hat === 'boolean';
+            && typeof v.hat === 'boolean'
+            && typeof v.bass === 'boolean';
     }
 
     private isValidToggle(toggle: IStationTogglePayload | undefined): toggle is IStationTogglePayload {
         return !!toggle && this.isValidBeatLane(toggle.lane);
     }
 
+    private isValidPadPhraseRequest(data: IPadPhraseRequestPayload | undefined): data is IPadPhraseRequestPayload {
+        return !!data && this.isValidPadId(data.padId);
+    }
+
+    private isValidPadPhraseStart(data: IPadPhraseStartPayload | undefined): data is IPadPhraseStartPayload {
+        if (!data || !this.isValidPadId(data.padId)) return false;
+        return Number.isFinite(data.startStep);
+    }
+
+    private isValidPadId(padId: unknown): padId is TPadPhraseId {
+        if (typeof padId !== 'string') return false;
+        const idx = this.parsePadIndex(padId);
+        return idx >= 0 && idx <= 7;
+    }
+
     private isValidBeatLane(lane: unknown): lane is TBeatLane {
-        return lane === 'kick' || lane === 'snare' || lane === 'hat';
+        return lane === 'kick' || lane === 'snare' || lane === 'hat' || lane === 'bass';
     }
 
     private anyLaneEnabled(): boolean {
-        return this.laneEnabled.kick || this.laneEnabled.snare || this.laneEnabled.hat;
+        return this.laneEnabled.kick || this.laneEnabled.snare || this.laneEnabled.hat || this.laneEnabled.bass;
     }
 
     private normalizeStep(stepIndex: number): number {

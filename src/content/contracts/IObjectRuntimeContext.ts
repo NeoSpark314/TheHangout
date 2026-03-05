@@ -38,7 +38,12 @@ export interface IObjectRuntimeContext {
     audio: {
         playDrumPadHit(options: { frequency: number; intensity: number; position?: { x: number; y: number; z: number } }): void;
         playSequencerBeat(options: {
-            beat: 'kick' | 'snare' | 'hat';
+            beat: 'kick' | 'snare' | 'hat' | 'bass';
+            intensity?: number;
+            position?: { x: number; y: number; z: number };
+        }): void;
+        playMelodyNote(options: {
+            frequency: number;
             intensity?: number;
             position?: { x: number; y: number; z: number };
         }): void;
