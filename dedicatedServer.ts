@@ -12,10 +12,10 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
+import { getCertificate } from '@vitejs/plugin-basic-ssl';
 
 import { HeadlessSession } from './src/server/HeadlessSession.ts';
 import { DedicatedSessionTransport } from './src/server/DedicatedSessionTransport.ts';
@@ -49,42 +49,32 @@ const { values: args } = parseArgs({
 const PORT = parseInt(args.port as string);
 
 // --- SSL Setup ---
-// Use custom certs via --key/--cert, or auto-generate self-signed
+// Use custom certs via --key/--cert, or fallback to basic-ssl cert generation.
 const customKey = args.key || null;
 const customCert = args.cert || null;
 
-let sslOptions;
-
-if (customKey && customCert) {
-    console.log(`[Server] Using custom SSL cert: ${customCert}`);
-    sslOptions = {
-        key: fs.readFileSync(customKey as string),
-        cert: fs.readFileSync(customCert as string)
-    };
-} else {
-    // Auto-generate self-signed cert
-    const certDir = path.join(__dirname, '.certs');
-    const keyPath = path.join(certDir, 'key.pem');
-    const certPath = path.join(certDir, 'cert.pem');
-
-    if (!fs.existsSync(certDir)) {
-        fs.mkdirSync(certDir, { recursive: true });
+async function resolveSslOptions(): Promise<https.ServerOptions> {
+    if (customKey && customCert) {
+        console.log(`[Server] Using custom SSL cert: ${customCert}`);
+        return {
+            key: fs.readFileSync(customKey as string),
+            cert: fs.readFileSync(customCert as string)
+        };
     }
 
-    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-        console.log('[Server] Generating self-signed SSL certificate via openssl...');
-        execSync(
-            `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" -days 365 -nodes -subj "/CN=localhost" -config NUL`,
-            { stdio: 'inherit' }
-        );
-        console.log('[Server] SSL certificate generated.');
+    const certDir = path.join(__dirname, 'node_modules', '.vite', 'basic-ssl');
+    try {
+        const pem = await getCertificate(certDir);
+        console.log(`[Server] Using generated basic-ssl certificate (${certDir}).`);
+        // basic-ssl emits a PEM bundle containing both key and cert.
+        return { key: pem, cert: pem };
+    } catch (error) {
+        console.error('[Server] Failed to load/generate basic-ssl certificate.', error);
+        throw error;
     }
-
-    sslOptions = {
-        key: fs.readFileSync(keyPath),
-        cert: fs.readFileSync(certPath)
-    };
 }
+
+const sslOptions = await resolveSslOptions();
 
 function sendPacketToSession(sessionId: string, type: number, payload: unknown): void {
     const session = activeSessions.get(sessionId);

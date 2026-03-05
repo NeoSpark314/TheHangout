@@ -18,15 +18,15 @@ npm install
 npm run dev          # Development (Vite + PeerJS)
 ```
 
-### Static site version
-
+### Static site version (deploy on any static web server)
+First user will be the host. It will use PeerJS for signaling.
 ```bash
 npm run build        # Build the client
 ```
 Web page will be in `dist/` directory.
 
-### Server
-default starts on port 443 (tries to generate self-signed certs; give your own via --cert and --key flags); no PeerJS used (local WebSocket relay used instead)
+### Dedicated Server
+Default starts on port 443 (uses your `--cert/--key` if provided, otherwise falls back to `@vitejs/plugin-basic-ssl` certificate generation); no PeerJS used (local WebSocket relay used instead)
 
 ```bash
 npm run build        # Build the client
@@ -38,10 +38,10 @@ npm run serve        # Start
 When running the local server, open this URL on the desktop machine you want to stream:
 
 ```bash
-https://<server-ip>/share
+https://<server-address>/share
 ```
 
 Steps:
-- Enter your global share key (for example `bobs-macbook-2026`)
-- Click **Connect**
+- Enter your global share key (for example `MyDesktopPC`)
+- Click **Connect** and then **Share**
 - Keep the page open (it will start/stop capture when summoned from VR Session tab)
