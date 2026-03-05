@@ -928,32 +928,37 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private triggerArpStep(absoluteStep: number): void {
-        const arpOffsets: Record<TArpStripId, readonly (readonly number[])[]> = {
+        const arpOffsets: Record<TArpStripId, readonly (readonly (number | null)[])[]> = {
             'arp-0': [
-                [0, 7, 12, 7, 0, 7, 14, 12],
-                [0, 5, 12, 7, 0, 7, 12, 10],
-                [0, 7, 12, 14, 12, 7, 5, 7]
+                [0, 7, 12, 14, 12, 7, 5, 7],
+                [0, null, 7, 12, 10, 7, null, 5],
+                [0, 5, 9, 12, 14, 12, 9, 7]
             ],
             'arp-1': [
-                [0, 3, 7, 10, 12, 10, 7, 3],
-                [0, 7, 10, 12, 10, 7, 3, 0],
-                [0, 3, 7, 12, 10, 7, 5, 3]
+                [0, null, 3, 7, 10, 7, 3, null],
+                [0, 3, 7, null, 10, 12, 10, 7],
+                [0, 5, 7, 10, null, 7, 5, 3]
             ],
             'arp-2': [
-                [0, 5, 9, 12, 9, 5, 12, 17],
-                [0, 5, 9, 14, 12, 9, 5, 12],
-                [0, 7, 9, 12, 14, 12, 9, 7]
+                [12, null, 9, 12, 14, 12, 9, 7],
+                [12, 14, null, 12, 9, 7, 5, 7],
+                [12, null, 14, 17, 14, 12, 9, null]
             ]
         };
         const arpRoots: Record<TArpStripId, number> = {
-            'arp-0': 261.63,
-            'arp-1': 293.66,
+            'arp-0': 220.0,
+            'arp-1': 277.18,
             'arp-2': 329.63
         };
+        const chordShiftByBar = [0, -4, 3, -2]; // Em -> C -> G -> D (relative semitone roots)
         const barIndex = Math.floor(Math.max(0, absoluteStep) / 16);
+        const barInCycle = barIndex % 4;
+        const resolveBar = barInCycle === 3;
+        const chordShift = chordShiftByBar[barIndex % chordShiftByBar.length] ?? 0;
         const variation = barIndex % 3;
         const stepInBar = absoluteStep % 16;
         const isKickStep = this.laneEnabled.kick && this.lanePattern.kick.has(stepInBar);
+        const resolveTail = resolveBar && stepInBar >= 12;
         const energy = this.getEnergyLevel();
 
         for (const stripId of ARP_STRIPS) {
@@ -962,14 +967,26 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             const pattern = patternSet[variation];
             const noteIdx = absoluteStep % pattern.length;
             const semitone = pattern[noteIdx];
-            const freq = arpRoots[stripId] * Math.pow(2, semitone / 12);
+            if (semitone === null) continue;
+            let shapedSemitone = semitone;
+            if (resolveBar) {
+                // On bar 4, bias up to brighter resolution notes.
+                if (stripId === 'arp-2' && stepInBar % 4 === 3) shapedSemitone += 3;
+                if (stripId === 'arp-1' && stepInBar >= 8) shapedSemitone += 2;
+                if (resolveTail) shapedSemitone += 1;
+            }
+
+            const freq = arpRoots[stripId] * Math.pow(2, shapedSemitone / 12);
+            const chordFreq = freq * Math.pow(2, chordShift / 12);
             const pos = this.arpStripPositions.get(stripId);
+            const resolveBoost = resolveBar ? 0.08 : 0;
+            const tailBoost = resolveTail ? 0.06 : 0;
             this.context.audio.playArpNote({
-                frequency: freq,
+                frequency: chordFreq,
                 intensity: isKickStep
-                    ? (0.42 + energy * 0.03)
-                    : (0.6 + energy * 0.12),
-                brightness: this.audioTuning.leadBrightness,
+                    ? (0.42 + energy * 0.03 + resolveBoost * 0.35)
+                    : (0.6 + energy * 0.12 + resolveBoost + tailBoost),
+                brightness: this.audioTuning.leadBrightness + (resolveBar ? 0.08 : 0) + (resolveTail ? 0.05 : 0),
                 position: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
             });
         }
