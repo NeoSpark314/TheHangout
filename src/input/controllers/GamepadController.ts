@@ -7,7 +7,14 @@ export class GamepadManager {
     public lastButtons: Record<number, boolean> = {};
     public isConnected = false;
     public hadMeaningfulInputThisFrame = false;
-    private deadzone: number = INPUT_CONFIG.DEADZONE;
+    // Slightly conservative defaults to suppress real-world stick drift.
+    private readonly moveInnerDeadzone = 0.14;
+    private readonly moveOuterDeadzone = 0.98;
+    private readonly moveExponent = 1.4;
+    private readonly lookInnerDeadzone = 0.2;
+    private readonly lookOuterDeadzone = 0.98;
+    private readonly lookExponent = 2.4;
+    private readonly activityDeadzone = INPUT_CONFIG.DEADZONE;
     private activeGamepadIndex: number | null = null;
 
     constructor() { }
@@ -25,11 +32,24 @@ export class GamepadManager {
             return;
         }
 
-        const applyDeadzone = (val: number) => Math.abs(val) < this.deadzone ? 0 : val;
-        this.move.x = applyDeadzone(gp.axes[0] || 0);
-        this.move.y = applyDeadzone(gp.axes[1] || 0);
-        this.look.x = applyDeadzone(gp.axes[2] || 0);
-        this.look.y = applyDeadzone(gp.axes[3] || 0);
+        const moveStick = this.shapeStickRadial(
+            gp.axes[0] || 0,
+            gp.axes[1] || 0,
+            this.moveInnerDeadzone,
+            this.moveOuterDeadzone,
+            this.moveExponent
+        );
+        const lookStick = this.shapeStickRadial(
+            gp.axes[2] || 0,
+            gp.axes[3] || 0,
+            this.lookInnerDeadzone,
+            this.lookOuterDeadzone,
+            this.lookExponent
+        );
+        this.move.x = moveStick.x;
+        this.move.y = moveStick.y;
+        this.look.x = lookStick.x;
+        this.look.y = lookStick.y;
 
         this.lastButtons = { ...this.buttons };
         gp.buttons.forEach((btn, i) => {
@@ -77,11 +97,34 @@ export class GamepadManager {
     }
 
     private hasMeaningfulInput(gamepad: Gamepad): boolean {
-        if (gamepad.axes.some((axis) => Math.abs(axis) > this.deadzone)) {
+        if (gamepad.axes.some((axis) => Math.abs(axis) > this.activityDeadzone)) {
             return true;
         }
 
         return gamepad.buttons.some((button) => button.pressed || button.value > 0.5);
+    }
+
+    private shapeStickRadial(
+        x: number,
+        y: number,
+        innerDeadzone: number,
+        outerDeadzone: number,
+        exponent: number
+    ): { x: number; y: number } {
+        const magnitude = Math.sqrt(x * x + y * y);
+        if (magnitude <= innerDeadzone) {
+            return { x: 0, y: 0 };
+        }
+
+        const safeOuter = Math.max(innerDeadzone + 0.0001, Math.min(1, outerDeadzone));
+        const normalized = (Math.min(magnitude, safeOuter) - innerDeadzone) / (safeOuter - innerDeadzone);
+        const curved = Math.pow(Math.max(0, Math.min(1, normalized)), exponent);
+        const scale = curved / magnitude;
+
+        return {
+            x: x * scale,
+            y: y * scale
+        };
     }
 
     private isLikelyGameController(gamepad: Gamepad): boolean {

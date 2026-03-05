@@ -8,7 +8,7 @@ export interface IMoveIntentPayload {
 }
 
 export interface ILookIntentPayload {
-    delta: IVector2; // Mouse or thumbstick delta
+    delta: IVector2; // Device-agnostic look delta
 }
 
 export interface IHandIntentPayload {

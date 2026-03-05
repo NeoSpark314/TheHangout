@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { AppContext } from '../../app/AppContext';
 import { INPUT_CONFIG } from '../../shared/constants/Constants';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
@@ -34,6 +35,15 @@ export class InputRuntime implements IUpdatable {
         controller: 0
     };
     private readonly modeSwitchGuardMs = 250;
+    private controllerYawRateDegPerSec = 0;
+    private controllerPitchRateDegPerSec = 0;
+    private readonly controllerLookBaseDegPerSec = 0;
+    private readonly controllerLookMaxDegPerSec = 220;
+    private readonly controllerTurnAccel = 11;
+    private readonly controllerTurnDecel = 30;
+    private readonly controllerTurnBoostStart = 0.9;
+    private readonly controllerTurnBoostFactor = 0.2;
+    private readonly lookDeltaUnitToRadians = 0.03; // legacy consumers multiply by 0.03 to get radians
 
     constructor(private context: AppContext) {
         this.keyboard = new KeyboardManager();
@@ -147,10 +157,12 @@ export class InputRuntime implements IUpdatable {
         }
 
         const mobile = this.mobileJoystick.getMoveVector();
+        const usingController = this.desktopInputMode === 'controller';
+        const usingKeyboardMouse = !usingController;
 
         const v = {
-            x: keyboard.x + mobile.x + this.gamepad.move.x + this.xrInput.move.x,
-            y: keyboard.y + mobile.y + this.gamepad.move.y + this.xrInput.move.y
+            x: (usingKeyboardMouse ? (keyboard.x + mobile.x) : this.gamepad.move.x) + this.xrInput.move.x,
+            y: (usingKeyboardMouse ? (keyboard.y + mobile.y) : this.gamepad.move.y) + this.xrInput.move.y
         };
 
         const length = Math.sqrt(v.x * v.x + v.y * v.y);
@@ -162,14 +174,11 @@ export class InputRuntime implements IUpdatable {
     }
 
     public getLookVector(): { x: number, y: number } {
-        const v = { x: 0, y: 0 };
-        v.x += this.gamepad.look.x * INPUT_CONFIG.GAMEPAD_LOOK_SENSITIVITY;
-        v.y += this.gamepad.look.y * INPUT_CONFIG.GAMEPAD_LOOK_SENSITIVITY;
-
         const jv = this.mobileJoystick.getLookVector();
-        v.x += jv.x * INPUT_CONFIG.MOBILE_LOOK_SENSITIVITY;
-        v.y += jv.y * INPUT_CONFIG.MOBILE_LOOK_SENSITIVITY;
-        return v;
+        return {
+            x: jv.x * INPUT_CONFIG.MOBILE_LOOK_SENSITIVITY,
+            y: jv.y * INPUT_CONFIG.MOBILE_LOOK_SENSITIVITY
+        };
     }
 
     private _wasSnapTurnPressed = false;
@@ -230,9 +239,16 @@ export class InputRuntime implements IUpdatable {
         const move = suppressWorldInput ? { x: 0, y: 0 } : this.getMovementVector();
         eventBus.emit(EVENTS.INTENT_MOVE, { direction: move } as IMoveIntentPayload);
 
-        const look = suppressWorldInput ? { x: 0, y: 0 } : this.getLookVector();
-        if (look.x !== 0 || look.y !== 0) {
-            eventBus.emit(EVENTS.INTENT_LOOK, { delta: look } as ILookIntentPayload);
+        if (suppressWorldInput) {
+            this.resetControllerLookRates();
+        } else if (this.desktopInputMode === 'controller') {
+            const controllerLookDelta = this.getControllerLookDelta(delta);
+            eventBus.emit(EVENTS.INTENT_LOOK, { delta: controllerLookDelta } as ILookIntentPayload);
+        } else {
+            const look = this.getLookVector();
+            if (look.x !== 0 || look.y !== 0) {
+                eventBus.emit(EVENTS.INTENT_LOOK, { delta: look } as ILookIntentPayload);
+            }
         }
 
         runtime.ui?.handleControllerCursor(
@@ -274,6 +290,72 @@ export class InputRuntime implements IUpdatable {
         }
 
         this.desktopInputMode = source;
+    }
+
+    private getControllerLookDelta(delta: number): { x: number; y: number } {
+        const filteredLook = this.filterControllerLookInput(this.gamepad.look.x, this.gamepad.look.y);
+
+        const yawRate = this.updateControllerAxisRate(delta, filteredLook.x, this.controllerYawRateDegPerSec);
+        this.controllerYawRateDegPerSec = yawRate.nextRateDegPerSec;
+
+        const pitchRate = this.updateControllerAxisRate(delta, filteredLook.y, this.controllerPitchRateDegPerSec);
+        this.controllerPitchRateDegPerSec = pitchRate.nextRateDegPerSec;
+
+        const yawRadiansThisFrame = THREE.MathUtils.degToRad(this.controllerYawRateDegPerSec) * delta;
+        const pitchRadiansThisFrame = THREE.MathUtils.degToRad(this.controllerPitchRateDegPerSec) * delta;
+
+        return {
+            x: yawRadiansThisFrame / this.lookDeltaUnitToRadians,
+            y: pitchRadiansThisFrame / this.lookDeltaUnitToRadians
+        };
+    }
+
+    private updateControllerAxisRate(
+        delta: number,
+        input: number,
+        currentRateDegPerSec: number
+    ): { nextRateDegPerSec: number } {
+        const absInput = Math.min(1, Math.abs(input));
+        if (absInput <= 0.0001) {
+            return {
+                nextRateDegPerSec: THREE.MathUtils.damp(currentRateDegPerSec, 0, this.controllerTurnDecel, delta)
+            };
+        }
+
+        const curved = absInput * absInput;
+        const baseTarget = this.controllerLookBaseDegPerSec + (this.controllerLookMaxDegPerSec - this.controllerLookBaseDegPerSec) * curved;
+        const boostT = Math.max(0, (absInput - this.controllerTurnBoostStart) / (1 - this.controllerTurnBoostStart));
+        const boostedTarget = baseTarget * (1 + boostT * this.controllerTurnBoostFactor);
+        const signedTarget = Math.sign(input) * boostedTarget;
+
+        return {
+            nextRateDegPerSec: THREE.MathUtils.damp(
+                currentRateDegPerSec,
+                signedTarget,
+                this.controllerTurnAccel,
+                delta
+            )
+        };
+    }
+
+    private resetControllerLookRates(): void {
+        this.controllerYawRateDegPerSec = 0;
+        this.controllerPitchRateDegPerSec = 0;
+    }
+
+    private filterControllerLookInput(x: number, y: number): { x: number; y: number } {
+        const absX = Math.abs(x);
+        const absY = Math.abs(y);
+
+        // Suppress incidental cross-axis bleed so right-stick horizontal turns stay horizontal.
+        if (absX > 0.2 && absY < absX * 0.4) {
+            return { x, y: 0 };
+        }
+        if (absY > 0.2 && absX < absY * 0.4) {
+            return { x: 0, y };
+        }
+
+        return { x, y };
     }
 
     public processInteractions(): void {
