@@ -28,6 +28,17 @@ export class SoundSynth {
         return { input: inputGain, output: shaper };
     }
 
+    private static createNoiseBuffer(ctx: AudioContext, durationSec: number, taper: number = 0.0): AudioBuffer {
+        const len = Math.max(1, Math.floor(ctx.sampleRate * durationSec));
+        const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+        const channel = buffer.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+            const env = taper > 0 ? Math.max(0, 1 - (i / len) * taper) : 1;
+            channel[i] = (Math.random() * 2 - 1) * env;
+        }
+        return buffer;
+    }
+
     public static playArpeggio(ctx: AudioContext, freqs: number[], type: OscillatorType = 'square', speed: number = 0.08): void {
         if (!ctx) return;
         const now = ctx.currentTime;
@@ -251,6 +262,120 @@ export class SoundSynth {
         clickGain.connect(out);
         click.start(now);
         click.stop(now + 0.05);
+    }
+
+    public static playKick(ctx: AudioContext, intensity: number = 0.85, destination?: AudioNode): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const output = this.resolveOutput(ctx, destination);
+        const drive = Math.min(1.0, Math.max(0.2, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(1.0, now);
+        out.connect(output);
+
+        const clipper = this.createSoftClipper(ctx, 1.2 + drive * 0.95);
+        clipper.output.connect(out);
+
+        const body = ctx.createOscillator();
+        body.type = 'sine';
+        body.frequency.setValueAtTime(146 + drive * 18, now);
+        body.frequency.exponentialRampToValueAtTime(42, now + 0.24);
+        const bodyGain = ctx.createGain();
+        bodyGain.gain.setValueAtTime(0.0001, now);
+        bodyGain.gain.linearRampToValueAtTime(0.5 * drive, now + 0.004);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.27);
+        body.connect(bodyGain);
+        bodyGain.connect(clipper.input);
+        body.start(now);
+        body.stop(now + 0.28);
+
+        const click = ctx.createOscillator();
+        click.type = 'triangle';
+        click.frequency.setValueAtTime(1300, now);
+        click.frequency.exponentialRampToValueAtTime(240, now + 0.018);
+        const clickGain = ctx.createGain();
+        clickGain.gain.setValueAtTime(0.03 * drive, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.022);
+        click.connect(clickGain);
+        clickGain.connect(out);
+        click.start(now);
+        click.stop(now + 0.025);
+    }
+
+    public static playSnare(ctx: AudioContext, intensity: number = 0.7, destination?: AudioNode): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const output = this.resolveOutput(ctx, destination);
+        const drive = Math.min(1.0, Math.max(0.2, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.9, now);
+        out.connect(output);
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer(ctx, 0.18, 0.35);
+        const noiseBand = ctx.createBiquadFilter();
+        noiseBand.type = 'bandpass';
+        noiseBand.frequency.setValueAtTime(2100 + drive * 700, now);
+        noiseBand.Q.setValueAtTime(0.8, now);
+        const noiseHigh = ctx.createBiquadFilter();
+        noiseHigh.type = 'highpass';
+        noiseHigh.frequency.setValueAtTime(700, now);
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.0001, now);
+        noiseGain.gain.linearRampToValueAtTime(0.3 * drive, now + 0.003);
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+        noise.connect(noiseBand);
+        noiseBand.connect(noiseHigh);
+        noiseHigh.connect(noiseGain);
+        noiseGain.connect(out);
+        noise.start(now);
+        noise.stop(now + 0.17);
+
+        const body = ctx.createOscillator();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(220, now);
+        body.frequency.exponentialRampToValueAtTime(138, now + 0.11);
+        const bodyGain = ctx.createGain();
+        bodyGain.gain.setValueAtTime(0.0001, now);
+        bodyGain.gain.linearRampToValueAtTime(0.1 * drive, now + 0.004);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+        body.connect(bodyGain);
+        bodyGain.connect(out);
+        body.start(now);
+        body.stop(now + 0.14);
+    }
+
+    public static playHat(ctx: AudioContext, intensity: number = 0.58, destination?: AudioNode): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const output = this.resolveOutput(ctx, destination);
+        const drive = Math.min(1.0, Math.max(0.15, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.85, now);
+        out.connect(output);
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer(ctx, 0.08, 0.45);
+        const high = ctx.createBiquadFilter();
+        high.type = 'highpass';
+        high.frequency.setValueAtTime(5200, now);
+        const band = ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.frequency.setValueAtTime(8400, now);
+        band.Q.setValueAtTime(1.2, now);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.12 * drive, now + 0.001);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+        noise.connect(high);
+        high.connect(band);
+        band.connect(gain);
+        gain.connect(out);
+        noise.start(now);
+        noise.stop(now + 0.08);
     }
 
     public static playHighFive(

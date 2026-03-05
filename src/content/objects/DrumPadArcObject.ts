@@ -12,6 +12,17 @@ interface IDrumPadHitPayload {
     position?: { x: number; y: number; z: number };
 }
 
+type TBeatLane = 'kick' | 'snare' | 'hat';
+
+interface ISequencerSnapshot {
+    version: 1;
+    bpm: number;
+    isPlaying: boolean;
+    stepIndex: number;
+    stepPhaseMs: number;
+    laneEnabled: Record<TBeatLane, boolean>;
+}
+
 class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplicatedObjectInstance {
     private readonly padMeshes: THREE.Mesh[] = [];
     private readonly padPositions: THREE.Vector3[] = [];
@@ -21,10 +32,27 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandPadHitAtMs = new Map<string, number>();
     private readonly group: THREE.Group | null;
+    private readonly stationCenter = new THREE.Vector3(6.2, 1.25, -1.8);
+    private readonly lanePattern: Record<TBeatLane, ReadonlySet<number>> = {
+        kick: new Set([0, 4, 8, 12]),
+        snare: new Set([4, 12]),
+        hat: new Set([2, 6, 10, 14])
+    };
+    private laneEnabled: Record<TBeatLane, boolean> = {
+        kick: true,
+        snare: true,
+        hat: true
+    };
+    private bpm: number = 124;
+    private isPlaying: boolean = true;
+    private sequencerAnchorMs: number = 0;
+    private lastProcessedAbsoluteStep: number | null = null;
+    private lastSyncBroadcastAtMs: number = 0;
 
     constructor(context: IObjectSpawnContext, moduleId: string) {
         super(context, moduleId);
         this.group = this.context.app.runtime.render ? this.ownSceneObject(new THREE.Group()) : null;
+        this.sequencerAnchorMs = this.nowMs();
 
         if (this.group) {
             this.group.name = `drum-pad-arc:${this.id}`;
@@ -44,6 +72,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.padFlash[i] = Math.max(0, flash - delta * 2.2);
         }
 
+        this.updateSequencer();
         this.updateHandDrumHits(delta);
     }
 
@@ -56,14 +85,32 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.handLastPos.left = null;
         this.handLastPos.right = null;
         this.padMeshes.length = 0;
+        this.lastProcessedAbsoluteStep = null;
         super.destroy();
     }
 
-    public onReplicationEvent(eventType: string, data: unknown, _meta: IObjectReplicationMeta): void {
-        if (eventType !== 'hit') return;
-        const hit = data as IDrumPadHitPayload;
-        if (!this.isValidHit(hit)) return;
-        this.applyDrumHit(hit, false);
+    public onReplicationEvent(eventType: string, data: unknown, meta: IObjectReplicationMeta): void {
+        if (meta.local) return;
+
+        if (eventType === 'hit') {
+            const hit = data as IDrumPadHitPayload;
+            if (!this.isValidHit(hit)) return;
+            this.applyDrumHit(hit, false);
+            return;
+        }
+
+        if (eventType === 'station-sync') {
+            const snapshot = data as ISequencerSnapshot;
+            this.applySequencerSnapshot(snapshot);
+        }
+    }
+
+    public captureReplicationSnapshot(): unknown {
+        return this.captureSequencerSnapshot();
+    }
+
+    public applyReplicationSnapshot(snapshot: unknown): void {
+        this.applySequencerSnapshot(snapshot as ISequencerSnapshot);
     }
 
     private createDrumPads(): void {
@@ -72,6 +119,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         const padCount = notes.length;
         const radius = 1.85;
         const center = new THREE.Vector3(6.2, 1.1, -1.8);
+        this.stationCenter.set(center.x, center.y + 0.16, center.z);
 
         for (let i = 0; i < padCount; i++) {
             const t = (i / (padCount - 1));
@@ -251,6 +299,113 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (replicate) {
             this.emitSyncEvent('hit', hit);
         }
+    }
+
+    private updateSequencer(): void {
+        if (!this.isPlaying) {
+            this.lastProcessedAbsoluteStep = null;
+            return;
+        }
+
+        const now = this.nowMs();
+        const stepDurationMs = this.getStepDurationMs();
+        const elapsedMs = Math.max(0, now - this.sequencerAnchorMs);
+        const absoluteStep = Math.floor(elapsedMs / stepDurationMs);
+        const phaseMs = elapsedMs - (absoluteStep * stepDurationMs);
+
+        if (this.lastProcessedAbsoluteStep === null) {
+            this.lastProcessedAbsoluteStep = absoluteStep;
+        } else if (absoluteStep > this.lastProcessedAbsoluteStep) {
+            const deltaSteps = Math.min(absoluteStep - this.lastProcessedAbsoluteStep, 16);
+            for (let i = 1; i <= deltaSteps; i++) {
+                const step = (this.lastProcessedAbsoluteStep + i) % 16;
+                this.triggerSequencerStep(step);
+            }
+            this.lastProcessedAbsoluteStep = absoluteStep;
+        }
+
+        if (this.context.app.isHost && (now - this.lastSyncBroadcastAtMs) >= 2000) {
+            this.lastSyncBroadcastAtMs = now;
+            this.emitSyncEvent('station-sync', {
+                version: 1,
+                bpm: this.bpm,
+                isPlaying: this.isPlaying,
+                stepIndex: absoluteStep % 16,
+                stepPhaseMs: phaseMs,
+                laneEnabled: { ...this.laneEnabled }
+            } satisfies ISequencerSnapshot);
+        }
+    }
+
+    private triggerSequencerStep(step: number): void {
+        const pos = { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z };
+
+        if (this.laneEnabled.kick && this.lanePattern.kick.has(step)) {
+            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: 0.9, position: pos });
+        }
+        if (this.laneEnabled.snare && this.lanePattern.snare.has(step)) {
+            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: 0.72, position: pos });
+        }
+        if (this.laneEnabled.hat && this.lanePattern.hat.has(step)) {
+            this.context.audio.playSequencerBeat({ beat: 'hat', intensity: 0.62, position: pos });
+        }
+    }
+
+    private captureSequencerSnapshot(): ISequencerSnapshot {
+        const now = this.nowMs();
+        const stepDurationMs = this.getStepDurationMs();
+        const elapsedMs = Math.max(0, now - this.sequencerAnchorMs);
+        const absoluteStep = Math.floor(elapsedMs / stepDurationMs);
+        const stepPhaseMs = elapsedMs - (absoluteStep * stepDurationMs);
+
+        return {
+            version: 1,
+            bpm: this.bpm,
+            isPlaying: this.isPlaying,
+            stepIndex: absoluteStep % 16,
+            stepPhaseMs,
+            laneEnabled: { ...this.laneEnabled }
+        };
+    }
+
+    private applySequencerSnapshot(snapshot: ISequencerSnapshot | undefined): void {
+        if (!snapshot || snapshot.version !== 1) return;
+        if (!this.isValidLaneEnabled(snapshot.laneEnabled)) return;
+
+        this.bpm = Math.max(80, Math.min(170, snapshot.bpm || 124));
+        this.isPlaying = !!snapshot.isPlaying;
+        this.laneEnabled = { ...snapshot.laneEnabled };
+
+        const stepDurationMs = this.getStepDurationMs();
+        const clampedStep = this.normalizeStep(snapshot.stepIndex);
+        const clampedPhase = Math.max(0, Math.min(stepDurationMs, snapshot.stepPhaseMs || 0));
+        const offsetMs = (clampedStep * stepDurationMs) + clampedPhase;
+        this.sequencerAnchorMs = this.nowMs() - offsetMs;
+        this.lastProcessedAbsoluteStep = null;
+    }
+
+    private isValidLaneEnabled(laneEnabled: unknown): laneEnabled is Record<TBeatLane, boolean> {
+        if (!laneEnabled || typeof laneEnabled !== 'object') return false;
+        const v = laneEnabled as Record<string, unknown>;
+        return typeof v.kick === 'boolean'
+            && typeof v.snare === 'boolean'
+            && typeof v.hat === 'boolean';
+    }
+
+    private normalizeStep(stepIndex: number): number {
+        if (!Number.isFinite(stepIndex)) return 0;
+        const rounded = Math.floor(stepIndex);
+        return ((rounded % 16) + 16) % 16;
+    }
+
+    private getStepDurationMs(): number {
+        return (60_000 / this.bpm) / 4;
+    }
+
+    private nowMs(): number {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
     }
 
     private parsePadIndex(padId: string): number {
