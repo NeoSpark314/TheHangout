@@ -6,10 +6,9 @@ import { HumanoidState } from '../../shared/types/HumanoidState';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
+import { ILookIntentPayload } from '../../shared/contracts/IIntents';
 
 const LERP_SPEED = 15;
-const TURN_SENSITIVITY = 15;
-const MIN_REACH = 0.2;
 const MAX_REACH = 4.0;
 const HAND_Y_OFFSET = 0.5;
 const HAND_Z_OFFSET = -0.2;
@@ -26,25 +25,19 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private targetLeftStretch = new THREE.Vector3(0, 0, 0);
     private targetRightStretch = new THREE.Vector3(0, 0, 0);
 
-    private leftReach = 1.0;
-    private rightReach = 1.0;
     private assistedReach: { left: number | null; right: number | null } = { left: null, right: null };
 
-    /** The most recently activated hand that is still held down. Used for reach adjustment. */
-    private prioritizedHand: 'left' | 'right' | null = null;
-
     private pitch = 0;
-    private turnSpeed = 0.002;
     private headHeight = PlayerAvatarEntity.DEFAULT_HEAD_HEIGHT;
     private assistedForwardBase = 0.22;
     private assistedCameraPos = new THREE.Vector3();
     private assistedCameraQuat = new THREE.Quaternion();
 
-    private _lookHandler = (payload: any) => {
+    private _lookHandler = (payload: ILookIntentPayload) => {
         // We only care about Y (pitch) here. 
         // Horizontal look (yaw) is handled by MovementSkill rotating the origin.
         if (this.context.runtime.render.isXRPresenting()) return;
-        this.pitch -= payload.delta.y * this.turnSpeed * TURN_SENSITIVITY;
+        this.pitch -= payload.pitchDeltaRad;
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
 
@@ -63,7 +56,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         eventBus.off(EVENTS.INTENT_LOOK, this._lookHandler);
 
         // Reset all hand stretches
-        this.prioritizedHand = null;
         this.targetLeftStretch.set(0, 0, 0);
         this.targetRightStretch.set(0, 0, 0);
         this.leftStretch.set(0, 0, 0);
@@ -72,36 +64,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.assistedReach.right = null;
     }
 
-    private manualStatus = { left: false, right: false };
-
-    public setHandActive(hand: 'left' | 'right', active: boolean): void {
-        const handState = this.state.hands[hand];
-        this.manualStatus[hand] = active;
-
-        if (active) {
-            // Newly activated hand (manually) becomes the prioritized one for scrolling
-            this.prioritizedHand = hand;
-            this.updateHandTarget(hand);
-        } else {
-            this.updateHandTarget(hand);
-
-            // If we released the prioritized hand, fall back to the other MANUALLY active hand if it exists
-            if (this.prioritizedHand === hand) {
-                const otherHand = hand === 'left' ? 'right' : 'left';
-                this.prioritizedHand = this.manualStatus[otherHand] ? otherHand : null;
-            }
-        }
-
-        // On desktop, we keep the hand's logical MUST be active for Interaction proximity checks
-        // to work even if not currently "manually extended".
-        handState.active = true;
-    }
-
     private updateHandTarget(hand: 'left' | 'right'): void {
-        const isManual = this.manualStatus[hand];
-        const reach = isManual
-            ? (hand === 'left' ? this.leftReach : this.rightReach)
-            : this.assistedReach[hand];
+        const reach = this.assistedReach[hand];
 
         if (hand === 'left') {
             if (reach !== null) this.targetLeftStretch.set(0, 0, -reach);
@@ -112,25 +76,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         }
     }
 
-    public adjustReach(delta: number): void {
-        const hand = this.prioritizedHand;
-        if (!hand) return;
-
-        if (hand === 'left') {
-            this.leftReach = Math.max(MIN_REACH, Math.min(MAX_REACH, this.leftReach + delta));
-            this.updateHandTarget('left');
-        } else {
-            this.rightReach = Math.max(MIN_REACH, Math.min(MAX_REACH, this.rightReach + delta));
-            this.updateHandTarget('right');
-        }
-    }
-
     public setAssistedReach(hand: 'left' | 'right', reach: number | null): void {
         const clamped = reach === null ? null : Math.max(0, Math.min(MAX_REACH, reach));
         this.assistedReach[hand] = clamped;
-        if (!this.manualStatus[hand]) {
-            this.updateHandTarget(hand);
-        }
+        this.updateHandTarget(hand);
     }
 
     private createInitialState(): ITrackingState {
@@ -200,15 +149,15 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // Assisted non-VR reach follows the exact rendered camera center line.
         // Using the actual camera transform avoids any discrepancy between the
         // reconstructed head pose and what the player is currently seeing.
-        if ((!this.manualStatus.left && this.assistedReach.left !== null) || (!this.manualStatus.right && this.assistedReach.right !== null)) {
+        if (this.assistedReach.left !== null || this.assistedReach.right !== null) {
             render.camera.getWorldPosition(this.assistedCameraPos);
             render.camera.getWorldQuaternion(this.assistedCameraQuat);
         }
-        if (!this.manualStatus.left && this.assistedReach.left !== null) {
+        if (this.assistedReach.left !== null) {
             const assistForward = new THREE.Vector3(0, 0, -(this.assistedForwardBase + this.assistedReach.left));
             leftTargetWorld = this.assistedCameraPos.clone().add(assistForward.applyQuaternion(this.assistedCameraQuat));
         }
-        if (!this.manualStatus.right && this.assistedReach.right !== null) {
+        if (this.assistedReach.right !== null) {
             const assistForward = new THREE.Vector3(0, 0, -(this.assistedForwardBase + this.assistedReach.right));
             rightTargetWorld = this.assistedCameraPos.clone().add(assistForward.applyQuaternion(this.assistedCameraQuat));
         }

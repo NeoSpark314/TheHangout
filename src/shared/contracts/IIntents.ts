@@ -8,7 +8,8 @@ export interface IMoveIntentPayload {
 }
 
 export interface ILookIntentPayload {
-    delta: IVector2; // Device-agnostic look delta
+    yawDeltaRad: number;
+    pitchDeltaRad: number;
 }
 
 export interface IHandIntentPayload {

@@ -56,18 +56,6 @@ export class TrackingRuntime {
         };
     }
 
-    public setHandActive(hand: 'left' | 'right', active: boolean): void {
-        if (this.activeProvider && this.activeProvider.setHandActive) {
-            this.activeProvider.setHandActive(hand, active);
-        }
-    }
-
-    public adjustReach(delta: number): void {
-        if (this.activeProvider && this.activeProvider.adjustReach) {
-            this.activeProvider.adjustReach(delta);
-        }
-    }
-
     public setAssistedReach(hand: 'left' | 'right', reach: number | null): void {
         if (this.activeProvider && this.activeProvider.setAssistedReach) {
             this.activeProvider.setAssistedReach(hand, reach);

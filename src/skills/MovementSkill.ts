@@ -35,7 +35,7 @@ export class MovementSkill extends Skill {
         };
         const onLook = (payload: ILookIntentPayload) => {
             // Horizontal look turns the body (origin)
-            this.yaw -= payload.delta.x * this.turnSpeed * 15;
+            this.yaw -= payload.yawDeltaRad;
         };
         const onVRSnapTurn = (payload: IVRSnapTurnPayload) => {
             this.applyVRTurn(player, payload.angle, player.appContext.runtime);

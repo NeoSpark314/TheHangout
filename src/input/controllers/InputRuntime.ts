@@ -42,7 +42,8 @@ export class InputRuntime implements IUpdatable {
     private readonly controllerTurnDecel = 30;
     private readonly controllerTurnBoostStart = 0.9;
     private readonly controllerTurnBoostFactor = 0.2;
-    private readonly lookDeltaUnitToRadians = 0.03; // legacy consumers multiply by 0.03 to get radians
+    private readonly mouseLookRadiansPerPixel = 0.002;
+    private readonly mobileLookMaxRadiansPerSec = 1.1;
 
     constructor(private context: AppContext) {
         this.keyboard = new KeyboardManager();
@@ -53,17 +54,7 @@ export class InputRuntime implements IUpdatable {
         this.xrInput = new XRInputManager(context);
 
         this._initMouseLook();
-        this._initWheel();
         this._initDesktopInputModeTracking();
-    }
-
-    private _initWheel(): void {
-        window.addEventListener('wheel', (e) => {
-            const render = this.context.runtime.render;
-            if (render && !render.isXRPresenting()) {
-                this.markDesktopInputActivity('keyboardMouse');
-            }
-        }, { passive: true });
     }
 
     private _initMouseLook(): void {
@@ -71,10 +62,9 @@ export class InputRuntime implements IUpdatable {
             const render = this.context.runtime.render;
             const canvas = document.getElementById('app');
             if (document.pointerLockElement === canvas && render && !render.isXRPresenting()) {
-                // Divide by 15 to normalize discrete mouse pixel deltas to the continuous magnitude 
-                // used by joysticks and gamepads downstream in the Skills logic.
                 eventBus.emit(EVENTS.INTENT_LOOK, {
-                    delta: { x: e.movementX / 15, y: e.movementY / 15 }
+                    yawDeltaRad: e.movementX * this.mouseLookRadiansPerPixel,
+                    pitchDeltaRad: e.movementY * this.mouseLookRadiansPerPixel
                 } as ILookIntentPayload);
                 if (e.movementX !== 0 || e.movementY !== 0) {
                     this.markDesktopInputActivity('keyboardMouse');
@@ -91,6 +81,10 @@ export class InputRuntime implements IUpdatable {
         window.addEventListener('mousedown', () => {
             this.markDesktopInputActivity('keyboardMouse');
         });
+
+        window.addEventListener('touchstart', () => {
+            this.markDesktopInputActivity('keyboardMouse');
+        }, { passive: true });
     }
 
     public initMobileJoysticks(): void {
@@ -229,11 +223,18 @@ export class InputRuntime implements IUpdatable {
             this.resetControllerLookRates();
         } else if (this.desktopInputMode === 'controller') {
             const controllerLookDelta = this.getControllerLookDelta(delta);
-            eventBus.emit(EVENTS.INTENT_LOOK, { delta: controllerLookDelta } as ILookIntentPayload);
+            eventBus.emit(EVENTS.INTENT_LOOK, {
+                yawDeltaRad: controllerLookDelta.x,
+                pitchDeltaRad: controllerLookDelta.y
+            } as ILookIntentPayload);
         } else {
             const look = this.getLookVector();
             if (look.x !== 0 || look.y !== 0) {
-                eventBus.emit(EVENTS.INTENT_LOOK, { delta: look } as ILookIntentPayload);
+                this.markDesktopInputActivity('keyboardMouse');
+                eventBus.emit(EVENTS.INTENT_LOOK, {
+                    yawDeltaRad: look.x * this.mobileLookMaxRadiansPerSec * delta,
+                    pitchDeltaRad: look.y * this.mobileLookMaxRadiansPerSec * delta
+                } as ILookIntentPayload);
             }
         }
 
@@ -291,8 +292,8 @@ export class InputRuntime implements IUpdatable {
         const pitchRadiansThisFrame = THREE.MathUtils.degToRad(this.controllerPitchRateDegPerSec) * delta;
 
         return {
-            x: yawRadiansThisFrame / this.lookDeltaUnitToRadians,
-            y: pitchRadiansThisFrame / this.lookDeltaUnitToRadians
+            x: yawRadiansThisFrame,
+            y: pitchRadiansThisFrame
         };
     }
 

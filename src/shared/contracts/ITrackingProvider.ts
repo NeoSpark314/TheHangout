@@ -58,8 +58,6 @@ export interface ITrackingProvider {
     getState(): ITrackingState;
     destroy(): void;
 
-    // Optional desktop-specific control methods
-    setHandActive?(hand: 'left' | 'right', active: boolean): void;
-    adjustReach?(delta: number): void;
+    // Optional desktop-specific assisted reach control
     setAssistedReach?(hand: 'left' | 'right', reach: number | null): void;
 }
