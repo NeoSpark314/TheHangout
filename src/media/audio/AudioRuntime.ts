@@ -19,6 +19,7 @@ export class AudioRuntime {
     private readonly beatTimbreVersion = 1;
     private readonly melodyTimbreVersion = 3;
     private readonly arpTimbreVersion = 2;
+    private readonly fxTimbreVersion = 1;
 
     constructor(private context: AppContext) {
         this.setupListeners();
@@ -105,6 +106,11 @@ export class AudioRuntime {
     public playArpNote(data: { frequency: number; intensity?: number; brightness?: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
         void this.playArpBuffered(data.frequency, data.intensity ?? 0.62, data.brightness ?? 1.0, data.position);
+    }
+
+    public playFxSweep(data: { down?: boolean; intensity?: number; position?: IVector3 }): void {
+        if (!this.isInitialized || !this.ctx) return;
+        void this.playFxSweepBuffered(!!data.down, data.intensity ?? 0.72, data.position);
     }
 
     private createSpatialDestination(position?: IVector3): AudioNode | undefined {
@@ -264,6 +270,28 @@ export class AudioRuntime {
             this.playSpatialBuffer(buffer, position);
         } catch (error) {
             console.error('[AudioRuntime] Arp pre-render failed:', error);
+        }
+    }
+
+    private async playFxSweepBuffered(down: boolean, intensity: number, position?: IVector3): Promise<void> {
+        const runtimeCtx = this.ctx;
+        if (!runtimeCtx || !this.isInitialized) return;
+
+        const level = this.bucketIntensity(intensity);
+        const key = `fx:v${this.fxTimbreVersion}:${down ? 'down' : 'up'}:${level.toFixed(2)}`;
+
+        try {
+            const buffer = await this.sfxCache.getOrCreate(key, async () => {
+                const durationSec = 0.64;
+                const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
+                const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
+                SoundSynth.playFxSweep(offline as unknown as AudioContext, down, level);
+                return offline.startRendering();
+            });
+
+            this.playSpatialBuffer(buffer, position);
+        } catch (error) {
+            console.error('[AudioRuntime] FX sweep pre-render failed:', error);
         }
     }
 

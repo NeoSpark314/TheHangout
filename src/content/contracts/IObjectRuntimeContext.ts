@@ -53,6 +53,11 @@ export interface IObjectRuntimeContext {
             brightness?: number;
             position?: { x: number; y: number; z: number };
         }): void;
+        playFxSweep(options: {
+            down?: boolean;
+            intensity?: number;
+            position?: { x: number; y: number; z: number };
+        }): void;
     };
 
     entity: {

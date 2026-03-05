@@ -1,14 +1,14 @@
 export class SoundSynth {
-    private static softClipCurve: Float32Array | null = null;
+    private static softClipCurve: Float32Array<ArrayBuffer> | null = null;
 
     private static resolveOutput(ctx: AudioContext, destination?: AudioNode): AudioNode {
         return destination || ctx.destination;
     }
 
-    private static getSoftClipCurve(): Float32Array {
+    private static getSoftClipCurve(): Float32Array<ArrayBuffer> {
         if (this.softClipCurve) return this.softClipCurve;
         const samples = 512;
-        const curve = new Float32Array(samples);
+        const curve = new Float32Array(samples) as Float32Array<ArrayBuffer>;
         for (let i = 0; i < samples; i++) {
             const x = (i / (samples - 1)) * 2 - 1;
             curve[i] = Math.tanh(x * 1.8);
@@ -626,6 +626,39 @@ export class SoundSynth {
         shimmerGain.connect(lp);
         shimmer.start(now);
         shimmer.stop(now + 0.2);
+    }
+
+    public static playFxSweep(ctx: AudioContext, down: boolean = false, intensity: number = 0.72, destination?: AudioNode): void {
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const output = this.resolveOutput(ctx, destination);
+        const drive = Math.min(1.0, Math.max(0.2, intensity));
+
+        const out = ctx.createGain();
+        out.gain.setValueAtTime(0.9, now);
+        out.connect(output);
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer(ctx, 0.55, 0.5);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        if (down) {
+            bp.frequency.setValueAtTime(3600, now);
+            bp.frequency.exponentialRampToValueAtTime(420, now + 0.52);
+        } else {
+            bp.frequency.setValueAtTime(420, now);
+            bp.frequency.exponentialRampToValueAtTime(4200, now + 0.52);
+        }
+        bp.Q.setValueAtTime(0.75, now);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.18 * drive, now + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+        noise.connect(bp);
+        bp.connect(gain);
+        gain.connect(out);
+        noise.start(now);
+        noise.stop(now + 0.56);
     }
 
     public static playHighFive(

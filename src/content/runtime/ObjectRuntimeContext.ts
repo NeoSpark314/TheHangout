@@ -60,6 +60,9 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             },
             playArpNote: (options: any) => {
                 this.app.runtime.audio?.playArpNote(options);
+            },
+            playFxSweep: (options: any) => {
+                this.app.runtime.audio?.playFxSweep(options);
             }
         };
 

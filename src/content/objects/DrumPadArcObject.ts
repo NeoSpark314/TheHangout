@@ -17,6 +17,8 @@ const BEAT_LANES: TBeatLane[] = ['kick', 'snare', 'hat', 'bass'];
 type TPadPhraseId = `pad-${number}`;
 type TArpStripId = 'arp-0' | 'arp-1' | 'arp-2';
 const ARP_STRIPS: TArpStripId[] = ['arp-0', 'arp-1', 'arp-2'];
+type TControlCubeId = 'chord' | 'macro' | 'riser';
+const CONTROL_CUBES: TControlCubeId[] = ['chord', 'macro', 'riser'];
 
 interface IStationTogglePayload {
     lane: TBeatLane;
@@ -42,12 +44,22 @@ interface IArpTouchStatePayload {
     active: boolean;
 }
 
+interface IControlActionPayload {
+    cubeId: TControlCubeId;
+    sourceId: string;
+    action: 'tap' | 'hold-start' | 'hold-end';
+}
+
 interface ISequencerSnapshot {
     version: 1;
-    bpm: number;    stepIndex: number;
+    bpm: number;
+    stepIndex: number;
     stepPhaseMs: number;
     laneEnabled: Record<TBeatLane, boolean>;
     arpActive: Record<TArpStripId, boolean>;
+    chordSceneIndex: number;
+    macroPreset: number;
+    riserActive: boolean;
 }
 
 interface IActivePadPhrase {
@@ -77,14 +89,15 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         'pad-7': 440.0
     };
     private readonly padPhrasePatternById: Record<TPadPhraseId, ReadonlyArray<{ offsetSemitones: number; stepOffset: number; intensity: number }>> = {
-        'pad-0': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.68 }, { offsetSemitones: 12, stepOffset: 4, intensity: 0.66 }, { offsetSemitones: 7, stepOffset: 6, intensity: 0.64 }],
-        'pad-1': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 3, stepOffset: 2, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 4, intensity: 0.66 }, { offsetSemitones: 10, stepOffset: 6, intensity: 0.64 }],
-        'pad-2': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 7, stepOffset: 1, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 3, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 5, intensity: 0.62 }],
-        'pad-3': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 5, stepOffset: 2, intensity: 0.66 }, { offsetSemitones: 10, stepOffset: 4, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 7, intensity: 0.6 }],
-        'pad-4': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.67 }, { offsetSemitones: 12, stepOffset: 3, intensity: 0.65 }, { offsetSemitones: 15, stepOffset: 6, intensity: 0.62 }],
-        'pad-5': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.72 }, { offsetSemitones: 3, stepOffset: 1, intensity: 0.66 }, { offsetSemitones: 7, stepOffset: 3, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 5, intensity: 0.62 }],
-        'pad-6': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.7 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.66 }, { offsetSemitones: 12, stepOffset: 4, intensity: 0.64 }, { offsetSemitones: 19, stepOffset: 6, intensity: 0.6 }],
-        'pad-7': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.7 }, { offsetSemitones: 5, stepOffset: 1, intensity: 0.64 }, { offsetSemitones: 12, stepOffset: 3, intensity: 0.66 }, { offsetSemitones: 17, stepOffset: 5, intensity: 0.6 }]
+        // Predictable uplifting motifs to keep pad play instantly musical.
+        'pad-0': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.74 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.7 }, { offsetSemitones: 12, stepOffset: 4, intensity: 0.7 }, { offsetSemitones: 7, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 14, stepOffset: 8, intensity: 0.72 }, { offsetSemitones: 12, stepOffset: 10, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 12, intensity: 0.66 }, { offsetSemitones: 3, stepOffset: 14, intensity: 0.64 }],
+        'pad-1': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.74 }, { offsetSemitones: 3, stepOffset: 2, intensity: 0.7 }, { offsetSemitones: 7, stepOffset: 4, intensity: 0.7 }, { offsetSemitones: 10, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 12, stepOffset: 8, intensity: 0.72 }, { offsetSemitones: 10, stepOffset: 10, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 12, intensity: 0.66 }, { offsetSemitones: 3, stepOffset: 14, intensity: 0.64 }],
+        'pad-2': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.74 }, { offsetSemitones: 7, stepOffset: 2, intensity: 0.69 }, { offsetSemitones: 12, stepOffset: 4, intensity: 0.7 }, { offsetSemitones: 15, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 19, stepOffset: 8, intensity: 0.72 }, { offsetSemitones: 15, stepOffset: 10, intensity: 0.68 }, { offsetSemitones: 12, stepOffset: 12, intensity: 0.66 }, { offsetSemitones: 7, stepOffset: 14, intensity: 0.64 }],
+        'pad-3': [{ offsetSemitones: 0, stepOffset: 0, intensity: 0.74 }, { offsetSemitones: 5, stepOffset: 2, intensity: 0.69 }, { offsetSemitones: 10, stepOffset: 4, intensity: 0.7 }, { offsetSemitones: 12, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 17, stepOffset: 8, intensity: 0.72 }, { offsetSemitones: 12, stepOffset: 10, intensity: 0.68 }, { offsetSemitones: 10, stepOffset: 12, intensity: 0.66 }, { offsetSemitones: 5, stepOffset: 14, intensity: 0.64 }],
+        'pad-4': [{ offsetSemitones: 12, stepOffset: 0, intensity: 0.76 }, { offsetSemitones: 14, stepOffset: 3, intensity: 0.68 }, { offsetSemitones: 15, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 19, stepOffset: 8, intensity: 0.74 }, { offsetSemitones: 22, stepOffset: 11, intensity: 0.66 }, { offsetSemitones: 19, stepOffset: 14, intensity: 0.64 }],
+        'pad-5': [{ offsetSemitones: 12, stepOffset: 0, intensity: 0.76 }, { offsetSemitones: 10, stepOffset: 3, intensity: 0.68 }, { offsetSemitones: 7, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 12, stepOffset: 8, intensity: 0.74 }, { offsetSemitones: 15, stepOffset: 11, intensity: 0.66 }, { offsetSemitones: 12, stepOffset: 14, intensity: 0.64 }],
+        'pad-6': [{ offsetSemitones: 19, stepOffset: 0, intensity: 0.76 }, { offsetSemitones: 17, stepOffset: 2, intensity: 0.68 }, { offsetSemitones: 15, stepOffset: 4, intensity: 0.68 }, { offsetSemitones: 14, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 19, stepOffset: 8, intensity: 0.74 }, { offsetSemitones: 22, stepOffset: 10, intensity: 0.66 }, { offsetSemitones: 24, stepOffset: 12, intensity: 0.68 }, { offsetSemitones: 22, stepOffset: 14, intensity: 0.64 }],
+        'pad-7': [{ offsetSemitones: 24, stepOffset: 0, intensity: 0.76 }, { offsetSemitones: 22, stepOffset: 2, intensity: 0.68 }, { offsetSemitones: 19, stepOffset: 4, intensity: 0.68 }, { offsetSemitones: 17, stepOffset: 6, intensity: 0.68 }, { offsetSemitones: 19, stepOffset: 8, intensity: 0.74 }, { offsetSemitones: 22, stepOffset: 10, intensity: 0.66 }, { offsetSemitones: 24, stepOffset: 12, intensity: 0.68 }, { offsetSemitones: 26, stepOffset: 14, intensity: 0.64 }]
     };
     private readonly group: THREE.Group | null;
 
@@ -97,6 +110,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly arpStripByHandle = new Map<number, TArpStripId>();
     private readonly arpStripActive: Record<TArpStripId, boolean> = { 'arp-0': false, 'arp-1': false, 'arp-2': false };
     private readonly arpTouchSourcesByStrip = new Map<TArpStripId, Set<string>>();
+    private readonly controlCubeMeshes = new Map<TControlCubeId, THREE.Mesh>();
+    private readonly controlCubePositions = new Map<TControlCubeId, THREE.Vector3>();
+    private readonly controlCubePulse: Record<TControlCubeId, number> = { chord: 0, macro: 0, riser: 0 };
+    private readonly controlTapCooldownAtMs = new Map<string, number>();
+    private readonly handRiserHeldByHand: Record<'left' | 'right', boolean> = { left: false, right: false };
+    private readonly riserSources = new Set<string>();
     private readonly lanePulse: Record<TBeatLane, number> = { kick: 0, snare: 0, hat: 0, bass: 0 };
     private readonly lanePattern: Record<TBeatLane, ReadonlySet<number>> = {
         kick: new Set([0, 4, 8, 12]),
@@ -108,12 +127,21 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         leadBrightness: 1.12,
         dropPunch: 1.1
     };
+    private readonly chordScenes: ReadonlyArray<ReadonlyArray<number>> = [
+        [0, -4, 3, -2],   // Em C G D
+        [0, -5, 2, -3],   // Em Bm F#? stylized darker pull
+        [0, -2, 5, 3],    // Em D A G
+        [0, 3, -2, 5]     // Em G D A
+    ];
     private laneEnabled: Record<TBeatLane, boolean> = {
         kick: false,
         snare: false,
         hat: false,
         bass: false
     };
+    private chordSceneIndex: number = 0;
+    private macroPreset: number = 1;
+    private riserActive: boolean = false;
     private bpm: number = 124;
     private sequencerAnchorMs: number = 0;
     private lastProcessedAbsoluteStep: number | null = null;
@@ -136,6 +164,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.createDrumPads();
         this.createLaneToggles();
         this.createArpStrips();
+        this.createControlCubes();
         this.bindCollisionListener();
     }
 
@@ -154,6 +183,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.updateHandPadTouches(delta);
         this.updateHandToggleHits(delta);
         this.updateHandArpTouches();
+        this.updateHandControlCubeTouches();
     }
 
     public destroy(): void {
@@ -181,6 +211,10 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.arpStripPositions.clear();
         this.arpStripByHandle.clear();
         this.arpTouchSourcesByStrip.clear();
+        this.controlCubeMeshes.clear();
+        this.controlCubePositions.clear();
+        this.controlTapCooldownAtMs.clear();
+        this.riserSources.clear();
         this.lastProcessedAbsoluteStep = null;
         super.destroy();
     }
@@ -229,6 +263,15 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             const state = data as IArpTouchStatePayload;
             if (!this.isValidArpTouchStatePayload(state)) return;
             this.applyArpStripActive(state.stripId, state.active);
+            return;
+        }
+
+        if (eventType === 'control-action') {
+            const action = data as IControlActionPayload;
+            if (!this.isValidControlActionPayload(action)) return;
+            if (!this.context.app.isHost) return;
+            this.applyControlAction(action);
+            this.broadcastSequencerSnapshot();
             return;
         }
 
@@ -430,6 +473,51 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                     this.ownPhysicsBody(body);
                 }
             }
+        }
+    }
+
+    private createControlCubes(): void {
+        const radius = 1.46;
+        const baseY = this.stationCenter.y + 0.74;
+        const angles: Record<TControlCubeId, number> = {
+            chord: -0.26,
+            macro: 0,
+            riser: 0.26
+        };
+        const colors: Record<TControlCubeId, number> = {
+            chord: 0x58a6ff,
+            macro: 0x00ffaa,
+            riser: 0xff8a3a
+        };
+
+        for (const cubeId of CONTROL_CUBES) {
+            const angle = angles[cubeId];
+            const position = new THREE.Vector3(
+                this.stationCenter.x - Math.cos(angle) * radius,
+                baseY,
+                this.stationCenter.z + Math.sin(angle) * radius
+            );
+            this.controlCubePositions.set(cubeId, position);
+
+            if (!this.group) continue;
+            const geo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+            const color = new THREE.Color(colors[cubeId]);
+            const mat = new THREE.MeshStandardMaterial({
+                color,
+                emissive: color.clone().multiplyScalar(0.85),
+                emissiveIntensity: 0.18,
+                metalness: 0.3,
+                roughness: 0.25
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(position);
+            mesh.name = `drum-control-cube:${cubeId}:${this.id}`;
+            mesh.add(new THREE.LineSegments(
+                new THREE.EdgesGeometry(geo),
+                new THREE.LineBasicMaterial({ color: 0xb8ffff, transparent: true, opacity: 0.52 })
+            ));
+            this.group.add(mesh);
+            this.controlCubeMeshes.set(cubeId, mesh);
         }
     }
 
@@ -642,6 +730,125 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
     }
 
+    private updateHandControlCubeTouches(): void {
+        const tracking = this.context.tracking.getState?.();
+        for (const hand of ['left', 'right'] as const) {
+            const sourceId = this.getHandTouchSourceId(hand);
+            if (!tracking || !tracking.hands[hand].active) {
+                if (this.handRiserHeldByHand[hand]) {
+                    this.requestControlAction('riser', sourceId, 'hold-end');
+                    this.handRiserHeldByHand[hand] = false;
+                }
+                continue;
+            }
+
+            const strikePose = this.getAvatarHandStrikePosition(hand);
+            if (!strikePose) {
+                if (this.handRiserHeldByHand[hand]) {
+                    this.requestControlAction('riser', sourceId, 'hold-end');
+                    this.handRiserHeldByHand[hand] = false;
+                }
+                continue;
+            }
+
+            const pos = new THREE.Vector3(strikePose.x, strikePose.y, strikePose.z);
+            for (const cubeId of CONTROL_CUBES) {
+                const cubePos = this.controlCubePositions.get(cubeId);
+                if (!cubePos) continue;
+                const dist = pos.distanceTo(cubePos);
+                const inside = dist <= 0.18;
+
+                if (cubeId === 'riser') {
+                    if (inside && !this.handRiserHeldByHand[hand]) {
+                        this.requestControlAction('riser', sourceId, 'hold-start');
+                        this.handRiserHeldByHand[hand] = true;
+                    } else if (!inside && this.handRiserHeldByHand[hand]) {
+                        this.requestControlAction('riser', sourceId, 'hold-end');
+                        this.handRiserHeldByHand[hand] = false;
+                    }
+                    continue;
+                }
+
+                if (!inside) continue;
+                const key = `${hand}:${cubeId}`;
+                const now = this.nowMs();
+                const lastAt = this.controlTapCooldownAtMs.get(key) ?? 0;
+                if ((now - lastAt) < 350) continue;
+                this.controlTapCooldownAtMs.set(key, now);
+                this.requestControlAction(cubeId, sourceId, 'tap');
+            }
+        }
+    }
+
+    private requestControlAction(cubeId: TControlCubeId, sourceId: string, action: 'tap' | 'hold-start' | 'hold-end'): void {
+        const payload: IControlActionPayload = { cubeId, sourceId, action };
+        if (this.context.app.isHost) {
+            this.applyControlAction(payload);
+            this.broadcastSequencerSnapshot();
+            return;
+        }
+        this.emitSyncEvent('control-action', payload);
+    }
+
+    private applyControlAction(payload: IControlActionPayload): void {
+        if (payload.cubeId === 'chord' && payload.action === 'tap') {
+            this.chordSceneIndex = (this.chordSceneIndex + 1) % this.chordScenes.length;
+            this.controlCubePulse.chord = 1;
+            this.playChordSceneCue();
+            return;
+        }
+        if (payload.cubeId === 'macro' && payload.action === 'tap') {
+            this.macroPreset = (this.macroPreset + 1) % 3;
+            this.controlCubePulse.macro = 1;
+            this.playMacroPresetCue();
+            return;
+        }
+        if (payload.cubeId === 'riser') {
+            if (payload.action === 'hold-start') {
+                this.riserSources.add(payload.sourceId);
+            } else if (payload.action === 'hold-end') {
+                this.riserSources.delete(payload.sourceId);
+            }
+            const wasActive = this.riserActive;
+            this.riserActive = this.riserSources.size > 0;
+            if (this.riserActive) {
+                this.controlCubePulse.riser = 1;
+                this.context.audio.playFxSweep({
+                    down: false,
+                    intensity: 0.68,
+                    position: { x: this.stationCenter.x, y: this.stationCenter.y + 0.18, z: this.stationCenter.z }
+                });
+            } else if (wasActive && !this.riserActive) {
+                this.context.audio.playFxSweep({
+                    down: true,
+                    intensity: 0.78,
+                    position: { x: this.stationCenter.x, y: this.stationCenter.y + 0.18, z: this.stationCenter.z }
+                });
+            }
+        }
+    }
+
+    private playChordSceneCue(): void {
+        const pos = { x: this.stationCenter.x - 0.22, y: this.stationCenter.y + 0.24, z: this.stationCenter.z };
+        const cueFreq = [523.25, 587.33, 659.25, 783.99][this.chordSceneIndex % 4] ?? 523.25;
+        this.context.audio.playMelodyNote({ frequency: cueFreq, intensity: 0.62, position: pos });
+        this.context.audio.playArpNote({ frequency: cueFreq * 0.5, intensity: 0.44, brightness: 1.16, position: pos });
+    }
+
+    private playMacroPresetCue(): void {
+        const pos = { x: this.stationCenter.x, y: this.stationCenter.y + 0.22, z: this.stationCenter.z };
+        if (this.macroPreset === 0) {
+            this.context.audio.playFxSweep({ down: true, intensity: 0.52, position: pos });
+            return;
+        }
+        if (this.macroPreset === 2) {
+            this.context.audio.playFxSweep({ down: false, intensity: 0.86, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: 0.62, position: pos });
+            return;
+        }
+        this.context.audio.playFxSweep({ down: false, intensity: 0.64, position: pos });
+    }
+
     private findTouchedArpStrip(handPos: THREE.Vector3): TArpStripId | null {
         let bestStrip: TArpStripId | null = null;
         let bestScore = Number.POSITIVE_INFINITY;
@@ -764,15 +971,17 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             if (!pattern || pattern.length === 0) continue;
             const root = this.padPhraseRootFreqById[padId];
             if (!root) continue;
+            const chordShift = this.getChordShiftForStep(absoluteStep);
+            const duck = this.getKickDuckGain(absoluteStep % 16);
 
             for (const note of pattern) {
                 if (note.stepOffset !== relStep) continue;
 
-                const frequency = root * Math.pow(2, note.offsetSemitones / 12);
+                const frequency = root * Math.pow(2, (note.offsetSemitones + chordShift) / 12);
                 const padInfo = this.padById.get(padId);
                 this.context.audio.playMelodyNote({
                     frequency,
-                    intensity: note.intensity,
+                    intensity: note.intensity * duck,
                     position: padInfo
                         ? { x: padInfo.position.x, y: padInfo.position.y + 0.08, z: padInfo.position.z }
                         : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
@@ -783,6 +992,21 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 }
             }
         }
+    }
+
+    private getChordShiftForStep(absoluteStep: number): number {
+        const scene = this.chordScenes[this.chordSceneIndex % this.chordScenes.length] ?? this.chordScenes[0];
+        const barIndex = Math.floor(Math.max(0, absoluteStep) / 16);
+        return scene[barIndex % scene.length] ?? 0;
+    }
+
+    private getKickDuckGain(stepInBar: number): number {
+        if (!this.laneEnabled.kick) return 1.0;
+        const currentKick = this.lanePattern.kick.has(stepInBar);
+        const prevKick = this.lanePattern.kick.has((stepInBar + 15) % 16);
+        if (currentKick) return 0.82;
+        if (prevKick) return 0.9;
+        return 1.0;
     }
 
     private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
@@ -856,6 +1080,26 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             const targetScaleY = active ? 1.1 : 1.0;
             mesh.scale.y += (targetScaleY - mesh.scale.y) * 0.2;
         }
+
+        for (const cubeId of CONTROL_CUBES) {
+            const mesh = this.controlCubeMeshes.get(cubeId);
+            if (!mesh) continue;
+            const pulse = this.controlCubePulse[cubeId];
+            const active = cubeId === 'riser' ? this.riserActive : true;
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            const stateBase = cubeId === 'chord'
+                ? (0.28 + this.chordSceneIndex * 0.08)
+                : (cubeId === 'macro'
+                    ? (0.24 + this.macroPreset * 0.12)
+                    : (this.riserActive ? 0.42 : 0.2));
+            const target = stateBase + pulse * 0.8;
+            mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.22;
+            const targetScale = 1.0 + (active ? 0.03 : 0) + pulse * 0.12;
+            mesh.scale.x += (targetScale - mesh.scale.x) * 0.2;
+            mesh.scale.y += (targetScale - mesh.scale.y) * 0.2;
+            mesh.scale.z += (targetScale - mesh.scale.z) * 0.2;
+            this.controlCubePulse[cubeId] = Math.max(0, pulse - delta * 3.3);
+        }
     }
 
     private requestLaneToggle(lane: TBeatLane): void {
@@ -903,24 +1147,37 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private triggerSequencerStep(step: number, absoluteStep: number): void {
         const pos = { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z };
+        const macro = this.getMacroProfile();
         const energy = this.getEnergyLevel();
-        const punch = this.audioTuning.dropPunch;
+        const punch = this.audioTuning.dropPunch * macro.punch;
+        const riserBoost = this.riserActive ? 1.06 : 1.0;
 
         if (this.laneEnabled.kick && this.lanePattern.kick.has(step)) {
             this.lanePulse.kick = Math.max(this.lanePulse.kick, 1.0);
-            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: Math.min(1.0, (0.92 + energy * 0.06) * punch), position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: Math.min(1.0, (0.92 + energy * 0.06) * punch * riserBoost), position: pos });
         }
         if (this.laneEnabled.snare && this.lanePattern.snare.has(step)) {
             this.lanePulse.snare = Math.max(this.lanePulse.snare, 0.95);
-            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: Math.min(1.0, (0.74 + energy * 0.04) * (1 + (punch - 1) * 0.55)), position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: Math.min(1.0, (0.74 + energy * 0.04) * (1 + (punch - 1) * 0.55) * riserBoost), position: pos });
         }
         if (this.laneEnabled.hat && this.lanePattern.hat.has(step)) {
             this.lanePulse.hat = Math.max(this.lanePulse.hat, 0.78);
-            this.context.audio.playSequencerBeat({ beat: 'hat', intensity: 0.6 + energy * 0.05, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'hat', intensity: Math.min(1.0, (0.6 + energy * 0.05) * (this.riserActive ? 1.04 : 1.0)), position: pos });
         }
         if (this.laneEnabled.bass && this.lanePattern.bass.has(step)) {
             this.lanePulse.bass = Math.max(this.lanePulse.bass, 0.9);
-            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: Math.min(1.0, (0.76 + energy * 0.07) * (1 + (punch - 1) * 0.9)), position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: Math.min(1.0, (0.76 + energy * 0.07) * (1 + (punch - 1) * 0.9) * riserBoost), position: pos });
+        }
+
+        if (this.riserActive && (step % 4) === 0) {
+            const stepInBar = absoluteStep % 16;
+            const lift = 0.56 + (stepInBar / 16) * 0.3;
+            this.context.audio.playFxSweep({
+                down: false,
+                intensity: Math.min(1, lift),
+                position: { x: this.stationCenter.x, y: this.stationCenter.y + 0.2, z: this.stationCenter.z }
+            });
+            this.controlCubePulse.riser = Math.max(this.controlCubePulse.riser, 0.9);
         }
 
         this.triggerArpStep(absoluteStep);
@@ -928,65 +1185,55 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private triggerArpStep(absoluteStep: number): void {
-        const arpOffsets: Record<TArpStripId, readonly (readonly (number | null)[])[]> = {
-            'arp-0': [
-                [0, 7, 12, 14, 12, 7, 5, 7],
-                [0, null, 7, 12, 10, 7, null, 5],
-                [0, 5, 9, 12, 14, 12, 9, 7]
-            ],
-            'arp-1': [
-                [0, null, 3, 7, 10, 7, 3, null],
-                [0, 3, 7, null, 10, 12, 10, 7],
-                [0, 5, 7, 10, null, 7, 5, 3]
-            ],
-            'arp-2': [
-                [12, null, 9, 12, 14, 12, 9, 7],
-                [12, 14, null, 12, 9, 7, 5, 7],
-                [12, null, 14, 17, 14, 12, 9, null]
-            ]
+        const arpOffsets: Record<TArpStripId, readonly (number | null)[]> = {
+            // Clear trance roles:
+            // arp-0 anchor (root/fifth pulse), arp-1 hook (main line), arp-2 air (high shimmer).
+            'arp-0': [0, null, 7, null, 12, null, 7, null, 0, null, 7, null, 12, null, 7, null],
+            'arp-1': [12, 14, 15, 14, 12, 10, 8, 10, 12, 14, 15, 17, 15, 14, 12, 10],
+            'arp-2': [19, null, 22, null, 24, null, 22, null, 19, null, 22, null, 24, null, 26, null]
         };
         const arpRoots: Record<TArpStripId, number> = {
             'arp-0': 220.0,
             'arp-1': 277.18,
             'arp-2': 329.63
         };
-        const chordShiftByBar = [0, -4, 3, -2]; // Em -> C -> G -> D (relative semitone roots)
+        const chordShiftByBar = this.chordScenes[this.chordSceneIndex % this.chordScenes.length] ?? this.chordScenes[0];
         const barIndex = Math.floor(Math.max(0, absoluteStep) / 16);
         const barInCycle = barIndex % 4;
-        const resolveBar = barInCycle === 3;
+        const liftBar = barInCycle === 3;
         const chordShift = chordShiftByBar[barIndex % chordShiftByBar.length] ?? 0;
-        const variation = barIndex % 3;
         const stepInBar = absoluteStep % 16;
         const isKickStep = this.laneEnabled.kick && this.lanePattern.kick.has(stepInBar);
-        const resolveTail = resolveBar && stepInBar >= 12;
+        const melodicDuck = this.getKickDuckGain(stepInBar);
         const energy = this.getEnergyLevel();
+        const macro = this.getMacroProfile();
+        const riserLeadBoost = this.riserActive ? 0.06 : 0;
 
         for (const stripId of ARP_STRIPS) {
             if (!this.arpStripActive[stripId]) continue;
-            const patternSet = arpOffsets[stripId];
-            const pattern = patternSet[variation];
-            const noteIdx = absoluteStep % pattern.length;
+            const pattern = arpOffsets[stripId];
+            let noteIdx = absoluteStep % pattern.length;
+            if (stripId === 'arp-2' && (absoluteStep % 2) === 1) {
+                // Subtle laid-back feel on the high line.
+                noteIdx = (noteIdx + pattern.length - 1) % pattern.length;
+            }
             const semitone = pattern[noteIdx];
             if (semitone === null) continue;
             let shapedSemitone = semitone;
-            if (resolveBar) {
-                // On bar 4, bias up to brighter resolution notes.
-                if (stripId === 'arp-2' && stepInBar % 4 === 3) shapedSemitone += 3;
-                if (stripId === 'arp-1' && stepInBar >= 8) shapedSemitone += 2;
-                if (resolveTail) shapedSemitone += 1;
+            if (liftBar && stripId !== 'arp-0' && stepInBar >= 8) {
+                shapedSemitone += 2;
             }
 
             const freq = arpRoots[stripId] * Math.pow(2, shapedSemitone / 12);
             const chordFreq = freq * Math.pow(2, chordShift / 12);
             const pos = this.arpStripPositions.get(stripId);
-            const resolveBoost = resolveBar ? 0.08 : 0;
-            const tailBoost = resolveTail ? 0.06 : 0;
+            const liftBoost = liftBar ? 0.1 : 0;
             this.context.audio.playArpNote({
                 frequency: chordFreq,
                 intensity: isKickStep
-                    ? (0.42 + energy * 0.03 + resolveBoost * 0.35)
-                    : (0.6 + energy * 0.12 + resolveBoost + tailBoost),
-                brightness: this.audioTuning.leadBrightness + (resolveBar ? 0.08 : 0) + (resolveTail ? 0.05 : 0),
+                    ? (0.42 + energy * 0.03 + macro.arpIntensityBias * 0.35) * melodicDuck
+                    : (0.6 + energy * 0.12 + liftBoost + macro.arpIntensityBias) * melodicDuck,
+                brightness: this.audioTuning.leadBrightness + macro.leadBrightness + (liftBar ? 0.1 : 0) + riserLeadBoost,
                 position: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
             });
         }
@@ -1005,7 +1252,10 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             stepIndex: absoluteStep % 16,
             stepPhaseMs,
             laneEnabled: { ...this.laneEnabled },
-            arpActive: { ...this.arpStripActive }
+            arpActive: { ...this.arpStripActive },
+            chordSceneIndex: this.chordSceneIndex,
+            macroPreset: this.macroPreset,
+            riserActive: this.riserActive
         };
     }
 
@@ -1021,6 +1271,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.arpStripActive['arp-0'] = !!arpActive['arp-0'];
         this.arpStripActive['arp-1'] = !!arpActive['arp-1'];
         this.arpStripActive['arp-2'] = !!arpActive['arp-2'];
+        this.chordSceneIndex = this.normalizeChordSceneIndex(snapshot.chordSceneIndex);
+        this.macroPreset = this.normalizeMacroPreset(snapshot.macroPreset);
+        this.riserActive = !!snapshot.riserActive;
+        if (!this.riserActive) {
+            this.riserSources.clear();
+        }
 
         const stepDurationMs = this.getStepDurationMs();
         const clampedStep = this.normalizeStep(snapshot.stepIndex);
@@ -1083,8 +1339,18 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         return typeof data.active === 'boolean';
     }
 
+    private isValidControlActionPayload(data: IControlActionPayload | undefined): data is IControlActionPayload {
+        if (!data || !this.isValidControlCubeId(data.cubeId)) return false;
+        if (typeof data.sourceId !== 'string' || data.sourceId.length === 0) return false;
+        return data.action === 'tap' || data.action === 'hold-start' || data.action === 'hold-end';
+    }
+
     private isValidArpStripId(stripId: unknown): stripId is TArpStripId {
         return stripId === 'arp-0' || stripId === 'arp-1' || stripId === 'arp-2';
+    }
+
+    private isValidControlCubeId(cubeId: unknown): cubeId is TControlCubeId {
+        return cubeId === 'chord' || cubeId === 'macro' || cubeId === 'riser';
     }
 
     private isValidArpActive(data: unknown): data is Record<TArpStripId, boolean> {
@@ -1122,7 +1388,34 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (this.arpStripActive['arp-0']) active++;
         if (this.arpStripActive['arp-1']) active++;
         if (this.arpStripActive['arp-2']) active++;
-        return Math.min(1, active / 7);
+        const macro = this.getMacroProfile();
+        const base = Math.min(1, active / 7);
+        const riser = this.riserActive ? 0.08 : 0;
+        return Math.min(1, base * macro.energyScale + riser);
+    }
+
+    private normalizeChordSceneIndex(index: number): number {
+        if (!Number.isFinite(index) || this.chordScenes.length <= 0) return 0;
+        const rounded = Math.floor(index);
+        return ((rounded % this.chordScenes.length) + this.chordScenes.length) % this.chordScenes.length;
+    }
+
+    private normalizeMacroPreset(preset: number): number {
+        if (!Number.isFinite(preset)) return 1;
+        const rounded = Math.floor(preset);
+        const count = 3;
+        return ((rounded % count) + count) % count;
+    }
+
+    private getMacroProfile(): { energyScale: number; leadBrightness: number; punch: number; arpIntensityBias: number } {
+        switch (this.macroPreset) {
+            case 0:
+                return { energyScale: 0.88, leadBrightness: -0.04, punch: 0.94, arpIntensityBias: -0.05 };
+            case 2:
+                return { energyScale: 1.14, leadBrightness: 0.1, punch: 1.12, arpIntensityBias: 0.07 };
+            default:
+                return { energyScale: 1.0, leadBrightness: 0, punch: 1.0, arpIntensityBias: 0 };
+        }
     }
 
     private normalizeStep(stepIndex: number): number {
