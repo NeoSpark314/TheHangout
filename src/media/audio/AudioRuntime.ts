@@ -17,7 +17,7 @@ export class AudioRuntime {
     private readonly renderSampleRate = 32000;
     private readonly drumTimbreVersion = 3;
     private readonly beatTimbreVersion = 1;
-    private readonly melodyTimbreVersion = 1;
+    private readonly melodyTimbreVersion = 2;
     private readonly arpTimbreVersion = 2;
 
     constructor(private context: AppContext) {
@@ -102,9 +102,9 @@ export class AudioRuntime {
         void this.playMelodyBuffered(data.frequency, data.intensity ?? 0.7, data.position);
     }
 
-    public playArpNote(data: { frequency: number; intensity?: number; position?: IVector3 }): void {
+    public playArpNote(data: { frequency: number; intensity?: number; brightness?: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
-        void this.playArpBuffered(data.frequency, data.intensity ?? 0.62, data.position);
+        void this.playArpBuffered(data.frequency, data.intensity ?? 0.62, data.brightness ?? 1.0, data.position);
     }
 
     private createSpatialDestination(position?: IVector3): AudioNode | undefined {
@@ -229,7 +229,7 @@ export class AudioRuntime {
 
         try {
             const buffer = await this.sfxCache.getOrCreate(key, async () => {
-                const durationSec = 0.44;
+                const durationSec = 0.56;
                 const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
                 const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
                 SoundSynth.playMelodyNote(offline as unknown as AudioContext, frequency, level);
@@ -242,20 +242,22 @@ export class AudioRuntime {
         }
     }
 
-    private async playArpBuffered(frequency: number, intensity: number, position?: IVector3): Promise<void> {
+    private async playArpBuffered(frequency: number, intensity: number, brightness: number, position?: IVector3): Promise<void> {
         const runtimeCtx = this.ctx;
         if (!runtimeCtx || !this.isInitialized) return;
 
         const level = this.bucketIntensity(intensity);
+        const bright = Math.max(0.7, Math.min(1.4, brightness));
+        const brightKey = Math.round(bright * 10) / 10;
         const freqKey = Number.isFinite(frequency) ? frequency.toFixed(2) : '220.00';
-        const key = `arp:v${this.arpTimbreVersion}:${freqKey}:${level.toFixed(2)}`;
+        const key = `arp:v${this.arpTimbreVersion}:${freqKey}:${level.toFixed(2)}:b${brightKey.toFixed(1)}`;
 
         try {
             const buffer = await this.sfxCache.getOrCreate(key, async () => {
                 const durationSec = 0.38;
                 const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
                 const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
-                SoundSynth.playArpNote(offline as unknown as AudioContext, frequency, level);
+                SoundSynth.playArpNote(offline as unknown as AudioContext, frequency, level, brightKey);
                 return offline.startRendering();
             });
 

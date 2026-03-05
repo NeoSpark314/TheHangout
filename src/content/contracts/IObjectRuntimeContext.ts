@@ -50,6 +50,7 @@ export interface IObjectRuntimeContext {
         playArpNote(options: {
             frequency: number;
             intensity?: number;
+            brightness?: number;
             position?: { x: number; y: number; z: number };
         }): void;
     };

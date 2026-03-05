@@ -104,6 +104,10 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         hat: new Set([2, 6, 10, 14]),
         bass: new Set([0, 6, 8, 12])
     };
+    private readonly audioTuning = {
+        leadBrightness: 1.12,
+        dropPunch: 1.1
+    };
     private laneEnabled: Record<TBeatLane, boolean> = {
         kick: false,
         snare: false,
@@ -900,14 +904,15 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private triggerSequencerStep(step: number, absoluteStep: number): void {
         const pos = { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z };
         const energy = this.getEnergyLevel();
+        const punch = this.audioTuning.dropPunch;
 
         if (this.laneEnabled.kick && this.lanePattern.kick.has(step)) {
             this.lanePulse.kick = Math.max(this.lanePulse.kick, 1.0);
-            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: 0.92 + energy * 0.06, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: Math.min(1.0, (0.92 + energy * 0.06) * punch), position: pos });
         }
         if (this.laneEnabled.snare && this.lanePattern.snare.has(step)) {
             this.lanePulse.snare = Math.max(this.lanePulse.snare, 0.95);
-            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: 0.74 + energy * 0.04, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: Math.min(1.0, (0.74 + energy * 0.04) * (1 + (punch - 1) * 0.55)), position: pos });
         }
         if (this.laneEnabled.hat && this.lanePattern.hat.has(step)) {
             this.lanePulse.hat = Math.max(this.lanePulse.hat, 0.78);
@@ -915,7 +920,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
         if (this.laneEnabled.bass && this.lanePattern.bass.has(step)) {
             this.lanePulse.bass = Math.max(this.lanePulse.bass, 0.9);
-            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: 0.76 + energy * 0.07, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: Math.min(1.0, (0.76 + energy * 0.07) * (1 + (punch - 1) * 0.9)), position: pos });
         }
 
         this.triggerArpStep(absoluteStep);
@@ -964,6 +969,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 intensity: isKickStep
                     ? (0.42 + energy * 0.03)
                     : (0.6 + energy * 0.12),
+                brightness: this.audioTuning.leadBrightness,
                 position: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
             });
         }
