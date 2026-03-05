@@ -22,6 +22,9 @@ export interface ITrackedHandUiProbe {
 }
 
 type HandId = 'left' | 'right';
+type XRJointPoseCapableFrame = XRFrame & {
+    getJointPose(joint: XRJointSpace, baseSpace: XRSpace): XRJointPose | null;
+};
 
 export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
@@ -201,6 +204,9 @@ export class XRInputManager {
         frame: XRFrame,
         referenceSpace: XRReferenceSpace
     ): THREE.Vector3 | null {
+        if (!this.hasJointPoseApi(frame)) {
+            return null;
+        }
         const thumbTip = source.hand?.get('thumb-tip');
         const indexTip = source.hand?.get('index-finger-tip');
         if (!thumbTip || !indexTip) {
@@ -223,6 +229,9 @@ export class XRInputManager {
         frame: XRFrame,
         referenceSpace: XRReferenceSpace
     ): number | null {
+        if (!this.hasJointPoseApi(frame)) {
+            return null;
+        }
         const thumbTip = source.hand?.get('thumb-tip');
         const indexTip = source.hand?.get('index-finger-tip');
         if (!thumbTip || !indexTip) {
@@ -337,6 +346,10 @@ export class XRInputManager {
         // xr-standard: button[5] is the upper face button (B/Y-style secondary button).
         const menuButton = buttons[5];
         return !!menuButton && (menuButton.pressed || menuButton.value > 0.5);
+    }
+
+    private hasJointPoseApi(frame: XRFrame): frame is XRJointPoseCapableFrame {
+        return typeof frame.getJointPose === 'function';
     }
 
     private resetActiveMovement(): void {
