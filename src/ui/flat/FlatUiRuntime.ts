@@ -7,6 +7,25 @@ import { ControllerPointer } from '../shared/ControllerPointer';
 import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 
 export class FlatUiRuntime implements IUpdatable {
+    private static readonly KEYBOARD_MOUSE_HELP_HTML = [
+        '<b>Controls</b>',
+        'Menu: M',
+        'Move: WASD',
+        'Look: Mouse',
+        'Extend Hands: Q (L), E (R)',
+        'Hand Grab: Left Click',
+        'Hand Interact: Right Click',
+        'Reach: Mouse Wheel'
+    ].join('<br>');
+    private static readonly CONTROLLER_HELP_HTML = [
+        '<b>Controls</b>',
+        'Menu: Y / Triangle',
+        'Move: Left Stick',
+        'Look: Right Stick',
+        'Left Hand Extend/Grab: LT',
+        'Right Hand Extend/Grab: RT',
+        'Hand Interact: A / Cross'
+    ].join('<br>');
     private overlay: HTMLElement;
     private mainPanel: HTMLElement | null;
     private nameInput: HTMLInputElement;
@@ -37,6 +56,7 @@ export class FlatUiRuntime implements IUpdatable {
     private joysticksInitialized: boolean = false;
     private mobileHudEnabled: boolean = false;
     private inviteSessionId: string | null = null;
+    private desktopHelpMode: 'keyboardMouse' | 'controller' | null = null;
 
     constructor(private context: AppContext) {
         this.overlay = document.getElementById('ui-overlay')!;
@@ -208,6 +228,7 @@ export class FlatUiRuntime implements IUpdatable {
 
         this.loadFromStorage();
         this.renderMyScreensEditor();
+        this.updateDesktopControlsHint();
         this.markPanelReady();
 
         // Desktop screen sharing is only for dedicated server mode
@@ -218,6 +239,8 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     public update(delta: number): void {
+        this.updateDesktopControlsHint();
+
         if (this.isElementHidden(this.overlay) && this.isMobile && !this.joysticksInitialized) {
             this.context.runtime.input?.initMobileJoysticks();
             this.joysticksInitialized = true;
@@ -705,6 +728,17 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.mainPanel) return;
         this.mainPanel.classList.remove('panel-hydrating');
         this.mainPanel.classList.add('panel-ready');
+    }
+
+    private updateDesktopControlsHint(): void {
+        if (!this.desktopControls || this.isMobile) return;
+        const mode = this.context.runtime.input?.getDesktopInputMode?.() ?? 'keyboardMouse';
+        if (this.desktopHelpMode === mode) return;
+
+        this.desktopHelpMode = mode;
+        this.desktopControls.innerHTML = mode === 'controller'
+            ? FlatUiRuntime.CONTROLLER_HELP_HTML
+            : FlatUiRuntime.KEYBOARD_MOUSE_HELP_HTML;
     }
 
     private resolveControllerCursorTarget(x: number, y: number): HTMLElement | null {

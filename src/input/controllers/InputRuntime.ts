@@ -14,6 +14,8 @@ import { XRInputManager } from './XRInputController';
 import { GestureUtils } from '../../shared/utils/GestureUtils';
 import { GrabSkill } from '../../skills/GrabSkill';
 
+export type DesktopInputMode = 'keyboardMouse' | 'controller';
+
 /**
  * Aggregates user input from multiple distinct hardware sources (Keyboard, Gamepad, Mobile Joysticks, XR).
  * Provides a unified interface for querying movement semantic intentions and handling VR pointers.
@@ -26,6 +28,12 @@ export class InputRuntime implements IUpdatable {
     public nonVRInteraction: NonVRInteractionController;
     public xrInput: XRInputManager;
     private _wheelDelta = 0;
+    private desktopInputMode: DesktopInputMode = 'keyboardMouse';
+    private lastDesktopInputAt: Record<DesktopInputMode, number> = {
+        keyboardMouse: 0,
+        controller: 0
+    };
+    private readonly modeSwitchGuardMs = 250;
 
     constructor(private context: AppContext) {
         this.keyboard = new KeyboardManager();
@@ -37,6 +45,7 @@ export class InputRuntime implements IUpdatable {
 
         this._initMouseLook();
         this._initWheel();
+        this._initDesktopInputModeTracking();
     }
 
     private _initWheel(): void {
@@ -46,6 +55,7 @@ export class InputRuntime implements IUpdatable {
                 // We don't preventDefault() here to allow browser zooming/scrolling if needed,
                 // but we capture the delta for reach adjustment.
                 this._wheelDelta += -e.deltaY * 0.001;
+                this.markDesktopInputActivity('keyboardMouse');
             }
         }, { passive: true });
     }
@@ -60,7 +70,20 @@ export class InputRuntime implements IUpdatable {
                 eventBus.emit(EVENTS.INTENT_LOOK, {
                     delta: { x: e.movementX / 15, y: e.movementY / 15 }
                 } as ILookIntentPayload);
+                if (e.movementX !== 0 || e.movementY !== 0) {
+                    this.markDesktopInputActivity('keyboardMouse');
+                }
             }
+        });
+    }
+
+    private _initDesktopInputModeTracking(): void {
+        window.addEventListener('keydown', () => {
+            this.markDesktopInputActivity('keyboardMouse');
+        });
+
+        window.addEventListener('mousedown', () => {
+            this.markDesktopInputActivity('keyboardMouse');
         });
     }
 
@@ -104,6 +127,10 @@ export class InputRuntime implements IUpdatable {
 
     public clearJustPressed(): void {
         this.keyboard.clearJustPressed();
+    }
+
+    public getDesktopInputMode(): DesktopInputMode {
+        return this.desktopInputMode;
     }
 
     public getMovementVector(): { x: number, y: number } {
@@ -158,6 +185,9 @@ export class InputRuntime implements IUpdatable {
 
     public update(delta: number, frame?: XRFrame): void {
         this.gamepad.poll(delta);
+        if (this.gamepad.hadMeaningfulInputThisFrame) {
+            this.markDesktopInputActivity('controller');
+        }
         this.xrInput.poll(frame);
         if (this.gamepad.wasPressed(3) || this.xrInput.wasMenuJustPressed()) {
             eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
@@ -230,6 +260,20 @@ export class InputRuntime implements IUpdatable {
             this._wasSnapTurnPressed = false;
         }
 
+    }
+
+    private markDesktopInputActivity(source: DesktopInputMode): void {
+        const now = performance.now();
+        this.lastDesktopInputAt[source] = now;
+
+        if (this.desktopInputMode === source) return;
+
+        const other: DesktopInputMode = source === 'controller' ? 'keyboardMouse' : 'controller';
+        if ((now - this.lastDesktopInputAt[other]) < this.modeSwitchGuardMs) {
+            return;
+        }
+
+        this.desktopInputMode = source;
     }
 
     public processInteractions(): void {

@@ -6,6 +6,7 @@ export class GamepadManager {
     public buttons: Record<number, boolean> = {};
     public lastButtons: Record<number, boolean> = {};
     public isConnected = false;
+    public hadMeaningfulInputThisFrame = false;
     private deadzone: number = INPUT_CONFIG.DEADZONE;
     private activeGamepadIndex: number | null = null;
 
@@ -20,6 +21,7 @@ export class GamepadManager {
             this.look = { x: 0, y: 0 };
             this.lastButtons = { ...this.buttons };
             this.buttons = {};
+            this.hadMeaningfulInputThisFrame = false;
             return;
         }
 
@@ -33,6 +35,7 @@ export class GamepadManager {
         gp.buttons.forEach((btn, i) => {
             this.buttons[i] = btn.pressed;
         });
+        this.hadMeaningfulInputThisFrame = this.hasMeaningfulInput(gp);
     }
 
     private getActiveGamepad(): Gamepad | null {
