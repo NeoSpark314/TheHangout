@@ -272,6 +272,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public async initHost(customId: string): Promise<void> {
+        await this.context.ensureGameplayStarted?.();
+
         if (this.context.isLocalServer) {
             this.context.isHost = false; // We are just a guest on the headless server
             return this.initWebSocketOnly(customId);
@@ -299,6 +301,8 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     }
 
     public async initGuest(hostId: string): Promise<void> {
+        await this.context.ensureGameplayStarted?.();
+
         if (this.context.isLocalServer) {
             return this.initWebSocketOnly(hostId);
         }

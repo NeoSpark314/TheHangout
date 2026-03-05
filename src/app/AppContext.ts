@@ -91,6 +91,7 @@ export class AppContext {
 
     public localPlayer: PlayerAvatarEntity | null = null;
     public isMenuOpen: boolean = false;
+    public ensureGameplayStarted: (() => Promise<void>) | null = null;
 
     private _runtime: Partial<IRuntimeRegistry> = {};
 

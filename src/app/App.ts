@@ -29,6 +29,8 @@ import { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFea
 import { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
 import eventBus from './events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
+import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
+import { IUpdatable } from '../shared/contracts/IUpdatable';
 
 /**
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
@@ -36,10 +38,15 @@ import { EVENTS } from '../shared/constants/Constants';
 export class App {
     private engine: Engine;
     public context: AppContext;
+    private gameplayStarted = false;
+    private gameplayStartPromise: Promise<void> | null = null;
+    private physicsPresentationSystem: PhysicsPresentationSystem | null = null;
+    private menuEnvironment: EnvironmentBuilder | null = null;
 
     constructor() {
         this.context = new AppContext();
         this.engine = new Engine(this.context);
+        this.context.ensureGameplayStarted = this.ensureGameplayStarted.bind(this);
     }
 
     public async bootstrap(): Promise<void> {
@@ -49,14 +56,13 @@ export class App {
             await this.detectServerInfo();
             this.initializeRuntime();
             this.setupGlobalEventListeners();
+            this.initializeMenuEnvironment();
 
-            // 1. Infrastructure (Physics must be first)
-            await this.context.runtime.physics.init();
-
-            // 2. World (Requires Physics)
+            // Register engine systems in their final order.
+            // Heavy gameplay runtime stays dormant until a session is requested.
             await this.initSystems();
 
-            // 3. Engine (Starts simulation)
+            // Start engine loop immediately for main-menu render/UI.
             await this.engine.initialize();
             this.engine.start();
 
@@ -152,42 +158,37 @@ export class App {
 
     private async initSystems(): Promise<void> {
         const runtime = this.context.runtime;
-
-        if (runtime.render && runtime.session) {
-            runtime.session.init(runtime.render.scene);
-        }
-
-        if (runtime.vrUi) {
-            runtime.vrUi.init();
-        }
-        if (runtime.debugRender) {
-            runtime.debugRender.init();
-        }
+        this.physicsPresentationSystem = new PhysicsPresentationSystem(this.context);
 
         // Register systems to Engine in the exact desired execution order
-        if (runtime.network) this.engine.addSystem(runtime.network as any);
-        if (runtime.input) this.engine.addSystem(runtime.input as any);
-        if (runtime.entity) this.engine.addSystem(runtime.entity as any);
+        this.addAlwaysSystem(runtime.network);
+        this.addGameplaySystem(runtime.input);
+        this.addGameplaySystem(runtime.entity);
 
         // Physics needs a small wrapper because its update method is called 'step' and only takes delta
         if (runtime.physics) {
-            this.engine.addSystem({
+            this.addGameplaySystem({
                 update: (delta) => runtime.physics!.step(delta)
             });
         }
-        this.engine.addSystem(new PhysicsPresentationSystem(this.context));
-
-        if (runtime.session) this.engine.addSystem(runtime.session as any);
-        if (runtime.mount) this.engine.addSystem(runtime.mount as any);
-        if (runtime.social) this.engine.addSystem(runtime.social as any);
-        if (runtime.particles) this.engine.addSystem(runtime.particles as any);
-        if (runtime.remoteDesktop) this.engine.addSystem(runtime.remoteDesktop as any);
-        if (runtime.ui) this.engine.addSystem(runtime.ui as any);
-        if (runtime.hud) this.engine.addSystem(runtime.hud as any);
-        if (runtime.vrUi) this.engine.addSystem(runtime.vrUi as any);
-        if (runtime.debugRender) this.engine.addSystem(runtime.debugRender as any);
+        this.addGameplaySystem(this.physicsPresentationSystem);
+        this.addGameplaySystem(runtime.session);
+        this.addGameplaySystem(runtime.mount);
+        this.addGameplaySystem(runtime.social);
+        this.addGameplaySystem(runtime.particles);
+        this.addGameplaySystem(runtime.remoteDesktop);
+        this.addAlwaysSystem(runtime.ui);
+        this.addAlwaysSystem(runtime.hud);
+        this.addGameplaySystem(runtime.vrUi);
+        this.addGameplaySystem(runtime.debugRender);
 
         if (runtime.render) {
+            this.engine.addSystem({
+                update: (delta) => {
+                    if (this.gameplayStarted) return;
+                    this.menuEnvironment?.update(delta);
+                }
+            });
             this.engine.addSystem({
                 update: (delta) => {
                     runtime.render!.update(delta, this.context.localPlayer);
@@ -198,8 +199,65 @@ export class App {
 
         // Tasks at the end of the frame
         if (runtime.input) {
-            this.engine.onEndFrame(() => runtime.input!.clearJustPressed());
+            this.engine.onEndFrame(() => {
+                if (!this.gameplayStarted) return;
+                runtime.input!.clearJustPressed();
+            });
         }
+    }
+
+    private async ensureGameplayStarted(): Promise<void> {
+        if (this.gameplayStarted) return;
+        if (this.gameplayStartPromise) {
+            await this.gameplayStartPromise;
+            return;
+        }
+
+        const runtime = this.context.runtime;
+        this.gameplayStartPromise = (async () => {
+            this.menuEnvironment?.clearProcedural();
+            this.menuEnvironment = null;
+
+            await runtime.physics.init();
+
+            if (runtime.render && runtime.session) {
+                runtime.session.init(runtime.render.scene);
+            }
+
+            runtime.vrUi?.init();
+            runtime.debugRender?.init();
+            this.gameplayStarted = true;
+            console.log('[App] Gameplay runtime initialized.');
+        })();
+
+        try {
+            await this.gameplayStartPromise;
+        } finally {
+            this.gameplayStartPromise = null;
+        }
+    }
+
+    private initializeMenuEnvironment(): void {
+        const scene = this.context.runtime.render?.scene;
+        if (!scene) return;
+
+        this.menuEnvironment = new EnvironmentBuilder(scene, () => Math.random());
+        this.menuEnvironment.applyConfig(this.context.sessionConfig);
+    }
+
+    private addGameplaySystem(system: IUpdatable | null | undefined): void {
+        if (!system) return;
+        this.engine.addSystem({
+            update: (delta, frame) => {
+                if (!this.gameplayStarted) return;
+                system.update(delta, frame);
+            }
+        });
+    }
+
+    private addAlwaysSystem(system: IUpdatable | null | undefined): void {
+        if (!system) return;
+        this.engine.addSystem(system);
     }
 
     private playerInitialized = false;
