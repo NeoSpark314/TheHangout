@@ -17,7 +17,7 @@ export class AudioRuntime {
     private readonly renderSampleRate = 32000;
     private readonly drumTimbreVersion = 3;
     private readonly beatTimbreVersion = 1;
-    private readonly melodyTimbreVersion = 2;
+    private readonly melodyTimbreVersion = 3;
     private readonly arpTimbreVersion = 2;
 
     constructor(private context: AppContext) {
@@ -229,7 +229,7 @@ export class AudioRuntime {
 
         try {
             const buffer = await this.sfxCache.getOrCreate(key, async () => {
-                const durationSec = 0.56;
+                const durationSec = 0.66;
                 const frameCount = Math.max(1, Math.ceil(durationSec * this.renderSampleRate));
                 const offline = new OfflineAudioContext(1, frameCount, this.renderSampleRate);
                 SoundSynth.playMelodyNote(offline as unknown as AudioContext, frequency, level);

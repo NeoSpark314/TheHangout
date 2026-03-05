@@ -446,6 +446,61 @@ export class SoundSynth {
         tone.connect(bodyHighpass);
         bodyHighpass.connect(out);
 
+        // Very light stereo chorus for width without smearing VR positional cues.
+        const chorusSend = ctx.createGain();
+        chorusSend.gain.setValueAtTime(0.065, now);
+        bodyHighpass.connect(chorusSend);
+
+        const delayL = ctx.createDelay(0.03);
+        const delayR = ctx.createDelay(0.03);
+        delayL.delayTime.setValueAtTime(0.010, now);
+        delayR.delayTime.setValueAtTime(0.015, now);
+
+        const wetL = ctx.createGain();
+        const wetR = ctx.createGain();
+        wetL.gain.setValueAtTime(0.11 * drive, now);
+        wetR.gain.setValueAtTime(0.1 * drive, now);
+
+        const pannerL = (typeof (ctx as any).createStereoPanner === 'function')
+            ? (ctx as any).createStereoPanner() as StereoPannerNode
+            : null;
+        const pannerR = (typeof (ctx as any).createStereoPanner === 'function')
+            ? (ctx as any).createStereoPanner() as StereoPannerNode
+            : null;
+        if (pannerL) pannerL.pan.setValueAtTime(-0.45, now);
+        if (pannerR) pannerR.pan.setValueAtTime(0.45, now);
+
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(0.32, now);
+        const lfoDepthL = ctx.createGain();
+        const lfoDepthR = ctx.createGain();
+        lfoDepthL.gain.setValueAtTime(0.0018, now);
+        lfoDepthR.gain.setValueAtTime(-0.0016, now);
+        lfo.connect(lfoDepthL);
+        lfo.connect(lfoDepthR);
+        lfoDepthL.connect(delayL.delayTime);
+        lfoDepthR.connect(delayR.delayTime);
+
+        chorusSend.connect(delayL);
+        chorusSend.connect(delayR);
+        delayL.connect(wetL);
+        delayR.connect(wetR);
+        if (pannerL) {
+            wetL.connect(pannerL);
+            pannerL.connect(out);
+        } else {
+            wetL.connect(out);
+        }
+        if (pannerR) {
+            wetR.connect(pannerR);
+            pannerR.connect(out);
+        } else {
+            wetR.connect(out);
+        }
+        lfo.start(now);
+        lfo.stop(now + 0.62);
+
         const oscA = ctx.createOscillator();
         oscA.type = 'sawtooth';
         oscA.frequency.setValueAtTime(frequency, now);
