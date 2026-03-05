@@ -67,7 +67,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private createDrumPads(): void {
-        const notes = [220, 247, 277, 294, 330, 370, 415, 440];
+        // E minor pentatonic across two octaves for a melodic, always-musical layout.
+        const notes = [164.81, 196.0, 220.0, 246.94, 293.66, 329.63, 392.0, 440.0];
         const padCount = notes.length;
         const radius = 1.85;
         const center = new THREE.Vector3(6.2, 1.1, -1.8);

@@ -13,6 +13,7 @@ export class AudioRuntime {
     private readonly LEAVE_FREQS = [880, 659.25, 554.37, 440];
     private readonly sfxCache = new SfxRenderCache(96);
     private readonly renderSampleRate = 32000;
+    private readonly drumTimbreVersion = 2;
 
     constructor(private context: AppContext) {
         this.setupListeners();
@@ -142,7 +143,7 @@ export class AudioRuntime {
 
         const level = this.bucketIntensity(intensity);
         const freqKey = Number.isFinite(frequency) ? frequency.toFixed(2) : '220.00';
-        const key = `drum:${freqKey}:${level.toFixed(2)}`;
+        const key = `drum:v${this.drumTimbreVersion}:${freqKey}:${level.toFixed(2)}`;
 
         try {
             const buffer = await this.sfxCache.getOrCreate(key, async () => {

@@ -177,43 +177,68 @@ export class SoundSynth {
 
         const bodyGain = ctx.createGain();
         bodyGain.gain.setValueAtTime(0.0001, now);
-        bodyGain.gain.linearRampToValueAtTime(0.22 * drive, now + 0.003);
-        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+        bodyGain.gain.linearRampToValueAtTime(0.18 * drive, now + 0.003);
+        bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
         bodyGain.connect(toneFilter);
 
         const oscMain = ctx.createOscillator();
-        oscMain.type = 'sawtooth';
-        oscMain.frequency.setValueAtTime(freq * 0.9, now);
-        oscMain.frequency.exponentialRampToValueAtTime(Math.max(48, freq * 0.44), now + 0.3);
+        oscMain.type = 'triangle';
+        oscMain.frequency.setValueAtTime(freq * 0.96, now);
+        oscMain.frequency.exponentialRampToValueAtTime(Math.max(48, freq * 0.62), now + 0.22);
         oscMain.connect(bodyGain);
         oscMain.start(now);
-        oscMain.stop(now + 0.41);
+        oscMain.stop(now + 0.31);
 
         const oscLayer = ctx.createOscillator();
         oscLayer.type = 'square';
-        oscLayer.frequency.setValueAtTime(freq * 1.5, now);
-        oscLayer.frequency.exponentialRampToValueAtTime(Math.max(70, freq * 1.08), now + 0.2);
+        oscLayer.frequency.setValueAtTime(freq * 1.48, now);
+        oscLayer.frequency.exponentialRampToValueAtTime(Math.max(70, freq * 1.02), now + 0.17);
         const layerGain = ctx.createGain();
         layerGain.gain.setValueAtTime(0.0001, now);
-        layerGain.gain.linearRampToValueAtTime(0.055 * drive, now + 0.003);
-        layerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+        layerGain.gain.linearRampToValueAtTime(0.045 * drive, now + 0.003);
+        layerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
         oscLayer.connect(layerGain);
         layerGain.connect(toneFilter);
         oscLayer.start(now);
-        oscLayer.stop(now + 0.22);
+        oscLayer.stop(now + 0.18);
+
+        // Musical sustain layer so pads feel more like playable melodic keys.
+        const melodyFund = ctx.createOscillator();
+        melodyFund.type = 'sine';
+        melodyFund.frequency.setValueAtTime(freq, now);
+        const melodyFundGain = ctx.createGain();
+        melodyFundGain.gain.setValueAtTime(0.0001, now);
+        melodyFundGain.gain.linearRampToValueAtTime(0.12 * drive, now + 0.01);
+        melodyFundGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+        melodyFund.connect(melodyFundGain);
+        melodyFundGain.connect(toneFilter);
+        melodyFund.start(now);
+        melodyFund.stop(now + 0.58);
+
+        const melodyHarm = ctx.createOscillator();
+        melodyHarm.type = 'triangle';
+        melodyHarm.frequency.setValueAtTime(freq * 2, now);
+        const melodyHarmGain = ctx.createGain();
+        melodyHarmGain.gain.setValueAtTime(0.0001, now);
+        melodyHarmGain.gain.linearRampToValueAtTime(0.032 * drive, now + 0.008);
+        melodyHarmGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+        melodyHarm.connect(melodyHarmGain);
+        melodyHarmGain.connect(toneFilter);
+        melodyHarm.start(now);
+        melodyHarm.stop(now + 0.4);
 
         const sub = ctx.createOscillator();
         sub.type = 'sine';
-        sub.frequency.setValueAtTime(freq * 0.3, now);
-        sub.frequency.exponentialRampToValueAtTime(Math.max(28, freq * 0.2), now + 0.38);
+        sub.frequency.setValueAtTime(freq * 0.34, now);
+        sub.frequency.exponentialRampToValueAtTime(Math.max(32, freq * 0.24), now + 0.33);
         const subGain = ctx.createGain();
         subGain.gain.setValueAtTime(0.0001, now);
-        subGain.gain.linearRampToValueAtTime(0.22 * drive, now + 0.005);
-        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.41);
+        subGain.gain.linearRampToValueAtTime(0.18 * drive, now + 0.005);
+        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
         sub.connect(subGain);
         subGain.connect(out);
         sub.start(now);
-        sub.stop(now + 0.43);
+        sub.stop(now + 0.38);
 
         const click = ctx.createOscillator();
         click.type = 'triangle';
