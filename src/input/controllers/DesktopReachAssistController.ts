@@ -27,13 +27,12 @@ export class NonVRReachAssistController {
 
     public update(
         delta: number,
-        manualModeActive: boolean,
         desktopGrabHeld: boolean,
         gamepadLeftGrabHeld: boolean,
         gamepadRightGrabHeld: boolean
     ): void {
         const render = this.context.runtime.render;
-        if (!render || render.isXRPresenting() || this.context.isMenuOpen || manualModeActive) {
+        if (!render || render.isXRPresenting() || this.context.isMenuOpen) {
             this.cancelAll();
             this.applyReachAll();
             return;

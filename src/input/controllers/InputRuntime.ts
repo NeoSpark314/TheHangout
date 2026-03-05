@@ -28,7 +28,6 @@ export class InputRuntime implements IUpdatable {
     public nonVRReachAssist: NonVRReachAssistController;
     public nonVRInteraction: NonVRInteractionController;
     public xrInput: XRInputManager;
-    private _wheelDelta = 0;
     private desktopInputMode: DesktopInputMode = 'keyboardMouse';
     private lastDesktopInputAt: Record<DesktopInputMode, number> = {
         keyboardMouse: 0,
@@ -62,9 +61,6 @@ export class InputRuntime implements IUpdatable {
         window.addEventListener('wheel', (e) => {
             const render = this.context.runtime.render;
             if (render && !render.isXRPresenting()) {
-                // We don't preventDefault() here to allow browser zooming/scrolling if needed,
-                // but we capture the delta for reach adjustment.
-                this._wheelDelta += -e.deltaY * 0.001;
                 this.markDesktopInputActivity('keyboardMouse');
             }
         }, { passive: true });
@@ -215,18 +211,8 @@ export class InputRuntime implements IUpdatable {
 
         // 0. Desktop Hand Activation (Centralized Logic)
         if (render && !render.isXRPresenting() && tracking) {
-            tracking.setHandActive('left', this.isKeyDown('q'));
-            tracking.setHandActive('right', this.isKeyDown('e'));
-            const manualModeActive = this.isKeyDown('q') || this.isKeyDown('e');
-
-            if (this._wheelDelta !== 0) {
-                tracking.adjustReach(this._wheelDelta);
-                this._wheelDelta = 0;
-            }
-
             this.nonVRReachAssist.update(
                 delta,
-                manualModeActive,
                 this.isKeyDown('primary_action'),
                 !!this.gamepad.buttons[6],
                 !!this.gamepad.buttons[7]
@@ -393,11 +379,8 @@ export class InputRuntime implements IUpdatable {
             const trackingState = tracking.getState();
             const leftActive = trackingState.hands.left.active;
             const rightActive = trackingState.hands.right.active;
-            const usingManualHandGrab = this.isKeyDown('q') || this.isKeyDown('e');
-
-            // Preserve the explicit desktop hand-extension workflow. Reach assist
-            // owns left-click grabbing only when the player is not manually using Q/E.
-            const isGrabPressed = this.isKeyDown('primary_action') && usingManualHandGrab;
+            // Non-VR desktop grabbing is owned by reach assist; avoid double-firing.
+            const isGrabPressed = false;
             const isInteractPressed = this.nonVRInteraction.isInteractionHeld();
 
             if (leftActive) {
