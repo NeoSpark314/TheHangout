@@ -44,9 +44,7 @@ interface IArpTouchStatePayload {
 
 interface ISequencerSnapshot {
     version: 1;
-    bpm: number;
-    isPlaying: boolean;
-    stepIndex: number;
+    bpm: number;    stepIndex: number;
     stepPhaseMs: number;
     laneEnabled: Record<TBeatLane, boolean>;
     arpActive: Record<TArpStripId, boolean>;
@@ -113,7 +111,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         bass: false
     };
     private bpm: number = 124;
-    private isPlaying: boolean = false;
     private sequencerAnchorMs: number = 0;
     private lastProcessedAbsoluteStep: number | null = null;
     private lastSyncBroadcastAtMs: number = 0;
@@ -695,11 +692,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             const mat = mesh.material as THREE.MeshStandardMaterial;
             mat.emissiveIntensity = active ? Math.max(mat.emissiveIntensity, 0.6) : Math.min(mat.emissiveIntensity, 0.2);
         }
-        if (active && !this.isPlaying) {
-            this.isPlaying = true;
-            this.sequencerAnchorMs = this.nowMs();
-            this.lastProcessedAbsoluteStep = 0;
-        }
     }
 
     private getHandTouchSourceId(hand: 'left' | 'right'): string {
@@ -724,11 +716,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private startPadPhrase(padId: TPadPhraseId): void {
         if (!this.isValidPadId(padId)) return;
         const now = this.nowMs();
-        if (!this.isPlaying) {
-            this.isPlaying = true;
-            this.sequencerAnchorMs = now;
-            this.lastProcessedAbsoluteStep = 0;
-        }
         const stepDurationMs = this.getStepDurationMs();
         const elapsedMs = Math.max(0, now - this.sequencerAnchorMs);
         const absoluteStep = Math.floor(elapsedMs / stepDurationMs);
@@ -748,12 +735,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private applyPadPhraseStart(start: IPadPhraseStartPayload): void {
         if (!this.isValidPadPhraseStart(start)) return;
-        const stepDurationMs = this.getStepDurationMs();
-        if (!this.isPlaying) {
-            this.isPlaying = true;
-            this.sequencerAnchorMs = this.nowMs() - (Math.max(0, Math.floor(start.startStep)) * stepDurationMs);
-            this.lastProcessedAbsoluteStep = null;
-        }
         this.padPhraseById.set(start.padId, {
             padId: start.padId,
             startStep: Math.max(0, Math.floor(start.startStep))
@@ -886,28 +867,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private toggleLane(lane: TBeatLane): void {
-        const wasAnyEnabled = this.anyLaneEnabled();
         this.laneEnabled[lane] = !this.laneEnabled[lane];
-        const nowAnyEnabled = this.anyLaneEnabled();
-
-        if (!wasAnyEnabled && nowAnyEnabled) {
-            this.isPlaying = true;
-            this.sequencerAnchorMs = this.nowMs();
-            this.lastProcessedAbsoluteStep = 0;
-            this.triggerSequencerStep(0, 0);
-        } else if (wasAnyEnabled && !nowAnyEnabled) {
-            this.isPlaying = false;
-            this.lastProcessedAbsoluteStep = null;
-        }
 
         this.lanePulse[lane] = Math.max(this.lanePulse[lane], 1.0);
     }
 
     private updateSequencer(): void {
-        if (!this.isPlaying) {
-            this.lastProcessedAbsoluteStep = null;
-            return;
-        }
 
         const now = this.nowMs();
         const stepDurationMs = this.getStepDurationMs();
@@ -930,32 +895,27 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (this.context.app.isHost && (now - this.lastSyncBroadcastAtMs) >= 2000) {
             this.broadcastSequencerSnapshot(absoluteStep % 16, phaseMs);
         }
-
-        // Keep the transport alive for active phrases even if all lanes are off.
-        if (!this.anyLaneEnabled() && !this.anyArpActive() && this.padPhraseById.size === 0) {
-            this.isPlaying = false;
-            this.lastProcessedAbsoluteStep = null;
-        }
     }
 
     private triggerSequencerStep(step: number, absoluteStep: number): void {
         const pos = { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z };
+        const energy = this.getEnergyLevel();
 
         if (this.laneEnabled.kick && this.lanePattern.kick.has(step)) {
             this.lanePulse.kick = Math.max(this.lanePulse.kick, 1.0);
-            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: 0.9, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'kick', intensity: 0.92 + energy * 0.06, position: pos });
         }
         if (this.laneEnabled.snare && this.lanePattern.snare.has(step)) {
             this.lanePulse.snare = Math.max(this.lanePulse.snare, 0.95);
-            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: 0.72, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'snare', intensity: 0.74 + energy * 0.04, position: pos });
         }
         if (this.laneEnabled.hat && this.lanePattern.hat.has(step)) {
             this.lanePulse.hat = Math.max(this.lanePulse.hat, 0.78);
-            this.context.audio.playSequencerBeat({ beat: 'hat', intensity: 0.62, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'hat', intensity: 0.6 + energy * 0.05, position: pos });
         }
         if (this.laneEnabled.bass && this.lanePattern.bass.has(step)) {
             this.lanePulse.bass = Math.max(this.lanePulse.bass, 0.9);
-            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: 0.72, position: pos });
+            this.context.audio.playSequencerBeat({ beat: 'bass', intensity: 0.76 + energy * 0.07, position: pos });
         }
 
         this.triggerArpStep(absoluteStep);
@@ -963,27 +923,47 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private triggerArpStep(absoluteStep: number): void {
-        const arpOffsets: Record<TArpStripId, readonly number[]> = {
-            'arp-0': [0, 7, 12, 7],
-            'arp-1': [0, 3, 7, 10],
-            'arp-2': [0, 5, 9, 12]
+        const arpOffsets: Record<TArpStripId, readonly (readonly number[])[]> = {
+            'arp-0': [
+                [0, 7, 12, 7, 0, 7, 14, 12],
+                [0, 5, 12, 7, 0, 7, 12, 10],
+                [0, 7, 12, 14, 12, 7, 5, 7]
+            ],
+            'arp-1': [
+                [0, 3, 7, 10, 12, 10, 7, 3],
+                [0, 7, 10, 12, 10, 7, 3, 0],
+                [0, 3, 7, 12, 10, 7, 5, 3]
+            ],
+            'arp-2': [
+                [0, 5, 9, 12, 9, 5, 12, 17],
+                [0, 5, 9, 14, 12, 9, 5, 12],
+                [0, 7, 9, 12, 14, 12, 9, 7]
+            ]
         };
         const arpRoots: Record<TArpStripId, number> = {
             'arp-0': 261.63,
             'arp-1': 293.66,
             'arp-2': 329.63
         };
+        const barIndex = Math.floor(Math.max(0, absoluteStep) / 16);
+        const variation = barIndex % 3;
+        const stepInBar = absoluteStep % 16;
+        const isKickStep = this.laneEnabled.kick && this.lanePattern.kick.has(stepInBar);
+        const energy = this.getEnergyLevel();
 
         for (const stripId of ARP_STRIPS) {
             if (!this.arpStripActive[stripId]) continue;
-            const pattern = arpOffsets[stripId];
+            const patternSet = arpOffsets[stripId];
+            const pattern = patternSet[variation];
             const noteIdx = absoluteStep % pattern.length;
             const semitone = pattern[noteIdx];
             const freq = arpRoots[stripId] * Math.pow(2, semitone / 12);
             const pos = this.arpStripPositions.get(stripId);
             this.context.audio.playArpNote({
                 frequency: freq,
-                intensity: 0.62,
+                intensity: isKickStep
+                    ? (0.42 + energy * 0.03)
+                    : (0.6 + energy * 0.12),
                 position: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: this.stationCenter.x, y: this.stationCenter.y, z: this.stationCenter.z }
             });
         }
@@ -999,7 +979,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         return {
             version: 1,
             bpm: this.bpm,
-            isPlaying: this.isPlaying,
             stepIndex: absoluteStep % 16,
             stepPhaseMs,
             laneEnabled: { ...this.laneEnabled },
@@ -1019,7 +998,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.arpStripActive['arp-0'] = !!arpActive['arp-0'];
         this.arpStripActive['arp-1'] = !!arpActive['arp-1'];
         this.arpStripActive['arp-2'] = !!arpActive['arp-2'];
-        this.isPlaying = !!snapshot.isPlaying && (this.anyLaneEnabled() || this.anyArpActive());
 
         const stepDurationMs = this.getStepDurationMs();
         const clampedStep = this.normalizeStep(snapshot.stepIndex);
@@ -1112,6 +1090,18 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         return this.arpStripActive['arp-0'] || this.arpStripActive['arp-1'] || this.arpStripActive['arp-2'];
     }
 
+    private getEnergyLevel(): number {
+        let active = 0;
+        if (this.laneEnabled.kick) active++;
+        if (this.laneEnabled.snare) active++;
+        if (this.laneEnabled.hat) active++;
+        if (this.laneEnabled.bass) active++;
+        if (this.arpStripActive['arp-0']) active++;
+        if (this.arpStripActive['arp-1']) active++;
+        if (this.arpStripActive['arp-2']) active++;
+        return Math.min(1, active / 7);
+    }
+
     private normalizeStep(stepIndex: number): number {
         if (!Number.isFinite(stepIndex)) return 0;
         const rounded = Math.floor(stepIndex);
@@ -1140,3 +1130,4 @@ export class DrumPadArcObject implements IObjectModule {
         return new DrumPadArcInstance(context, this.id);
     }
 }
+

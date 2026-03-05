@@ -496,19 +496,19 @@ export class SoundSynth {
         const drive = Math.min(1.0, Math.max(0.2, intensity));
 
         const out = ctx.createGain();
-        out.gain.setValueAtTime(0.86, now);
+        out.gain.setValueAtTime(0.9, now);
         out.connect(output);
 
         const hp = ctx.createBiquadFilter();
         hp.type = 'highpass';
-        hp.frequency.setValueAtTime(280, now);
+        hp.frequency.setValueAtTime(340, now);
         hp.connect(out);
 
         const lp = ctx.createBiquadFilter();
         lp.type = 'lowpass';
-        lp.frequency.setValueAtTime(4200, now);
-        lp.frequency.exponentialRampToValueAtTime(1400, now + 0.22);
-        lp.Q.setValueAtTime(0.6, now);
+        lp.frequency.setValueAtTime(5400 + drive * 1100, now);
+        lp.frequency.exponentialRampToValueAtTime(1700 + drive * 300, now + 0.26);
+        lp.Q.setValueAtTime(0.7, now);
         lp.connect(hp);
 
         const oscA = ctx.createOscillator();
@@ -516,24 +516,36 @@ export class SoundSynth {
         oscA.frequency.setValueAtTime(frequency, now);
         const gainA = ctx.createGain();
         gainA.gain.setValueAtTime(0.0001, now);
-        gainA.gain.linearRampToValueAtTime(0.09 * drive, now + 0.008);
-        gainA.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        gainA.gain.linearRampToValueAtTime(0.1 * drive, now + 0.006);
+        gainA.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
         oscA.connect(gainA);
         gainA.connect(lp);
         oscA.start(now);
-        oscA.stop(now + 0.32);
+        oscA.stop(now + 0.36);
 
         const oscB = ctx.createOscillator();
         oscB.type = 'sawtooth';
         oscB.frequency.setValueAtTime(frequency * 1.002, now);
         const gainB = ctx.createGain();
         gainB.gain.setValueAtTime(0.0001, now);
-        gainB.gain.linearRampToValueAtTime(0.045 * drive, now + 0.008);
-        gainB.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+        gainB.gain.linearRampToValueAtTime(0.06 * drive, now + 0.007);
+        gainB.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
         oscB.connect(gainB);
         gainB.connect(lp);
         oscB.start(now);
-        oscB.stop(now + 0.26);
+        oscB.stop(now + 0.3);
+
+        const shimmer = ctx.createOscillator();
+        shimmer.type = 'sine';
+        shimmer.frequency.setValueAtTime(frequency * 2.0, now);
+        const shimmerGain = ctx.createGain();
+        shimmerGain.gain.setValueAtTime(0.0001, now);
+        shimmerGain.gain.linearRampToValueAtTime(0.018 * drive, now + 0.006);
+        shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        shimmer.connect(shimmerGain);
+        shimmerGain.connect(lp);
+        shimmer.start(now);
+        shimmer.stop(now + 0.2);
     }
 
     public static playHighFive(

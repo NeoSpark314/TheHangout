@@ -18,7 +18,7 @@ export class AudioRuntime {
     private readonly drumTimbreVersion = 3;
     private readonly beatTimbreVersion = 1;
     private readonly melodyTimbreVersion = 1;
-    private readonly arpTimbreVersion = 1;
+    private readonly arpTimbreVersion = 2;
 
     constructor(private context: AppContext) {
         this.setupListeners();
