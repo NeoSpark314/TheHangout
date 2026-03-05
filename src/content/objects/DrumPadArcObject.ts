@@ -377,7 +377,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         const now = this.nowMs();
         const padEnterRadius = 0.24;
         const padLeaveRadius = 0.36;
-        const touchCooldownMs = 220;
+        const touchCooldownMs = 140;
 
         for (const hand of ['left', 'right'] as const) {
             const state = tracking.hands[hand];
@@ -400,14 +400,15 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 const dx = pos.x - padPos.x;
                 const dz = pos.z - padPos.z;
                 const distXZ = Math.hypot(dx, dz);
+                const distY = Math.abs(pos.y - padPos.y);
                 const armKey = `${hand}:pad:${i}`;
                 const armed = this.handPadArmed.get(armKey) ?? true;
-                if (distXZ > padLeaveRadius) {
+                if (distXZ > padLeaveRadius || distY > 0.24) {
                     this.handPadArmed.set(armKey, true);
                     continue;
                 }
                 if (!armed || distXZ > padEnterRadius) continue;
-                if (Math.abs(pos.y - padPos.y) > 0.22) continue;
+                if (distY > 0.2) continue;
 
                 const key = `${hand}:${i}`;
                 const lastHit = this.lastHandPadHitAtMs.get(key) ?? 0;
@@ -501,6 +502,11 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private startPadPhrase(padId: TPadPhraseId): void {
         if (!this.isValidPadId(padId)) return;
         const now = this.nowMs();
+        if (!this.isPlaying) {
+            this.isPlaying = true;
+            this.sequencerAnchorMs = now;
+            this.lastProcessedAbsoluteStep = 0;
+        }
         const stepDurationMs = this.getStepDurationMs();
         const elapsedMs = Math.max(0, now - this.sequencerAnchorMs);
         const absoluteStep = Math.floor(elapsedMs / stepDurationMs);
@@ -520,6 +526,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private applyPadPhraseStart(start: IPadPhraseStartPayload): void {
         if (!this.isValidPadPhraseStart(start)) return;
+        const stepDurationMs = this.getStepDurationMs();
+        if (!this.isPlaying) {
+            this.isPlaying = true;
+            this.sequencerAnchorMs = this.nowMs() - (Math.max(0, Math.floor(start.startStep)) * stepDurationMs);
+            this.lastProcessedAbsoluteStep = null;
+        }
         this.padPhraseById.set(start.padId, {
             padId: start.padId,
             startStep: Math.max(0, Math.floor(start.startStep))
@@ -684,6 +696,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
         if (this.context.app.isHost && (now - this.lastSyncBroadcastAtMs) >= 2000) {
             this.broadcastSequencerSnapshot(absoluteStep % 16, phaseMs);
+        }
+
+        // Keep the transport alive for active phrases even if all lanes are off.
+        if (!this.anyLaneEnabled() && this.padPhraseById.size === 0) {
+            this.isPlaying = false;
+            this.lastProcessedAbsoluteStep = null;
         }
     }
 
