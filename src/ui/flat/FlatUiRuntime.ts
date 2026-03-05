@@ -4,6 +4,7 @@ import { EVENTS } from '../../shared/constants/Constants';
 import { isMobile } from '../../shared/utils/DeviceUtils';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { ControllerPointer } from '../shared/ControllerPointer';
+import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 
 export class FlatUiRuntime implements IUpdatable {
     private overlay: HTMLElement;
@@ -74,11 +75,8 @@ export class FlatUiRuntime implements IUpdatable {
         const sessionIdToJoin = urlParams.get('session')?.trim() || null;
         this.inviteSessionId = sessionIdToJoin;
 
-        if (sessionIdToJoin) {
-            this.setupGuestMode(sessionIdToJoin);
-        } else {
-            this.setupDefaultMode();
-        }
+        // Invite links only prefill the session id; joining/hosting keeps the same UI flow.
+        this.setupDefaultMode();
 
         const networkBadge = document.getElementById('network-mode');
         if (networkBadge) {
@@ -273,48 +271,48 @@ export class FlatUiRuntime implements IUpdatable {
     }
 
     private loadFromStorage(): void {
-        const storedName = localStorage.getItem('hangout_playerName');
+        const storedName = AppLocalStorage.getPlayerName();
         if (!storedName) {
             const randomName = this.generateRandomName();
             this.nameInput.value = randomName;
-            localStorage.setItem('hangout_playerName', randomName);
+            AppLocalStorage.setPlayerName(randomName);
         } else {
             this.nameInput.value = storedName;
         }
 
-        const storedSession = localStorage.getItem('hangout_lastSessionId');
+        const storedSession = AppLocalStorage.getLastSessionId();
         if (!storedSession) {
             const defaultSession = 'DefaultMeetingSession';
             this.sessionIdInput.value = defaultSession;
-            localStorage.setItem('hangout_lastSessionId', defaultSession);
+            AppLocalStorage.setLastSessionId(defaultSession);
         } else {
             this.sessionIdInput.value = storedSession;
         }
         // Invite links should win over previous local defaults/history.
         if (this.inviteSessionId) {
             this.sessionIdInput.value = this.inviteSessionId;
-            localStorage.setItem('hangout_lastSessionId', this.inviteSessionId);
+            AppLocalStorage.setLastSessionId(this.inviteSessionId);
         }
 
-        const storedVoice = localStorage.getItem('hangout_voiceEnabled');
-        if (storedVoice === 'false') {
+        const storedVoice = AppLocalStorage.getVoiceAutoEnable();
+        if (storedVoice === false) {
             this.context.voiceAutoEnable = false;
         } else {
             this.context.voiceAutoEnable = true;
-            if (storedVoice === null) {
-                localStorage.setItem('hangout_voiceEnabled', 'true');
+            if (storedVoice === undefined) {
+                AppLocalStorage.setVoiceAutoEnable(true);
             }
         }
         this.context.voiceEnabled = this.context.runtime.media?.isMicrophoneEnabled() || false;
         this.updateVoiceButton(this.context.voiceAutoEnable);
 
-        const storedColor = localStorage.getItem('hangout_avatarColor');
+        const storedColor = AppLocalStorage.getAvatarColor();
         if (storedColor) {
             this.context.avatarConfig.color = storedColor;
         } else {
             const randomColor = this.generateRandomAvatarColor();
             this.context.avatarConfig.color = randomColor;
-            localStorage.setItem('hangout_avatarColor', randomColor);
+            AppLocalStorage.setAvatarColor(randomColor);
         }
 
         if (this.avatarColorInput) this.avatarColorInput.value = this.context.avatarConfig.color as string;
@@ -335,16 +333,16 @@ export class FlatUiRuntime implements IUpdatable {
         const name = this.nameInput.value.trim();
         const session = this.sessionIdInput.value.trim();
         if (name) {
-            localStorage.setItem('hangout_playerName', name);
+            AppLocalStorage.setPlayerName(name);
             this.context.playerName = name;
             eventBus.emit(EVENTS.LOCAL_NAME_UPDATED, name);
         }
         if (this.context.avatarConfig.color) {
-            localStorage.setItem('hangout_avatarColor', this.context.avatarConfig.color as string);
+            AppLocalStorage.setAvatarColor(this.context.avatarConfig.color as string);
         }
-        localStorage.setItem('hangout_voiceEnabled', String(this.context.voiceAutoEnable));
+        AppLocalStorage.setVoiceAutoEnable(this.context.voiceAutoEnable);
         if (session) {
-            localStorage.setItem('hangout_lastSessionId', session);
+            AppLocalStorage.setLastSessionId(session);
         }
     }
 
@@ -369,22 +367,6 @@ export class FlatUiRuntime implements IUpdatable {
     private enableAllButtons(): void {
         this.createBtn.disabled = false;
         this.joinBtn.disabled = false;
-    }
-
-    private setupGuestMode(sessionId: string): void {
-        this.context.isHost = false;
-        if (this.createBtn) this.hideElement(this.createBtn);
-        this.sessionIdInput.value = sessionId;
-        this.joinBtn.addEventListener('click', async () => {
-            this.ensureAudioContextResumed();
-            this.context.playerName = this.nameInput.value.trim() || 'Guest';
-            if (this.context.voiceAutoEnable) {
-                await this.context.runtime.media.ensureMicrophoneEnabled();
-            }
-            this.setStatus('Connecting to host...');
-            this.joinBtn.disabled = true;
-            eventBus.emit(EVENTS.JOIN_SESSION, this.sessionIdInput.value.trim() || sessionId);
-        });
     }
 
     private setupDefaultMode(): void {

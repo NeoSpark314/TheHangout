@@ -11,6 +11,7 @@ import {
     IDesktopStreamSummonedPayload
 } from '../../shared/contracts/INetworkPacket';
 import { EVENTS, PACKET_TYPES } from '../../shared/constants/Constants';
+import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 
 export interface IMyScreenConfig {
     name: string;
@@ -31,8 +32,6 @@ interface IRenderSurface {
     lastFrameTs: number;
     isBillboard: boolean;
 }
-
-const MY_SCREENS_STORAGE_KEY = 'hangout_myScreens';
 
 export class RemoteDesktopFeature implements IUpdatable {
     private configs: IMyScreenConfig[] = [];
@@ -60,29 +59,10 @@ export class RemoteDesktopFeature implements IUpdatable {
     }
 
     public loadConfigsFromStorage(): void {
-        try {
-            const raw = localStorage.getItem(MY_SCREENS_STORAGE_KEY);
-            if (!raw) {
-                this.configs = [];
-                return;
-            }
-
-            const parsed = JSON.parse(raw);
-            if (!Array.isArray(parsed)) {
-                this.configs = [];
-                return;
-            }
-
-            this.configs = parsed
-                .filter((item: unknown) => !!item && typeof item === 'object')
-                .map((item: any) => ({
-                    name: String(item.name || '').trim(),
-                    key: String(item.key || '').trim()
-                }))
-                .filter((item: IMyScreenConfig) => item.name.length > 0 && item.key.length > 0);
-        } catch {
-            this.configs = [];
-        }
+        this.configs = AppLocalStorage.getRemoteDesktopScreens().map((item) => ({
+            name: item.name,
+            key: item.key
+        }));
     }
 
     public getConfigs(): IMyScreenConfig[] {
@@ -94,7 +74,7 @@ export class RemoteDesktopFeature implements IUpdatable {
             .map(c => ({ name: c.name, key: c.key }));
 
         this.configs = cleaned;
-        localStorage.setItem(MY_SCREENS_STORAGE_KEY, JSON.stringify(cleaned));
+        AppLocalStorage.setRemoteDesktopScreens(cleaned);
         if (!silent) {
             eventBus.emit(EVENTS.DESKTOP_SCREENS_UPDATED);
         }

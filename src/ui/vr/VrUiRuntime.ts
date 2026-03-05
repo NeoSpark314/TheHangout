@@ -8,6 +8,7 @@ import { EntityType } from '../../shared/contracts/IEntityState';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../shared/utils/PlayerBadgeUtils';
+import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 import { ControllerPointer } from '../shared/ControllerPointer';
 import * as THREE from 'three';
 import { GrabSkill } from '../../skills/GrabSkill';
@@ -747,7 +748,7 @@ export class VrUiRuntime implements IUpdatable {
         const micBtn = new UIButton("Mic: ON", 240, 10, 380, 60, () => {
             const nextPreference = !this.context.voiceAutoEnable;
             this.context.voiceAutoEnable = nextPreference;
-            localStorage.setItem('hangout_voiceEnabled', String(nextPreference));
+            AppLocalStorage.setVoiceAutoEnable(nextPreference);
             this.context.runtime.media.setMicrophoneEnabled(nextPreference).then((actualState) => {
                 this.context.voiceEnabled = actualState;
             });
