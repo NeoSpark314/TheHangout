@@ -49,12 +49,12 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         hat: new Set([2, 6, 10, 14])
     };
     private laneEnabled: Record<TBeatLane, boolean> = {
-        kick: true,
-        snare: true,
-        hat: true
+        kick: false,
+        snare: false,
+        hat: false
     };
     private bpm: number = 124;
-    private isPlaying: boolean = true;
+    private isPlaying: boolean = false;
     private sequencerAnchorMs: number = 0;
     private lastProcessedAbsoluteStep: number | null = null;
     private lastSyncBroadcastAtMs: number = 0;
@@ -491,7 +491,20 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private toggleLane(lane: TBeatLane): void {
+        const wasAnyEnabled = this.anyLaneEnabled();
         this.laneEnabled[lane] = !this.laneEnabled[lane];
+        const nowAnyEnabled = this.anyLaneEnabled();
+
+        if (!wasAnyEnabled && nowAnyEnabled) {
+            this.isPlaying = true;
+            this.sequencerAnchorMs = this.nowMs();
+            this.lastProcessedAbsoluteStep = 0;
+            this.triggerSequencerStep(0);
+        } else if (wasAnyEnabled && !nowAnyEnabled) {
+            this.isPlaying = false;
+            this.lastProcessedAbsoluteStep = null;
+        }
+
         this.lanePulse[lane] = Math.max(this.lanePulse[lane], 1.0);
     }
 
@@ -562,8 +575,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (!this.isValidLaneEnabled(snapshot.laneEnabled)) return;
 
         this.bpm = Math.max(80, Math.min(170, snapshot.bpm || 124));
-        this.isPlaying = !!snapshot.isPlaying;
         this.laneEnabled = { ...snapshot.laneEnabled };
+        this.isPlaying = !!snapshot.isPlaying && this.anyLaneEnabled();
 
         const stepDurationMs = this.getStepDurationMs();
         const clampedStep = this.normalizeStep(snapshot.stepIndex);
@@ -608,6 +621,10 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private isValidBeatLane(lane: unknown): lane is TBeatLane {
         return lane === 'kick' || lane === 'snare' || lane === 'hat';
+    }
+
+    private anyLaneEnabled(): boolean {
+        return this.laneEnabled.kick || this.laneEnabled.snare || this.laneEnabled.hat;
     }
 
     private normalizeStep(stepIndex: number): number {
