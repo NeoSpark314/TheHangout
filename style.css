@@ -776,3 +776,11 @@ input[type="color"] {
     cursor: default;
     border: 2px solid rgba(0, 255, 255, 0.2);
 }
+
+body.world-transition-active #menu-2d-overlay,
+body.world-transition-active .controller-cursor,
+body.world-transition-active #ui-overlay,
+body.world-transition-active .xr-entry-row {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}

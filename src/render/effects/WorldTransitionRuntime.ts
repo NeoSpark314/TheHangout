@@ -212,12 +212,18 @@ export class WorldTransitionRuntime implements IUpdatable {
         const scene = this.context.runtime.render?.scene;
         if (!scene) return;
         scene.overrideMaterial = this.transitionMaterial;
+        if (typeof document !== 'undefined') {
+            document.body.classList.add('world-transition-active');
+        }
     }
 
     private endTransition(): void {
         const scene = this.context.runtime.render?.scene;
         if (scene && scene.overrideMaterial === this.transitionMaterial) {
             scene.overrideMaterial = null;
+        }
+        if (typeof document !== 'undefined') {
+            document.body.classList.remove('world-transition-active');
         }
         this.phase = 'idle';
         this.phaseTimeSec = 0;
