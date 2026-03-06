@@ -124,6 +124,7 @@ export class UIPointerSkill extends Skill {
             }
 
             const trackingHands = runtime.tracking.getState().hands;
+            let anyHandHoveringTablet = false;
 
             for (const hand of ['left', 'right'] as const) {
                 const handState = trackingHands[hand];
@@ -146,6 +147,7 @@ export class UIPointerSkill extends Skill {
 
                     if (hits.length > 0) {
                         const hit = hits[0];
+                        anyHandHoveringTablet = true;
                         line.visible = true;
                         dot.visible = true;
 
@@ -166,12 +168,15 @@ export class UIPointerSkill extends Skill {
                     } else {
                         line.visible = false;
                         dot.visible = false;
-                        vrUi.tablet.ui.onPointerOut();
                     }
                 } else {
                     line.visible = false;
                     dot.visible = false;
                 }
+            }
+
+            if (!anyHandHoveringTablet) {
+                vrUi.tablet.ui.onPointerOut();
             }
         } else {
             // Keep world-space tablet interaction XR-only. Desktop users should use
@@ -180,7 +185,11 @@ export class UIPointerSkill extends Skill {
             this.pointerLines.right.visible = false;
             this.pointerDots.left.visible = false;
             this.pointerDots.right.visible = false;
-            vrUi.tablet.ui.onPointerOut();
+            // Do not clear hover while the desktop 2D tablet menu is open; that path
+            // drives hover through canvas mouse events.
+            if (!player.appContext.isMenuOpen) {
+                vrUi.tablet.ui.onPointerOut();
+            }
             this.mouseDot.visible = false;
             return;
         }

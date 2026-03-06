@@ -37,8 +37,21 @@ export class VrUiRuntime implements IUpdatable {
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
+    private canvasMouseLeaveHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
     private scenarioRefreshCleanup: (() => void) | null = null;
+    private readonly tempUpAxis = new THREE.Vector3(0, 1, 0);
+    private readonly tempHeadPosition = new THREE.Vector3();
+    private readonly tempHeadQuaternion = new THREE.Quaternion();
+    private readonly tempHeadEuler = new THREE.Euler();
+    private readonly tempCenterOffset = new THREE.Vector3();
+    private readonly tempMenuOffsetLocal = new THREE.Vector3();
+    private readonly tempMenuOffsetWorld = new THREE.Vector3();
+    private readonly tempWristWorld = new THREE.Vector3();
+    private readonly tempWristWorldQuat = new THREE.Quaternion();
+    private readonly tempOrbLocalOffset = new THREE.Vector3();
+    private readonly tempOrbWorld = new THREE.Vector3();
+    private readonly tempFreeHandWorld = new THREE.Vector3();
 
     constructor(private context: AppContext) {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
@@ -286,10 +299,10 @@ export class VrUiRuntime implements IUpdatable {
             return;
         }
 
-        const headPosition = new THREE.Vector3();
-        const headQuaternion = new THREE.Quaternion();
-        const headEuler = new THREE.Euler();
-        const centerOffset = new THREE.Vector3(
+        const headPosition = this.tempHeadPosition;
+        const headQuaternion = this.tempHeadQuaternion;
+        const headEuler = this.tempHeadEuler;
+        const centerOffset = this.tempCenterOffset.set(
             state.centerOffsetHeadLocal.x,
             state.centerOffsetHeadLocal.y,
             state.centerOffsetHeadLocal.z
@@ -297,11 +310,11 @@ export class VrUiRuntime implements IUpdatable {
         render.camera.getWorldPosition(headPosition);
         render.camera.getWorldQuaternion(headQuaternion);
         headEuler.setFromQuaternion(headQuaternion, 'YXZ');
-        centerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
+        centerOffset.applyAxisAngle(this.tempUpAxis, headEuler.y);
 
         indicator.visible = true;
         indicator.position.copy(headPosition).add(centerOffset);
-        indicator.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), state.frameYaw);
+        indicator.quaternion.setFromAxisAngle(this.tempUpAxis, state.frameYaw);
         shell.scale.setScalar(state.radius);
         const shellMaterial = shell.material as THREE.MeshBasicMaterial;
         shellMaterial.opacity = state.isActive ? 0.08 : 0.12;
@@ -333,10 +346,10 @@ export class VrUiRuntime implements IUpdatable {
             return;
         }
 
-        const headPosition = new THREE.Vector3();
-        const headQuaternion = new THREE.Quaternion();
-        const headEuler = new THREE.Euler();
-        const centerOffset = new THREE.Vector3(
+        const headPosition = this.tempHeadPosition;
+        const headQuaternion = this.tempHeadQuaternion;
+        const headEuler = this.tempHeadEuler;
+        const centerOffset = this.tempCenterOffset.set(
             indicatorState.centerOffsetHeadLocal.x,
             indicatorState.centerOffsetHeadLocal.y,
             indicatorState.centerOffsetHeadLocal.z
@@ -344,16 +357,17 @@ export class VrUiRuntime implements IUpdatable {
         render.camera.getWorldPosition(headPosition);
         render.camera.getWorldQuaternion(headQuaternion);
         headEuler.setFromQuaternion(headQuaternion, 'YXZ');
-        centerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
+        centerOffset.applyAxisAngle(this.tempUpAxis, headEuler.y);
 
-        const menuOffsetLocal = new THREE.Vector3(
+        const menuOffsetLocal = this.tempMenuOffsetLocal.set(
             -indicatorState.radius * 1.45,
             indicatorState.radius * 1.45,
             0
         );
 
         menuOrb.visible = true;
-        menuOrb.position.copy(headPosition).add(centerOffset).add(menuOffsetLocal.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y));
+        this.tempMenuOffsetWorld.copy(menuOffsetLocal).applyAxisAngle(this.tempUpAxis, headEuler.y);
+        menuOrb.position.copy(headPosition).add(centerOffset).add(this.tempMenuOffsetWorld);
 
         const menuRadius = indicatorState.radius * 0.33;
         menuOrb.scale.setScalar(menuRadius / 0.022);
@@ -412,15 +426,15 @@ export class VrUiRuntime implements IUpdatable {
 
         const wristPos = heldHandState.pose.position;
         const wristQuat = heldHandState.pose.quaternion;
-        const wristWorld = new THREE.Vector3(wristPos.x, wristPos.y, wristPos.z);
-        const wristWorldQuat = new THREE.Quaternion(wristQuat.x, wristQuat.y, wristQuat.z, wristQuat.w);
+        const wristWorld = this.tempWristWorld.set(wristPos.x, wristPos.y, wristPos.z);
+        const wristWorldQuat = this.tempWristWorldQuat.set(wristQuat.x, wristQuat.y, wristQuat.z, wristQuat.w);
 
-        const orbLocalOffset = new THREE.Vector3(
+        const orbLocalOffset = this.tempOrbLocalOffset.set(
             heldHand === 'left' ? 0.045 : -0.045,
             0.015,
             0
         );
-        const orbWorld = wristWorld.clone().add(orbLocalOffset.applyQuaternion(wristWorldQuat));
+        const orbWorld = this.tempOrbWorld.copy(orbLocalOffset).applyQuaternion(wristWorldQuat).add(wristWorld);
 
         interactOrb.visible = true;
         interactOrb.position.copy(orbWorld);
@@ -429,10 +443,10 @@ export class VrUiRuntime implements IUpdatable {
         interactOrb.scale.setScalar(orbRadius / 0.022);
 
         const freeHandPos = probe.currentLocal;
-        const headPosition = new THREE.Vector3();
-        const headQuaternion = new THREE.Quaternion();
-        const headEuler = new THREE.Euler();
-        const centerOffset = new THREE.Vector3(
+        const headPosition = this.tempHeadPosition;
+        const headQuaternion = this.tempHeadQuaternion;
+        const headEuler = this.tempHeadEuler;
+        const centerOffset = this.tempCenterOffset.set(
             indicatorState.centerOffsetHeadLocal.x,
             indicatorState.centerOffsetHeadLocal.y,
             indicatorState.centerOffsetHeadLocal.z
@@ -440,10 +454,12 @@ export class VrUiRuntime implements IUpdatable {
         render.camera.getWorldPosition(headPosition);
         render.camera.getWorldQuaternion(headQuaternion);
         headEuler.setFromQuaternion(headQuaternion, 'YXZ');
-        centerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y);
-        const freeHandWorld = headPosition.clone()
+        centerOffset.applyAxisAngle(this.tempUpAxis, headEuler.y);
+        const freeHandWorld = this.tempFreeHandWorld
+            .set(freeHandPos.x, freeHandPos.y, freeHandPos.z)
+            .applyAxisAngle(this.tempUpAxis, headEuler.y)
             .add(centerOffset)
-            .add(new THREE.Vector3(freeHandPos.x, freeHandPos.y, freeHandPos.z).applyAxisAngle(new THREE.Vector3(0, 1, 0), headEuler.y));
+            .add(headPosition);
 
         const isHovering = freeHandWorld.distanceToSquared(orbWorld) <= (orbRadius * orbRadius);
 
@@ -543,6 +559,11 @@ export class VrUiRuntime implements IUpdatable {
                 this.tablet!.ui.onMouseClick(x, y);
             };
             canvas.addEventListener('click', this.canvasClickHandler);
+
+            this.canvasMouseLeaveHandler = (_e: MouseEvent) => {
+                this.tablet?.ui.onPointerOut();
+            };
+            canvas.addEventListener('mouseleave', this.canvasMouseLeaveHandler);
         }
 
         // Always re-append to ensure it's in the DOM
@@ -565,6 +586,7 @@ export class VrUiRuntime implements IUpdatable {
 
     private hide2DMenu(): void {
         this.controllerCursor.hide();
+        this.tablet?.ui.onPointerOut();
         if (this.overlayContainer && this.overlayContainer.parentElement) {
             this.overlayContainer.parentElement.removeChild(this.overlayContainer);
         }
@@ -1564,6 +1586,10 @@ export class VrUiRuntime implements IUpdatable {
             if (this.canvasClickHandler) {
                 canvas.removeEventListener('click', this.canvasClickHandler);
                 this.canvasClickHandler = null;
+            }
+            if (this.canvasMouseLeaveHandler) {
+                canvas.removeEventListener('mouseleave', this.canvasMouseLeaveHandler);
+                this.canvasMouseLeaveHandler = null;
             }
 
             this.context.runtime.render?.scene.remove(this.tablet.mesh);
