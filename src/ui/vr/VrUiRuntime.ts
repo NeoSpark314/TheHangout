@@ -30,18 +30,15 @@ export class VrUiRuntime implements IUpdatable {
     private sessionTab: any = null;
     private systemTab: any = null;
     private refreshPeersList: (() => void) | null = null;
-    private peersTalkingInterval: ReturnType<typeof setInterval> | null = null;
-    private onPeerUpdateHandler: (() => void) | null = null;
+    private peersRefreshCleanup: (() => void) | null = null;
     private onVoiceStateHandler: (() => void) | null = null;
-    private scheduleRenderHandler: (() => void) | null = null;
-    private onDesktopUpdateHandler: (() => void) | null = null;
-    private onDesktopResubscribeHandler: (() => void) | null = null;
+    private desktopRefreshCleanup: (() => void) | null = null;
     private menuIntentHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
-    private scenarioTabRefreshHandler: (() => void) | null = null;
+    private scenarioRefreshCleanup: (() => void) | null = null;
 
     constructor(private context: AppContext) {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
@@ -62,6 +59,79 @@ export class VrUiRuntime implements IUpdatable {
         }
 
         return true;
+    }
+
+    private createPlainContainer(x: number, y: number, width: number, height: number): UIElement {
+        const container = new UIElement(x, y, width, height);
+        container.backgroundColor = 'transparent';
+        container.borderWidth = 0;
+        return container;
+    }
+
+    private createTabTitle(text: string, x: number, y: number, width: number, height: number, align: CanvasTextAlign = 'center'): UILabel {
+        const label = new UILabel(text, x, y, width, height);
+        label.font = getFont(UITheme.typography.sizes.title, 'bold');
+        label.textColor = UITheme.colors.primary;
+        label.textAlign = align;
+        return label;
+    }
+
+    private registerTabRefresh(
+        tabGetter: () => { container: UIElement } | null,
+        refresh: () => void,
+        options: {
+            events?: string[];
+            delayedEvents?: string[];
+            delayMs?: number;
+            intervalMs?: number;
+        } = {}
+    ): () => void {
+        const handlers: Array<{ event: string; handler: () => void }> = [];
+        const timeoutIds = new Set<ReturnType<typeof setTimeout>>();
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
+        const runIfVisible = () => {
+            if (this.shouldRefreshTabUi(tabGetter())) {
+                refresh();
+            }
+        };
+
+        for (const eventName of options.events || []) {
+            const handler = () => runIfVisible();
+            handlers.push({ event: eventName, handler });
+            eventBus.on(eventName as any, handler);
+        }
+
+        const delayMs = options.delayMs ?? 100;
+        for (const eventName of options.delayedEvents || []) {
+            const handler = () => {
+                const timeoutId = setTimeout(() => {
+                    timeoutIds.delete(timeoutId);
+                    runIfVisible();
+                }, delayMs);
+                timeoutIds.add(timeoutId);
+            };
+            handlers.push({ event: eventName, handler });
+            eventBus.on(eventName as any, handler);
+        }
+
+        if (options.intervalMs && options.intervalMs > 0) {
+            intervalId = setInterval(() => runIfVisible(), options.intervalMs);
+        }
+
+        return () => {
+            for (const { event, handler } of handlers) {
+                eventBus.off(event as any, handler);
+            }
+            for (const timeoutId of timeoutIds) {
+                clearTimeout(timeoutId);
+            }
+            timeoutIds.clear();
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        };
     }
 
     public init(): void {
@@ -417,17 +487,9 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     private teardownPeersTabSubscriptions(): void {
-        if (this.peersTalkingInterval) {
-            clearInterval(this.peersTalkingInterval);
-            this.peersTalkingInterval = null;
-        }
-
-        if (this.onPeerUpdateHandler) {
-            eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.onPeerUpdateHandler);
-            eventBus.off(EVENTS.PEER_STATE_UPDATED, this.onPeerUpdateHandler);
-            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.onPeerUpdateHandler);
-            eventBus.off(EVENTS.PEER_DISCONNECTED, this.onPeerUpdateHandler);
-            this.onPeerUpdateHandler = null;
+        if (this.peersRefreshCleanup) {
+            this.peersRefreshCleanup();
+            this.peersRefreshCleanup = null;
         }
 
         if (this.onVoiceStateHandler) {
@@ -435,23 +497,6 @@ export class VrUiRuntime implements IUpdatable {
             this.onVoiceStateHandler = null;
         }
 
-        if (this.scheduleRenderHandler) {
-            eventBus.off(EVENTS.ENTITY_DISCOVERED, this.scheduleRenderHandler);
-            eventBus.off(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
-            eventBus.off(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
-            this.scheduleRenderHandler = null;
-        }
-
-        if (this.onDesktopUpdateHandler) {
-            eventBus.off(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
-            this.onDesktopUpdateHandler = null;
-        }
-
-        if (this.onDesktopResubscribeHandler) {
-            eventBus.off(EVENTS.SESSION_CONNECTED, this.onDesktopResubscribeHandler);
-            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.onDesktopResubscribeHandler);
-            this.onDesktopResubscribeHandler = null;
-        }
     }
 
     public toggle2DMenu(): void {
@@ -590,11 +635,11 @@ export class VrUiRuntime implements IUpdatable {
         const playersPerPage = 4;
 
         // 1. Header Row (for actions like Copy Invite)
-        const headerContainer = new UIElement(0, 20, 1280, 80);
+        const headerContainer = this.createPlainContainer(0, 20, 1280, 80);
         sessionContainer.addChild(headerContainer);
 
         // 2. List Container (shifted down)
-        const listContainer = new UIElement(0, 110, 1280, 500);
+        const listContainer = this.createPlainContainer(0, 110, 1280, 500);
         sessionContainer.addChild(listContainer);
 
         const pageLabel = new UILabel("Page 1/1", 540, 640, 200, 60);
@@ -740,25 +785,25 @@ export class VrUiRuntime implements IUpdatable {
         };
 
         this.refreshPeersList = renderList;
-
-        // Reactive updates
-        this.onPeerUpdateHandler = () => {
-            if (this.shouldRefreshTabUi(this.peersTab)) {
-                renderList();
+        this.peersRefreshCleanup = this.registerTabRefresh(
+            () => this.peersTab,
+            renderList,
+            {
+                events: [
+                    EVENTS.VOICE_STATE_UPDATED,
+                    EVENTS.PEER_STATE_UPDATED,
+                    EVENTS.PEER_JOINED_SESSION,
+                    EVENTS.PEER_DISCONNECTED
+                ],
+                delayedEvents: [
+                    EVENTS.ENTITY_DISCOVERED,
+                    EVENTS.PEER_DISCONNECTED,
+                    EVENTS.REMOTE_NAME_UPDATED
+                ],
+                delayMs: 100,
+                intervalMs: 500
             }
-        };
-
-        eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.onPeerUpdateHandler);
-        eventBus.on(EVENTS.PEER_STATE_UPDATED, this.onPeerUpdateHandler);
-        eventBus.on(EVENTS.PEER_JOINED_SESSION, this.onPeerUpdateHandler);
-        eventBus.on(EVENTS.PEER_DISCONNECTED, this.onPeerUpdateHandler);
-
-        // Periodically refresh for Talking indicators if menu is visible
-        this.peersTalkingInterval = setInterval(() => {
-            if (this.shouldRefreshTabUi(this.peersTab)) {
-                renderList();
-            }
-        }, 500);
+        );
 
         // 3. Header Controls
         const micBtn = new UIButton("Mic: ON", 240, 10, 380, 60, () => {
@@ -830,18 +875,6 @@ export class VrUiRuntime implements IUpdatable {
         sessionContainer.addChild(pageLabel);
         sessionContainer.addChild(nextBtn);
 
-        // Hook up auto-refresh events.
-        this.scheduleRenderHandler = () => {
-            setTimeout(() => {
-                if (this.shouldRefreshTabUi(this.peersTab)) {
-                    renderList();
-                }
-            }, 100);
-        };
-        eventBus.on(EVENTS.ENTITY_DISCOVERED, this.scheduleRenderHandler);
-        eventBus.on(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
-        eventBus.on(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
-
         // Initial render
         renderList();
     }
@@ -880,10 +913,7 @@ export class VrUiRuntime implements IUpdatable {
 
         const desktop = this.context.runtime.remoteDesktop;
 
-        const title = new UILabel('Remote Screens', 50, 30, 1180, 70);
-        title.font = getFont(UITheme.typography.sizes.title, 'bold');
-        title.textColor = UITheme.colors.primary;
-        title.textAlign = 'center';
+        const title = this.createTabTitle('Remote Screens', 50, 30, 1180, 70);
         sessionContainer.addChild(title);
 
         const subtitle = new UILabel('Manage your pre-configured global desktop sources', 70, 90, 1140, 40);
@@ -898,9 +928,7 @@ export class VrUiRuntime implements IUpdatable {
         refreshBtn.cornerRadius = 10;
         sessionContainer.addChild(refreshBtn);
 
-        const listContainer = new UIElement(40, 240, 1200, 500);
-        listContainer.backgroundColor = 'transparent';
-        listContainer.borderWidth = 0;
+        const listContainer = this.createPlainContainer(40, 240, 1200, 500);
         sessionContainer.addChild(listContainer);
 
         const renderList = () => {
@@ -969,17 +997,21 @@ export class VrUiRuntime implements IUpdatable {
             this.tablet?.ui.markDirty();
         };
 
-        this.onDesktopUpdateHandler = () => {
-            renderList();
-        };
-        this.onDesktopResubscribeHandler = () => {
-            desktop.requestSourceStatus();
-            renderList();
-        };
-
-        eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, this.onDesktopUpdateHandler);
-        eventBus.on(EVENTS.SESSION_CONNECTED, this.onDesktopResubscribeHandler);
-        eventBus.on(EVENTS.PEER_JOINED_SESSION, this.onDesktopResubscribeHandler);
+        this.desktopRefreshCleanup?.();
+        this.desktopRefreshCleanup = this.registerTabRefresh(
+            () => this.sessionTab,
+            () => {
+                desktop.requestSourceStatus();
+                renderList();
+            },
+            {
+                events: [
+                    EVENTS.DESKTOP_SCREENS_UPDATED
+                ],
+                delayedEvents: [EVENTS.SESSION_CONNECTED, EVENTS.PEER_JOINED_SESSION],
+                delayMs: 0
+            }
+        );
         desktop.requestSourceStatus();
         renderList();
     }
@@ -1177,10 +1209,8 @@ export class VrUiRuntime implements IUpdatable {
 
         const scenarioTab = this.tabPanel.addTab('Scenario');
         const container = scenarioTab.container;
-        const title = new UILabel('Scenario Actions', 90, 52, 1080, 48);
-        title.font = getFont(UITheme.typography.sizes.title, 'bold');
+        const title = this.createTabTitle('Scenario Actions', 90, 52, 1080, 48, 'left');
         title.textColor = UITheme.colors.accent;
-        title.textAlign = 'left';
         container.addChild(title);
 
         const subtitle = new UILabel('', 90, 102, 1080, 36);
@@ -1189,9 +1219,7 @@ export class VrUiRuntime implements IUpdatable {
         subtitle.textAlign = 'left';
         container.addChild(subtitle);
 
-        const listContainer = new UIElement(90, 160, 1080, 560);
-        listContainer.backgroundColor = 'transparent';
-        listContainer.borderWidth = 0;
+        const listContainer = this.createPlainContainer(90, 160, 1080, 560);
         container.addChild(listContainer);
 
         const renderActions = () => {
@@ -1253,17 +1281,19 @@ export class VrUiRuntime implements IUpdatable {
         };
 
         renderActions();
-        if (this.scenarioTabRefreshHandler) {
-            eventBus.off(EVENTS.SESSION_CONFIG_APPLIED, this.scenarioTabRefreshHandler);
-            eventBus.off(EVENTS.SESSION_CONNECTED, this.scenarioTabRefreshHandler);
-            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.scenarioTabRefreshHandler);
-            eventBus.off(EVENTS.PEER_DISCONNECTED, this.scenarioTabRefreshHandler);
-        }
-        this.scenarioTabRefreshHandler = renderActions;
-        eventBus.on(EVENTS.SESSION_CONFIG_APPLIED, this.scenarioTabRefreshHandler);
-        eventBus.on(EVENTS.SESSION_CONNECTED, this.scenarioTabRefreshHandler);
-        eventBus.on(EVENTS.PEER_JOINED_SESSION, this.scenarioTabRefreshHandler);
-        eventBus.on(EVENTS.PEER_DISCONNECTED, this.scenarioTabRefreshHandler);
+        this.scenarioRefreshCleanup?.();
+        this.scenarioRefreshCleanup = this.registerTabRefresh(
+            () => scenarioTab,
+            renderActions,
+            {
+                events: [
+                    EVENTS.SESSION_CONFIG_APPLIED,
+                    EVENTS.SESSION_CONNECTED,
+                    EVENTS.PEER_JOINED_SESSION,
+                    EVENTS.PEER_DISCONNECTED
+                ]
+            }
+        );
     }
 
     private addHelpTab() {
@@ -1273,9 +1303,7 @@ export class VrUiRuntime implements IUpdatable {
         const container = helpTab.container;
         let currentMode: 'VR' | 'Desktop' | 'Touch' = 'VR';
 
-        const contentArea = new UIElement(50, 150, 1180, 600);
-        contentArea.backgroundColor = 'transparent';
-        contentArea.borderWidth = 0;
+        const contentArea = this.createPlainContainer(50, 150, 1180, 600);
         container.addChild(contentArea);
 
         const navButtons: UIButton[] = [];
@@ -1464,17 +1492,18 @@ export class VrUiRuntime implements IUpdatable {
 
     public destroy(): void {
         this.teardownPeersTabSubscriptions();
+        if (this.desktopRefreshCleanup) {
+            this.desktopRefreshCleanup();
+            this.desktopRefreshCleanup = null;
+        }
+        if (this.scenarioRefreshCleanup) {
+            this.scenarioRefreshCleanup();
+            this.scenarioRefreshCleanup = null;
+        }
         this.hide2DMenu();
         if (this.debugStatsInterval) {
             clearInterval(this.debugStatsInterval);
             this.debugStatsInterval = null;
-        }
-        if (this.scenarioTabRefreshHandler) {
-            eventBus.off(EVENTS.SESSION_CONFIG_APPLIED, this.scenarioTabRefreshHandler);
-            eventBus.off(EVENTS.SESSION_CONNECTED, this.scenarioTabRefreshHandler);
-            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.scenarioTabRefreshHandler);
-            eventBus.off(EVENTS.PEER_DISCONNECTED, this.scenarioTabRefreshHandler);
-            this.scenarioTabRefreshHandler = null;
         }
         if (this.keyboardHandler) {
             window.removeEventListener('keydown', this.keyboardHandler);

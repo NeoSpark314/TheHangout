@@ -165,14 +165,21 @@ export class UIElement {
         // Base implementation draws a simple background box.
         // Can be overridden or left empty for container elements.
         ctx.fillStyle = (this.isHovered && this.hoverColor) ? this.hoverColor : this.backgroundColor;
+        const strokeInset = Math.max(0, this.borderWidth * 0.5);
+        const strokeW = Math.max(0, this.width - this.borderWidth);
+        const strokeH = Math.max(0, this.height - this.borderWidth);
 
         if (this.cornerRadius > 0) {
+            const strokeRadius = Math.max(0, this.cornerRadius - strokeInset);
+
             ctx.beginPath();
             ctx.roundRect(0, 0, this.width, this.height, this.cornerRadius);
             ctx.fill();
             if (this.borderWidth > 0 && this.borderColor) {
                 ctx.lineWidth = this.borderWidth;
                 ctx.strokeStyle = this.borderColor;
+                ctx.beginPath();
+                ctx.roundRect(strokeInset, strokeInset, strokeW, strokeH, strokeRadius);
                 ctx.stroke();
             }
         } else {
@@ -180,7 +187,7 @@ export class UIElement {
             if (this.borderWidth > 0 && this.borderColor) {
                 ctx.lineWidth = this.borderWidth;
                 ctx.strokeStyle = this.borderColor;
-                ctx.strokeRect(0, 0, this.width, this.height);
+                ctx.strokeRect(strokeInset, strokeInset, strokeW, strokeH);
             }
         }
     }
