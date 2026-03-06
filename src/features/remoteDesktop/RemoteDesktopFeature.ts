@@ -95,11 +95,19 @@ export class RemoteDesktopFeature implements IUpdatable {
     public summonStream(key: string, name?: string): void {
         if (!this.context.sessionId) return;
         if (!this.isOnline(key)) {
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen key "${key}" is offline.`);
+            this.context.runtime.notify.warn(`Screen key "${key}" is offline.`, {
+                source: 'remote-desktop',
+                code: 'desktop.offline',
+                dedupeKey: `desktop:offline:${key}`
+            });
             return;
         }
         if (this.isActive(key)) {
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, `Screen "${name || key}" is already active in-session.`);
+            this.context.runtime.notify.info(`Screen "${name || key}" is already active in-session.`, {
+                source: 'remote-desktop',
+                code: 'desktop.already_active',
+                dedupeKey: `desktop:active:${key}`
+            });
             return;
         }
 

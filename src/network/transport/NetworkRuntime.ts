@@ -225,7 +225,10 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 }
             }
 
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, message);
+            this.context.runtime.notify.info(message, {
+                source: 'session',
+                code: `session.${payload.kind || 'notification'}`
+            });
         });
     }
 

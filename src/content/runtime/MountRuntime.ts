@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import type { AppContext } from '../../app/AppContext';
 import type { IUpdatable } from '../../shared/contracts/IUpdatable';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
 import type {
     ILocalMountBinding,
     ILocalMountStatus,
@@ -30,12 +28,11 @@ export class MountRuntime implements IUpdatable {
         if (this.localState === 'requesting' && (this.nowMs() - this.localStateSinceMs) > MountRuntime.REQUEST_TIMEOUT_MS) {
             this.pendingMount = null;
             this.setLocalState('rejected', 'timeout');
-            eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, {
-                message: 'Mount request timed out.',
-                level: 'warning',
+            this.context.runtime.notify.warn('Mount request timed out.', {
                 source: 'mount',
                 durationMs: 2600,
-                dedupeKey: 'mount:timeout'
+                dedupeKey: 'mount:timeout',
+                code: 'mount.request.timeout'
             });
         }
 

@@ -61,8 +61,11 @@ export class PlayerPresenceService {
         // Critical: Always trigger destruction and removal
         runtime.entity.removeEntity(peerId);
 
-        if (isPlayer && runtime.hud) {
-            runtime.hud.showNotification(`${name || 'A player'} left the hangout.`);
+        if (isPlayer) {
+            runtime.notify.info(`${name || 'A player'} left the hangout.`, {
+                source: 'presence',
+                code: 'presence.peer_left'
+            });
         }
     }
 }

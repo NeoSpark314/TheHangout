@@ -10,6 +10,7 @@ import { MountRuntime } from '../content/runtime/MountRuntime';
 import { EntityType } from '../shared/contracts/IEntityState';
 import { RuntimeDiagnostics } from '../app/diagnostics/RuntimeDiagnostics';
 import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
+import { NotificationRuntime } from '../app/notifications/NotificationRuntime';
 
 export class HeadlessSession {
     public context: AppContext;
@@ -31,6 +32,7 @@ export class HeadlessSession {
 
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
         this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
+        this.context.setRuntime('notify', new NotificationRuntime());
         const entityMgr = new EntityRegistry(this.context);
         this.context.setRuntime('entity', entityMgr);
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));

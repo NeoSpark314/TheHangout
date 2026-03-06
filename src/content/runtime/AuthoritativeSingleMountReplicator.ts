@@ -4,8 +4,6 @@ import type {
     IObjectReplicationMeta
 } from '../contracts/IReplicatedObjectInstance';
 import type { ILocalMountBinding } from '../contracts/IMounting';
-import eventBus from '../../app/events/EventBus';
-import { EVENTS } from '../../shared/constants/Constants';
 import type { ISystemNotificationPayload } from '../../shared/contracts/INotification';
 
 export type TMountReleaseReason = 'released' | 'movement' | 'external';
@@ -92,7 +90,8 @@ export class AuthoritativeSingleMountReplicator {
                     level: 'warning',
                     source: 'mount',
                     durationMs: 2400,
-                    dedupeKey: `${this.adapter.ownerInstanceId}:mount:blocked-local`
+                    dedupeKey: `${this.adapter.ownerInstanceId}:mount:blocked-local`,
+                    code: 'mount.rejected.occupied'
                 });
             }
             return false;
@@ -247,7 +246,8 @@ export class AuthoritativeSingleMountReplicator {
                     level: 'success',
                     source: 'mount',
                     durationMs: 1600,
-                    dedupeKey: `${this.adapter.ownerInstanceId}:mount:granted`
+                    dedupeKey: `${this.adapter.ownerInstanceId}:mount:granted`,
+                    code: 'mount.granted'
                 });
             }
         } else if (this.adapter.context.mount.isMountedLocal(this.adapter.ownerInstanceId)) {
@@ -319,7 +319,8 @@ export class AuthoritativeSingleMountReplicator {
             level: 'warning',
             source: 'mount',
             durationMs: 2600,
-            dedupeKey: `${this.adapter.ownerInstanceId}:mount:rejected:${payload.reason}`
+            dedupeKey: `${this.adapter.ownerInstanceId}:mount:rejected:${payload.reason}`,
+            code: `mount.rejected.${payload.reason}`
         });
     }
 
@@ -346,7 +347,7 @@ export class AuthoritativeSingleMountReplicator {
     }
 
     private notify(payload: ISystemNotificationPayload): void {
-        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, payload);
+        this.adapter.context.app.runtime.notify.push(payload);
     }
 
     private resolvePlayerName(peerId: string): string | undefined {

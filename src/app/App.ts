@@ -28,6 +28,7 @@ import { SocialFeature } from '../features/social/SocialFeature';
 import { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
 import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
+import { NotificationRuntime } from './notifications/NotificationRuntime';
 import eventBus from './events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
@@ -93,6 +94,7 @@ export class App {
     private initializeRuntime(): void {
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
         this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
+        this.context.setRuntime('notify', new NotificationRuntime());
         this.context.setRuntime('entity', new EntityRegistry(this.context));
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
         this.context.setRuntime('remoteDesktop', new RemoteDesktopFeature(this.context));

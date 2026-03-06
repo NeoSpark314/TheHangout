@@ -24,6 +24,7 @@ import type { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDeskt
 import type { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import type { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
 import type { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
+import type { NotificationRuntime } from './notifications/NotificationRuntime';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -62,6 +63,7 @@ export interface IRuntimeRegistry {
     particles: ParticleEffectSystem;
     social: SocialFeature;
     remoteDesktop: RemoteDesktopFeature;
+    notify: NotificationRuntime;
     diagnostics: RuntimeDiagnostics;
     replicationDebug: ReplicationDebugRuntime;
 }

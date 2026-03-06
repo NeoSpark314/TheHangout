@@ -44,6 +44,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - [App.ts](src/app/App.ts) boots the app in a fixed order: infrastructure, world initialization, then engine startup.
 - [Engine.ts](src/app/Engine.ts) runs the frame loop over registered systems.
 - [AppContext.ts](src/app/AppContext.ts) is the shared runtime state container and dependency registry.
+- User-facing text notifications should go through `context.runtime.notify` (typed payloads, dedupe, rate limiting), not direct `EventBus` emits from gameplay objects.
 
 ### Entities and Spawning
 
