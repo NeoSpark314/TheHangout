@@ -10,6 +10,9 @@ interface Notification {
     text: string;
     startTime: number;
     duration: number;
+    lines: string[];
+    panelWidth: number;
+    panelHeight: number;
 }
 
 export class HudRuntime implements IUpdatable {
@@ -80,10 +83,14 @@ export class HudRuntime implements IUpdatable {
 
 
     public showNotification(text: string, duration: number = 4000): void {
+        const layout = this.layoutNotificationText(text);
         this.notifications.push({
             text: text,
             startTime: performance.now(),
-            duration: duration
+            duration: duration,
+            lines: layout.lines,
+            panelWidth: layout.panelWidth,
+            panelHeight: layout.panelHeight
         });
         if (this.notifications.length > this.maxNotifications) {
             this.notifications.shift();
@@ -100,9 +107,10 @@ export class HudRuntime implements IUpdatable {
 
         const initialCount = this.notifications.length;
         this.notifications = this.notifications.filter(n => (now - n.startTime) < n.duration);
-        if (this.notifications.length !== initialCount || this.notifications.length > 0) {
+        if (this.notifications.length !== initialCount) {
             this.draw();
         }
+        this.updateNotificationOpacity(now);
     }
 
     private draw(): void {
@@ -110,25 +118,103 @@ export class HudRuntime implements IUpdatable {
         nctx.clearRect(0, 0, this.noteCanvas.width, this.noteCanvas.height);
         if (this.notifications.length > 0) {
             const n = this.notifications[0];
-            const age = performance.now() - n.startTime;
-            const opacity = Math.min(1.0, 1.0 - (age / n.duration) * 1.5);
-            if (opacity > 0) {
-                nctx.save();
-                nctx.globalAlpha = opacity;
-                nctx.textAlign = 'center';
-                nctx.fillStyle = UITheme.colors.panelBg;
-                this.drawRoundedRect(nctx, this.noteCanvas.width / 2 - 300, this.noteCanvas.height / 2 - 30, 600, 60, UITheme.styling.cornerRadius * 2);
-                nctx.fill();
-                nctx.strokeStyle = UITheme.colors.secondary;
-                nctx.lineWidth = UITheme.styling.borderWidth;
-                nctx.stroke();
-                nctx.font = `bold 28px ${UITheme.typography.fontFamily}`;
-                nctx.fillStyle = UITheme.colors.text;
-                nctx.fillText(n.text, this.noteCanvas.width / 2, this.noteCanvas.height / 2 + 8);
-                nctx.restore();
+            nctx.save();
+            nctx.textAlign = 'center';
+            nctx.fillStyle = UITheme.colors.panelBg;
+            this.drawRoundedRect(
+                nctx,
+                this.noteCanvas.width / 2 - n.panelWidth / 2,
+                this.noteCanvas.height / 2 - n.panelHeight / 2,
+                n.panelWidth,
+                n.panelHeight,
+                UITheme.styling.cornerRadius * 2
+            );
+            nctx.fill();
+            nctx.strokeStyle = UITheme.colors.secondary;
+            nctx.lineWidth = UITheme.styling.borderWidth;
+            nctx.stroke();
+            nctx.font = `bold 28px ${UITheme.typography.fontFamily}`;
+            nctx.fillStyle = UITheme.colors.text;
+
+            const lineHeight = 34;
+            const startY = this.noteCanvas.height / 2 - ((n.lines.length - 1) * lineHeight) / 2 + 8;
+            for (let i = 0; i < n.lines.length; i++) {
+                nctx.fillText(n.lines[i], this.noteCanvas.width / 2, startY + i * lineHeight);
             }
+            nctx.restore();
         }
         if (this.noteTexture) this.noteTexture.needsUpdate = true;
+    }
+
+    private updateNotificationOpacity(now: number): void {
+        if (!this.noteMesh) return;
+        const material = this.noteMesh.material as THREE.MeshBasicMaterial;
+        const current = this.notifications[0];
+        if (!current) {
+            material.opacity = 0;
+            return;
+        }
+
+        const age = now - current.startTime;
+        const t = Math.max(0, Math.min(1, age / Math.max(1, current.duration)));
+        // Keep full visibility for most of the lifetime; fade in the tail.
+        const fade = t < 0.7 ? 1 : Math.max(0, 1 - ((t - 0.7) / 0.3));
+        material.opacity = this.opacity * fade;
+    }
+
+    private layoutNotificationText(text: string): { lines: string[]; panelWidth: number; panelHeight: number } {
+        const ctx = this.noteContext;
+        const maxTextWidth = 840;
+        const minPanelWidth = 420;
+        const maxPanelWidth = 920;
+        const lineHeight = 34;
+        const maxLines = 4;
+
+        ctx.save();
+        ctx.font = `bold 28px ${UITheme.typography.fontFamily}`;
+
+        const words = (text || '').trim().split(/\s+/).filter(Boolean);
+        const lines: string[] = [];
+        let current = '';
+
+        const pushCurrent = () => {
+            if (current.length > 0) {
+                lines.push(current);
+                current = '';
+            }
+        };
+
+        for (const word of words) {
+            const candidate = current.length > 0 ? `${current} ${word}` : word;
+            if (ctx.measureText(candidate).width <= maxTextWidth) {
+                current = candidate;
+            } else if (current.length === 0) {
+                // Very long token (e.g. URL/id) fallback: force single-token line.
+                current = word;
+                pushCurrent();
+            } else {
+                pushCurrent();
+                current = word;
+            }
+        }
+        pushCurrent();
+
+        const finalLines = lines.length > 0 ? lines : [''];
+        if (finalLines.length > maxLines) {
+            finalLines.length = maxLines;
+            const last = finalLines[maxLines - 1];
+            finalLines[maxLines - 1] = last.length > 1 ? `${last.slice(0, Math.max(1, last.length - 1))}…` : '…';
+        }
+
+        let widest = 0;
+        for (const line of finalLines) {
+            widest = Math.max(widest, ctx.measureText(line).width);
+        }
+        ctx.restore();
+
+        const panelWidth = Math.max(minPanelWidth, Math.min(maxPanelWidth, widest + 80));
+        const panelHeight = Math.max(60, 40 + finalLines.length * lineHeight);
+        return { lines: finalLines, panelWidth, panelHeight };
     }
 
     private drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
