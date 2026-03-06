@@ -47,6 +47,23 @@ export class VrUiRuntime implements IUpdatable {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
     }
 
+    private shouldRefreshTabUi(tab: { container: UIElement } | null): boolean {
+        if (!this.tablet || !tab || !this.context.isMenuOpen) {
+            return false;
+        }
+
+        if (!tab.container.isVisible) {
+            return false;
+        }
+
+        const isVR = !!this.context.runtime.render?.isXRPresenting();
+        if (isVR && !this.tablet.mesh.visible) {
+            return false;
+        }
+
+        return true;
+    }
+
     public init(): void {
         this.initHandLocomotionIndicator();
 
@@ -586,8 +603,7 @@ export class VrUiRuntime implements IUpdatable {
         pageLabel.textAlign = 'center';
 
         const renderList = () => {
-            if (this.peersTab && !this.peersTab.container.children.includes(listContainer)) {
-                // If the list is no longer in the container (tab switched), skip
+            if (!this.shouldRefreshTabUi(this.peersTab)) {
                 return;
             }
             listContainer.clearChildren();
@@ -727,8 +743,7 @@ export class VrUiRuntime implements IUpdatable {
 
         // Reactive updates
         this.onPeerUpdateHandler = () => {
-            const isVR = this.context.runtime.render?.isXRPresenting();
-            if (this.context.isMenuOpen || isVR) {
+            if (this.shouldRefreshTabUi(this.peersTab)) {
                 renderList();
             }
         };
@@ -740,8 +755,7 @@ export class VrUiRuntime implements IUpdatable {
 
         // Periodically refresh for Talking indicators if menu is visible
         this.peersTalkingInterval = setInterval(() => {
-            const isVR = this.context.runtime.render?.isXRPresenting();
-            if (this.context.isMenuOpen || isVR) {
+            if (this.shouldRefreshTabUi(this.peersTab)) {
                 renderList();
             }
         }, 500);
@@ -817,7 +831,13 @@ export class VrUiRuntime implements IUpdatable {
         sessionContainer.addChild(nextBtn);
 
         // Hook up auto-refresh events.
-        this.scheduleRenderHandler = () => { setTimeout(renderList, 100); };
+        this.scheduleRenderHandler = () => {
+            setTimeout(() => {
+                if (this.shouldRefreshTabUi(this.peersTab)) {
+                    renderList();
+                }
+            }, 100);
+        };
         eventBus.on(EVENTS.ENTITY_DISCOVERED, this.scheduleRenderHandler);
         eventBus.on(EVENTS.PEER_DISCONNECTED, this.scheduleRenderHandler);
         eventBus.on(EVENTS.REMOTE_NAME_UPDATED, this.scheduleRenderHandler);
@@ -1133,6 +1153,10 @@ export class VrUiRuntime implements IUpdatable {
         debugContainer.addChild(statsLabel);
 
         const updateStats = () => {
+            if (!this.shouldRefreshTabUi(debugTab)) {
+                return;
+            }
+
             const network = this.context.runtime.network.getDebugStatus();
             const recentEntry = diagnostics.getRecentEntries(1)[0];
             const avg = physics.getTouchQueryAverageHitsPerFrame();
