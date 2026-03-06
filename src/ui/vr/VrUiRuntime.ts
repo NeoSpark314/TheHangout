@@ -542,6 +542,10 @@ export class VrUiRuntime implements IUpdatable {
         this.context.isMenuOpen = !this.context.isMenuOpen;
 
         if (isVR) {
+            if (this.context.isMenuOpen) {
+                this.tablet?.recenterInFrontOfView();
+                this.tablet?.update(0);
+            }
             this.tablet?.setVisible(this.context.isMenuOpen);
             return;
         }

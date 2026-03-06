@@ -9,6 +9,9 @@ import { CanvasUI } from '../../ui/shared/canvasui';
 import { PlayerAvatarEntity } from './PlayerAvatarEntity';
 
 export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
+    private static readonly DEFAULT_RELATIVE_POSITION = new THREE.Vector3(0, -0.3, -0.35);
+    private static readonly DEFAULT_RELATIVE_QUATERNION = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.1, 0, 0));
+
     public id: string;
     public type: string = 'TABLET';
     public isAuthority: boolean = true;
@@ -23,17 +26,14 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
     public ui: CanvasUI;
 
     public isRelative: boolean = true;
-    public relativePosition: THREE.Vector3 = new THREE.Vector3(0, -0.3, -0.5);
-    public relativeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.1, 0, 0));
+    public relativePosition: THREE.Vector3 = TabletSurfaceEntity.DEFAULT_RELATIVE_POSITION.clone();
+    public relativeQuaternion: THREE.Quaternion = TabletSurfaceEntity.DEFAULT_RELATIVE_QUATERNION.clone();
     private context: AppContext;
     private position: THREE.Vector3;
     private quaternion: THREE.Quaternion;
 
     private leftHandle: THREE.Mesh;
     private rightHandle: THREE.Mesh;
-
-    private isRecentering: boolean = false;
-    private hasSpawned: boolean = false;
 
     constructor(context: AppContext, id: string) {
         this.context = context;
@@ -98,59 +98,24 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
         this.ui.update();
     }
 
-    public update(delta: number): void {
+    public update(_delta: number): void {
         const lp = this.context.localPlayer as PlayerAvatarEntity;
-        if (this.isRelative && lp && lp.headState) {
-            const head = lp.headState;
-            const tracking = this.context.runtime.tracking.getState();
-            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
+        if (this.isRelative && lp) {
+            const xrOriginPos = lp.xrOrigin.position;
+            const xrOriginQuat = lp.xrOrigin.quaternion;
+            const originQuat = new THREE.Quaternion(xrOriginQuat.x, xrOriginQuat.y, xrOriginQuat.z, xrOriginQuat.w);
 
-            const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(yawQuat).add({ x: head.position.x, y: head.position.y, z: head.position.z });
-            const idealQuat = new THREE.Quaternion().copy(yawQuat).multiply(this.relativeQuaternion);
-
-            if (!this.hasSpawned) {
-                // **Deterministic Spawn**: No hacks, no heuristics. 
-                // We lock to the player's reported world transform on the very first frame they exist.
-                this.position.copy(idealPos);
-                this.quaternion.copy(idealQuat);
-
-                this.mesh.position.copy(this.position);
-                this.mesh.quaternion.copy(this.quaternion);
-                this.mesh.updateMatrixWorld(true);
-
-                this.hasSpawned = true;
-
-                console.log(`[TabletSurfaceEntity] Deterministic Spawn:`);
-                console.log(` - Head: [${head.position.x.toFixed(2)}, ${head.position.y.toFixed(2)}, ${head.position.z.toFixed(2)}]`);
-                console.log(` - Tablet: [${this.position.x.toFixed(2)}, ${this.position.y.toFixed(2)}, ${this.position.z.toFixed(2)}]`);
-                return;
-            }
-
-            if (!this.isRecentering) {
-                const dist = this.position.distanceTo(idealPos);
-                const angleDist = this.quaternion.angleTo(idealQuat);
-                const deadzoneDist = 0.5; // 0.5 meters
-                const deadzoneAngle = Math.PI / 4; // 45 degrees
-
-                if (dist > deadzoneDist || angleDist > deadzoneAngle) {
-                    this.isRecentering = true;
-                    // Log once when we start moving to follow
-                    console.log(`[TabletSurfaceEntity] Moving to follow player...`);
-                }
-            }
-
-            if (this.isRecentering) {
-                const lerpFactor = 1.0 - Math.exp(-delta * 6.0);
-                this.position.lerp(idealPos, lerpFactor);
-                this.quaternion.slerp(idealQuat, lerpFactor);
-
-                if (this.position.distanceTo(idealPos) < 0.02 && this.quaternion.angleTo(idealQuat) < 0.05) {
-                    this.isRecentering = false;
-                }
-            }
-
+            const idealPos = new THREE.Vector3().copy(this.relativePosition).applyQuaternion(originQuat).add({
+                x: xrOriginPos.x,
+                y: xrOriginPos.y,
+                z: xrOriginPos.z
+            });
+            const idealQuat = new THREE.Quaternion().copy(originQuat).multiply(this.relativeQuaternion);
+            this.position.copy(idealPos);
+            this.quaternion.copy(idealQuat);
             this.mesh.position.copy(this.position);
             this.mesh.quaternion.copy(this.quaternion);
+            this.mesh.updateMatrixWorld(true);
         }
 
         this.ui.update();
@@ -171,23 +136,52 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
         this.heldBy = null;
         this.isRelative = true;
 
-        if (this.context.localPlayer && 'headState' in this.context.localPlayer) {
-            const head = (this.context.localPlayer as PlayerAvatarEntity).headState;
-            const tracking = this.context.runtime.tracking.getState();
-
-            // Store the dropped transform relative to the user's current head yaw
-            const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), tracking.head.yaw);
-            const invYawQuat = yawQuat.clone().invert();
+        if (this.context.localPlayer) {
+            const xrOriginPos = this.context.localPlayer.xrOrigin.position;
+            const xrOriginQuat = this.context.localPlayer.xrOrigin.quaternion;
+            const originQuat = new THREE.Quaternion(xrOriginQuat.x, xrOriginQuat.y, xrOriginQuat.z, xrOriginQuat.w);
+            const invOriginQuat = originQuat.clone().invert();
 
             this.relativePosition.copy(this.position)
-                .sub({ x: head.position.x, y: head.position.y, z: head.position.z })
-                .applyQuaternion(invYawQuat);
+                .sub({ x: xrOriginPos.x, y: xrOriginPos.y, z: xrOriginPos.z })
+                .applyQuaternion(invOriginQuat);
 
-            this.relativeQuaternion.copy(invYawQuat).multiply(this.quaternion);
-
-            // Prevent immediate snapback, user just placed it here
-            this.isRecentering = false;
+            this.relativeQuaternion.copy(invOriginQuat).multiply(this.quaternion);
         }
+    }
+
+    public recenterToDefaultPose(): void {
+        this.recenterInFrontOfView();
+    }
+
+    public recenterInFrontOfView(): void {
+        const lp = this.context.localPlayer as PlayerAvatarEntity | null;
+        if (!lp) return;
+
+        const xrOriginPos = lp.xrOrigin.position;
+        const xrOriginQuat = lp.xrOrigin.quaternion;
+        const originPos = new THREE.Vector3(xrOriginPos.x, xrOriginPos.y, xrOriginPos.z);
+        const originQuat = new THREE.Quaternion(xrOriginQuat.x, xrOriginQuat.y, xrOriginQuat.z, xrOriginQuat.w);
+        const invOriginQuat = originQuat.clone().invert();
+
+        const headPosData = lp.headState.position;
+        const headQuatData = lp.headState.quaternion;
+        const headPos = new THREE.Vector3(headPosData.x, headPosData.y, headPosData.z);
+        const headQuat = new THREE.Quaternion(headQuatData.x, headQuatData.y, headQuatData.z, headQuatData.w);
+        const headYaw = new THREE.Euler().setFromQuaternion(headQuat, 'YXZ').y;
+        const viewYawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), headYaw);
+
+        const worldPos = new THREE.Vector3()
+            .copy(TabletSurfaceEntity.DEFAULT_RELATIVE_POSITION)
+            .applyQuaternion(viewYawQuat)
+            .add(headPos);
+        const worldQuat = new THREE.Quaternion()
+            .copy(viewYawQuat)
+            .multiply(TabletSurfaceEntity.DEFAULT_RELATIVE_QUATERNION);
+
+        this.isRelative = true;
+        this.relativePosition.copy(worldPos.sub(originPos).applyQuaternion(invOriginQuat));
+        this.relativeQuaternion.copy(invOriginQuat).multiply(worldQuat);
     }
 
     public getGrabRoots(): THREE.Object3D[] {
