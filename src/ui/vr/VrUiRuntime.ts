@@ -925,26 +925,22 @@ export class VrUiRuntime implements IUpdatable {
         micTitle.textAlign = 'left';
         systemContainer.addChild(micTitle);
 
-        const micStatus = new UILabel("", 90, 128, 1000, 36);
-        micStatus.font = getFont(UITheme.typography.sizes.small);
-        micStatus.textColor = UITheme.colors.textMuted;
-        micStatus.textAlign = 'left';
-        systemContainer.addChild(micStatus);
-
-        const micListContainer = this.createPlainContainer(90, 182, 1100, 330);
-        systemContainer.addChild(micListContainer);
-
         let micPage = 0;
-        const micsPerPage = 4;
+        const micsPerPage = 6;
         const renderMicSelector = async () => {
             micListContainer.clearChildren();
             const devices = await media.listMicrophoneDevices();
             const preferredId = media.getPreferredMicrophoneDeviceId();
             const currentId = media.getCurrentMicrophoneDeviceId();
+            const usingSystemDefault = !preferredId;
 
             micStatus.text = this.context.voiceEnabled
                 ? `Mic active${currentId ? ` (${preferredId ? 'selected device' : 'system default'})` : ''}`
                 : 'Mic muted/off';
+            useDefaultBtn.text = usingSystemDefault ? "System Default (Selected)" : "Use System Default";
+            useDefaultBtn.borderColor = usingSystemDefault ? UITheme.colors.primary : UITheme.colors.textMuted;
+            useDefaultBtn.backgroundColor = usingSystemDefault ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+            useDefaultBtn.textColor = usingSystemDefault ? UITheme.colors.primary : UITheme.colors.text;
 
             if (devices.length === 0) {
                 const empty = new UILabel("No microphone devices found.", 0, 10, 900, 40);
@@ -963,60 +959,83 @@ export class VrUiRuntime implements IUpdatable {
             const pageDevices = devices.slice(start, start + micsPerPage);
 
             pageDevices.forEach((device, index) => {
-                const y = index * 78;
+                const y = index * 46;
                 const isSelected = (!!preferredId && preferredId === device.id) || (!preferredId && currentId === device.id);
 
-                const name = new UILabel(device.label, 0, y + 10, 780, 44);
-                name.font = getFont(UITheme.typography.sizes.small, 'bold');
+                const name = new UILabel(device.label, 0, y + 6, 840, 32);
+                name.font = getFont(UITheme.typography.sizes.small);
                 name.textColor = isSelected ? UITheme.colors.primary : UITheme.colors.text;
                 name.textAlign = 'left';
                 micListContainer.addChild(name);
 
-                const useBtn = new UIButton(isSelected ? "Selected" : "Use", 820, y, 240, 56, () => {
+                const useBtn = new UIButton(isSelected ? "Selected" : "Use", 880, y, 180, 36, () => {
                     void media.setPreferredMicrophoneDevice(device.id).then(() => {
                         void renderMicSelector();
                     });
                 });
                 useBtn.cornerRadius = 8;
+                useBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
                 useBtn.backgroundColor = isSelected ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
                 useBtn.borderColor = isSelected ? UITheme.colors.primary : UITheme.colors.textMuted;
                 useBtn.textColor = isSelected ? UITheme.colors.primary : UITheme.colors.text;
                 micListContainer.addChild(useBtn);
             });
 
-            const pageLabel = new UILabel(`Page ${micPage + 1}/${totalPages}`, 420, 300, 260, 30);
+            const pageLabel = new UILabel(`Page ${micPage + 1}/${totalPages}`, 420, 286, 260, 26);
             pageLabel.font = getFont(UITheme.typography.sizes.small);
             pageLabel.textColor = UITheme.colors.textMuted;
             pageLabel.textAlign = 'center';
             micListContainer.addChild(pageLabel);
 
-            const prevBtn = new UIButton("<", 340, 286, 60, 44, () => {
+            const prevBtn = new UIButton("<", 340, 278, 54, 36, () => {
                 if (micPage > 0) {
                     micPage--;
                     void renderMicSelector();
                 }
             });
             prevBtn.cornerRadius = 8;
+            prevBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
             micListContainer.addChild(prevBtn);
 
-            const nextBtn = new UIButton(">", 700, 286, 60, 44, () => {
+            const nextBtn = new UIButton(">", 700, 278, 54, 36, () => {
                 if (micPage < totalPages - 1) {
                     micPage++;
                     void renderMicSelector();
                 }
             });
             nextBtn.cornerRadius = 8;
+            nextBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
             micListContainer.addChild(nextBtn);
-
-            const refreshBtn = new UIButton("Refresh Devices", 820, 286, 240, 44, () => {
-                void renderMicSelector();
-            });
-            refreshBtn.cornerRadius = 8;
-            refreshBtn.borderColor = UITheme.colors.secondary;
-            micListContainer.addChild(refreshBtn);
 
             this.tablet?.ui.markDirty();
         };
+
+        const useDefaultBtn = new UIButton("Use System Default", 590, 78, 230, 44, () => {
+            void media.setPreferredMicrophoneDevice(null).then(() => {
+                void renderMicSelector();
+            });
+        });
+        useDefaultBtn.cornerRadius = 8;
+        useDefaultBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
+        useDefaultBtn.borderColor = UITheme.colors.textMuted;
+        systemContainer.addChild(useDefaultBtn);
+
+        const refreshDevicesBtn = new UIButton("Refresh Devices", 840, 78, 220, 44, () => {
+            void renderMicSelector();
+        });
+        refreshDevicesBtn.cornerRadius = 8;
+        refreshDevicesBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
+        refreshDevicesBtn.borderColor = UITheme.colors.secondary;
+        systemContainer.addChild(refreshDevicesBtn);
+
+        const micStatus = new UILabel("", 90, 128, 1000, 36);
+        micStatus.font = getFont(UITheme.typography.sizes.small);
+        micStatus.textColor = UITheme.colors.textMuted;
+        micStatus.textAlign = 'left';
+        systemContainer.addChild(micStatus);
+
+        const micListContainer = this.createPlainContainer(90, 172, 1100, 320);
+        systemContainer.addChild(micListContainer);
 
         if (this.sessionMicRefreshHandler) {
             eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
