@@ -152,6 +152,9 @@ export class VrUiRuntime implements IUpdatable {
 
         // Create the Tablet Entity
         this.tablet = new TabletSurfaceEntity(this.context, 'local-tablet');
+        this.tablet.ui.onActionHandled = () => {
+            this.context.runtime.audio?.playUiClick();
+        };
 
         // Add mesh to the scene rendering
         if (this.context.runtime.render) {

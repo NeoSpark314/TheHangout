@@ -93,6 +93,11 @@ export class AudioRuntime {
         SoundSynth.playUI(this.ctx, isActive ? 1046.5 : 784);
     }
 
+    public playUiClick(): void {
+        if (!this.isInitialized || !this.ctx) return;
+        SoundSynth.playUI(this.ctx, 932.33);
+    }
+
     public playSequencerBeat(data: { beat: SequencerBeatType; intensity?: number; position?: IVector3 }): void {
         if (!this.isInitialized || !this.ctx) return;
         void this.playBeatBuffered(data.beat, data.intensity ?? 0.8, data.position);

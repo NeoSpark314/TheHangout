@@ -6,6 +6,7 @@ export class CanvasUI {
     public context: CanvasRenderingContext2D;
     public texture: THREE.CanvasTexture;
     public root: UIElement;
+    public onActionHandled: (() => void) | null = null;
 
     private isDirty: boolean = true;
     private needsTextureUpdate: boolean = true;
@@ -86,6 +87,7 @@ export class CanvasUI {
         const handled = this.root.onPointerClick(px, py);
         if (handled) {
             this.markDirty();
+            this.onActionHandled?.();
         }
         return handled;
     }
@@ -106,12 +108,14 @@ export class CanvasUI {
         const handled = this.root.onPointerClick(x, y);
         if (handled) {
             this.markDirty();
+            this.onActionHandled?.();
         }
         return handled;
     }
 
     public destroy(): void {
         this.root.clearChildren();
+        this.onActionHandled = null;
         this.texture.dispose();
 
         if (this.canvas.parentElement) {
