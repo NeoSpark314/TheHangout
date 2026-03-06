@@ -202,6 +202,18 @@ export class AuthoritativeSessionHost {
         const previousScenarioId = this.context.sessionConfig.activeScenarioId;
         const scenarioChangeRequested = typeof payload.activeScenarioId === 'string'
             && payload.activeScenarioId !== previousScenarioId;
+        if (scenarioChangeRequested) {
+            const targetScenarioId = payload.activeScenarioId as string;
+            const targetScenario = this.context.runtime.session.getAvailableScenarios()
+                .find((scenario) => scenario.id === targetScenarioId);
+            const targetLabel = targetScenario?.displayName || targetScenarioId;
+            this.transport.broadcast(PACKET_TYPES.SESSION_NOTIFICATION, {
+                kind: 'system',
+                level: 'info',
+                message: `Teleporting to ${targetLabel}...`,
+                sentAt: this.nowMs()
+            });
+        }
 
         const applied = this.context.runtime.session.applySessionConfigUpdate(payload, () => {
             broadcastAfterApply();
