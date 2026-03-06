@@ -29,7 +29,10 @@ export class VrUiRuntime implements IUpdatable {
     private peersTab: UITab | null = null;
     private sessionTab: UITab | null = null;
     private systemTab: UITab | null = null;
+    private scenarioTab: UITab | null = null;
     private refreshPeersList: (() => void) | null = null;
+    private refreshScenarioActions: (() => void) | null = null;
+    private wasScenarioTabVisible: boolean = false;
     private peersRefreshCleanup: (() => void) | null = null;
     private onVoiceStateHandler: (() => void) | null = null;
     private desktopRefreshCleanup: (() => void) | null = null;
@@ -1233,6 +1236,7 @@ export class VrUiRuntime implements IUpdatable {
         if (!this.tabPanel) return;
 
         const scenarioTab = this.tabPanel.addTab('Scenario');
+        this.scenarioTab = scenarioTab;
         const container = scenarioTab.container;
         const title = this.createTabTitle('Scenario Actions', 90, 52, 1080, 48, 'left');
         title.textColor = UITheme.colors.accent;
@@ -1304,6 +1308,7 @@ export class VrUiRuntime implements IUpdatable {
 
             this.tablet?.ui.markDirty();
         };
+        this.refreshScenarioActions = renderActions;
 
         renderActions();
         this.scenarioRefreshCleanup?.();
@@ -1502,6 +1507,12 @@ export class VrUiRuntime implements IUpdatable {
         this.updateMenuOrb();
         this.updateInteractionOrb();
 
+        const isScenarioVisibleNow = this.shouldRefreshTabUi(this.scenarioTab);
+        if (isScenarioVisibleNow && !this.wasScenarioTabVisible) {
+            this.refreshScenarioActions?.();
+        }
+        this.wasScenarioTabVisible = isScenarioVisibleNow;
+
         if (this.tablet) {
             // Update 3D visibility based on VR state vs Desktop Menu
             const isVR = this.context.runtime.render?.isXRPresenting();
@@ -1525,6 +1536,9 @@ export class VrUiRuntime implements IUpdatable {
             this.scenarioRefreshCleanup();
             this.scenarioRefreshCleanup = null;
         }
+        this.scenarioTab = null;
+        this.refreshScenarioActions = null;
+        this.wasScenarioTabVisible = false;
         this.hide2DMenu();
         if (this.debugStatsInterval) {
             clearInterval(this.debugStatsInterval);
