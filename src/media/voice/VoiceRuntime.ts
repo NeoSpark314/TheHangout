@@ -3,6 +3,7 @@ import eventBus from '../../app/events/EventBus';
 import { AppContext } from '../../app/AppContext';
 import { IVoiceStreamReceivedEvent } from '../../shared/contracts/IVoice';
 import { EVENTS, PACKET_TYPES } from '../../shared/constants/Constants';
+import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 
 export class VoiceRuntime {
     private localStream: MediaStream | null = null;
@@ -16,8 +17,10 @@ export class VoiceRuntime {
     // WebSocket / Dedicated Server properties
     private websocket: WebSocket | null = null;
     private mediaRecorder: MediaRecorder | null = null;
+    private preferredMicDeviceId: string | null = null;
 
     constructor(private context: AppContext) {
+        this.preferredMicDeviceId = AppLocalStorage.getPreferredMicDeviceId() || null;
         eventBus.on(EVENTS.ENTITY_DISCOVERED, (peerId: string) => {
             const network = this.context.runtime.network;
             const localId = network?.peer?.id || network?.localPeerId;
@@ -55,6 +58,57 @@ export class VoiceRuntime {
                 this.startRecording();
             }
         });
+
+        if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+            navigator.mediaDevices.addEventListener('devicechange', () => {
+                void this.handleDeviceChange();
+            });
+        }
+    }
+
+    public getPreferredMicrophoneDeviceId(): string | null {
+        return this.preferredMicDeviceId;
+    }
+
+    public getCurrentMicrophoneDeviceId(): string | null {
+        const track = this.localStream?.getAudioTracks?.()[0];
+        const settings = track?.getSettings?.();
+        return settings?.deviceId || null;
+    }
+
+    public async listMicrophoneDevices(): Promise<Array<{ id: string; label: string }>> {
+        if (!navigator.mediaDevices?.enumerateDevices) return [];
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            return devices
+                .filter((d) => d.kind === 'audioinput')
+                .map((d, idx) => ({
+                    id: d.deviceId,
+                    label: d.label?.trim() || `Microphone ${idx + 1}`
+                }));
+        } catch {
+            return [];
+        }
+    }
+
+    public async setPreferredMicrophoneDevice(deviceId: string | null): Promise<boolean> {
+        this.preferredMicDeviceId = deviceId && deviceId.trim().length > 0 ? deviceId : null;
+        AppLocalStorage.setPreferredMicDeviceId(this.preferredMicDeviceId);
+
+        if (!this.localStream) {
+            this.syncVoiceState();
+            return true;
+        }
+
+        const wasEnabled = !!this.localStream;
+        if (!wasEnabled) {
+            this.syncVoiceState();
+            return true;
+        }
+
+        // Re-open with preferred device and rebind outbound voice path.
+        this.stopMicrophone();
+        return this.enableMicrophone();
     }
 
     public async ensureMicrophoneEnabled(): Promise<boolean> {
@@ -85,7 +139,11 @@ export class VoiceRuntime {
 
     private async enableMicrophone(): Promise<boolean> {
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            this.localStream = await this.acquireMicrophoneStream();
+            if (!this.localStream) {
+                this.syncVoiceState();
+                return false;
+            }
             console.log('[VoiceRuntime] Microphone access granted.');
 
             const render = this.context.runtime.render;
@@ -132,6 +190,50 @@ export class VoiceRuntime {
             this.syncVoiceState();
             return false;
         }
+    }
+
+    private async acquireMicrophoneStream(): Promise<MediaStream | null> {
+        if (!navigator.mediaDevices?.getUserMedia) return null;
+
+        if (this.preferredMicDeviceId) {
+            try {
+                return await navigator.mediaDevices.getUserMedia({
+                    audio: { deviceId: { exact: this.preferredMicDeviceId } },
+                    video: false
+                });
+            } catch (err: any) {
+                const name = err?.name || '';
+                const canFallback = name === 'OverconstrainedError' || name === 'NotFoundError' || name === 'AbortError';
+                if (!canFallback) {
+                    throw err;
+                }
+                console.warn('[VoiceRuntime] Preferred microphone unavailable, falling back to default input.');
+                this.preferredMicDeviceId = null;
+                AppLocalStorage.setPreferredMicDeviceId(null);
+            }
+        }
+
+        return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+
+    private async handleDeviceChange(): Promise<void> {
+        const devices = await this.listMicrophoneDevices();
+        const preferred = this.preferredMicDeviceId;
+        if (preferred && !devices.some((d) => d.id === preferred)) {
+            console.warn('[VoiceRuntime] Preferred microphone was removed. Reverting to default input.');
+            this.preferredMicDeviceId = null;
+            AppLocalStorage.setPreferredMicDeviceId(null);
+            if (this.localStream) {
+                this.stopMicrophone();
+                await this.enableMicrophone();
+            } else {
+                this.syncVoiceState();
+            }
+            return;
+        }
+
+        // Keep UI selectors in sync with hotplug state even if stream is off.
+        this.syncVoiceState();
     }
 
     public stopMicrophone(): void {

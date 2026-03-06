@@ -31,7 +31,7 @@ export class VrUiRuntime implements IUpdatable {
     private systemTab: UITab | null = null;
     private refreshPeersList: (() => void) | null = null;
     private peersRefreshCleanup: (() => void) | null = null;
-    private onVoiceStateHandler: (() => void) | null = null;
+    private sessionMicRefreshHandler: (() => void) | null = null;
     private desktopRefreshCleanup: (() => void) | null = null;
     private menuIntentHandler: (() => void) | null = null;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -533,12 +533,6 @@ export class VrUiRuntime implements IUpdatable {
             this.peersRefreshCleanup();
             this.peersRefreshCleanup = null;
         }
-
-        if (this.onVoiceStateHandler) {
-            eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.onVoiceStateHandler);
-            this.onVoiceStateHandler = null;
-        }
-
     }
 
     public toggle2DMenu(): void {
@@ -826,6 +820,21 @@ export class VrUiRuntime implements IUpdatable {
                     gotoBtn.borderColor = UITheme.colors.accent;
                     gotoBtn.cornerRadius = 8;
                     listContainer.addChild(gotoBtn);
+                } else if (peer.isLocal) {
+                    const selfMuteBtn = new UIButton(this.context.voiceEnabled ? "Mute Myself" : "Unmute Myself", 720, rowY + 15, 430, 70, () => {
+                        const nextEnabled = !this.context.voiceEnabled;
+                        this.context.voiceAutoEnable = nextEnabled;
+                        AppLocalStorage.setVoiceAutoEnable(nextEnabled);
+                        this.context.runtime.media.setMicrophoneEnabled(nextEnabled).then((actualState) => {
+                            this.context.voiceEnabled = actualState;
+                            renderList();
+                        });
+                    });
+                    selfMuteBtn.backgroundColor = this.context.voiceEnabled ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                    selfMuteBtn.borderColor = this.context.voiceEnabled ? UITheme.colors.primary : UITheme.colors.secondary;
+                    selfMuteBtn.textColor = UITheme.colors.text;
+                    selfMuteBtn.cornerRadius = 8;
+                    listContainer.addChild(selfMuteBtn);
                 }
             });
 
@@ -852,30 +861,6 @@ export class VrUiRuntime implements IUpdatable {
                 intervalMs: 500
             }
         );
-
-        // 3. Header Controls
-        const micBtn = new UIButton("Mic: ON", 240, 10, 380, 60, () => {
-            const nextPreference = !this.context.voiceAutoEnable;
-            this.context.voiceAutoEnable = nextPreference;
-            AppLocalStorage.setVoiceAutoEnable(nextPreference);
-            this.context.runtime.media.setMicrophoneEnabled(nextPreference).then((actualState) => {
-                this.context.voiceEnabled = actualState;
-            });
-        });
-        micBtn.font = getFont(UITheme.typography.sizes.small, 'bold');
-        micBtn.cornerRadius = 10;
-        headerContainer.addChild(micBtn);
-
-        const updateMicUI = () => {
-            micBtn.text = this.context.voiceEnabled ? "Mic: ON" : "Mic: OFF";
-            micBtn.backgroundColor = this.context.voiceEnabled ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
-            micBtn.borderColor = this.context.voiceEnabled ? UITheme.colors.primary : UITheme.colors.textMuted;
-            this.tablet?.ui.markDirty();
-        };
-
-        this.onVoiceStateHandler = updateMicUI;
-        eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.onVoiceStateHandler);
-        updateMicUI(); // Initial state
 
         const copyBtn = new UIButton("Copy Invite Link", 660, 10, 380, 60, () => {
             const url = window.location.origin + window.location.pathname + "?session=" + this.context.sessionId;
@@ -932,6 +917,113 @@ export class VrUiRuntime implements IUpdatable {
 
         this.systemTab = this.tabPanel.addTab('Session');
         const systemContainer = this.systemTab.container;
+        const media = this.context.runtime.media;
+
+        const micTitle = new UILabel("Microphone", 90, 80, 320, 52);
+        micTitle.font = getFont(UITheme.typography.sizes.body, 'bold');
+        micTitle.textColor = UITheme.colors.accent;
+        micTitle.textAlign = 'left';
+        systemContainer.addChild(micTitle);
+
+        const micStatus = new UILabel("", 90, 128, 1000, 36);
+        micStatus.font = getFont(UITheme.typography.sizes.small);
+        micStatus.textColor = UITheme.colors.textMuted;
+        micStatus.textAlign = 'left';
+        systemContainer.addChild(micStatus);
+
+        const micListContainer = this.createPlainContainer(90, 182, 1100, 330);
+        systemContainer.addChild(micListContainer);
+
+        let micPage = 0;
+        const micsPerPage = 4;
+        const renderMicSelector = async () => {
+            micListContainer.clearChildren();
+            const devices = await media.listMicrophoneDevices();
+            const preferredId = media.getPreferredMicrophoneDeviceId();
+            const currentId = media.getCurrentMicrophoneDeviceId();
+
+            micStatus.text = this.context.voiceEnabled
+                ? `Mic active${currentId ? ` (${preferredId ? 'selected device' : 'system default'})` : ''}`
+                : 'Mic muted/off';
+
+            if (devices.length === 0) {
+                const empty = new UILabel("No microphone devices found.", 0, 10, 900, 40);
+                empty.font = getFont(UITheme.typography.sizes.small, 'bold');
+                empty.textColor = UITheme.colors.textMuted;
+                empty.textAlign = 'left';
+                micListContainer.addChild(empty);
+                this.tablet?.ui.markDirty();
+                return;
+            }
+
+            const totalPages = Math.max(1, Math.ceil(devices.length / micsPerPage));
+            if (micPage >= totalPages) micPage = totalPages - 1;
+            if (micPage < 0) micPage = 0;
+            const start = micPage * micsPerPage;
+            const pageDevices = devices.slice(start, start + micsPerPage);
+
+            pageDevices.forEach((device, index) => {
+                const y = index * 78;
+                const isSelected = (!!preferredId && preferredId === device.id) || (!preferredId && currentId === device.id);
+
+                const name = new UILabel(device.label, 0, y + 10, 780, 44);
+                name.font = getFont(UITheme.typography.sizes.small, 'bold');
+                name.textColor = isSelected ? UITheme.colors.primary : UITheme.colors.text;
+                name.textAlign = 'left';
+                micListContainer.addChild(name);
+
+                const useBtn = new UIButton(isSelected ? "Selected" : "Use", 820, y, 240, 56, () => {
+                    void media.setPreferredMicrophoneDevice(device.id).then(() => {
+                        void renderMicSelector();
+                    });
+                });
+                useBtn.cornerRadius = 8;
+                useBtn.backgroundColor = isSelected ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                useBtn.borderColor = isSelected ? UITheme.colors.primary : UITheme.colors.textMuted;
+                useBtn.textColor = isSelected ? UITheme.colors.primary : UITheme.colors.text;
+                micListContainer.addChild(useBtn);
+            });
+
+            const pageLabel = new UILabel(`Page ${micPage + 1}/${totalPages}`, 420, 300, 260, 30);
+            pageLabel.font = getFont(UITheme.typography.sizes.small);
+            pageLabel.textColor = UITheme.colors.textMuted;
+            pageLabel.textAlign = 'center';
+            micListContainer.addChild(pageLabel);
+
+            const prevBtn = new UIButton("<", 340, 286, 60, 44, () => {
+                if (micPage > 0) {
+                    micPage--;
+                    void renderMicSelector();
+                }
+            });
+            prevBtn.cornerRadius = 8;
+            micListContainer.addChild(prevBtn);
+
+            const nextBtn = new UIButton(">", 700, 286, 60, 44, () => {
+                if (micPage < totalPages - 1) {
+                    micPage++;
+                    void renderMicSelector();
+                }
+            });
+            nextBtn.cornerRadius = 8;
+            micListContainer.addChild(nextBtn);
+
+            const refreshBtn = new UIButton("Refresh Devices", 820, 286, 240, 44, () => {
+                void renderMicSelector();
+            });
+            refreshBtn.cornerRadius = 8;
+            refreshBtn.borderColor = UITheme.colors.secondary;
+            micListContainer.addChild(refreshBtn);
+
+            this.tablet?.ui.markDirty();
+        };
+
+        if (this.sessionMicRefreshHandler) {
+            eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
+        }
+        this.sessionMicRefreshHandler = () => { void renderMicSelector(); };
+        eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
+        void renderMicSelector();
 
         const leaveBtn = new UIButton("Leave Session", 440, 630, 400, 80, () => {
             const render = this.context.runtime.render;
@@ -1555,6 +1647,10 @@ export class VrUiRuntime implements IUpdatable {
         if (this.scenarioRefreshCleanup) {
             this.scenarioRefreshCleanup();
             this.scenarioRefreshCleanup = null;
+        }
+        if (this.sessionMicRefreshHandler) {
+            eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
+            this.sessionMicRefreshHandler = null;
         }
         this.tabVisibleRefreshWatchers.length = 0;
         this.hide2DMenu();

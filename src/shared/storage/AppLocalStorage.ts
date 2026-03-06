@@ -14,6 +14,7 @@ interface IAppStorageSessionV1 {
 
 interface IAppStorageSettingsV1 {
     voiceAutoEnable?: boolean;
+    preferredMicDeviceId?: string;
 }
 
 interface IAppStorageRemoteDesktopV1 {
@@ -76,7 +77,8 @@ function sanitizeDataV1(value: unknown): IAppStorageDataV1 {
         ? {
             voiceAutoEnable: typeof value.settings.voiceAutoEnable === 'boolean'
                 ? value.settings.voiceAutoEnable
-                : undefined
+                : undefined,
+            preferredMicDeviceId: asNonEmptyTrimmedString(value.settings.preferredMicDeviceId)
         }
         : undefined;
 
@@ -165,6 +167,17 @@ export class AppLocalStorage {
         this.update((data) => {
             data.settings = data.settings || {};
             data.settings.voiceAutoEnable = !!enabled;
+        });
+    }
+
+    public static getPreferredMicDeviceId(): string | undefined {
+        return readEnvelope().data.settings?.preferredMicDeviceId;
+    }
+
+    public static setPreferredMicDeviceId(deviceId: string | null | undefined): void {
+        this.update((data) => {
+            data.settings = data.settings || {};
+            data.settings.preferredMicDeviceId = asNonEmptyTrimmedString(deviceId);
         });
     }
 
