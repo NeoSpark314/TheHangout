@@ -23,6 +23,7 @@ import type { SocialFeature } from '../features/social/SocialFeature';
 import type { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import type { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import type { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
+import type { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -62,6 +63,7 @@ export interface IRuntimeRegistry {
     social: SocialFeature;
     remoteDesktop: RemoteDesktopFeature;
     diagnostics: RuntimeDiagnostics;
+    replicationDebug: ReplicationDebugRuntime;
 }
 
 /**

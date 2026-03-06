@@ -1,5 +1,6 @@
 import { AppContext } from '../../app/AppContext';
 import { PACKET_TYPES } from '../../shared/constants/Constants';
+import type { ReplicationDebugRuntime } from './ReplicationDebugRuntime';
 
 /**
  * Generic low/medium-frequency feature replication channel.
@@ -84,6 +85,10 @@ export class FeatureReplicationService {
         if (pendingSnapshot !== undefined && feature.applySnapshot) {
             feature.applySnapshot(pendingSnapshot);
             this.pendingSnapshots.delete(feature.featureId);
+            const debug = this.getDebug();
+            if (debug?.shouldTrackFeature(feature.featureId)) {
+                debug.recordSnapshotPendingApplied(feature.featureId);
+            }
         }
     }
 
@@ -102,6 +107,8 @@ export class FeatureReplicationService {
     public emitFeatureEvent(featureId: string, eventType: string, data: unknown, options?: IFeatureEmitOptions): void {
         const feature = this.features.get(featureId);
         const localEcho = options?.localEcho ?? feature?.policy?.defaultLocalEcho ?? true;
+        const debug = this.getDebug();
+        const debugEnabled = !!debug?.shouldTrackFeature(featureId);
         const payload: IReplicatedFeatureEventPayload = {
             featureId,
             eventType,
@@ -110,11 +117,17 @@ export class FeatureReplicationService {
             sentAt: this.nowMs(),
             data
         };
+        if (debugEnabled) {
+            debug!.recordEmit(featureId, eventType, payload.eventId);
+        }
 
         if (localEcho) {
             this.applyEvent(payload, null, true);
         } else {
             this.markSeen(payload.eventId);
+            if (debugEnabled) {
+                debug!.recordLocalEchoSkipped(featureId, eventType, payload.eventId);
+            }
         }
 
         const network = this.context.runtime.network as unknown as {
@@ -135,6 +148,12 @@ export class FeatureReplicationService {
     }
 
     public handleIncomingFeatureEvent(senderId: string, payload: IReplicatedFeatureEventPayload): void {
+        const debug = this.getDebug();
+        const debugEnabled = !!debug?.shouldTrackFeature(payload.featureId);
+        if (debugEnabled) {
+            debug!.recordIncoming(payload.featureId, payload.eventType, payload.eventId);
+        }
+
         if (this.context.isHost) {
             const feature = this.features.get(payload.featureId);
             const relayMode = feature?.policy?.relayIncomingFromPeer ?? 'others';
@@ -143,6 +162,11 @@ export class FeatureReplicationService {
             } | undefined;
             if (relayMode === 'others') {
                 network?.relayToOthers?.(senderId, PACKET_TYPES.FEATURE_EVENT, payload);
+                if (debugEnabled) {
+                    debug!.recordRelay(payload.featureId, true);
+                }
+            } else if (debugEnabled) {
+                debug!.recordRelay(payload.featureId, false);
             }
         }
 
@@ -151,12 +175,16 @@ export class FeatureReplicationService {
 
     public createSnapshotPayload(): IReplicatedFeatureSnapshotPayload {
         const features: IReplicatedFeatureSnapshotEntry[] = [];
+        const debug = this.getDebug();
         for (const feature of this.features.values()) {
             if (feature.policy?.includeInSnapshot === false) continue;
             if (!feature.captureSnapshot) continue;
             const snapshot = feature.captureSnapshot();
             if (snapshot === undefined) {
                 continue;
+            }
+            if (debug?.shouldTrackFeature(feature.featureId)) {
+                debug.recordSnapshotCapture(feature.featureId);
             }
             features.push({
                 featureId: feature.featureId,
@@ -168,13 +196,20 @@ export class FeatureReplicationService {
 
     public applySnapshotPayload(payload: IReplicatedFeatureSnapshotPayload | undefined | null): void {
         if (!payload || !Array.isArray(payload.features)) return;
+        const debug = this.getDebug();
         for (const entry of payload.features) {
             const feature = this.features.get(entry.featureId);
             if (!feature?.applySnapshot) {
                 this.pendingSnapshots.set(entry.featureId, entry.snapshot);
+                if (debug?.shouldTrackFeature(entry.featureId)) {
+                    debug.recordSnapshotQueued(entry.featureId);
+                }
                 continue;
             }
             feature.applySnapshot(entry.snapshot);
+            if (debug?.shouldTrackFeature(entry.featureId)) {
+                debug.recordSnapshotApply(entry.featureId);
+            }
         }
     }
 
@@ -200,11 +235,24 @@ export class FeatureReplicationService {
     }
 
     private applyEvent(payload: IReplicatedFeatureEventPayload, senderId: string | null, local: boolean): void {
-        if (!payload || !payload.eventId || this.hasSeen(payload.eventId)) return;
+        if (!payload || !payload.eventId) return;
+        const debug = this.getDebug();
+        const debugEnabled = !!debug?.shouldTrackFeature(payload.featureId);
+        if (this.hasSeen(payload.eventId)) {
+            if (debugEnabled) {
+                debug!.recordDropSeen(payload.featureId, payload.eventType, payload.eventId);
+            }
+            return;
+        }
         this.markSeen(payload.eventId);
 
         const feature = this.features.get(payload.featureId);
-        if (!feature) return;
+        if (!feature) {
+            if (debugEnabled) {
+                debug!.recordDropMissingFeature(payload.featureId, payload.eventType, payload.eventId);
+            }
+            return;
+        }
 
         feature.onEvent(payload.eventType, payload.data, {
             eventId: payload.eventId,
@@ -213,6 +261,9 @@ export class FeatureReplicationService {
             local,
             sentAt: payload.sentAt
         });
+        if (debugEnabled) {
+            debug!.recordApplied(payload.featureId, local, payload.eventType, payload.eventId);
+        }
     }
 
     private nextEventId(): string {
@@ -244,5 +295,10 @@ export class FeatureReplicationService {
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private getDebug(): ReplicationDebugRuntime | null {
+        const runtime = this.context.runtime as { replicationDebug?: ReplicationDebugRuntime };
+        return runtime.replicationDebug ?? null;
     }
 }

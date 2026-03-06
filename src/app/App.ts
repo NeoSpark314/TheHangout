@@ -27,6 +27,7 @@ import { ParticleEffectSystem } from '../render/effects/ParticleEffectSystem';
 import { SocialFeature } from '../features/social/SocialFeature';
 import { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
+import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 import eventBus from './events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
@@ -91,6 +92,7 @@ export class App {
 
     private initializeRuntime(): void {
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
+        this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
         this.context.setRuntime('entity', new EntityRegistry(this.context));
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
         this.context.setRuntime('remoteDesktop', new RemoteDesktopFeature(this.context));
@@ -124,6 +126,7 @@ export class App {
 
     private setupGlobalEventListeners(): void {
         const runtime = this.context.runtime;
+        this.exposeDebugHelpers();
 
         // Audio Activation
         const resumeAudio = () => {
@@ -201,6 +204,33 @@ export class App {
         if (runtime.input) {
             this.engine.onEndFrame(() => runtime.input!.clearJustPressed());
         }
+    }
+
+    private exposeDebugHelpers(): void {
+        if (typeof window === 'undefined') return;
+        const context = this.context;
+        const debugApi = {
+            setReplicationDebugMode: (mode: 'off' | 'stats' | 'trace') => {
+                context.runtime.replicationDebug.setMode(mode);
+                context.runtime.diagnostics.record('info', 'replication', `Replication debug mode=${mode}`);
+            },
+            setReplicationDebugFeatureFilter: (featureId: string | null) => {
+                context.runtime.replicationDebug.setFeatureFilter(featureId);
+                const active = context.runtime.replicationDebug.getFeatureFilter() || 'none';
+                context.runtime.diagnostics.record('info', 'replication', `Replication debug filter=${active}`);
+            },
+            clearReplicationDebug: () => {
+                context.runtime.replicationDebug.clear();
+            },
+            getReplicationDebugStats: (limit: number = 20) => {
+                return context.runtime.replicationDebug.listFeatureStats(limit);
+            },
+            getReplicationDebugTraces: (limit: number = 50) => {
+                return context.runtime.replicationDebug.getRecentTraces(limit);
+            }
+        };
+
+        (window as unknown as { __hangoutDebug?: unknown }).__hangoutDebug = debugApi;
     }
 
     private async ensureGameplayStarted(): Promise<void> {

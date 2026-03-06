@@ -9,6 +9,7 @@ import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
 import { MountRuntime } from '../content/runtime/MountRuntime';
 import { EntityType } from '../shared/contracts/IEntityState';
 import { RuntimeDiagnostics } from '../app/diagnostics/RuntimeDiagnostics';
+import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 
 export class HeadlessSession {
     public context: AppContext;
@@ -29,6 +30,7 @@ export class HeadlessSession {
         this.network.setContext(this.context);
 
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
+        this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
         const entityMgr = new EntityRegistry(this.context);
         this.context.setRuntime('entity', entityMgr);
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
