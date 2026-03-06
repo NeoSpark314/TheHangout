@@ -468,7 +468,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     }
 
     public setName(name: string): void {
-        this.nameTagComponent.setName(name);
+        this.nameTagComponent.setName(this.isLocal ? '' : name);
     }
 
     private _updateNameTagPosition(): void {
