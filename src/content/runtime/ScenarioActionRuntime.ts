@@ -1,5 +1,4 @@
 import type { AppContext } from '../../app/AppContext';
-import { PACKET_TYPES } from '../../shared/constants/Constants';
 import type {
     IScenarioActionExecutePayload,
     IScenarioActionRequestPayload,
@@ -13,7 +12,6 @@ import type {
     IScenarioActionView,
     TScenarioActionRole
 } from '../contracts/IScenarioAction';
-import type { IScenarioModule } from '../contracts/IScenarioModule';
 
 interface IScenarioActionHostOutcome {
     ok: boolean;
@@ -31,36 +29,6 @@ export class ScenarioActionRuntime {
 
         const queryContext = this.createQueryContext();
         return provider.getActions(queryContext).map((action) => this.toView(action, queryContext));
-    }
-
-    public requestAction(actionId: string, payload?: unknown): void {
-        const scenario = this.context.runtime.session.getActiveScenario();
-        const request: IScenarioActionRequestPayload = {
-            scenarioId: scenario.id,
-            actionId,
-            payload
-        };
-
-        if (this.context.isHost) {
-            const senderPeerId = this.getLocalPeerId();
-            const outcome = this.executeHostRequest(senderPeerId, request);
-            if (outcome.executePayload) {
-                this.context.runtime.network.broadcast(PACKET_TYPES.SCENARIO_ACTION_EXECUTE, outcome.executePayload);
-            }
-            this.handleActionResult(outcome.resultPayload);
-            return;
-        }
-
-        const sessionId = this.context.sessionId;
-        if (!sessionId) {
-            this.context.runtime.notify.warn('Cannot trigger scenario action while disconnected.', {
-                source: 'scenario-action',
-                code: 'scenario_action.disconnected'
-            });
-            return;
-        }
-
-        this.context.runtime.network.sendData(sessionId, PACKET_TYPES.SCENARIO_ACTION_REQUEST, request);
     }
 
     public executeHostRequest(senderPeerId: string | null, request: IScenarioActionRequestPayload): IScenarioActionHostOutcome {
@@ -120,7 +88,7 @@ export class ScenarioActionRuntime {
             };
         }
 
-        const requiredRole = this.resolveRequiredRole(definition);
+        const requiredRole = definition.requiredRole;
         if (!this.hasRole(queryContext.callerRole, requiredRole)) {
             return {
                 ok: false,
@@ -236,7 +204,7 @@ export class ScenarioActionRuntime {
 
     private toView(action: IScenarioActionDefinition, queryContext: IScenarioActionQueryContext): IScenarioActionView {
         const availableByScenario = action.isAvailable ? action.isAvailable(queryContext) : true;
-        const requiredRole = this.resolveRequiredRole(action);
+        const requiredRole = action.requiredRole;
         const blockedByRole = !this.hasRole(queryContext.callerRole, requiredRole);
         const available = availableByScenario && !blockedByRole;
 
@@ -252,11 +220,6 @@ export class ScenarioActionRuntime {
                 ? 'Unavailable in current scenario state.'
                 : (blockedByRole ? `Requires ${requiredRole} role.` : undefined)
         };
-    }
-
-    private resolveRequiredRole(action: IScenarioActionDefinition): TScenarioActionRole {
-        if (action.requiredRole) return action.requiredRole;
-        return action.hostOnly === false ? 'moderator' : 'admin';
     }
 
     private resolveCallerRole(callerPeerId: string | null): TScenarioActionRole {

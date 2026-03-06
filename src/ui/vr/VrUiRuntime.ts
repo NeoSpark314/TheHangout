@@ -41,7 +41,7 @@ export class VrUiRuntime implements IUpdatable {
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
-    private scenarioTabRefreshInterval: ReturnType<typeof setInterval> | null = null;
+    private scenarioTabRefreshHandler: (() => void) | null = null;
 
     constructor(private context: AppContext) {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
@@ -1233,10 +1233,17 @@ export class VrUiRuntime implements IUpdatable {
         };
 
         renderActions();
-        if (this.scenarioTabRefreshInterval) {
-            clearInterval(this.scenarioTabRefreshInterval);
+        if (this.scenarioTabRefreshHandler) {
+            eventBus.off(EVENTS.SESSION_CONFIG_APPLIED, this.scenarioTabRefreshHandler);
+            eventBus.off(EVENTS.SESSION_CONNECTED, this.scenarioTabRefreshHandler);
+            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.scenarioTabRefreshHandler);
+            eventBus.off(EVENTS.PEER_DISCONNECTED, this.scenarioTabRefreshHandler);
         }
-        this.scenarioTabRefreshInterval = setInterval(renderActions, 1000);
+        this.scenarioTabRefreshHandler = renderActions;
+        eventBus.on(EVENTS.SESSION_CONFIG_APPLIED, this.scenarioTabRefreshHandler);
+        eventBus.on(EVENTS.SESSION_CONNECTED, this.scenarioTabRefreshHandler);
+        eventBus.on(EVENTS.PEER_JOINED_SESSION, this.scenarioTabRefreshHandler);
+        eventBus.on(EVENTS.PEER_DISCONNECTED, this.scenarioTabRefreshHandler);
     }
 
     private addHelpTab() {
@@ -1440,9 +1447,12 @@ export class VrUiRuntime implements IUpdatable {
             clearInterval(this.debugStatsInterval);
             this.debugStatsInterval = null;
         }
-        if (this.scenarioTabRefreshInterval) {
-            clearInterval(this.scenarioTabRefreshInterval);
-            this.scenarioTabRefreshInterval = null;
+        if (this.scenarioTabRefreshHandler) {
+            eventBus.off(EVENTS.SESSION_CONFIG_APPLIED, this.scenarioTabRefreshHandler);
+            eventBus.off(EVENTS.SESSION_CONNECTED, this.scenarioTabRefreshHandler);
+            eventBus.off(EVENTS.PEER_JOINED_SESSION, this.scenarioTabRefreshHandler);
+            eventBus.off(EVENTS.PEER_DISCONNECTED, this.scenarioTabRefreshHandler);
+            this.scenarioTabRefreshHandler = null;
         }
         if (this.keyboardHandler) {
             window.removeEventListener('keydown', this.keyboardHandler);

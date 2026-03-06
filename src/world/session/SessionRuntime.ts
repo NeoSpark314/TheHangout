@@ -11,6 +11,8 @@ import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegi
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioRegistry } from '../../content/runtime/ScenarioRegistry';
 import { WideCircleScenario } from '../../content/scenarios/wideCircle/WideCircleScenario';
+import eventBus from '../../app/events/EventBus';
+import { EVENTS } from '../../shared/constants/Constants';
 
 export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
@@ -114,6 +116,9 @@ export class SessionRuntime implements IUpdatable {
                 `[SessionRuntime] Scenario switch ${applied ? 'completed' : 'failed'}` +
                 ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
             );
+            if (applied) {
+                this.emitSessionConfigApplied();
+            }
             return applied;
         }
 
@@ -140,10 +145,12 @@ export class SessionRuntime implements IUpdatable {
                 `[SessionRuntime] Scenario reload completed` +
                 ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
             );
+            this.emitSessionConfigApplied();
             return true;
         }
 
         this.activeScenario.applyConfig?.(this.context, this.context.sessionConfig);
+        this.emitSessionConfigApplied();
         return true;
     }
 
@@ -280,5 +287,9 @@ export class SessionRuntime implements IUpdatable {
         const spawnIndex = this.context.isHost ? 0 : (this.assignedSpawnIndex ?? 0);
         const spawn = this.getSpawnPoint(spawnIndex);
         localPlayer.teleportTo(spawn.position, spawn.yaw, { targetSpace: 'player' });
+    }
+
+    private emitSessionConfigApplied(): void {
+        eventBus.emit(EVENTS.SESSION_CONFIG_APPLIED);
     }
 }

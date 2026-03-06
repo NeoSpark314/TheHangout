@@ -21,10 +21,7 @@ export interface IScenarioActionDefinition<TPayload = unknown> {
     id: string;
     label: string;
     description?: string;
-    requiredRole?: TScenarioActionRole;
-    // Legacy compatibility: if true/omitted, maps to requiredRole='admin'.
-    // if false, maps to requiredRole='moderator'.
-    hostOnly?: boolean;
+    requiredRole: TScenarioActionRole;
     dangerous?: boolean;
     replicateToGuests?: boolean;
     isAvailable?(context: IScenarioActionQueryContext): boolean;
