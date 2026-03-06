@@ -19,6 +19,7 @@ export interface ITrackedHandUiProbe {
     tracked: boolean;
     currentLocal: { x: number; y: number; z: number };
     pinchStarted: boolean;
+    pinchActive: boolean;
 }
 
 type HandId = 'left' | 'right';
@@ -353,7 +354,8 @@ export class XRInputManager {
                 y: this.handCurrentLocal[hand].y,
                 z: this.handCurrentLocal[hand].z
             },
-            pinchStarted: this.handPinchStarted[hand]
+            pinchStarted: this.handPinchStarted[hand],
+            pinchActive: this.handPinchLatched[hand]
         };
     }
 

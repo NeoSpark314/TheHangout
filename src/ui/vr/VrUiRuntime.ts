@@ -24,6 +24,7 @@ export class VrUiRuntime implements IUpdatable {
     private handLocomotionCurrent: THREE.Mesh | null = null;
     private handLocomotionLine: THREE.Line | null = null;
     private menuOrb: THREE.Mesh | null = null;
+    private menuOrbCore: THREE.Mesh | null = null;
     private interactOrb: THREE.Mesh | null = null;
     private exitXrButton: UIButton | null = null;
 
@@ -62,6 +63,15 @@ export class VrUiRuntime implements IUpdatable {
     private readonly tempOrbLocalOffset = new THREE.Vector3();
     private readonly tempOrbWorld = new THREE.Vector3();
     private readonly tempFreeHandWorld = new THREE.Vector3();
+    private readonly menuOrbLongPressThresholdSec = 0.65;
+    private readonly menuOrbPressState: Record<'left' | 'right', {
+        wasPinchingInside: boolean;
+        holdSec: number;
+        longFired: boolean;
+    }> = {
+            left: { wasPinchingInside: false, holdSec: 0, longFired: false },
+            right: { wasPinchingInside: false, holdSec: 0, longFired: false }
+        };
 
     constructor(private context: AppContext) {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
@@ -287,9 +297,21 @@ export class VrUiRuntime implements IUpdatable {
                 depthWrite: false
             })
         );
+        const menuOrbCore = new THREE.Mesh(
+            new THREE.SphereGeometry(0.011, 16, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0x9ec9ff,
+                transparent: true,
+                opacity: 0.0,
+                depthWrite: false
+            })
+        );
+        menuOrbCore.scale.setScalar(0.1);
+        menuOrb.add(menuOrbCore);
         menuOrb.visible = false;
         render.scene.add(menuOrb);
         this.menuOrb = menuOrb;
+        this.menuOrbCore = menuOrbCore;
 
         const interactOrb = new THREE.Mesh(
             new THREE.SphereGeometry(0.022, 16, 16),
@@ -314,6 +336,39 @@ export class VrUiRuntime implements IUpdatable {
         const material = mesh.material as THREE.MeshBasicMaterial;
         material.color.setHex(isActive ? colors.on : (isHovering ? colors.hover : colors.off));
         material.opacity = isActive ? 0.45 : (isHovering ? 0.34 : 0.22);
+    }
+
+    private applyMenuOrbVisual(isHovering: boolean, isPressing: boolean, isReady: boolean, progressNorm: number): void {
+        const menuOrb = this.menuOrb;
+        const menuOrbCore = this.menuOrbCore;
+        if (!menuOrb || !menuOrbCore) return;
+
+        const outerMaterial = menuOrb.material as THREE.MeshBasicMaterial;
+        if (isReady) {
+            outerMaterial.color.setHex(0x64ffd2);
+            outerMaterial.opacity = 0.52;
+        } else if (isPressing) {
+            outerMaterial.color.setHex(0x8de3ff);
+            outerMaterial.opacity = 0.44;
+        } else if (isHovering) {
+            outerMaterial.color.setHex(0xa8d7ff);
+            outerMaterial.opacity = 0.34;
+        } else {
+            outerMaterial.color.setHex(0x4a5d6b);
+            outerMaterial.opacity = 0.22;
+        }
+
+        const coreMaterial = menuOrbCore.material as THREE.MeshBasicMaterial;
+        if (!isPressing && !isReady) {
+            coreMaterial.opacity = 0;
+            menuOrbCore.scale.setScalar(0.1);
+            return;
+        }
+
+        const t = Math.max(0, Math.min(1, progressNorm));
+        coreMaterial.color.setHex(isReady ? 0x79ffb8 : 0x8fe6ff);
+        coreMaterial.opacity = isReady ? 0.95 : (0.28 + 0.52 * t);
+        menuOrbCore.scale.setScalar(0.1 + 0.82 * t);
     }
 
     private updateHandLocomotionIndicator(): void {
@@ -367,13 +422,20 @@ export class VrUiRuntime implements IUpdatable {
         }
     }
 
-    private updateMenuOrb(): void {
+    private updateMenuOrb(delta: number): void {
         const render = this.context.runtime.render;
         const menuOrb = this.menuOrb;
+        const menuOrbCore = this.menuOrbCore;
         const indicatorState = this.context.runtime.input?.xrInput.getLeftHandLocomotionIndicatorState() || null;
 
-        if (!render || !menuOrb || !render.isXRPresenting() || !indicatorState?.visible) {
+        if (!render || !menuOrb || !menuOrbCore || !render.isXRPresenting() || !indicatorState?.visible) {
             if (menuOrb) menuOrb.visible = false;
+            if (menuOrbCore) {
+                const coreMaterial = menuOrbCore.material as THREE.MeshBasicMaterial;
+                coreMaterial.opacity = 0;
+                menuOrbCore.scale.setScalar(0.1);
+            }
+            this.resetMenuOrbPressState();
             return;
         }
 
@@ -404,30 +466,86 @@ export class VrUiRuntime implements IUpdatable {
         menuOrb.scale.setScalar(menuRadius / 0.022);
 
         let isHovering = false;
+        let isPressing = false;
+        let isReady = false;
+        let maxProgressNorm = 0;
         for (const hand of ['left', 'right'] as const) {
             const probe = this.context.runtime.input?.xrInput.getHandUiProbe(hand);
-            if (!probe?.tracked) continue;
+            const state = this.menuOrbPressState[hand];
+            if (!probe?.tracked) {
+                state.wasPinchingInside = false;
+                state.holdSec = 0;
+                state.longFired = false;
+                continue;
+            }
 
             const dx = probe.currentLocal.x - menuOffsetLocal.x;
             const dy = probe.currentLocal.y - menuOffsetLocal.y;
             const dz = probe.currentLocal.z - menuOffsetLocal.z;
             const inside = (dx * dx + dy * dy + dz * dz) <= (menuRadius * menuRadius);
-            if (!inside) continue;
+            const pinchingInside = inside && probe.pinchActive;
 
-            isHovering = true;
-            if (probe.pinchStarted) {
-                const nextState = !this.context.isMenuOpen;
-                eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
-                this.context.runtime.audio?.playUiToggle(nextState);
-                break;
+            if (inside) {
+                isHovering = true;
             }
-        }
 
-        this.applyToggleOrbVisual(menuOrb, isHovering, !!this.context.isMenuOpen, {
-            off: 0x4a5d6b,
-            hover: 0xa8d7ff,
-            on: 0x79b8ff
-        });
+            if (pinchingInside) {
+                isPressing = true;
+                if (!state.wasPinchingInside) {
+                    state.wasPinchingInside = true;
+                    state.holdSec = 0;
+                    state.longFired = false;
+                } else {
+                    state.holdSec += Math.max(0, delta);
+                    if (!state.longFired && state.holdSec >= this.menuOrbLongPressThresholdSec) {
+                        state.longFired = true;
+                        eventBus.emit(EVENTS.INTENT_MENU_OPEN_RECENTER);
+                        this.context.runtime.audio?.playUiToggle(true);
+                    }
+                }
+                const progressNorm = Math.max(0, Math.min(1, state.holdSec / this.menuOrbLongPressThresholdSec));
+                maxProgressNorm = Math.max(maxProgressNorm, progressNorm);
+                if (state.longFired) {
+                    isReady = true;
+                    maxProgressNorm = 1;
+                }
+                continue;
+            }
+
+            if (state.wasPinchingInside) {
+                if (!probe.pinchActive) {
+                    if (!state.longFired) {
+                        const nextState = !this.context.isMenuOpen;
+                        eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
+                        this.context.runtime.audio?.playUiToggle(nextState);
+                    }
+                    state.wasPinchingInside = false;
+                    state.holdSec = 0;
+                    state.longFired = false;
+                    continue;
+                }
+
+                // Gesture moved out of the sphere while still pinching: cancel this press.
+                state.wasPinchingInside = false;
+                state.holdSec = 0;
+                state.longFired = false;
+                continue;
+            }
+
+            state.holdSec = 0;
+            state.longFired = false;
+            state.wasPinchingInside = false;
+        }
+        this.applyMenuOrbVisual(isHovering, isPressing, isReady, maxProgressNorm);
+    }
+
+    private resetMenuOrbPressState(): void {
+        for (const hand of ['left', 'right'] as const) {
+            const state = this.menuOrbPressState[hand];
+            state.wasPinchingInside = false;
+            state.holdSec = 0;
+            state.longFired = false;
+        }
     }
 
     private updateInteractionOrb(): void {
@@ -1700,7 +1818,7 @@ export class VrUiRuntime implements IUpdatable {
         this.wasXrPresentingLastFrame = isXrPresenting;
 
         this.updateHandLocomotionIndicator();
-        this.updateMenuOrb();
+        this.updateMenuOrb(delta);
         this.updateInteractionOrb();
 
         if (this.exitXrButton) {
@@ -1799,6 +1917,12 @@ export class VrUiRuntime implements IUpdatable {
             this.handLocomotionIndicator = null;
         }
         if (this.menuOrb) {
+            if (this.menuOrbCore) {
+                this.menuOrbCore.geometry.dispose();
+                (this.menuOrbCore.material as THREE.Material).dispose();
+                this.menuOrbCore.removeFromParent();
+                this.menuOrbCore = null;
+            }
             this.menuOrb.geometry.dispose();
             (this.menuOrb.material as THREE.Material).dispose();
             this.menuOrb.removeFromParent();
