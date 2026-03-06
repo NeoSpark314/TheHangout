@@ -29,10 +29,7 @@ export class VrUiRuntime implements IUpdatable {
     private peersTab: UITab | null = null;
     private sessionTab: UITab | null = null;
     private systemTab: UITab | null = null;
-    private scenarioTab: UITab | null = null;
     private refreshPeersList: (() => void) | null = null;
-    private refreshScenarioActions: (() => void) | null = null;
-    private wasScenarioTabVisible: boolean = false;
     private peersRefreshCleanup: (() => void) | null = null;
     private onVoiceStateHandler: (() => void) | null = null;
     private desktopRefreshCleanup: (() => void) | null = null;
@@ -43,6 +40,11 @@ export class VrUiRuntime implements IUpdatable {
     private canvasMouseLeaveHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
     private scenarioRefreshCleanup: (() => void) | null = null;
+    private readonly tabVisibleRefreshWatchers: Array<{
+        tabGetter: () => UITab | null;
+        refresh: () => void;
+        wasVisible: boolean;
+    }> = [];
     private readonly tempUpAxis = new THREE.Vector3(0, 1, 0);
     private readonly tempHeadPosition = new THREE.Vector3();
     private readonly tempHeadQuaternion = new THREE.Quaternion();
@@ -100,11 +102,17 @@ export class VrUiRuntime implements IUpdatable {
             delayedEvents?: string[];
             delayMs?: number;
             intervalMs?: number;
+            refreshOnVisible?: boolean;
         } = {}
     ): () => void {
         const handlers: Array<{ event: string; handler: () => void }> = [];
         const timeoutIds = new Set<ReturnType<typeof setTimeout>>();
         let intervalId: ReturnType<typeof setInterval> | null = null;
+        let visibleWatcher: {
+            tabGetter: () => UITab | null;
+            refresh: () => void;
+            wasVisible: boolean;
+        } | null = null;
 
         const runIfVisible = () => {
             if (this.shouldRefreshTabUi(tabGetter())) {
@@ -135,6 +143,11 @@ export class VrUiRuntime implements IUpdatable {
             intervalId = setInterval(() => runIfVisible(), options.intervalMs);
         }
 
+        if (options.refreshOnVisible) {
+            visibleWatcher = { tabGetter, refresh, wasVisible: false };
+            this.tabVisibleRefreshWatchers.push(visibleWatcher);
+        }
+
         return () => {
             for (const { event, handler } of handlers) {
                 eventBus.off(event as any, handler);
@@ -146,6 +159,13 @@ export class VrUiRuntime implements IUpdatable {
             if (intervalId) {
                 clearInterval(intervalId);
                 intervalId = null;
+            }
+            if (visibleWatcher) {
+                const idx = this.tabVisibleRefreshWatchers.indexOf(visibleWatcher);
+                if (idx !== -1) {
+                    this.tabVisibleRefreshWatchers.splice(idx, 1);
+                }
+                visibleWatcher = null;
             }
         };
     }
@@ -1236,7 +1256,6 @@ export class VrUiRuntime implements IUpdatable {
         if (!this.tabPanel) return;
 
         const scenarioTab = this.tabPanel.addTab('Scenario');
-        this.scenarioTab = scenarioTab;
         const container = scenarioTab.container;
         const title = this.createTabTitle('Scenario Actions', 90, 52, 1080, 48, 'left');
         title.textColor = UITheme.colors.accent;
@@ -1308,7 +1327,6 @@ export class VrUiRuntime implements IUpdatable {
 
             this.tablet?.ui.markDirty();
         };
-        this.refreshScenarioActions = renderActions;
 
         renderActions();
         this.scenarioRefreshCleanup?.();
@@ -1321,7 +1339,8 @@ export class VrUiRuntime implements IUpdatable {
                     EVENTS.SESSION_CONNECTED,
                     EVENTS.PEER_JOINED_SESSION,
                     EVENTS.PEER_DISCONNECTED
-                ]
+                ],
+                refreshOnVisible: true
             }
         );
     }
@@ -1506,12 +1525,13 @@ export class VrUiRuntime implements IUpdatable {
         this.updateHandLocomotionIndicator();
         this.updateMenuOrb();
         this.updateInteractionOrb();
-
-        const isScenarioVisibleNow = this.shouldRefreshTabUi(this.scenarioTab);
-        if (isScenarioVisibleNow && !this.wasScenarioTabVisible) {
-            this.refreshScenarioActions?.();
+        for (const watcher of this.tabVisibleRefreshWatchers) {
+            const isVisibleNow = this.shouldRefreshTabUi(watcher.tabGetter());
+            if (isVisibleNow && !watcher.wasVisible) {
+                watcher.refresh();
+            }
+            watcher.wasVisible = isVisibleNow;
         }
-        this.wasScenarioTabVisible = isScenarioVisibleNow;
 
         if (this.tablet) {
             // Update 3D visibility based on VR state vs Desktop Menu
@@ -1536,9 +1556,7 @@ export class VrUiRuntime implements IUpdatable {
             this.scenarioRefreshCleanup();
             this.scenarioRefreshCleanup = null;
         }
-        this.scenarioTab = null;
-        this.refreshScenarioActions = null;
-        this.wasScenarioTabVisible = false;
+        this.tabVisibleRefreshWatchers.length = 0;
         this.hide2DMenu();
         if (this.debugStatsInterval) {
             clearInterval(this.debugStatsInterval);
