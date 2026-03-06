@@ -35,6 +35,9 @@ export class VrUiRuntime implements IUpdatable {
     private sessionMicRefreshHandler: (() => void) | null = null;
     private desktopRefreshCleanup: (() => void) | null = null;
     private menuIntentHandler: (() => void) | null = null;
+    private menuOpenRecenterIntentHandler: (() => void) | null = null;
+    private hasInitialVrMenuRecentered = false;
+    private wasXrPresentingLastFrame = false;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
@@ -509,12 +512,19 @@ export class VrUiRuntime implements IUpdatable {
         if (this.menuIntentHandler) {
             eventBus.off(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
         }
+        if (this.menuOpenRecenterIntentHandler) {
+            eventBus.off(EVENTS.INTENT_MENU_OPEN_RECENTER, this.menuOpenRecenterIntentHandler);
+        }
 
         this.menuIntentHandler = () => {
             this.toggle2DMenu();
         };
+        this.menuOpenRecenterIntentHandler = () => {
+            this.openMenuWithRecenter();
+        };
 
         eventBus.on(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
+        eventBus.on(EVENTS.INTENT_MENU_OPEN_RECENTER, this.menuOpenRecenterIntentHandler);
     }
 
     private setupKeyboardListeners(): void {
@@ -542,9 +552,10 @@ export class VrUiRuntime implements IUpdatable {
         this.context.isMenuOpen = !this.context.isMenuOpen;
 
         if (isVR) {
-            if (this.context.isMenuOpen) {
+            if (this.context.isMenuOpen && !this.hasInitialVrMenuRecentered) {
                 this.tablet?.recenterInFrontOfView();
                 this.tablet?.update(0);
+                this.hasInitialVrMenuRecentered = true;
             }
             this.tablet?.setVisible(this.context.isMenuOpen);
             return;
@@ -629,6 +640,21 @@ export class VrUiRuntime implements IUpdatable {
         if (controls && !this.context.runtime.render?.isXRPresenting()) {
             controls.classList.remove('is-hidden');
         }
+    }
+
+    public openMenuWithRecenter(): void {
+        const isVR = !!this.context.runtime.render?.isXRPresenting();
+        this.context.isMenuOpen = true;
+
+        if (isVR) {
+            this.tablet?.recenterInFrontOfView();
+            this.tablet?.update(0);
+            this.tablet?.setVisible(true);
+            this.hasInitialVrMenuRecentered = true;
+            return;
+        }
+
+        this.show2DMenu();
     }
 
     public handleControllerCursor(
@@ -1667,6 +1693,12 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     public update(delta: number): void {
+        const isXrPresenting = !!this.context.runtime.render?.isXRPresenting();
+        if (this.wasXrPresentingLastFrame && !isXrPresenting) {
+            this.hasInitialVrMenuRecentered = false;
+        }
+        this.wasXrPresentingLastFrame = isXrPresenting;
+
         this.updateHandLocomotionIndicator();
         this.updateMenuOrb();
         this.updateInteractionOrb();
@@ -1731,6 +1763,10 @@ export class VrUiRuntime implements IUpdatable {
         if (this.menuIntentHandler) {
             eventBus.off(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
             this.menuIntentHandler = null;
+        }
+        if (this.menuOpenRecenterIntentHandler) {
+            eventBus.off(EVENTS.INTENT_MENU_OPEN_RECENTER, this.menuOpenRecenterIntentHandler);
+            this.menuOpenRecenterIntentHandler = null;
         }
         this.controllerCursor.destroy();
         if (this.handLocomotionLine) {

@@ -191,9 +191,12 @@ export class InputRuntime implements IUpdatable {
         if (this.gamepad.hadMeaningfulInputThisFrame) {
             this.markDesktopInputActivity('controller');
         }
-        this.xrInput.poll(frame);
-        if (this.gamepad.wasPressed(3) || this.xrInput.wasMenuJustPressed()) {
+        this.xrInput.poll(delta, frame);
+        if (this.gamepad.wasPressed(3) || this.xrInput.wasMenuShortPressJustTriggered()) {
             eventBus.emit(EVENTS.INTENT_MENU_TOGGLE);
+        }
+        if (this.xrInput.wasMenuLongPressJustTriggered()) {
+            eventBus.emit(EVENTS.INTENT_MENU_OPEN_RECENTER);
         }
         if (this.xrInteractionLatchedHand && !this.isXRBubbleInteractionEligible(this.xrInteractionLatchedHand)) {
             this.xrInteractionLatchedHand = null;

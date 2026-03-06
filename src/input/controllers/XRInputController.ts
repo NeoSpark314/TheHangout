@@ -30,7 +30,11 @@ export class XRInputManager {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
     private menuPressed = false;
-    private menuJustPressed = false;
+    private menuShortPressJustTriggered = false;
+    private menuLongPressJustTriggered = false;
+    private menuPressDurationSec = 0;
+    private menuLongPressTriggeredForCurrentHold = false;
+    private readonly menuLongPressThresholdSec = 0.65;
     private handPinchLatched: Record<HandId, boolean> = { left: false, right: false };
     private handPinchStarted: Record<HandId, boolean> = { left: false, right: false };
     private handTracked: Record<HandId, boolean> = { left: false, right: false };
@@ -57,10 +61,11 @@ export class XRInputManager {
 
     constructor(private context: AppContext) { }
 
-    public poll(frame?: XRFrame): void {
+    public poll(delta: number, frame?: XRFrame): void {
         this.move = { x: 0, y: 0 };
         this.turn = 0;
-        this.menuJustPressed = false;
+        this.menuShortPressJustTriggered = false;
+        this.menuLongPressJustTriggered = false;
 
         const render = this.context.runtime.render;
         if (!render || !render.isXRPresenting()) {
@@ -109,7 +114,26 @@ export class XRInputManager {
             }
         }
 
-        this.menuJustPressed = sawMenuPressed && !this.menuPressed;
+        if (sawMenuPressed) {
+            if (!this.menuPressed) {
+                this.menuPressDurationSec = 0;
+                this.menuLongPressTriggeredForCurrentHold = false;
+            }
+
+            this.menuPressDurationSec += Math.max(0, delta);
+            if (!this.menuLongPressTriggeredForCurrentHold && this.menuPressDurationSec >= this.menuLongPressThresholdSec) {
+                this.menuLongPressTriggeredForCurrentHold = true;
+                this.menuLongPressJustTriggered = true;
+            }
+        } else if (this.menuPressed && !this.menuLongPressTriggeredForCurrentHold) {
+            this.menuShortPressJustTriggered = true;
+        }
+
+        if (!sawMenuPressed) {
+            this.menuPressDurationSec = 0;
+            this.menuLongPressTriggeredForCurrentHold = false;
+        }
+
         this.menuPressed = sawMenuPressed;
 
         for (const hand of ['left', 'right'] as const) {
@@ -333,8 +357,12 @@ export class XRInputManager {
         };
     }
 
-    public wasMenuJustPressed(): boolean {
-        return this.menuJustPressed;
+    public wasMenuShortPressJustTriggered(): boolean {
+        return this.menuShortPressJustTriggered;
+    }
+
+    public wasMenuLongPressJustTriggered(): boolean {
+        return this.menuLongPressJustTriggered;
     }
 
     private isMenuButtonPressed(source: XRInputSource): boolean {
