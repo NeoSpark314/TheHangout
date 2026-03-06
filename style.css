@@ -436,21 +436,43 @@ input[type="color"] {
     font-weight: bold;
 }
 
-#VRButton {
-    z-index: 100 !important;
-    border: var(--border-width) solid var(--primary-color) !important;
-    background: var(--bg-color) !important;
-    color: var(--primary-color) !important;
-    font-family: var(--font-family) !important;
-    font-weight: 600 !important;
-    letter-spacing: 1px !important;
-    box-shadow: var(--neon-glow) !important;
-    border-radius: var(--border-radius) !important;
+.xr-entry-row {
+    position: absolute;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 999;
 }
 
-#VRButton:hover {
-    background: var(--primary-color) !important;
-    color: var(--bg-color) !important;
+.xr-entry-btn {
+    position: static;
+    width: 72px;
+    height: 40px;
+    line-height: 40px;
+    margin: 0;
+    padding: 0;
+    border: var(--border-width) solid var(--primary-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-color);
+    color: var(--primary-color);
+    font-family: var(--font-family);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: none;
+    text-align: center;
+    box-shadow: var(--neon-glow);
+    opacity: 1;
+    cursor: pointer;
+    outline: none;
+}
+
+.xr-entry-btn:hover {
+    background: var(--primary-color);
+    color: var(--bg-color);
 }
 
 /* --- Face Drawing UI --- */

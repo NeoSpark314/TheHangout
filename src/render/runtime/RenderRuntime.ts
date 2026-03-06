@@ -27,6 +27,7 @@ export class RenderRuntime {
     private xrButtonRow: HTMLDivElement | null = null;
     private vrEntryButton: HTMLElement | null = null;
     private mrEntryButton: HTMLElement | null = null;
+    private readonly xrButtonLabelObservers = new WeakMap<HTMLElement, MutationObserver>();
 
     constructor(private context: AppContext) {
         this.container = document.getElementById('app')!;
@@ -111,9 +112,9 @@ export class RenderRuntime {
 
             const row = this.ensureXrButtonRow();
             this.prepareXrEntryButton(vrButton);
-            this.lockButtonLabel(vrButton, 'VR');
             row.appendChild(vrButton);
             this.vrEntryButton = vrButton;
+            this.setXrButtonLabel(vrButton, 'VR');
             void this.attachMixedRealityButton(row);
         }
 
@@ -310,9 +311,9 @@ export class RenderRuntime {
             }
 
             this.prepareXrEntryButton(mrButton);
-            this.lockButtonLabel(mrButton, 'MR');
             row.appendChild(mrButton);
             this.mrEntryButton = mrButton;
+            this.setXrButtonLabel(mrButton, 'MR');
         } catch (error) {
             console.warn('[RenderRuntime] Could not determine immersive-ar support:', error);
         }
@@ -322,55 +323,21 @@ export class RenderRuntime {
         if (this.xrButtonRow) return this.xrButtonRow;
 
         const row = document.createElement('div');
-        row.style.position = 'absolute';
-        row.style.left = '50%';
-        row.style.bottom = '20px';
-        row.style.transform = 'translateX(-50%)';
-        row.style.display = 'flex';
-        row.style.gap = '10px';
-        row.style.alignItems = 'center';
-        row.style.zIndex = '999';
+        row.className = 'xr-entry-row';
         this.container.appendChild(row);
         this.xrButtonRow = row;
         return row;
     }
 
     private prepareXrEntryButton(button: HTMLElement): void {
-        button.style.position = 'static';
-        button.style.left = '';
-        button.style.right = '';
-        button.style.bottom = '';
-        button.style.transform = '';
-        button.style.width = '72px';
-        button.style.height = '40px';
-        button.style.lineHeight = '40px';
-        button.style.margin = '0';
-        button.style.padding = '0';
-        button.style.borderRadius = '6px';
-        button.style.border = '1px solid rgba(255,255,255,0.45)';
-        button.style.background = 'rgba(0,0,0,0.35)';
-        button.style.color = '#fff';
-        button.style.fontWeight = '700';
-        button.style.letterSpacing = '0.08em';
-        button.style.textTransform = 'none';
-        button.style.textAlign = 'center';
-        button.style.opacity = '1';
-        button.style.cursor = 'pointer';
-    }
-
-    private lockButtonLabel(button: HTMLElement, label: string): void {
-        button.textContent = label;
-        const observer = new MutationObserver(() => {
-            if (button.textContent !== label) {
-                button.textContent = label;
-            }
-        });
-        observer.observe(button, { childList: true, subtree: true, characterData: true });
+        button.classList.add('xr-entry-btn');
+        // Neutralize default absolute positioning from THREE helper buttons.
+        this.forceXrButtonLayout(button);
     }
 
     private refreshXrButtonLabels(): void {
-        if (this.vrEntryButton) this.vrEntryButton.textContent = 'VR';
-        if (this.mrEntryButton) this.mrEntryButton.textContent = 'MR';
+        if (this.vrEntryButton) this.setXrButtonLabel(this.vrEntryButton, 'VR');
+        if (this.mrEntryButton) this.setXrButtonLabel(this.mrEntryButton, 'MR');
     }
 
     private async promoteReferenceSpaceToRoomScale(): Promise<void> {
@@ -385,5 +352,35 @@ export class RenderRuntime {
             // Keep local-floor as baseline fallback when bounded-floor is unavailable.
             console.log('[RenderRuntime] bounded-floor unavailable; staying on local-floor.');
         }
+    }
+
+    private setXrButtonLabel(button: HTMLElement, label: string): void {
+        button.setAttribute('data-short-label', label);
+        button.textContent = label;
+        button.setAttribute('aria-label', label);
+
+        if (!this.xrButtonLabelObservers.has(button)) {
+            const observer = new MutationObserver(() => {
+                const desired = button.getAttribute('data-short-label') || label;
+                if (button.textContent !== desired) {
+                    button.textContent = desired;
+                }
+            });
+            observer.observe(button, { childList: true, subtree: true, characterData: true });
+            this.xrButtonLabelObservers.set(button, observer);
+        }
+    }
+
+    private forceXrButtonLayout(button: HTMLElement): void {
+        button.style.setProperty('position', 'static', 'important');
+        button.style.setProperty('left', 'auto', 'important');
+        button.style.setProperty('right', 'auto', 'important');
+        button.style.setProperty('bottom', 'auto', 'important');
+        button.style.setProperty('transform', 'none', 'important');
+        button.style.setProperty('width', '72px', 'important');
+        button.style.setProperty('height', '40px', 'important');
+        button.style.setProperty('margin', '0', 'important');
+        button.style.setProperty('padding', '0', 'important');
+        button.style.setProperty('line-height', '40px', 'important');
     }
 }
