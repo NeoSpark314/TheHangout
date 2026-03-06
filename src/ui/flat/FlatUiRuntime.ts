@@ -11,9 +11,9 @@ export class FlatUiRuntime implements IUpdatable {
         '<b>Controls</b>',
         'Menu: M',
         'Move: WASD',
-        'Look: Mouse',
-        'Hand Grab: Left Click',
-        'Hand Interact: Right Click'
+        'Mouse Look: Right Click',
+        'Hand Grab: Left Click + Hold',
+        'Interact with Object: Right Click'
     ].join('<br>');
     private static readonly CONTROLLER_HELP_HTML = [
         '<b>Controls</b>',
