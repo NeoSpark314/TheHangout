@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import { isTrueHMD } from '../../shared/utils/DeviceUtils.ts';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
+import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
 
 export class RenderRuntime {
     public container: HTMLElement;
@@ -19,6 +21,12 @@ export class RenderRuntime {
     public controllerGrips: THREE.Group[] = [];
     public hands: THREE.Group[] = [];
     private raycaster: THREE.Raycaster = new THREE.Raycaster();
+    private xrPresentationMode: 'none' | 'vr' | 'mr' = 'none';
+    private savedSceneBackground: THREE.Scene['background'] | null = null;
+    private savedSceneFog: THREE.Scene['fog'] | null = null;
+    private xrButtonRow: HTMLDivElement | null = null;
+    private vrEntryButton: HTMLElement | null = null;
+    private mrEntryButton: HTMLElement | null = null;
 
     constructor(private context: AppContext) {
         this.container = document.getElementById('app')!;
@@ -55,18 +63,27 @@ export class RenderRuntime {
         this.camera.add(this.audioListener);
 
         // Renderer setup
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.shadowMap.enabled = false;
+        this.renderer.setClearColor(0x000000, 1);
 
         // WebXR Enable
         this.renderer.xr.enabled = true;
+        this.renderer.xr.setReferenceSpaceType('local-floor');
         this.renderer.xr.addEventListener('sessionstart', () => {
+            void this.promoteReferenceSpaceToRoomScale();
+            this.xrPresentationMode = this.detectXrPresentationMode();
+            this.applyXrVisualMode();
+            this.refreshXrButtonLabels();
             console.log('[RenderRuntime] XR Session Started');
             eventBus.emit(EVENTS.XR_SESSION_STARTED);
         });
         this.renderer.xr.addEventListener('sessionend', () => {
+            this.xrPresentationMode = 'none';
+            this.applyXrVisualMode();
+            this.refreshXrButtonLabels();
             console.log('[RenderRuntime] XR Session Ended');
             eventBus.emit(EVENTS.XR_SESSION_ENDED);
         });
@@ -86,9 +103,18 @@ export class RenderRuntime {
         if (isTrueHMD) {
             const vrButton = VRButton.createButton(this.renderer, {
                 requiredFeatures: ['local-floor'],
-                optionalFeatures: ['hand-tracking']
+                optionalFeatures: ['bounded-floor', 'hand-tracking']
             });
-            this.container.appendChild(vrButton);
+            if (vrButton instanceof HTMLButtonElement) {
+                vrButton.textContent = 'VR';
+            }
+
+            const row = this.ensureXrButtonRow();
+            this.prepareXrEntryButton(vrButton);
+            this.lockButtonLabel(vrButton, 'VR');
+            row.appendChild(vrButton);
+            this.vrEntryButton = vrButton;
+            void this.attachMixedRealityButton(row);
         }
 
         // Handle Window Resize and Orientation Change
@@ -180,6 +206,10 @@ export class RenderRuntime {
         return this.renderer.xr.isPresenting;
     }
 
+    public isMixedRealityPresenting(): boolean {
+        return this.isXRPresenting() && this.xrPresentationMode === 'mr';
+    }
+
     public getXRSession(): XRSession | null {
         return this.renderer.xr.getSession();
     }
@@ -214,6 +244,10 @@ export class RenderRuntime {
     }
 
     public render(): void {
+        if (this.xrPresentationMode === 'mr') {
+            this.scene.background = null;
+            this.scene.fog = null;
+        }
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -226,5 +260,130 @@ export class RenderRuntime {
         this.raycaster.far = maxDist;
         this.raycaster.camera = this.camera;
         return this.raycaster.intersectObjects(this.interactionGroup.children, true);
+    }
+
+    private detectXrPresentationMode(): 'vr' | 'mr' {
+        const session = this.getXRSession();
+        const blendMode = session?.environmentBlendMode;
+        if (blendMode === 'alpha-blend' || blendMode === 'additive') {
+            return 'mr';
+        }
+        return 'vr';
+    }
+
+    private applyXrVisualMode(): void {
+        const mixedReality = this.xrPresentationMode === 'mr';
+
+        if (mixedReality) {
+            this.savedSceneBackground = this.scene.background;
+            this.savedSceneFog = this.scene.fog;
+            this.scene.background = null;
+            this.scene.fog = null;
+            this.renderer.setClearColor(0x000000, 0);
+        } else {
+            this.renderer.setClearColor(0x000000, 1);
+            if (this.savedSceneBackground !== null || this.savedSceneFog !== null) {
+                this.scene.background = this.savedSceneBackground;
+                this.scene.fog = this.savedSceneFog;
+                this.savedSceneBackground = null;
+                this.savedSceneFog = null;
+            }
+        }
+
+        EnvironmentBuilder.setDecorationsVisible(!mixedReality);
+    }
+
+    private async attachMixedRealityButton(row: HTMLElement): Promise<void> {
+        if (!navigator.xr?.isSessionSupported) return;
+
+        try {
+            const supportsMr = await navigator.xr.isSessionSupported('immersive-ar');
+            if (!supportsMr) return;
+
+            const mrButton = ARButton.createButton(this.renderer, {
+                requiredFeatures: ['local-floor'],
+                optionalFeatures: ['bounded-floor', 'hand-tracking']
+            });
+
+            if (mrButton instanceof HTMLButtonElement) {
+                mrButton.textContent = 'MR';
+            }
+
+            this.prepareXrEntryButton(mrButton);
+            this.lockButtonLabel(mrButton, 'MR');
+            row.appendChild(mrButton);
+            this.mrEntryButton = mrButton;
+        } catch (error) {
+            console.warn('[RenderRuntime] Could not determine immersive-ar support:', error);
+        }
+    }
+
+    private ensureXrButtonRow(): HTMLDivElement {
+        if (this.xrButtonRow) return this.xrButtonRow;
+
+        const row = document.createElement('div');
+        row.style.position = 'absolute';
+        row.style.left = '50%';
+        row.style.bottom = '20px';
+        row.style.transform = 'translateX(-50%)';
+        row.style.display = 'flex';
+        row.style.gap = '10px';
+        row.style.alignItems = 'center';
+        row.style.zIndex = '999';
+        this.container.appendChild(row);
+        this.xrButtonRow = row;
+        return row;
+    }
+
+    private prepareXrEntryButton(button: HTMLElement): void {
+        button.style.position = 'static';
+        button.style.left = '';
+        button.style.right = '';
+        button.style.bottom = '';
+        button.style.transform = '';
+        button.style.width = '72px';
+        button.style.height = '40px';
+        button.style.lineHeight = '40px';
+        button.style.margin = '0';
+        button.style.padding = '0';
+        button.style.borderRadius = '6px';
+        button.style.border = '1px solid rgba(255,255,255,0.45)';
+        button.style.background = 'rgba(0,0,0,0.35)';
+        button.style.color = '#fff';
+        button.style.fontWeight = '700';
+        button.style.letterSpacing = '0.08em';
+        button.style.textTransform = 'none';
+        button.style.textAlign = 'center';
+        button.style.opacity = '1';
+        button.style.cursor = 'pointer';
+    }
+
+    private lockButtonLabel(button: HTMLElement, label: string): void {
+        button.textContent = label;
+        const observer = new MutationObserver(() => {
+            if (button.textContent !== label) {
+                button.textContent = label;
+            }
+        });
+        observer.observe(button, { childList: true, subtree: true, characterData: true });
+    }
+
+    private refreshXrButtonLabels(): void {
+        if (this.vrEntryButton) this.vrEntryButton.textContent = 'VR';
+        if (this.mrEntryButton) this.mrEntryButton.textContent = 'MR';
+    }
+
+    private async promoteReferenceSpaceToRoomScale(): Promise<void> {
+        const session = this.getXRSession();
+        if (!session) return;
+
+        try {
+            const boundedFloor = await session.requestReferenceSpace('bounded-floor');
+            this.renderer.xr.setReferenceSpace(boundedFloor);
+            console.log('[RenderRuntime] Using bounded-floor (room-scale) reference space.');
+        } catch {
+            // Keep local-floor as baseline fallback when bounded-floor is unavailable.
+            console.log('[RenderRuntime] bounded-floor unavailable; staying on local-floor.');
+        }
     }
 }

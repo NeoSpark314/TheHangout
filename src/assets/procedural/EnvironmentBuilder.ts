@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { ISessionConfig } from '../../app/AppContext';
 
 export class EnvironmentBuilder {
+    private static decorationsVisible: boolean = true;
     private scene: THREE.Scene;
     private random: () => number;
 
+    private decorationRoot: THREE.Group | null = null;
     private hills: THREE.Group | null = null;
     private stars: THREE.Points | null = null;
     private floor: THREE.Mesh | null = null;
@@ -18,8 +20,13 @@ export class EnvironmentBuilder {
         this.random = randomFunc;
     }
 
+    public static setDecorationsVisible(visible: boolean): void {
+        EnvironmentBuilder.decorationsVisible = visible;
+    }
+
     public applyConfig(config: ISessionConfig): void {
         if (!config || !this.scene) return;
+        this.ensureDecorationRoot();
 
         if (config.skyColor) {
             this.scene.background = new THREE.Color(config.skyColor);
@@ -40,9 +47,12 @@ export class EnvironmentBuilder {
         if (!this.floor) this.createFloor();
         if (!this.lights) this.setupLighting();
         if (!this.sun) this.createSynthwaveSun();
+        this.applyDecorationVisibility();
     }
 
     public update(delta: number): void {
+        this.applyDecorationVisibility();
+
         if (this.gridUniforms) {
             this.gridUniforms.uTime.value += delta;
         }
@@ -54,6 +64,7 @@ export class EnvironmentBuilder {
     }
 
     private createDistantHills(): void {
+        this.ensureDecorationRoot();
         this.hills = new THREE.Group();
         const hillCount = 36;
         const radius = 400;
@@ -95,10 +106,11 @@ export class EnvironmentBuilder {
 
             this.hills.add(mountain);
         }
-        this.scene.add(this.hills);
+        this.decorationRoot?.add(this.hills);
     }
 
     private createStarfield(): void {
+        this.ensureDecorationRoot();
         const starCount = 5000;
         const starGeo = new THREE.BufferGeometry();
         const positions = new Float32Array(starCount * 3);
@@ -135,10 +147,11 @@ export class EnvironmentBuilder {
         });
 
         this.stars = new THREE.Points(starGeo, starMat);
-        this.scene.add(this.stars);
+        this.decorationRoot?.add(this.stars);
     }
 
     private createFloor(): void {
+        this.ensureDecorationRoot();
         const floorGeo = new THREE.PlaneGeometry(1000, 1000);
         const floorMat = new THREE.MeshStandardMaterial({
             color: 0x020205,
@@ -148,7 +161,7 @@ export class EnvironmentBuilder {
         this.floor = new THREE.Mesh(floorGeo, floorMat);
         this.floor.rotation.x = -Math.PI / 2;
         this.floor.position.y = -0.05;
-        this.scene.add(this.floor);
+        this.decorationRoot?.add(this.floor);
 
         this.gridUniforms = {
             uTime: { value: 0 },
@@ -191,7 +204,7 @@ export class EnvironmentBuilder {
         this.grid = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), gridMat);
         this.grid.rotation.x = -Math.PI / 2;
         this.grid.position.y = 0.01;
-        this.scene.add(this.grid);
+        this.decorationRoot?.add(this.grid);
     }
 
     private setupLighting(): void {
@@ -205,6 +218,7 @@ export class EnvironmentBuilder {
     }
 
     private createSynthwaveSun(): void {
+        this.ensureDecorationRoot();
         const sunGeom = new THREE.CircleGeometry(120, 64);
         const sunMat = new THREE.ShaderMaterial({
             uniforms: {
@@ -237,7 +251,20 @@ export class EnvironmentBuilder {
         this.sun = new THREE.Mesh(sunGeom, sunMat);
         this.sun.position.set(0, 60, -600);
         this.sun.lookAt(0, 60, 0);
-        this.scene.add(this.sun);
+        this.decorationRoot?.add(this.sun);
+    }
+
+    private applyDecorationVisibility(): void {
+        if (this.decorationRoot) {
+            this.decorationRoot.visible = EnvironmentBuilder.decorationsVisible;
+        }
+    }
+
+    private ensureDecorationRoot(): void {
+        if (this.decorationRoot) return;
+        this.decorationRoot = new THREE.Group();
+        this.decorationRoot.name = 'environment-decorations';
+        this.scene.add(this.decorationRoot);
     }
 
     public clearProcedural(): void {
@@ -259,8 +286,10 @@ export class EnvironmentBuilder {
         remove(this.stars);
         remove(this.floor);
         remove(this.grid);
-        remove(this.lights);
         remove(this.sun);
+        remove(this.decorationRoot);
+        remove(this.lights);
+        this.decorationRoot = null;
         this.hills = null;
         this.stars = null;
         this.floor = null;
