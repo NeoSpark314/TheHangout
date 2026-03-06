@@ -79,7 +79,10 @@ export class SessionRuntime implements IUpdatable {
         this.objectInstanceRegistry.update(delta);
     }
 
-    public applySessionConfigUpdate(newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number }): boolean {
+    public applySessionConfigUpdate(
+        newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number },
+        onApplied?: () => void
+    ): boolean {
         const oldSeed = this.context.sessionConfig.seed;
         const oldScenarioId = this.context.sessionConfig.activeScenarioId;
 
@@ -108,16 +111,26 @@ export class SessionRuntime implements IUpdatable {
             // admin/client payload cannot leave the runtime advertising a scenario
             // that never actually became active.
             this.context.sessionConfig = nextConfig;
-            const applied = this.switchScenario(this.context.sessionConfig.activeScenarioId, {
-                seed: this.context.sessionConfig.seed,
-                reason: 'scenario_switch'
-            });
-            console.info(
-                `[SessionRuntime] Scenario switch ${applied ? 'completed' : 'failed'}` +
-                ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+            const applied = this.switchScenario(
+                this.context.sessionConfig.activeScenarioId,
+                {
+                    seed: this.context.sessionConfig.seed,
+                    reason: 'scenario_switch'
+                },
+                () => {
+                    console.info(
+                        `[SessionRuntime] Scenario switch completed` +
+                        ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+                    );
+                    this.emitSessionConfigApplied();
+                    onApplied?.();
+                }
             );
-            if (applied) {
-                this.emitSessionConfigApplied();
+            if (!applied) {
+                console.info(
+                    `[SessionRuntime] Scenario switch failed` +
+                    ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+                );
             }
             return applied;
         }
@@ -146,11 +159,13 @@ export class SessionRuntime implements IUpdatable {
                 ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
             );
             this.emitSessionConfigApplied();
+            onApplied?.();
             return true;
         }
 
         this.activeScenario.applyConfig?.(this.context, this.context.sessionConfig);
         this.emitSessionConfigApplied();
+        onApplied?.();
         return true;
     }
 
@@ -204,7 +219,11 @@ export class SessionRuntime implements IUpdatable {
         return this.scenarioRegistry.listIds();
     }
 
-    public switchScenario(id: string, options: Partial<IScenarioLoadOptions> = {}): boolean {
+    public switchScenario(
+        id: string,
+        options: Partial<IScenarioLoadOptions> = {},
+        onSwitched?: () => void
+    ): boolean {
         const nextScenario = this.scenarioRegistry.get(id);
         if (!nextScenario) {
             console.warn(`[SessionRuntime] Cannot switch to unknown scenario: ${id}`);
@@ -212,25 +231,25 @@ export class SessionRuntime implements IUpdatable {
         }
 
         if (nextScenario.id === this.activeScenario.id) {
+            onSwitched?.();
             return true;
         }
 
-        this.activeScenario.unload(this.context);
-        this.clearScenarioOwnedState();
-        this.activeScenario = nextScenario;
-        this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
-        this._seed = options.seed ?? this.context.sessionConfig.seed;
-        this.refreshActiveObjectModules();
-
         if (this.isInitialized) {
-            this.activeScenario.load(this.context, {
-                isHost: this.context.isHost,
-                seed: options.seed ?? this.context.sessionConfig.seed,
-                reason: options.reason ?? 'scenario_switch'
-            });
+            const transition = this.context.runtime.worldTransition;
+            if (transition) {
+                transition.transitionScenario(() => {
+                    this.completeScenarioSwitch(nextScenario, options);
+                    onSwitched?.();
+                });
+            } else {
+                this.completeScenarioSwitch(nextScenario, options);
+                onSwitched?.();
+            }
+        } else {
+            this.completeScenarioSwitch(nextScenario, options);
+            onSwitched?.();
         }
-
-        this.repositionLocalPlayerForActiveScenario();
 
         return true;
     }
@@ -278,6 +297,25 @@ export class SessionRuntime implements IUpdatable {
     private clearScenarioOwnedState(): void {
         this.context.runtime.drawing?.clear?.();
         this.objectInstanceRegistry.removeAll();
+    }
+
+    private completeScenarioSwitch(nextScenario: IScenarioModule, options: Partial<IScenarioLoadOptions>): void {
+        this.activeScenario.unload(this.context);
+        this.clearScenarioOwnedState();
+        this.activeScenario = nextScenario;
+        this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
+        this._seed = options.seed ?? this.context.sessionConfig.seed;
+        this.refreshActiveObjectModules();
+
+        if (this.isInitialized) {
+            this.activeScenario.load(this.context, {
+                isHost: this.context.isHost,
+                seed: options.seed ?? this.context.sessionConfig.seed,
+                reason: options.reason ?? 'scenario_switch'
+            });
+        }
+
+        this.repositionLocalPlayerForActiveScenario();
     }
 
     private repositionLocalPlayerForActiveScenario(): void {

@@ -26,6 +26,7 @@ import type { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
 import type { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 import type { NotificationRuntime } from './notifications/NotificationRuntime';
 import type { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
+import type { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -68,6 +69,7 @@ export interface IRuntimeRegistry {
     diagnostics: RuntimeDiagnostics;
     replicationDebug: ReplicationDebugRuntime;
     scenarioActions: ScenarioActionRuntime;
+    worldTransition: WorldTransitionRuntime;
 }
 
 /**

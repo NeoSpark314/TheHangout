@@ -191,7 +191,21 @@ export class AuthoritativeSessionHost {
     }
 
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
-        const applied = this.context.runtime.session.applySessionConfigUpdate(payload);
+        let broadcastDone = false;
+        const broadcastAfterApply = () => {
+            if (broadcastDone) return;
+            broadcastDone = true;
+            this.transport.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
+            this.broadcastAuthoritativeWorldState();
+        };
+
+        const previousScenarioId = this.context.sessionConfig.activeScenarioId;
+        const scenarioChangeRequested = typeof payload.activeScenarioId === 'string'
+            && payload.activeScenarioId !== previousScenarioId;
+
+        const applied = this.context.runtime.session.applySessionConfigUpdate(payload, () => {
+            broadcastAfterApply();
+        });
         if (!applied) {
             if (payload.activeScenarioId) {
                 console.warn(
@@ -202,8 +216,10 @@ export class AuthoritativeSessionHost {
             return;
         }
 
-        this.transport.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
-        this.broadcastAuthoritativeWorldState();
+        // Non-scenario updates apply synchronously and can broadcast immediately.
+        if (!scenarioChangeRequested) {
+            broadcastAfterApply();
+        }
     }
 
     public reclaimOwnership(peerId: string): void {

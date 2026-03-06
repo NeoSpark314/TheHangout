@@ -24,6 +24,7 @@ import { VrUiRuntime } from '../ui/vr/VrUiRuntime';
 import { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
 import { ParticleEffectSystem } from '../render/effects/ParticleEffectSystem';
+import { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
 import { SocialFeature } from '../features/social/SocialFeature';
 import { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
 import { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
@@ -119,6 +120,7 @@ export class App {
         this.context.setRuntime('debugRender', new DebugRenderRuntime(this.context));
         this.context.setRuntime('particles', new ParticleEffectSystem(this.context.runtime.render.scene));
         this.context.setRuntime('social', new SocialFeature(this.context, this.context.runtime.particles));
+        this.context.setRuntime('worldTransition', new WorldTransitionRuntime(this.context));
 
         // Tracking Initialization
         const tracking = new TrackingRuntime(this.context);
@@ -183,6 +185,7 @@ export class App {
         this.addGameplaySystem(runtime.mount);
         this.addGameplaySystem(runtime.social);
         this.addGameplaySystem(runtime.particles);
+        this.addGameplaySystem(runtime.worldTransition);
         this.addGameplaySystem(runtime.remoteDesktop);
         this.addAlwaysSystem(runtime.ui);
         this.addAlwaysSystem(runtime.hud);
