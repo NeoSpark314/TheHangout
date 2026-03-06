@@ -48,19 +48,56 @@ float hash13(vec3 p) {
     return fract((p.x + p.y) * p.z);
 }
 
-void main() {
-    float noise = hash13(vWorldPos * 0.6 + vec3(uTime * 0.25));
-    float distanceToHead = length(vSourceWorldPos - uHeadWorld);
-    float cutoffRadius = vWarp * uRevealRadiusMax;
-    float edgeNoise = (hash13(vSourceWorldPos * 0.35 + vec3(uTime * 0.17)) - 0.5) * 2.0;
-    float edgeWidth = 1.4;
-    if (distanceToHead < (cutoffRadius + edgeNoise * edgeWidth)) discard;
+float valueNoise3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = f * f * (3.0 - 2.0 * f);
 
-    float pulse = 0.5 + 0.5 * sin(uTime * 8.0 + length(vWorldPos) * 0.8);
-    float shimmer = mix(0.75, 1.25, noise) * mix(0.85, 1.15, pulse);
+    float n000 = hash13(i + vec3(0.0, 0.0, 0.0));
+    float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+
+    float nx00 = mix(n000, n100, u.x);
+    float nx10 = mix(n010, n110, u.x);
+    float nx01 = mix(n001, n101, u.x);
+    float nx11 = mix(n011, n111, u.x);
+    float nxy0 = mix(nx00, nx10, u.y);
+    float nxy1 = mix(nx01, nx11, u.y);
+    return mix(nxy0, nxy1, u.z);
+}
+
+float fbm3(vec3 p) {
+    float sum = 0.0;
+    float amp = 0.5;
+    float freq = 1.0;
+    for (int i = 0; i < 4; i++) {
+        sum += valueNoise3D(p * freq) * amp;
+        freq *= 2.0;
+        amp *= 0.5;
+    }
+    return sum / 0.9375; // normalize by total amplitude (0.5+0.25+0.125+0.0625)
+}
+
+void main() {
+    vec3 noisePos = vSourceWorldPos * 0.11 + vec3(uTime * 0.07);
+    float noise = fbm3(noisePos);
+    float distanceToHead = length(vSourceWorldPos - uHeadWorld);
+    float normalizedDistance = clamp(distanceToHead / uRevealRadiusMax, 0.0, 1.0);
+    float surfaceNoise = (noise - 0.5) * 2.0;
+    // Blend radial reveal with smooth 3D noise so surfaces do not appear as a strict sphere.
+    float revealMetric = normalizedDistance + surfaceNoise * 0.28;
+    if (revealMetric < vWarp) discard;
+
+    float pulse = 0.5 + 0.5 * sin(uTime * 3.4 + length(vWorldPos) * 0.22);
+    float shimmer = mix(0.9, 1.08, noise) * mix(0.94, 1.06, pulse);
     vec3 base = vec3(0.08, 0.90, 0.95);
     vec3 accent = vec3(0.95, 0.98, 1.0);
-    vec3 color = mix(base, accent, clamp(vWarp * 0.8 + noise * 0.25, 0.0, 1.0)) * shimmer;
+    vec3 color = mix(base, accent, clamp(vWarp * 0.72 + noise * 0.18, 0.0, 1.0)) * shimmer;
 
     float alpha = clamp(1.0 - smoothstep(0.82, 1.0, vWarp), 0.0, 1.0);
     if (alpha <= 0.001) discard;
