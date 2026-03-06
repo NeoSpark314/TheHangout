@@ -17,6 +17,8 @@ export class UIPointerSkill extends Skill {
     private readonly tempOrigin = new THREE.Vector3();
     private readonly tempQuat = new THREE.Quaternion();
     private readonly tempDirection = new THREE.Vector3();
+    private readonly hoverHapticCooldownMs = 70;
+    private readonly lastHoverHapticAt: Record<'left' | 'right', number> = { left: 0, right: 0 };
 
     private _handlers: Array<{ event: string, handler: any }> = [];
 
@@ -166,7 +168,10 @@ export class UIPointerSkill extends Skill {
 
                         // Trigger Hover Event in CanvasUI
                         if (hit.uv) {
-                            vrUi.tablet.ui.onPointerMove(hit.uv);
+                            const hoverChanged = vrUi.tablet.ui.onPointerMove(hit.uv);
+                            if (hoverChanged) {
+                                this.triggerHoverHaptic(player, hand);
+                            }
                         }
                     } else {
                         line.visible = false;
@@ -197,6 +202,40 @@ export class UIPointerSkill extends Skill {
             return;
         }
 
+    }
+
+    private triggerHoverHaptic(player: PlayerAvatarEntity, hand: 'left' | 'right'): void {
+        const nowMs = performance.now();
+        if ((nowMs - this.lastHoverHapticAt[hand]) < this.hoverHapticCooldownMs) {
+            return;
+        }
+        this.lastHoverHapticAt[hand] = nowMs;
+
+        const render = player.appContext.runtime.render;
+        if (!render || !render.isXRPresenting()) return;
+        const session = render.getXRSession();
+        if (!session) return;
+
+        const source = session.inputSources.find((s) => s.handedness === hand && !!s.gamepad);
+        const gamepad = source?.gamepad;
+        if (!gamepad) return;
+
+        // WebXR haptics vary by browser/device; support both common APIs.
+        const hapticActuator = (gamepad as any).hapticActuators?.[0];
+        if (hapticActuator?.pulse) {
+            hapticActuator.pulse(0.18, 18);
+            return;
+        }
+
+        const vibrationActuator = (gamepad as any).vibrationActuator;
+        if (vibrationActuator?.playEffect) {
+            vibrationActuator.playEffect('dual-rumble', {
+                startDelay: 0,
+                duration: 18,
+                weakMagnitude: 0.14,
+                strongMagnitude: 0.14
+            });
+        }
     }
 
     private handlePointerClick(player: PlayerAvatarEntity, hand: 'left' | 'right'): void {

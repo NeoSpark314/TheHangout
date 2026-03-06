@@ -57,14 +57,16 @@ export class CanvasUI {
      * Handles a raycast UV hit from Three.js
      * @param uv THREE.Vector2 representing UV coordinates of hit on mesh
      */
-    public onPointerMove(uv: THREE.Vector2): void {
+    public onPointerMove(uv: THREE.Vector2): boolean {
         const px = uv.x * this.width;
         // UV y is usually inverted relative to canvas
         const py = (1.0 - uv.y) * this.height;
 
-        if (this.root.onPointerMove(px, py)) {
+        const changed = this.root.onPointerMove(px, py);
+        if (changed) {
             this.markDirty();
         }
+        return changed;
     }
 
     /**
@@ -95,10 +97,12 @@ export class CanvasUI {
     /**
      * Handles direct pixel mouse move (for 2D overlay)
      */
-    public onMouseMove(x: number, y: number): void {
-        if (this.root.onPointerMove(x, y)) {
+    public onMouseMove(x: number, y: number): boolean {
+        const changed = this.root.onPointerMove(x, y);
+        if (changed) {
             this.markDirty();
         }
+        return changed;
     }
 
     /**
