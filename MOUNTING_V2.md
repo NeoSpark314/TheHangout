@@ -56,3 +56,16 @@ This is the recommended baseline for future mountables:
 - object keeps mount occupancy and rules self-contained.
 - host remains authoritative on acceptance/release.
 - clients mount/unmount locally only from authoritative occupancy convergence.
+
+## Shared Helper
+
+The protocol is now reusable via:
+
+- [AuthoritativeSingleMountReplicator.ts](src/content/runtime/AuthoritativeSingleMountReplicator.ts)
+
+It centralizes:
+
+- `mount-request` / `mount-release-request` / `mount-rejected` / `occupancy` handling
+- host-side sender validation using replication metadata (`senderId`)
+- local request/grant/reject convergence and authoritative occupancy application
+- snapshot capture/apply for single-mount occupancy

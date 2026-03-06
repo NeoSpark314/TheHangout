@@ -8,24 +8,23 @@ import type { IInteractable } from '../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
 import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IMountableObject } from '../contracts/IMountableObject';
+import type { ILocalMountBinding } from '../contracts/IMounting';
+import {
+    AuthoritativeSingleMountReplicator,
+    type IAuthoritativeSingleMountEventMap
+} from '../runtime/AuthoritativeSingleMountReplicator';
 
-interface IChairOccupancyPayload {
-    occupiedBy: string | null;
-}
+const CHAIR_EVENT_OCCUPANCY = 'occupancy';
+const CHAIR_EVENT_MOUNT_REQUEST = 'mount-request';
+const CHAIR_EVENT_MOUNT_RELEASE_REQUEST = 'mount-release-request';
+const CHAIR_EVENT_MOUNT_REJECTED = 'mount-rejected';
 
-interface IChairMountRequestPayload {
-    mountPointId?: string;
-}
-
-interface IChairMountReleaseRequestPayload {
-    mountPointId?: string;
-    reason?: string;
-}
-
-interface IChairMountRejectedPayload {
-    playerId: string;
-    reason: string;
-}
+const CHAIR_MOUNT_EVENTS: IAuthoritativeSingleMountEventMap = {
+    occupancy: CHAIR_EVENT_OCCUPANCY,
+    mountRequest: CHAIR_EVENT_MOUNT_REQUEST,
+    mountReleaseRequest: CHAIR_EVENT_MOUNT_RELEASE_REQUEST,
+    mountRejected: CHAIR_EVENT_MOUNT_REJECTED
+};
 
 class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
     public readonly type = 'CONTENT_CHAIR';
@@ -134,10 +133,8 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
     private readonly seatPosition: THREE.Vector3;
     private readonly seatYaw: number;
     private readonly seatEntity: ChairSeatEntity;
-    private occupiedBy: string | null = null;
+    private readonly mountReplication: AuthoritativeSingleMountReplicator;
     private hovered = false;
-    private awaitingMountAuthority = false;
-    private awaitingReleaseAuthority = false;
 
     constructor(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
         super(context, 'chair');
@@ -158,6 +155,18 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
         });
         this.ownSceneObject(this.seatEntity.mesh);
         this.createPhysicsColliders();
+        this.mountReplication = new AuthoritativeSingleMountReplicator(
+            {
+                context: this.context,
+                ownerInstanceId: this.id,
+                mountPointId: ChairInstance.MOUNT_POINT_ID,
+                createLocalMountBinding: () => this.createLocalMountBinding(),
+                canMount: (playerId, occupiedBy) => !occupiedBy || occupiedBy === playerId,
+                onOccupancyChanged: () => this.applySeatVisualState()
+            },
+            (eventType, data, options) => this.emitSyncEvent(eventType, data, options),
+            CHAIR_MOUNT_EVENTS
+        );
     }
 
     public getPrimaryEntity(): IEntity {
@@ -167,64 +176,44 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
     public update(): void {
         const localPlayerId = this.context.app.localPlayer?.id ?? null;
 
-        if (this.occupiedBy === localPlayerId && !this.context.mount.isMountedLocal(this.id)) {
-            this.requestAuthoritativeRelease('movement');
+        if (this.mountReplication.getOccupiedBy() === localPlayerId && !this.context.mount.isMountedLocal(this.id)) {
+            const mountStatus = this.context.mount.getLocalMountStatus();
+            if (mountStatus.state === 'idle' && mountStatus.reason === 'movement') {
+                this.mountReplication.requestAuthoritativeReleaseForLocal('movement');
+            }
             return;
         }
 
-        if (this.occupiedBy && this.context.mount.isMountedLocal(this.id) && this.occupiedBy !== localPlayerId) {
+        if (this.mountReplication.getOccupiedBy() && this.context.mount.isMountedLocal(this.id) && this.mountReplication.getOccupiedBy() !== localPlayerId) {
             this.context.mount.unmountLocal(this.id, 'external');
         }
     }
 
     public canMount(playerId: string): boolean {
-        return !this.occupiedBy || this.occupiedBy === playerId;
+        return this.mountReplication.canMount(playerId);
     }
 
     public mount(playerId: string): boolean {
-        if (this.context.app.isHost) {
-            return this.applyAuthoritativeMount(playerId);
-        }
-        if (!this.canMount(playerId)) return false;
-
-        this.awaitingMountAuthority = true;
-        if (playerId === this.context.app.localPlayer?.id) {
-            this.context.mount.requestLocalMount(this.createLocalMountBinding());
-        }
-        this.emitSyncEvent('mount-request', { mountPointId: ChairInstance.MOUNT_POINT_ID }, { localEcho: false });
-        return true;
+        return this.mountReplication.mount(playerId);
     }
 
     public unmount(playerId: string): void {
-        if (this.context.app.isHost) {
-            this.applyAuthoritativeRelease(playerId, 'released');
-            return;
-        }
-
-        if (this.occupiedBy !== playerId) return;
-        this.awaitingReleaseAuthority = true;
-        if (playerId === this.context.app.localPlayer?.id) {
-            this.context.mount.releaseLocalMount(this.id, 'released');
-        }
-        this.emitSyncEvent('mount-release-request', {
-            mountPointId: ChairInstance.MOUNT_POINT_ID,
-            reason: 'released'
-        }, { localEcho: false });
+        this.mountReplication.unmount(playerId, 'released');
     }
 
     public isOccupied(): boolean {
-        return !!this.occupiedBy;
+        return this.mountReplication.isOccupied();
     }
 
     public handleInteraction(event: IInteractionEvent): void {
         if (event.type !== 'trigger' || event.phase !== 'start') return;
 
-        if (this.occupiedBy === event.playerId) {
+        if (this.mountReplication.getOccupiedBy() === event.playerId) {
             this.unmount(event.playerId);
             return;
         }
 
-        if (!this.occupiedBy) {
+        if (!this.mountReplication.isOccupied()) {
             this.mount(event.playerId);
         }
     }
@@ -235,173 +224,24 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
     }
 
     public onReplicationEvent(eventType: string, data: unknown, meta: IObjectReplicationMeta): void {
-        if (eventType === 'occupancy') {
-            this.applyOccupancyPayload(data);
-            return;
-        }
-
-        if (eventType === 'mount-request') {
-            if (!this.context.app.isHost) return;
-            this.handleMountRequestAsHost(meta.senderId, data);
-            return;
-        }
-
-        if (eventType === 'mount-release-request') {
-            if (!this.context.app.isHost) return;
-            this.handleMountReleaseRequestAsHost(meta.senderId, data);
-            return;
-        }
-
-        if (eventType === 'mount-rejected') {
-            this.handleMountRejected(data);
-        }
+        this.mountReplication.handleReplicationEvent(eventType, data, meta);
     }
 
     public captureReplicationSnapshot(): unknown {
-        return {
-            occupiedBy: this.occupiedBy
-        };
+        return this.mountReplication.captureSnapshot();
     }
 
     public applyReplicationSnapshot(snapshot: unknown): void {
-        if (!snapshot || typeof snapshot !== 'object') return;
-        const payload = snapshot as IChairOccupancyPayload;
-        if (payload.occupiedBy !== null && typeof payload.occupiedBy !== 'string') return;
-        this.applyOccupancyPayload(payload);
+        this.mountReplication.applySnapshot(snapshot);
     }
 
-    private createLocalMountBinding(): {
-        ownerInstanceId: string;
-        mountPointId: string;
-        getSeatPose: () => { position: THREE.Vector3; yaw: number };
-        getExitPose: () => { position: THREE.Vector3; yaw: number };
-    } {
+    private createLocalMountBinding(): ILocalMountBinding {
         return {
             ownerInstanceId: this.id,
             mountPointId: ChairInstance.MOUNT_POINT_ID,
             getSeatPose: () => this.getSeatPose(),
             getExitPose: () => this.getExitPose()
         };
-    }
-
-    private applyAuthoritativeMount(playerId: string): boolean {
-        if (!this.canMount(playerId)) return false;
-        this.occupiedBy = playerId;
-        this.awaitingMountAuthority = false;
-        this.awaitingReleaseAuthority = false;
-        if (playerId === this.context.app.localPlayer?.id && !this.context.mount.isMountedLocal(this.id)) {
-            this.context.mount.grantLocalMount(this.createLocalMountBinding());
-        }
-        this.emitSyncEvent('occupancy', { occupiedBy: playerId }, { localEcho: false });
-        this.applySeatVisualState();
-        return true;
-    }
-
-    private applyAuthoritativeRelease(playerId: string, reason: 'released' | 'movement' | 'external'): boolean {
-        if (this.occupiedBy !== playerId) return false;
-        this.occupiedBy = null;
-        this.awaitingMountAuthority = false;
-        this.awaitingReleaseAuthority = false;
-
-        if (playerId === this.context.app.localPlayer?.id) {
-            this.context.mount.unmountLocal(this.id, reason);
-        }
-
-        this.emitSyncEvent('occupancy', { occupiedBy: null }, { localEcho: false });
-        this.applySeatVisualState();
-        return true;
-    }
-
-    private requestAuthoritativeRelease(reason: 'released' | 'movement' | 'external'): void {
-        const localPlayerId = this.context.app.localPlayer?.id;
-        if (!localPlayerId || this.occupiedBy !== localPlayerId) return;
-
-        if (this.context.app.isHost) {
-            this.applyAuthoritativeRelease(localPlayerId, reason);
-            return;
-        }
-
-        if (this.awaitingReleaseAuthority) return;
-        this.awaitingReleaseAuthority = true;
-        this.emitSyncEvent('mount-release-request', {
-            mountPointId: ChairInstance.MOUNT_POINT_ID,
-            reason
-        }, { localEcho: false });
-    }
-
-    private handleMountRequestAsHost(senderId: string | null, data: unknown): void {
-        if (!senderId) return;
-        const payload = data as IChairMountRequestPayload;
-        const mountPointId = payload?.mountPointId ?? ChairInstance.MOUNT_POINT_ID;
-        if (mountPointId !== ChairInstance.MOUNT_POINT_ID) {
-            this.emitMountRejected(senderId, 'invalid_mount_point');
-            return;
-        }
-        if (!this.applyAuthoritativeMount(senderId)) {
-            this.emitMountRejected(senderId, 'occupied');
-        }
-    }
-
-    private handleMountReleaseRequestAsHost(senderId: string | null, data: unknown): void {
-        if (!senderId) return;
-        const payload = data as IChairMountReleaseRequestPayload;
-        const mountPointId = payload?.mountPointId ?? ChairInstance.MOUNT_POINT_ID;
-        if (mountPointId !== ChairInstance.MOUNT_POINT_ID) {
-            this.emitMountRejected(senderId, 'invalid_mount_point');
-            return;
-        }
-        const reason = payload?.reason === 'movement' ? 'movement' : 'released';
-        if (!this.applyAuthoritativeRelease(senderId, reason)) {
-            this.emitMountRejected(senderId, 'not_occupant');
-        }
-    }
-
-    private emitMountRejected(playerId: string, reason: string): void {
-        this.emitSyncEvent('mount-rejected', { playerId, reason }, { localEcho: false });
-    }
-
-    private handleMountRejected(data: unknown): void {
-        const payload = data as IChairMountRejectedPayload;
-        if (!payload || typeof payload.playerId !== 'string' || typeof payload.reason !== 'string') return;
-        const localPlayerId = this.context.app.localPlayer?.id;
-        if (!localPlayerId || payload.playerId !== localPlayerId) return;
-        this.awaitingMountAuthority = false;
-        this.awaitingReleaseAuthority = false;
-        this.context.mount.rejectLocalMount();
-    }
-
-    private applyOccupancyPayload(data: unknown): void {
-        const payload = data as IChairOccupancyPayload;
-        if (!payload || (payload.occupiedBy !== null && typeof payload.occupiedBy !== 'string')) return;
-        this.occupiedBy = payload.occupiedBy;
-
-        const localPlayerId = this.context.app.localPlayer?.id ?? null;
-        if (this.occupiedBy === localPlayerId) {
-            this.awaitingMountAuthority = false;
-            this.awaitingReleaseAuthority = false;
-            if (!this.context.mount.isMountedLocal(this.id)) {
-                this.context.mount.grantLocalMount(this.createLocalMountBinding());
-            }
-        } else if (this.context.mount.isMountedLocal(this.id)) {
-            this.context.mount.unmountLocal(this.id, 'external');
-            if (this.awaitingMountAuthority && this.occupiedBy !== localPlayerId) {
-                this.context.mount.rejectLocalMount();
-            }
-            this.awaitingMountAuthority = false;
-            if (!this.occupiedBy) {
-                this.awaitingReleaseAuthority = false;
-            }
-        } else {
-            if (this.awaitingMountAuthority && this.occupiedBy !== localPlayerId) {
-                this.context.mount.rejectLocalMount();
-                this.awaitingMountAuthority = false;
-            }
-            if (!this.occupiedBy) {
-                this.awaitingReleaseAuthority = false;
-            }
-        }
-
-        this.applySeatVisualState();
     }
 
     private getSeatPose(): { position: THREE.Vector3; yaw: number } {

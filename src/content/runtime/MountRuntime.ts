@@ -9,16 +9,24 @@ import type {
 } from '../contracts/IMounting';
 
 export class MountRuntime implements IUpdatable {
+    private static readonly REQUEST_TIMEOUT_MS = 3000;
+
     private localMount: ILocalMountBinding | null = null;
     private pendingMount: ILocalMountBinding | null = null;
     private localState: TLocalMountState = 'idle';
     private localStateReason: TLocalMountStateReason = 'unknown';
     private localStateSinceMs: number = this.nowMs();
     private readonly localStateListeners = new Set<(status: ILocalMountStatus) => void>();
+    private lastStateSignature = '';
 
     constructor(private context: AppContext) { }
 
     public update(): void {
+        if (this.localState === 'requesting' && (this.nowMs() - this.localStateSinceMs) > MountRuntime.REQUEST_TIMEOUT_MS) {
+            this.pendingMount = null;
+            this.setLocalState('rejected', 'timeout');
+        }
+
         if (!this.localMount) return;
 
         const localPlayer = this.context.localPlayer;
@@ -116,10 +124,15 @@ export class MountRuntime implements IUpdatable {
     }
 
     private setLocalState(state: TLocalMountState, reason: TLocalMountStateReason): void {
-        if (this.localState === state && this.localStateReason === reason) return;
+        const owner = this.localMount?.ownerInstanceId ?? this.pendingMount?.ownerInstanceId ?? null;
+        const mountPoint = this.localMount?.mountPointId ?? this.pendingMount?.mountPointId ?? null;
+        const nextSignature = `${state}|${reason}|${owner ?? ''}|${mountPoint ?? ''}`;
+        if (nextSignature === this.lastStateSignature) return;
+
         this.localState = state;
         this.localStateReason = reason;
         this.localStateSinceMs = this.nowMs();
+        this.lastStateSignature = nextSignature;
         const snapshot = this.snapshotLocalState();
         for (const listener of this.localStateListeners) {
             listener(snapshot);

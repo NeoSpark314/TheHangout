@@ -6,6 +6,7 @@ export type TLocalMountStateReason =
     | 'request'
     | 'granted'
     | 'rejected'
+    | 'timeout'
     | 'released'
     | 'movement'
     | 'replaced'
@@ -26,4 +27,3 @@ export interface ILocalMountStatus {
     reason: TLocalMountStateReason;
     sinceMs: number;
 }
-
