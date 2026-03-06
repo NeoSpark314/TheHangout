@@ -1,11 +1,17 @@
-import type { IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
+import type { IFeatureReplicationPolicy, IReplicatedFeature } from '../../network/replication/FeatureReplicationService';
 import type { IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 
 export class ObjectReplicationChannel implements IReplicatedFeature {
     public readonly featureId: string;
+    public readonly policy: IFeatureReplicationPolicy;
 
     constructor(private instance: IReplicatedObjectInstance) {
         this.featureId = instance.replicationKey;
+        this.policy = {
+            relayIncomingFromPeer: instance.replicationPolicy?.relayIncomingFromPeer ?? 'others',
+            includeInSnapshot: instance.replicationPolicy?.includeInSnapshot ?? true,
+            defaultLocalEcho: instance.replicationPolicy?.defaultLocalEcho ?? true
+        };
     }
 
     public onEvent(

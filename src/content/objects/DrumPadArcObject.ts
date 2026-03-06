@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IObjectReplicationMeta, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
+import type { IObjectReplicationMeta, IObjectReplicationPolicy, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
@@ -68,6 +68,12 @@ interface IActivePadPhrase {
 }
 
 class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplicatedObjectInstance {
+    public readonly replicationPolicy: IObjectReplicationPolicy = {
+        relayIncomingFromPeer: 'others',
+        includeInSnapshot: true,
+        defaultLocalEcho: true
+    };
+
     private readonly padMeshes: THREE.Mesh[] = [];
     private readonly padPositions: THREE.Vector3[] = [];
     private readonly padFlash: number[] = [];
@@ -787,7 +793,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.broadcastSequencerSnapshot();
             return;
         }
-        this.emitSyncEvent('control-action', payload);
+        this.emitSyncEvent('control-action', payload, { localEcho: false });
     }
 
     private applyControlAction(payload: IControlActionPayload): void {
@@ -875,11 +881,15 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (this.context.app.isHost) {
             const changed = this.applyArpTouchSource(stripId, sourceId, active);
             if (changed) {
-                this.emitSyncEvent('arp-touch-state', { stripId, active: this.arpStripActive[stripId] } satisfies IArpTouchStatePayload);
+                this.emitSyncEvent(
+                    'arp-touch-state',
+                    { stripId, active: this.arpStripActive[stripId] } satisfies IArpTouchStatePayload,
+                    { localEcho: false }
+                );
             }
             return;
         }
-        this.emitSyncEvent('arp-touch-request', { stripId, sourceId, active } satisfies IArpTouchPayload);
+        this.emitSyncEvent('arp-touch-request', { stripId, sourceId, active } satisfies IArpTouchPayload, { localEcho: false });
     }
 
     private applyArpTouchSource(stripId: TArpStripId, sourceId: string, active: boolean): boolean {
@@ -921,7 +931,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             return;
         }
 
-        this.emitSyncEvent('phrase-request', { padId } satisfies IPadPhraseRequestPayload);
+        this.emitSyncEvent('phrase-request', { padId } satisfies IPadPhraseRequestPayload, { localEcho: false });
     }
 
     private startPadPhrase(padId: TPadPhraseId): void {
@@ -941,7 +951,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         };
 
         this.applyPadPhraseStart(payload);
-        this.emitSyncEvent('phrase-start', payload);
+        this.emitSyncEvent('phrase-start', payload, { localEcho: false });
     }
 
     private applyPadPhraseStart(start: IPadPhraseStartPayload): void {
@@ -1111,7 +1121,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             return;
         }
 
-        this.emitSyncEvent('station-toggle', { lane } satisfies IStationTogglePayload);
+        this.emitSyncEvent('station-toggle', { lane } satisfies IStationTogglePayload, { localEcho: false });
     }
 
     private toggleLane(lane: TBeatLane): void {
@@ -1293,7 +1303,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             snapshot.stepPhaseMs = Math.max(0, Math.min(this.getStepDurationMs(), stepPhaseMs));
         }
         this.lastSyncBroadcastAtMs = this.nowMs();
-        this.emitSyncEvent('station-sync', snapshot);
+        this.emitSyncEvent('station-sync', snapshot, { localEcho: false });
     }
 
     private parsePadIndex(padId: string): number {

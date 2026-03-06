@@ -1,5 +1,6 @@
 import type { AppContext } from '../../app/AppContext';
 import type { IEntity } from '../../shared/contracts/IEntity';
+import type { IObjectReplicationEmitOptions } from '../contracts/IReplicatedObjectInstance';
 import type { IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
 import { ObjectReplicationHost } from './ObjectReplicationHost';
@@ -96,7 +97,7 @@ export class ObjectInstanceRegistry {
         }
     }
 
-    public emit(instanceId: string, eventType: string, data: unknown): void {
-        this.replicationHost.emit(instanceId, eventType, data);
+    public emit(instanceId: string, eventType: string, data: unknown, options?: IObjectReplicationEmitOptions): void {
+        this.replicationHost.emit(instanceId, eventType, data, options);
     }
 }

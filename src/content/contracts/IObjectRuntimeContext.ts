@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AppContext } from '../../app/AppContext';
 import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IObjectSpawnConfig } from './IObjectModule';
+import type { IObjectReplicationEmitOptions } from './IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
 
 export interface IPhysicsBodyHandle {
@@ -70,7 +71,7 @@ export interface IObjectRuntimeContext {
     };
 
     sync: {
-        emit(eventType: string, data: unknown): void;
+        emit(eventType: string, data: unknown, options?: IObjectReplicationEmitOptions): void;
     };
 
     mount: {

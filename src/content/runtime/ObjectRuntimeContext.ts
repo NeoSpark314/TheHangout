@@ -7,6 +7,7 @@ import type {
     IPhysicsColliderHandle
 } from '../contracts/IObjectRuntimeContext';
 import type { IObjectSpawnConfig } from '../contracts/IObjectModule';
+import type { IObjectReplicationEmitOptions } from '../contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
 
 export class ObjectRuntimeContext implements IObjectRuntimeContext {
@@ -76,8 +77,8 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.sync = {
-            emit: (eventType: string, data: any) => {
-                this.app.runtime.session.emitObjectInstanceEvent(this.instanceId, eventType, data);
+            emit: (eventType: string, data: any, options?: IObjectReplicationEmitOptions) => {
+                this.app.runtime.session.emitObjectInstanceEvent(this.instanceId, eventType, data, options);
             }
         };
 

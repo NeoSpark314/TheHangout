@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
+import type { IObjectReplicationMeta, IObjectReplicationPolicy } from '../contracts/IReplicatedObjectInstance';
 import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IHoldable } from '../../shared/contracts/IHoldable';
 import type { IInteractable } from '../../shared/contracts/IInteractable';
@@ -109,6 +109,12 @@ class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
 }
 
 class ChairInstance extends BaseReplicatedObjectInstance implements IMountableObject {
+    public readonly replicationPolicy: IObjectReplicationPolicy = {
+        relayIncomingFromPeer: 'others',
+        includeInSnapshot: true,
+        defaultLocalEcho: true
+    };
+
     private readonly seatPosition: THREE.Vector3;
     private readonly seatYaw: number;
     private readonly seatEntity: ChairSeatEntity;
@@ -145,7 +151,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
 
         if (this.occupiedBy === localPlayerId && !this.context.mount.isMountedLocal(this.id)) {
             this.occupiedBy = null;
-            this.emitSyncEvent('occupancy', { occupiedBy: null });
+            this.emitSyncEvent('occupancy', { occupiedBy: null }, { localEcho: false });
             this.applySeatVisualState();
             return;
         }
@@ -162,7 +168,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
     public mount(playerId: string): boolean {
         if (!this.canMount(playerId)) return false;
         this.occupiedBy = playerId;
-        this.emitSyncEvent('occupancy', { occupiedBy: playerId });
+        this.emitSyncEvent('occupancy', { occupiedBy: playerId }, { localEcho: false });
 
         if (playerId === this.context.app.localPlayer?.id) {
             this.context.mount.mountLocal({
@@ -182,7 +188,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
         if (playerId === this.context.app.localPlayer?.id) {
             this.context.mount.unmountLocal(this.id);
         }
-        this.emitSyncEvent('occupancy', { occupiedBy: null });
+        this.emitSyncEvent('occupancy', { occupiedBy: null }, { localEcho: false });
         this.applySeatVisualState();
     }
 

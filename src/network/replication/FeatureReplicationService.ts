@@ -31,8 +31,32 @@ export interface IReplicatedFeatureSnapshotPayload {
     features: IReplicatedFeatureSnapshotEntry[];
 }
 
+export interface IFeatureReplicationPolicy {
+    /**
+     * Host relay behavior for events arriving from guests.
+     * - others: relay to all peers except sender (default)
+     * - none: do not relay guest events
+     */
+    relayIncomingFromPeer?: 'others' | 'none';
+    /**
+     * Whether this feature should be included in late-join snapshots.
+     * Defaults to true.
+     */
+    includeInSnapshot?: boolean;
+    /**
+     * Default behavior for local application when emitting an event.
+     * Defaults to true.
+     */
+    defaultLocalEcho?: boolean;
+}
+
+export interface IFeatureEmitOptions {
+    localEcho?: boolean;
+}
+
 export interface IReplicatedFeature {
     featureId: string;
+    policy?: IFeatureReplicationPolicy;
     onEvent(eventType: string, data: unknown, meta: {
         eventId: string;
         originPeerId: string;
@@ -75,7 +99,9 @@ export class FeatureReplicationService {
      * the global app EventBus, which should remain reserved for shared
      * infrastructure and lifecycle events.
      */
-    public emitFeatureEvent(featureId: string, eventType: string, data: unknown): void {
+    public emitFeatureEvent(featureId: string, eventType: string, data: unknown, options?: IFeatureEmitOptions): void {
+        const feature = this.features.get(featureId);
+        const localEcho = options?.localEcho ?? feature?.policy?.defaultLocalEcho ?? true;
         const payload: IReplicatedFeatureEventPayload = {
             featureId,
             eventType,
@@ -85,7 +111,11 @@ export class FeatureReplicationService {
             data
         };
 
-        this.applyEvent(payload, null, true);
+        if (localEcho) {
+            this.applyEvent(payload, null, true);
+        } else {
+            this.markSeen(payload.eventId);
+        }
 
         const network = this.context.runtime.network as unknown as {
             sendData: (targetId: string, type: number, payload: unknown) => void;
@@ -106,10 +136,14 @@ export class FeatureReplicationService {
 
     public handleIncomingFeatureEvent(senderId: string, payload: IReplicatedFeatureEventPayload): void {
         if (this.context.isHost) {
+            const feature = this.features.get(payload.featureId);
+            const relayMode = feature?.policy?.relayIncomingFromPeer ?? 'others';
             const network = this.context.runtime.network as unknown as {
                 relayToOthers?: (senderId: string, type: number, payload: unknown) => void;
             } | undefined;
-            network?.relayToOthers?.(senderId, PACKET_TYPES.FEATURE_EVENT, payload);
+            if (relayMode === 'others') {
+                network?.relayToOthers?.(senderId, PACKET_TYPES.FEATURE_EVENT, payload);
+            }
         }
 
         this.applyEvent(payload, senderId, false);
@@ -118,6 +152,7 @@ export class FeatureReplicationService {
     public createSnapshotPayload(): IReplicatedFeatureSnapshotPayload {
         const features: IReplicatedFeatureSnapshotEntry[] = [];
         for (const feature of this.features.values()) {
+            if (feature.policy?.includeInSnapshot === false) continue;
             if (!feature.captureSnapshot) continue;
             const snapshot = feature.captureSnapshot();
             if (snapshot === undefined) {

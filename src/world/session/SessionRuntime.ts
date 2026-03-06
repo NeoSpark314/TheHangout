@@ -4,6 +4,7 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
+import type { IObjectReplicationEmitOptions } from '../../content/contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
 import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegistry';
@@ -250,8 +251,13 @@ export class SessionRuntime implements IUpdatable {
         return this.objectInstanceRegistry.getFirstByModuleId(moduleId);
     }
 
-    public emitObjectInstanceEvent(instanceId: string, eventType: string, data: unknown): void {
-        this.objectInstanceRegistry.emit(instanceId, eventType, data);
+    public emitObjectInstanceEvent(
+        instanceId: string,
+        eventType: string,
+        data: unknown,
+        options?: IObjectReplicationEmitOptions
+    ): void {
+        this.objectInstanceRegistry.emit(instanceId, eventType, data, options);
     }
 
     public removeObjectInstance(instanceId: string): void {

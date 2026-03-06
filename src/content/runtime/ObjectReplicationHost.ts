@@ -1,4 +1,5 @@
 import type { AppContext } from '../../app/AppContext';
+import type { IObjectReplicationEmitOptions } from '../contracts/IReplicatedObjectInstance';
 import type { IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 import { ObjectReplicationChannel } from './ObjectReplicationChannel';
 
@@ -35,9 +36,9 @@ export class ObjectReplicationHost {
         this.channels.delete(instanceId);
     }
 
-    public emit(instanceId: string, eventType: string, data: unknown): void {
+    public emit(instanceId: string, eventType: string, data: unknown, options?: IObjectReplicationEmitOptions): void {
         const instance = this.instances.get(instanceId);
         if (!instance) return;
-        this.context.runtime.replication.emitFeatureEvent(instance.replicationKey, eventType, data);
+        this.context.runtime.replication.emitFeatureEvent(instance.replicationKey, eventType, data, options);
     }
 }

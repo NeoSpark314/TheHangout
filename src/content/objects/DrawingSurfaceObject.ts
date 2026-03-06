@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IReplicatedObjectInstance, IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
+import type { IObjectReplicationMeta, IObjectReplicationPolicy, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 import type { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 
@@ -10,6 +10,12 @@ export interface IDrawingSurfaceInstance extends IReplicatedObjectInstance {
 }
 
 class DrawingSurfaceInstance extends BaseReplicatedObjectInstance implements IDrawingSurfaceInstance {
+    public readonly replicationPolicy: IObjectReplicationPolicy = {
+        relayIncomingFromPeer: 'others',
+        includeInSnapshot: true,
+        defaultLocalEcho: true
+    };
+
     private readonly lineMaterial: THREE.LineBasicMaterial;
     private lineGroup: THREE.Group | null = null;
     private readonly segments: IDrawSegmentPayload[] = [];

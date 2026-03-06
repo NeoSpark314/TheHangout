@@ -67,6 +67,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - [BaseObjectInstance.ts](src/content/runtime/BaseObjectInstance.ts) provides default cleanup tracking for scene objects, physics bodies, and per-instance disposables.
 - [BaseReplicatedObjectInstance.ts](src/content/runtime/BaseReplicatedObjectInstance.ts) adds ergonomic sync emission and the standard object replication key pattern.
 - [ObjectReplicationHost.ts](src/content/runtime/ObjectReplicationHost.ts) adapts replicated object instances onto the existing feature replication transport.
+- Replicated object instances can declare an object-scoped replication policy (`relayIncomingFromPeer`, `includeInSnapshot`, `defaultLocalEcho`) so object-specific sync behavior stays in object code instead of engine packet wiring.
 - [DefaultHangoutScenario.ts](src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario.
 - Small experimental content can now be authored as compact object modules, such as [DebugBeaconObject.ts](src/content/objects/DebugBeaconObject.ts).
 - Fixed interactables such as [ChairObject.ts](src/content/objects/ChairObject.ts) now use the holdable path without pretending to be movable props.
@@ -166,3 +167,4 @@ These names are part of the architecture. New modules should follow them instead
 - [ARCHITECTURE_REFACTOR_SPEC.md](ARCHITECTURE_REFACTOR_SPEC.md) for the naming and structure rules that drove the refactor
 - [ENTITY_ARCHITECTURE_PLAN.md](ENTITY_ARCHITECTURE_PLAN.md) for the entity model rationale
 - [PLAYER_AVATAR_REFACTOR_PLAN.md](PLAYER_AVATAR_REFACTOR_PLAN.md) for the unified player-avatar design
+- [OBJECT_REPLICATION_POLICY.md](OBJECT_REPLICATION_POLICY.md) for object-scoped replication policy and usage patterns
