@@ -31,6 +31,7 @@ interface ISeatAllReplicatedPayload {
 
 class DefaultHangoutActionProvider implements IScenarioActionProvider {
     private static readonly ACTION_SEAT_ALL = 'seat-all';
+    private static readonly ACTION_RESET_ROOM = 'reset-room';
 
     public getActions(_context: IScenarioActionQueryContext): IScenarioActionDefinition[] {
         return [
@@ -40,6 +41,14 @@ class DefaultHangoutActionProvider implements IScenarioActionProvider {
                 description: 'Teleport all connected players into meeting seats around the table.',
                 requiredRole: 'moderator',
                 replicateToGuests: true
+            },
+            {
+                id: DefaultHangoutActionProvider.ACTION_RESET_ROOM,
+                label: 'Reset Room',
+                description: 'Reload this scenario and reset scenario-owned objects (drawing, props, instruments).',
+                requiredRole: 'moderator',
+                dangerous: true,
+                replicateToGuests: false
             }
         ];
     }
@@ -49,14 +58,27 @@ class DefaultHangoutActionProvider implements IScenarioActionProvider {
         payload: unknown,
         context: IScenarioActionExecutionContext
     ): IScenarioActionExecutionResult {
-        if (actionId !== DefaultHangoutActionProvider.ACTION_SEAT_ALL) {
-            return { ok: false, reason: `Unsupported action: ${actionId}` };
+        if (actionId === DefaultHangoutActionProvider.ACTION_SEAT_ALL) {
+            if (context.source === 'replicated') {
+                return this.applyReplicatedSeatAssignment(payload, context);
+            }
+            return this.executeSeatAll(context);
         }
 
-        if (context.source === 'replicated') {
-            return this.applyReplicatedSeatAssignment(payload, context);
+        if (actionId === DefaultHangoutActionProvider.ACTION_RESET_ROOM) {
+            if (context.source === 'replicated') {
+                return { ok: true };
+            }
+            const currentSeed = context.app.sessionConfig.seed;
+            const nextSeed = this.nextSeed(currentSeed);
+            context.app.runtime.network.requestSessionConfigUpdate({ seed: nextSeed });
+            return { ok: true, message: 'Room reset triggered.' };
         }
 
+        return { ok: false, reason: `Unsupported action: ${actionId}` };
+    }
+
+    private executeSeatAll(context: IScenarioActionExecutionContext): IScenarioActionExecutionResult {
         const players = Array.from(context.app.runtime.entity.entities.values())
             .filter((entity) => entity.type === EntityType.PLAYER_AVATAR)
             .map((entity) => entity.id)
@@ -83,6 +105,15 @@ class DefaultHangoutActionProvider implements IScenarioActionProvider {
             message: `Seated ${players.length} player${players.length === 1 ? '' : 's'}.`,
             replicatedPayload: { seats } satisfies ISeatAllReplicatedPayload
         };
+    }
+
+    private nextSeed(currentSeed: number): number {
+        let candidate = Math.floor(Math.random() * 2147483647);
+        if (candidate === currentSeed) {
+            candidate = (candidate + 1) % 2147483647;
+            if (candidate === 0) candidate = 1;
+        }
+        return candidate;
     }
 
     private applyReplicatedSeatAssignment(
