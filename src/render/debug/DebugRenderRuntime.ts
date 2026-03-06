@@ -57,6 +57,9 @@ export class DebugRenderRuntime implements IUpdatable {
 
     public setEnabled(enabled: boolean): void {
         this.settings.enabled = enabled;
+        this.settings.showColliders = enabled;
+        this.settings.showAxes = enabled;
+        this.settings.showAuthorityLabels = enabled;
         this.root.visible = enabled;
     }
 

@@ -1242,7 +1242,7 @@ export class VrUiRuntime implements IUpdatable {
         const debugSettings = debugManager?.getSettings();
 
         const overlayToggle = new UIToggle(
-            "Enable Debug Overlay",
+            "Physics Debug Overlay",
             debugSettings?.enabled ?? false,
             90, 70, 620, 52,
             (checked) => {
@@ -1251,39 +1251,6 @@ export class VrUiRuntime implements IUpdatable {
             }
         );
         debugContainer.addChild(overlayToggle);
-
-        const collidersToggle = new UIToggle(
-            "Show Colliders",
-            debugSettings?.showColliders ?? true,
-            760, 70, 420, 52,
-            (checked) => {
-                debugManager?.setShowColliders(checked);
-                this.tablet?.ui.markDirty();
-            }
-        );
-        debugContainer.addChild(collidersToggle);
-
-        const axesToggle = new UIToggle(
-            "Show Axes",
-            debugSettings?.showAxes ?? true,
-            760, 126, 420, 52,
-            (checked) => {
-                debugManager?.setShowAxes(checked);
-                this.tablet?.ui.markDirty();
-            }
-        );
-        debugContainer.addChild(axesToggle);
-
-        const authorityToggle = new UIToggle(
-            "Show Authority Labels",
-            debugSettings?.showAuthorityLabels ?? true,
-            90, 126, 620, 52,
-            (checked) => {
-                debugManager?.setShowAuthorityLabels(checked);
-                this.tablet?.ui.markDirty();
-            }
-        );
-        debugContainer.addChild(authorityToggle);
 
         const physics = this.context.runtime.physics;
         const diagnostics = this.context.runtime.diagnostics;
