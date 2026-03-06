@@ -21,6 +21,15 @@ export class HudRuntime implements IUpdatable {
     private noteContext: CanvasRenderingContext2D;
     private noteTexture: THREE.CanvasTexture | null = null;
     private noteMesh: THREE.Mesh | null = null;
+    private perfCanvas: HTMLCanvasElement;
+    private perfContext: CanvasRenderingContext2D;
+    private perfTexture: THREE.CanvasTexture | null = null;
+    private perfMesh: THREE.Mesh | null = null;
+    private showPerformanceStats = false;
+    private fpsSampleFrames = 0;
+    private fpsSampleSeconds = 0;
+    private smoothedFps = 0;
+    private perfRefreshTimer = 0;
 
     private crosshair: THREE.Mesh | null = null;
     private opacity: number = 0.8;
@@ -35,6 +44,10 @@ export class HudRuntime implements IUpdatable {
         this.noteContext = this.noteCanvas.getContext('2d')!;
         this.noteCanvas.width = 1024;
         this.noteCanvas.height = 256;
+        this.perfCanvas = document.createElement('canvas');
+        this.perfContext = this.perfCanvas.getContext('2d')!;
+        this.perfCanvas.width = 768;
+        this.perfCanvas.height = 128;
 
         this.init();
 
@@ -66,6 +79,21 @@ export class HudRuntime implements IUpdatable {
         this.noteMesh.position.set(0, -0.35, -1.0);
         this.group.add(this.noteMesh);
 
+        const perfGeo = new THREE.PlaneGeometry(0.62, 0.1);
+        this.perfTexture = new THREE.CanvasTexture(this.perfCanvas);
+        const perfMat = new THREE.MeshBasicMaterial({
+            map: this.perfTexture,
+            transparent: true,
+            opacity: this.opacity,
+            depthTest: false,
+            depthWrite: false
+        });
+        this.perfMesh = new THREE.Mesh(perfGeo, perfMat);
+        this.perfMesh.renderOrder = 1000;
+        this.perfMesh.position.set(-0.28, 0.3, -1.0);
+        this.perfMesh.visible = false;
+        this.group.add(this.perfMesh);
+
         const crosshairGeo = new THREE.RingGeometry(0.002, 0.004, 32);
         const crosshairMat = new THREE.MeshBasicMaterial({
             color: 0x00ffff,
@@ -79,6 +107,24 @@ export class HudRuntime implements IUpdatable {
         this.group.add(this.crosshair);
 
         this.draw();
+        this.drawPerformanceStats(0, 0, 0, 0, 0);
+    }
+
+    public setShowPerformanceStats(enabled: boolean): void {
+        this.showPerformanceStats = enabled;
+        if (this.perfMesh) {
+            this.perfMesh.visible = enabled;
+        }
+        if (!enabled) {
+            this.fpsSampleFrames = 0;
+            this.fpsSampleSeconds = 0;
+            this.smoothedFps = 0;
+            this.perfRefreshTimer = 0;
+        }
+    }
+
+    public getShowPerformanceStats(): boolean {
+        return this.showPerformanceStats;
     }
 
 
@@ -111,6 +157,33 @@ export class HudRuntime implements IUpdatable {
             this.draw();
         }
         this.updateNotificationOpacity(now);
+
+        if (!this.showPerformanceStats) return;
+
+        this.fpsSampleFrames += 1;
+        this.fpsSampleSeconds += Math.max(0, delta);
+        this.perfRefreshTimer += Math.max(0, delta);
+
+        if (this.fpsSampleSeconds >= 0.5) {
+            const sampleFps = this.fpsSampleFrames / this.fpsSampleSeconds;
+            this.smoothedFps = this.smoothedFps > 0
+                ? THREE.MathUtils.lerp(this.smoothedFps, sampleFps, 0.35)
+                : sampleFps;
+            this.fpsSampleFrames = 0;
+            this.fpsSampleSeconds = 0;
+        }
+
+        if (this.perfRefreshTimer >= 0.25) {
+            this.perfRefreshTimer = 0;
+            const renderInfo = this.context.runtime.render?.renderer.info.render;
+            this.drawPerformanceStats(
+                Math.round(this.smoothedFps),
+                renderInfo?.calls ?? 0,
+                renderInfo?.triangles ?? 0,
+                renderInfo?.lines ?? 0,
+                renderInfo?.points ?? 0
+            );
+        }
     }
 
     private draw(): void {
@@ -229,5 +302,35 @@ export class HudRuntime implements IUpdatable {
         ctx.lineTo(x, y + radius);
         ctx.quadraticCurveTo(x, y, x + radius, y);
         ctx.closePath();
+    }
+
+    private drawPerformanceStats(fps: number, drawCalls: number, triangles: number, lines: number, points: number): void {
+        const ctx = this.perfContext;
+        ctx.clearRect(0, 0, this.perfCanvas.width, this.perfCanvas.height);
+        ctx.save();
+        this.drawRoundedRect(
+            ctx,
+            12,
+            12,
+            this.perfCanvas.width - 24,
+            this.perfCanvas.height - 24,
+            UITheme.styling.cornerRadius * 2
+        );
+        ctx.fillStyle = UITheme.colors.panelBg;
+        ctx.fill();
+        ctx.strokeStyle = UITheme.colors.secondary;
+        ctx.lineWidth = UITheme.styling.borderWidth;
+        ctx.stroke();
+
+        ctx.font = `bold 30px ${UITheme.typography.fontFamily}`;
+        ctx.fillStyle = UITheme.colors.text;
+        ctx.textAlign = 'left';
+        const text = `FPS ${fps}   D ${drawCalls}   T ${triangles.toLocaleString()}   L ${lines.toLocaleString()}   P ${points.toLocaleString()}`;
+        ctx.fillText(text, 34, 74);
+        ctx.restore();
+
+        if (this.perfTexture) {
+            this.perfTexture.needsUpdate = true;
+        }
     }
 }

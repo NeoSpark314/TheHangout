@@ -1252,6 +1252,17 @@ export class VrUiRuntime implements IUpdatable {
         );
         debugContainer.addChild(overlayToggle);
 
+        const showFpsToggle = new UIToggle(
+            "Show FPS",
+            this.context.runtime.hud.getShowPerformanceStats(),
+            760, 70, 420, 52,
+            (checked) => {
+                this.context.runtime.hud.setShowPerformanceStats(checked);
+                this.tablet?.ui.markDirty();
+            }
+        );
+        debugContainer.addChild(showFpsToggle);
+
         const physics = this.context.runtime.physics;
         const diagnostics = this.context.runtime.diagnostics;
 
