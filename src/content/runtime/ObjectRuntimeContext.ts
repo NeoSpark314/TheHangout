@@ -7,6 +7,7 @@ import type {
     IPhysicsColliderHandle
 } from '../contracts/IObjectRuntimeContext';
 import type { IObjectSpawnConfig } from '../contracts/IObjectModule';
+import type { TLocalMountStateReason } from '../contracts/IMounting';
 import type { IObjectReplicationEmitOptions } from '../contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
 
@@ -83,9 +84,16 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.mount = {
+            requestLocalMount: (options: any) => this.app.runtime.mount.requestLocalMount(options),
+            grantLocalMount: (options: any) => this.app.runtime.mount.grantLocalMount(options),
+            rejectLocalMount: () => this.app.runtime.mount.rejectLocalMount(),
+            releaseLocalMount: (ownerInstanceId?: string, reason?: TLocalMountStateReason) =>
+                this.app.runtime.mount.releaseLocalMount(ownerInstanceId, reason),
             mountLocal: (options: any) => this.app.runtime.mount.mountLocal(options),
-            unmountLocal: (ownerInstanceId?: string) => this.app.runtime.mount.unmountLocal(ownerInstanceId),
-            isMountedLocal: (ownerInstanceId?: string) => this.app.runtime.mount.isMountedLocal(ownerInstanceId)
+            unmountLocal: (ownerInstanceId?: string, reason?: TLocalMountStateReason) =>
+                this.app.runtime.mount.unmountLocal(ownerInstanceId, reason),
+            isMountedLocal: (ownerInstanceId?: string) => this.app.runtime.mount.isMountedLocal(ownerInstanceId),
+            getLocalMountStatus: () => this.app.runtime.mount.getLocalMountStatus()
         };
 
         this.objects = {

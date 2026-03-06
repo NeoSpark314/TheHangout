@@ -75,6 +75,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - The same pattern now applies to default physics props: [GrabbableCubeObject.ts](src/content/objects/GrabbableCubeObject.ts) wraps the low-level grabbable physics-entity spawn path for scenario-owned cubes.
 - Shared drawing is now content-owned: [DrawingSurfaceObject.ts](src/content/objects/DrawingSurfaceObject.ts) is a replicated object instance that owns stroke state and late-join snapshots.
 - The drum pads now follow the same content-owned model: [DrumPadArcObject.ts](src/content/objects/DrumPadArcObject.ts) is a self-contained replicated object that owns its own meshes, colliders, hit detection, audio, and sync.
+- Local mounting now has an explicit state-machine-shaped runtime API (`request/grant/reject/release`) exposed through object runtime context, while preserving backward-compatible `mountLocal/unmountLocal` calls for existing objects.
 - Scenario-owned runtime state should either be tracked through `ObjectInstanceRegistry` or be explicitly cleaned up in the scenario's `unload()` path.
 
 ### Networking
@@ -168,3 +169,4 @@ These names are part of the architecture. New modules should follow them instead
 - [ENTITY_ARCHITECTURE_PLAN.md](ENTITY_ARCHITECTURE_PLAN.md) for the entity model rationale
 - [PLAYER_AVATAR_REFACTOR_PLAN.md](PLAYER_AVATAR_REFACTOR_PLAN.md) for the unified player-avatar design
 - [OBJECT_REPLICATION_POLICY.md](OBJECT_REPLICATION_POLICY.md) for object-scoped replication policy and usage patterns
+- [MOUNTING_V2.md](MOUNTING_V2.md) for the generalized mount scaffolding and next-step migration path

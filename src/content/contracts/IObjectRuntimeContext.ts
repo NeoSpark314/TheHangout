@@ -4,6 +4,7 @@ import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IObjectSpawnConfig } from './IObjectModule';
 import type { IObjectReplicationEmitOptions } from './IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
+import type { ILocalMountBinding, ILocalMountStatus, TLocalMountStateReason } from './IMounting';
 
 export interface IPhysicsBodyHandle {
     readonly id: number;
@@ -75,13 +76,14 @@ export interface IObjectRuntimeContext {
     };
 
     mount: {
-        mountLocal(options: {
-            ownerInstanceId: string;
-            getSeatPose: () => { position: THREE.Vector3; yaw: number };
-            getExitPose?: () => { position: THREE.Vector3; yaw: number };
-        }): boolean;
-        unmountLocal(ownerInstanceId?: string): void;
+        requestLocalMount(options: ILocalMountBinding): boolean;
+        grantLocalMount(options: ILocalMountBinding): boolean;
+        rejectLocalMount(): void;
+        releaseLocalMount(ownerInstanceId?: string, reason?: TLocalMountStateReason): void;
+        mountLocal(options: ILocalMountBinding): boolean;
+        unmountLocal(ownerInstanceId?: string, reason?: TLocalMountStateReason): void;
         isMountedLocal(ownerInstanceId?: string): boolean;
+        getLocalMountStatus(): ILocalMountStatus;
     };
 
     objects: {

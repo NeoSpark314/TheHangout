@@ -1,15 +1,19 @@
 import * as THREE from 'three';
 import type { AppContext } from '../../app/AppContext';
 import type { IUpdatable } from '../../shared/contracts/IUpdatable';
-
-interface ILocalMountBinding {
-    ownerInstanceId: string;
-    getSeatPose: () => { position: THREE.Vector3; yaw: number };
-    getExitPose?: () => { position: THREE.Vector3; yaw: number };
-}
+import type {
+    ILocalMountBinding,
+    ILocalMountStatus,
+    TLocalMountState,
+    TLocalMountStateReason
+} from '../contracts/IMounting';
 
 export class MountRuntime implements IUpdatable {
     private localMount: ILocalMountBinding | null = null;
+    private localState: TLocalMountState = 'idle';
+    private localStateReason: TLocalMountStateReason = 'unknown';
+    private localStateSinceMs: number = this.nowMs();
+    private readonly localStateListeners = new Set<(status: ILocalMountStatus) => void>();
 
     constructor(private context: AppContext) { }
 
@@ -21,7 +25,7 @@ export class MountRuntime implements IUpdatable {
 
         const move = this.context.runtime.input?.getMovementVector?.();
         if (move && Math.hypot(move.x, move.y) > 0.1) {
-            this.unmountLocal(this.localMount.ownerInstanceId);
+            this.unmountLocal(this.localMount.ownerInstanceId, 'movement');
             return;
         }
 
@@ -29,34 +33,57 @@ export class MountRuntime implements IUpdatable {
         localPlayer.moveOriginTo(seat.position, seat.yaw);
     }
 
-    public mountLocal(binding: ILocalMountBinding): boolean {
+    public requestLocalMount(binding: ILocalMountBinding): boolean {
+        this.setLocalState('requesting', 'request');
+        return this.grantLocalMount(binding);
+    }
+
+    public grantLocalMount(binding: ILocalMountBinding): boolean {
         const localPlayer = this.context.localPlayer;
         if (!localPlayer) return false;
 
         if (this.localMount && this.localMount.ownerInstanceId !== binding.ownerInstanceId) {
-            this.unmountLocal(this.localMount.ownerInstanceId);
+            this.unmountLocal(this.localMount.ownerInstanceId, 'replaced');
         }
 
         this.localMount = binding;
+        this.setLocalState('mounted', 'granted');
         const seat = binding.getSeatPose();
         localPlayer.teleportTo(seat.position, seat.yaw, { targetSpace: 'player' });
         return true;
     }
 
-    public unmountLocal(ownerInstanceId?: string): void {
+    public rejectLocalMount(): void {
+        this.setLocalState('rejected', 'rejected');
+    }
+
+    public releaseLocalMount(ownerInstanceId?: string, reason: TLocalMountStateReason = 'released'): void {
+        this.unmountLocal(ownerInstanceId, reason);
+    }
+
+    public mountLocal(binding: ILocalMountBinding): boolean {
+        return this.grantLocalMount(binding);
+    }
+
+    public unmountLocal(ownerInstanceId?: string, reason: TLocalMountStateReason = 'released'): void {
         if (!this.localMount) return;
         if (ownerInstanceId && this.localMount.ownerInstanceId !== ownerInstanceId) return;
 
         const binding = this.localMount;
+        this.setLocalState('releasing', reason);
         this.localMount = null;
 
         const localPlayer = this.context.localPlayer;
-        if (!localPlayer) return;
+        if (!localPlayer) {
+            this.setLocalState('idle', reason);
+            return;
+        }
 
         const exitPose = binding.getExitPose?.();
         if (exitPose) {
             localPlayer.teleportTo(exitPose.position, exitPose.yaw, { targetSpace: 'player' });
         }
+        this.setLocalState('idle', reason);
     }
 
     public isMountedLocal(ownerInstanceId?: string): boolean {
@@ -67,5 +94,44 @@ export class MountRuntime implements IUpdatable {
 
     public getMountedInstanceId(): string | null {
         return this.localMount?.ownerInstanceId ?? null;
+    }
+
+    public getLocalMountStatus(): ILocalMountStatus {
+        return this.snapshotLocalState();
+    }
+
+    public onLocalMountStateChanged(listener: (status: ILocalMountStatus) => void): () => void {
+        this.localStateListeners.add(listener);
+        listener(this.snapshotLocalState());
+        return () => {
+            this.localStateListeners.delete(listener);
+        };
+    }
+
+    private setLocalState(state: TLocalMountState, reason: TLocalMountStateReason): void {
+        if (this.localState === state && this.localStateReason === reason) return;
+        this.localState = state;
+        this.localStateReason = reason;
+        this.localStateSinceMs = this.nowMs();
+        const snapshot = this.snapshotLocalState();
+        for (const listener of this.localStateListeners) {
+            listener(snapshot);
+        }
+    }
+
+    private snapshotLocalState(): ILocalMountStatus {
+        return {
+            state: this.localState,
+            ownerInstanceId: this.localMount?.ownerInstanceId ?? null,
+            mountPointId: this.localMount?.mountPointId ?? null,
+            reason: this.localStateReason,
+            sinceMs: this.localStateSinceMs
+        };
+    }
+
+    private nowMs(): number {
+        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
     }
 }
