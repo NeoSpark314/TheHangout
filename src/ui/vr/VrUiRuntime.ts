@@ -25,6 +25,7 @@ export class VrUiRuntime implements IUpdatable {
     private handLocomotionLine: THREE.Line | null = null;
     private menuOrb: THREE.Mesh | null = null;
     private interactOrb: THREE.Mesh | null = null;
+    private exitXrButton: UIButton | null = null;
 
     private peersTab: UITab | null = null;
     private sessionTab: UITab | null = null;
@@ -1075,6 +1076,24 @@ export class VrUiRuntime implements IUpdatable {
             }
         }, 80);
 
+        const exitXrBtn = new UIButton("Exit XR", 220, 630, 200, 80, () => {
+            const render = this.context.runtime.render;
+            if (!render || !render.isXRPresenting()) {
+                return;
+            }
+            render.getXRSession()?.end().catch(() => {
+                // Intentionally ignore end errors (session may already be closing).
+            });
+        });
+        exitXrBtn.backgroundColor = UITheme.colors.panelBg;
+        exitXrBtn.borderColor = UITheme.colors.secondary;
+        exitXrBtn.textColor = UITheme.colors.text;
+        exitXrBtn.hoverColor = UITheme.colors.panelBgHover;
+        exitXrBtn.cornerRadius = 10;
+        exitXrBtn.isVisible = !!this.context.runtime.render?.isXRPresenting();
+        systemContainer.addChild(exitXrBtn);
+        this.exitXrButton = exitXrBtn;
+
         const leaveBtn = new UIButton("Leave Session", 440, 630, 400, 80, () => {
             const render = this.context.runtime.render;
             if (render && render.isXRPresenting()) {
@@ -1667,6 +1686,15 @@ export class VrUiRuntime implements IUpdatable {
         this.updateHandLocomotionIndicator();
         this.updateMenuOrb();
         this.updateInteractionOrb();
+
+        if (this.exitXrButton) {
+            const shouldShowExitXr = !!this.context.runtime.render?.isXRPresenting();
+            if (this.exitXrButton.isVisible !== shouldShowExitXr) {
+                this.exitXrButton.isVisible = shouldShowExitXr;
+                this.tablet?.ui.markDirty();
+            }
+        }
+
         for (const watcher of this.tabVisibleRefreshWatchers) {
             const isVisibleNow = this.shouldRefreshTabUi(watcher.tabGetter());
             if (isVisibleNow && !watcher.wasVisible) {
@@ -1784,6 +1812,7 @@ export class VrUiRuntime implements IUpdatable {
         }
         this.tabPanel = null;
         this.overlayContainer = null;
+        this.exitXrButton = null;
     }
 
 }
