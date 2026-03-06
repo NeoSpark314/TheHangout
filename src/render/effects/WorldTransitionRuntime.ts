@@ -24,7 +24,7 @@ void main() {
     vec3 direction = toWorld / distanceToHead;
 
     // Pull distant surfaces further so the space converges toward the headset center.
-    float distanceBoost = mix(0.35, 1.0, clamp(distanceToHead / 8.0, 0.0, 1.0));
+    float distanceBoost = mix(0.55, 1.0, clamp(distanceToHead / 8.0, 0.0, 1.0));
     worldPos.xyz += direction * (uWarp * uInfinityDistance * distanceBoost);
 
     vWorldPos = worldPos.xyz;
@@ -75,12 +75,12 @@ float fbm3(vec3 p) {
     float sum = 0.0;
     float amp = 0.5;
     float freq = 1.0;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         sum += valueNoise3D(p * freq) * amp;
         freq *= 2.0;
         amp *= 0.5;
     }
-    return sum / 0.9375; // normalize by total amplitude (0.5+0.25+0.125+0.0625)
+    return sum / 0.96875; // normalize by total amplitude (0.5+0.25+0.125+0.0625+0.03125)
 }
 
 void main() {
@@ -90,7 +90,7 @@ void main() {
     float normalizedDistance = clamp(distanceToHead / uRevealRadiusMax, 0.0, 1.0);
     float surfaceNoise = (noise - 0.5) * 2.0;
     // Blend radial reveal with smooth 3D noise so surfaces do not appear as a strict sphere.
-    float revealMetric = normalizedDistance + surfaceNoise * 0.28;
+    float revealMetric = normalizedDistance + surfaceNoise * 0.34;
     if (revealMetric < vWarp) discard;
 
     float pulse = 0.5 + 0.5 * sin(uTime * 3.4 + length(vWorldPos) * 0.22);
@@ -98,6 +98,8 @@ void main() {
     vec3 base = vec3(0.08, 0.90, 0.95);
     vec3 accent = vec3(0.95, 0.98, 1.0);
     vec3 color = mix(base, accent, clamp(vWarp * 0.72 + noise * 0.18, 0.0, 1.0)) * shimmer;
+    float edgeBand = 1.0 - smoothstep(0.0, 0.08, abs(revealMetric - vWarp));
+    color += vec3(0.25, 0.55, 0.70) * edgeBand;
 
     float alpha = clamp(1.0 - smoothstep(0.82, 1.0, vWarp), 0.0, 1.0);
     if (alpha <= 0.001) discard;
@@ -108,7 +110,7 @@ void main() {
 export class WorldTransitionRuntime implements IUpdatable {
     private readonly transitionDurationSec = 1.0;
     private readonly switchHiddenDelaySec = 0.06;
-    private readonly infinityDistance = 90.0;
+    private readonly infinityDistance = 130.0;
     private readonly revealRadiusMax = 34.0;
     private phase: TransitionPhase = 'idle';
     private phaseTimeSec = 0;
@@ -246,7 +248,7 @@ export class WorldTransitionRuntime implements IUpdatable {
     private playTransitionSound(kind: 'appear' | 'disappear'): void {
         this.context.runtime.audio?.playFxSweep({
             down: kind === 'disappear',
-            intensity: 0.95
+            intensity: kind === 'disappear' ? 1.0 : 0.85
         });
     }
 }
