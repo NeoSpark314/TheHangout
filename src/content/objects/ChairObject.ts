@@ -160,6 +160,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
                 context: this.context,
                 ownerInstanceId: this.id,
                 mountPointId: ChairInstance.MOUNT_POINT_ID,
+                mountLabel: 'chair',
                 createLocalMountBinding: () => this.createLocalMountBinding(),
                 canMount: (playerId, occupiedBy) => !occupiedBy || occupiedBy === playerId,
                 onOccupancyChanged: () => this.applySeatVisualState()
@@ -213,9 +214,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
             return;
         }
 
-        if (!this.mountReplication.isOccupied()) {
-            this.mount(event.playerId);
-        }
+        this.mount(event.playerId);
     }
 
     public setHovered(hovered: boolean): void {

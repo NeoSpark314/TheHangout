@@ -4,6 +4,7 @@ import { AppContext } from '../../app/AppContext';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { UITheme } from '../shared/UITheme';
+import type { ISystemNotificationPayload } from '../../shared/contracts/INotification';
 
 interface Notification {
     text: string;
@@ -38,9 +39,11 @@ export class HudRuntime implements IUpdatable {
             this.showNotification(`${data.name} joined the hangout!`);
         });
 
-        eventBus.on(EVENTS.SYSTEM_NOTIFICATION, (msg: string) => {
-            console.log('[HudRuntime] System Notification received:', msg);
-            this.showNotification(`SYSTEM: ${msg}`, 8000);
+        eventBus.on(EVENTS.SYSTEM_NOTIFICATION, (note: string | ISystemNotificationPayload) => {
+            const payload = typeof note === 'string'
+                ? { message: note, level: 'info', durationMs: 8000 } as ISystemNotificationPayload
+                : note;
+            this.showNotification(payload.message, payload.durationMs ?? 4000);
         });
 
     }

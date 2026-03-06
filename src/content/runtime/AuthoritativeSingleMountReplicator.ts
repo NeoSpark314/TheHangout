@@ -4,6 +4,9 @@ import type {
     IObjectReplicationMeta
 } from '../contracts/IReplicatedObjectInstance';
 import type { ILocalMountBinding } from '../contracts/IMounting';
+import eventBus from '../../app/events/EventBus';
+import { EVENTS } from '../../shared/constants/Constants';
+import type { ISystemNotificationPayload } from '../../shared/contracts/INotification';
 
 export type TMountReleaseReason = 'released' | 'movement' | 'external';
 
@@ -19,6 +22,8 @@ interface IMountReleaseRequestPayload {
 interface IMountRejectedPayload {
     playerId: string;
     reason: string;
+    occupiedById?: string;
+    occupiedByName?: string;
 }
 
 interface IOccupancyPayload {
@@ -29,6 +34,7 @@ export interface IAuthoritativeSingleMountAdapter {
     context: IObjectRuntimeContext;
     ownerInstanceId: string;
     mountPointId: string;
+    mountLabel?: string;
     createLocalMountBinding(): ILocalMountBinding;
     canMount?(playerId: string, occupiedBy: string | null): boolean;
     onOccupancyChanged?(occupiedBy: string | null): void;
@@ -74,11 +80,27 @@ export class AuthoritativeSingleMountReplicator {
     }
 
     public mount(playerId: string): boolean {
+        if (!this.canMount(playerId)) {
+            if (playerId === this.getLocalPlayerId()) {
+                this.notify({
+                    message: this.getMountRejectedMessage({
+                        playerId,
+                        reason: 'occupied',
+                        occupiedById: this.occupiedBy || undefined,
+                        occupiedByName: this.occupiedBy ? this.resolvePlayerName(this.occupiedBy) : undefined
+                    }),
+                    level: 'warning',
+                    source: 'mount',
+                    durationMs: 2400,
+                    dedupeKey: `${this.adapter.ownerInstanceId}:mount:blocked-local`
+                });
+            }
+            return false;
+        }
+
         if (this.adapter.context.app.isHost) {
             return this.applyAuthoritativeMount(playerId);
         }
-
-        if (!this.canMount(playerId)) return false;
         this.awaitingMountAuthority = true;
 
         if (playerId === this.getLocalPlayerId()) {
@@ -163,6 +185,7 @@ export class AuthoritativeSingleMountReplicator {
     private applyAuthoritativeMount(playerId: string): boolean {
         if (!this.canMount(playerId)) return false;
         this.occupiedBy = playerId;
+        const hadPendingMountRequest = this.awaitingMountAuthority;
         this.awaitingMountAuthority = false;
         this.awaitingReleaseAuthority = false;
 
@@ -172,6 +195,17 @@ export class AuthoritativeSingleMountReplicator {
 
         this.emit(this.events.occupancy, { occupiedBy: playerId }, { localEcho: false });
         this.adapter.onOccupancyChanged?.(this.occupiedBy);
+        if (playerId === this.getLocalPlayerId()) {
+            this.notify({
+                message: `Mounted ${this.getMountLabel()}.`,
+                level: 'success',
+                source: 'mount',
+                durationMs: 1600,
+                dedupeKey: hadPendingMountRequest
+                    ? `${this.adapter.ownerInstanceId}:mount:granted`
+                    : `${this.adapter.ownerInstanceId}:mount:state`
+            });
+        }
         return true;
     }
 
@@ -197,6 +231,7 @@ export class AuthoritativeSingleMountReplicator {
     }
 
     private applyOccupancy(occupiedBy: string | null): void {
+        const previousOccupiedBy = this.occupiedBy;
         this.occupiedBy = occupiedBy;
         const localPlayerId = this.getLocalPlayerId();
 
@@ -205,6 +240,15 @@ export class AuthoritativeSingleMountReplicator {
             this.awaitingReleaseAuthority = false;
             if (!this.adapter.context.mount.isMountedLocal(this.adapter.ownerInstanceId)) {
                 this.adapter.context.mount.grantLocalMount(this.adapter.createLocalMountBinding());
+            }
+            if (previousOccupiedBy !== localPlayerId && localPlayerId) {
+                this.notify({
+                    message: `Mounted ${this.getMountLabel()}.`,
+                    level: 'success',
+                    source: 'mount',
+                    durationMs: 1600,
+                    dedupeKey: `${this.adapter.ownerInstanceId}:mount:granted`
+                });
             }
         } else if (this.adapter.context.mount.isMountedLocal(this.adapter.ownerInstanceId)) {
             this.adapter.context.mount.unmountLocal(this.adapter.ownerInstanceId, 'external');
@@ -252,7 +296,14 @@ export class AuthoritativeSingleMountReplicator {
     }
 
     private emitMountRejected(playerId: string, reason: string): void {
-        this.emit(this.events.mountRejected, { playerId, reason }, { localEcho: false });
+        const occupiedById = reason === 'occupied' ? this.occupiedBy : undefined;
+        const occupiedByName = occupiedById ? this.resolvePlayerName(occupiedById) : undefined;
+        this.emit(this.events.mountRejected, {
+            playerId,
+            reason,
+            occupiedById,
+            occupiedByName
+        }, { localEcho: false });
     }
 
     private handleMountRejected(data: unknown): void {
@@ -263,10 +314,46 @@ export class AuthoritativeSingleMountReplicator {
         this.awaitingMountAuthority = false;
         this.awaitingReleaseAuthority = false;
         this.adapter.context.mount.rejectLocalMount();
+        this.notify({
+            message: this.getMountRejectedMessage(payload),
+            level: 'warning',
+            source: 'mount',
+            durationMs: 2600,
+            dedupeKey: `${this.adapter.ownerInstanceId}:mount:rejected:${payload.reason}`
+        });
     }
 
     private getLocalPlayerId(): string | null {
         return this.adapter.context.app.localPlayer?.id ?? null;
     }
-}
 
+    private getMountRejectedMessage(payload: IMountRejectedPayload): string {
+        if (payload.reason === 'occupied') {
+            const occupant = payload.occupiedByName || payload.occupiedById || 'another player';
+            return `Cannot mount ${this.getMountLabel()}: occupied by ${occupant}.`;
+        }
+        if (payload.reason === 'not_occupant') {
+            return `Cannot unmount ${this.getMountLabel()}: you are not the occupant.`;
+        }
+        if (payload.reason === 'invalid_mount_point') {
+            return `Cannot mount ${this.getMountLabel()}: invalid seat.`;
+        }
+        return `Cannot mount ${this.getMountLabel()} right now.`;
+    }
+
+    private getMountLabel(): string {
+        return this.adapter.mountLabel || 'object';
+    }
+
+    private notify(payload: ISystemNotificationPayload): void {
+        eventBus.emit(EVENTS.SYSTEM_NOTIFICATION, payload);
+    }
+
+    private resolvePlayerName(peerId: string): string | undefined {
+        const entity = this.adapter.context.entity.get(peerId) as { name?: unknown } | undefined;
+        if (entity && typeof entity.name === 'string' && entity.name.trim().length > 0) {
+            return entity.name;
+        }
+        return undefined;
+    }
+}

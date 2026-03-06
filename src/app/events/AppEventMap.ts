@@ -3,6 +3,7 @@ import type { IOwnershipReleasePayload, IOwnershipRequestPayload } from '../../s
 import type { IHandIntentPayload, ILookIntentPayload, IMoveIntentPayload, IVRSnapTurnPayload } from '../../shared/contracts/IIntents';
 import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IVoiceStreamReceivedEvent } from '../../shared/contracts/IVoice';
+import type { ISystemNotificationPayload } from '../../shared/contracts/INotification';
 
 /**
  * Global app-wide events only.
@@ -41,7 +42,7 @@ export interface AppEventMap {
     REQUEST_OWNERSHIP: IOwnershipRequestPayload;
     RELEASE_OWNERSHIP: IOwnershipReleasePayload;
     RECLAIM_OWNERSHIP: void;
-    SYSTEM_NOTIFICATION: string;
+    SYSTEM_NOTIFICATION: string | ISystemNotificationPayload;
     AUDIO_CHUNK_RECEIVED: unknown;
     PEER_JOINED_SESSION: string;
     XR_SESSION_STARTED: void;
