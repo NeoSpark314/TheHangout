@@ -72,6 +72,10 @@ export class VrUiRuntime implements IUpdatable {
             left: { wasPinchingInside: false, holdSec: 0, longFired: false },
             right: { wasPinchingInside: false, holdSec: 0, longFired: false }
         };
+    private readonly handUiPointerBlocked: Record<'left' | 'right', boolean> = {
+        left: false,
+        right: false
+    };
 
     constructor(private context: AppContext) {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
@@ -435,6 +439,8 @@ export class VrUiRuntime implements IUpdatable {
                 coreMaterial.opacity = 0;
                 menuOrbCore.scale.setScalar(0.1);
             }
+            this.handUiPointerBlocked.left = false;
+            this.handUiPointerBlocked.right = false;
             this.resetMenuOrbPressState();
             return;
         }
@@ -464,6 +470,8 @@ export class VrUiRuntime implements IUpdatable {
 
         const menuRadius = indicatorState.radius * 0.33;
         menuOrb.scale.setScalar(menuRadius / 0.022);
+        this.handUiPointerBlocked.left = false;
+        this.handUiPointerBlocked.right = false;
 
         let isHovering = false;
         let isPressing = false;
@@ -484,6 +492,9 @@ export class VrUiRuntime implements IUpdatable {
             const dz = probe.currentLocal.z - menuOffsetLocal.z;
             const inside = (dx * dx + dy * dy + dz * dz) <= (menuRadius * menuRadius);
             const pinchingInside = inside && probe.pinchActive;
+            if (inside) {
+                this.handUiPointerBlocked[hand] = true;
+            }
 
             if (inside) {
                 isHovering = true;
@@ -1808,6 +1819,10 @@ export class VrUiRuntime implements IUpdatable {
             render.isXRPresenting() &&
             !!this.context.isMenuOpen &&
             this.tablet.mesh.visible;
+    }
+
+    public isHandUiPointerBlocked(hand: 'left' | 'right'): boolean {
+        return this.handUiPointerBlocked[hand];
     }
 
     public update(delta: number): void {

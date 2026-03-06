@@ -135,6 +135,13 @@ export class UIPointerSkill extends Skill {
                 const handState = trackingHands[hand];
                 const line = this.pointerLines[hand];
                 const dot = this.pointerDots[hand];
+                const isPointerBlocked = vrUi.isHandUiPointerBlocked(hand);
+
+                if (isPointerBlocked) {
+                    line.visible = false;
+                    dot.visible = false;
+                    continue;
+                }
 
                 if (handState.active) {
                     // Prefer specialized pointer pose (pinch/target ray) over raw joint/grip pose
@@ -247,6 +254,7 @@ export class UIPointerSkill extends Skill {
         const tabletMesh = vrUi.tablet.mesh;
 
         if (!isXR || !vrUi.isTabletInteractionActive()) return;
+        if (vrUi.isHandUiPointerBlocked(hand)) return;
 
         const handState = player.appContext.runtime.tracking.getState().hands[hand];
         if (!handState.active) return;
