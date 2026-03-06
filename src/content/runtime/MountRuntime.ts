@@ -10,6 +10,8 @@ import type {
 
 export class MountRuntime implements IUpdatable {
     private static readonly REQUEST_TIMEOUT_MS = 3000;
+    private static readonly MOVEMENT_UNMOUNT_THRESHOLD = 0.45;
+    private static readonly MOVEMENT_UNMOUNT_HOLD_MS = 220;
 
     private localMount: ILocalMountBinding | null = null;
     private pendingMount: ILocalMountBinding | null = null;
@@ -18,6 +20,7 @@ export class MountRuntime implements IUpdatable {
     private localStateSinceMs: number = this.nowMs();
     private readonly localStateListeners = new Set<(status: ILocalMountStatus) => void>();
     private lastStateSignature = '';
+    private movementUnmountStartMs: number | null = null;
 
     constructor(private context: AppContext) { }
 
@@ -33,9 +36,23 @@ export class MountRuntime implements IUpdatable {
         if (!localPlayer) return;
 
         const move = this.context.runtime.input?.getMovementVector?.();
-        if (move && Math.hypot(move.x, move.y) > 0.1) {
-            this.unmountLocal(this.localMount.ownerInstanceId, 'movement');
-            return;
+        if (move) {
+            const mag = Math.hypot(move.x, move.y);
+            if (mag >= MountRuntime.MOVEMENT_UNMOUNT_THRESHOLD) {
+                if (this.movementUnmountStartMs === null) {
+                    this.movementUnmountStartMs = this.nowMs();
+                }
+                const heldMs = this.nowMs() - this.movementUnmountStartMs;
+                if (heldMs >= MountRuntime.MOVEMENT_UNMOUNT_HOLD_MS) {
+                    const canUnmount = this.localMount.canUnmountNow?.('movement') ?? true;
+                    if (canUnmount) {
+                        this.unmountLocal(this.localMount.ownerInstanceId, 'movement');
+                        return;
+                    }
+                }
+            } else {
+                this.movementUnmountStartMs = null;
+            }
         }
 
         const seat = this.localMount.getSeatPose();
@@ -46,6 +63,7 @@ export class MountRuntime implements IUpdatable {
         const localPlayer = this.context.localPlayer;
         if (!localPlayer) return false;
         this.pendingMount = binding;
+        this.movementUnmountStartMs = null;
         this.setLocalState('requesting', 'request');
         return true;
     }
@@ -60,6 +78,7 @@ export class MountRuntime implements IUpdatable {
 
         this.localMount = binding;
         this.pendingMount = null;
+        this.movementUnmountStartMs = null;
         this.setLocalState('mounted', 'granted');
         const seat = binding.getSeatPose();
         localPlayer.teleportTo(seat.position, seat.yaw, { targetSpace: 'player' });
@@ -68,6 +87,7 @@ export class MountRuntime implements IUpdatable {
 
     public rejectLocalMount(): void {
         this.pendingMount = null;
+        this.movementUnmountStartMs = null;
         this.setLocalState('rejected', 'rejected');
     }
 
@@ -87,6 +107,7 @@ export class MountRuntime implements IUpdatable {
         this.setLocalState('releasing', reason);
         this.localMount = null;
         this.pendingMount = null;
+        this.movementUnmountStartMs = null;
 
         const localPlayer = this.context.localPlayer;
         if (!localPlayer) {

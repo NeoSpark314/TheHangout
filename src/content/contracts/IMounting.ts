@@ -18,6 +18,7 @@ export interface ILocalMountBinding {
     mountPointId?: string;
     getSeatPose: () => { position: THREE.Vector3; yaw: number };
     getExitPose?: () => { position: THREE.Vector3; yaw: number };
+    canUnmountNow?: (reason: 'movement' | 'released' | 'external') => boolean;
 }
 
 export interface ILocalMountStatus {

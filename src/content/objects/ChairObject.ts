@@ -240,7 +240,8 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
             ownerInstanceId: this.id,
             mountPointId: ChairInstance.MOUNT_POINT_ID,
             getSeatPose: () => this.getSeatPose(),
-            getExitPose: () => this.getExitPose()
+            getExitPose: () => this.getExitPose(),
+            canUnmountNow: (_reason) => true
         };
     }
 
