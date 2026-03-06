@@ -849,14 +849,8 @@ export class VrUiRuntime implements IUpdatable {
     private addSystemTab() {
         if (!this.tabPanel) return;
 
-        this.systemTab = this.tabPanel.addTab('System');
+        this.systemTab = this.tabPanel.addTab('Session');
         const systemContainer = this.systemTab.container;
-
-        const title = new UILabel("System", 50, 50, 1180, 80);
-        title.font = getFont(UITheme.typography.sizes.title, 'bold');
-        title.textColor = UITheme.colors.primary;
-        title.textAlign = 'center';
-        systemContainer.addChild(title);
 
         const leaveBtn = new UIButton("Leave Session", 440, 630, 400, 80, () => {
             const render = this.context.runtime.render;
@@ -881,7 +875,7 @@ export class VrUiRuntime implements IUpdatable {
     private addSessionTab() {
         if (!this.tabPanel) return;
 
-        this.sessionTab = this.tabPanel.addTab('Session');
+        this.sessionTab = this.tabPanel.addTab('Screens');
         const sessionContainer = this.sessionTab.container;
 
         const desktop = this.context.runtime.remoteDesktop;
@@ -905,6 +899,8 @@ export class VrUiRuntime implements IUpdatable {
         sessionContainer.addChild(refreshBtn);
 
         const listContainer = new UIElement(40, 240, 1200, 500);
+        listContainer.backgroundColor = 'transparent';
+        listContainer.borderWidth = 0;
         sessionContainer.addChild(listContainer);
 
         const renderList = () => {
@@ -1278,6 +1274,8 @@ export class VrUiRuntime implements IUpdatable {
         let currentMode: 'VR' | 'Desktop' | 'Touch' = 'VR';
 
         const contentArea = new UIElement(50, 150, 1180, 600);
+        contentArea.backgroundColor = 'transparent';
+        contentArea.borderWidth = 0;
         container.addChild(contentArea);
 
         const navButtons: UIButton[] = [];
