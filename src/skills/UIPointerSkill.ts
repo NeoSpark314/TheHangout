@@ -194,21 +194,6 @@ export class UIPointerSkill extends Skill {
             return;
         }
 
-        const hits = this.raycaster.intersectObject(tabletMesh);
-
-        if (hits.length > 0) {
-            const hit = hits[0];
-            this.mouseDot.visible = true;
-            this.mouseDot.position.copy(hit.point);
-            this.mouseDot.quaternion.copy(tabletMesh.quaternion);
-
-            if (hit.uv) {
-                vrUi.tablet.ui.onPointerMove(hit.uv);
-            }
-        } else {
-            this.mouseDot.visible = false;
-            vrUi.tablet.ui.onPointerOut();
-        }
     }
 
     private handlePointerClick(player: PlayerAvatarEntity, hand: 'left' | 'right'): void {
