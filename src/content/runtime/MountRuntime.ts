@@ -10,6 +10,7 @@ import type {
 
 export class MountRuntime implements IUpdatable {
     private localMount: ILocalMountBinding | null = null;
+    private pendingMount: ILocalMountBinding | null = null;
     private localState: TLocalMountState = 'idle';
     private localStateReason: TLocalMountStateReason = 'unknown';
     private localStateSinceMs: number = this.nowMs();
@@ -34,8 +35,11 @@ export class MountRuntime implements IUpdatable {
     }
 
     public requestLocalMount(binding: ILocalMountBinding): boolean {
+        const localPlayer = this.context.localPlayer;
+        if (!localPlayer) return false;
+        this.pendingMount = binding;
         this.setLocalState('requesting', 'request');
-        return this.grantLocalMount(binding);
+        return true;
     }
 
     public grantLocalMount(binding: ILocalMountBinding): boolean {
@@ -47,6 +51,7 @@ export class MountRuntime implements IUpdatable {
         }
 
         this.localMount = binding;
+        this.pendingMount = null;
         this.setLocalState('mounted', 'granted');
         const seat = binding.getSeatPose();
         localPlayer.teleportTo(seat.position, seat.yaw, { targetSpace: 'player' });
@@ -54,6 +59,7 @@ export class MountRuntime implements IUpdatable {
     }
 
     public rejectLocalMount(): void {
+        this.pendingMount = null;
         this.setLocalState('rejected', 'rejected');
     }
 
@@ -72,6 +78,7 @@ export class MountRuntime implements IUpdatable {
         const binding = this.localMount;
         this.setLocalState('releasing', reason);
         this.localMount = null;
+        this.pendingMount = null;
 
         const localPlayer = this.context.localPlayer;
         if (!localPlayer) {
@@ -123,7 +130,7 @@ export class MountRuntime implements IUpdatable {
         return {
             state: this.localState,
             ownerInstanceId: this.localMount?.ownerInstanceId ?? null,
-            mountPointId: this.localMount?.mountPointId ?? null,
+            mountPointId: this.localMount?.mountPointId ?? this.pendingMount?.mountPointId ?? null,
             reason: this.localStateReason,
             sinceMs: this.localStateSinceMs
         };

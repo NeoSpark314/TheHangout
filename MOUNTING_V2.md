@@ -36,9 +36,23 @@ This document describes the first step toward a generalized mount system for VR 
 
 [IObjectRuntimeContext.ts](src/content/contracts/IObjectRuntimeContext.ts) and [ObjectRuntimeContext.ts](src/content/runtime/ObjectRuntimeContext.ts) now expose the same extended mount API so object modules can adopt the new flow incrementally.
 
-## Non-Breaking Scope
+## Compatibility Scope
 
-- Existing chair behavior remains unchanged.
 - Existing object code using `mountLocal/unmountLocal/isMountedLocal` still works.
-- The new API is scaffolding for the next step: host-authoritative mount request/grant/reject/release replication.
+- Chair keeps the same user-facing interaction model (trigger to sit/stand), but now converges through host-authoritative occupancy decisions.
+- The mount runtime API is backward compatible while exposing request/grant/reject/release primitives for newer objects.
 
+## Host-Authoritative Pattern (Implemented for Chair)
+
+`ChairObject` now follows this replication flow:
+
+1. Guest interaction emits `mount-request` (or `mount-release-request`) with `localEcho: false`.
+2. Host receives event and validates actor identity from replication `meta.senderId` (not from payload claims).
+3. Host applies state if valid and emits authoritative `occupancy` update for all peers.
+4. If invalid, host emits `mount-rejected` containing `playerId` and `reason`; non-target peers ignore it.
+
+This is the recommended baseline for future mountables:
+
+- object keeps mount occupancy and rules self-contained.
+- host remains authoritative on acceptance/release.
+- clients mount/unmount locally only from authoritative occupancy convergence.
