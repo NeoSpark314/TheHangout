@@ -157,6 +157,31 @@ function isPeerLatencyReportPayload(payload: unknown): boolean {
         (payload.samples === undefined || typeof payload.samples === 'number');
 }
 
+function isScenarioActionRequestPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.scenarioId === 'string' &&
+        typeof payload.actionId === 'string' &&
+        (payload.requestId === undefined || typeof payload.requestId === 'string');
+}
+
+function isScenarioActionExecutePayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.scenarioId === 'string' &&
+        typeof payload.actionId === 'string' &&
+        (payload.initiatedByPeerId === undefined || typeof payload.initiatedByPeerId === 'string') &&
+        (payload.sentAt === undefined || typeof payload.sentAt === 'number');
+}
+
+function isScenarioActionResultPayload(payload: unknown): boolean {
+    return isObject(payload) &&
+        typeof payload.scenarioId === 'string' &&
+        typeof payload.actionId === 'string' &&
+        typeof payload.ok === 'boolean' &&
+        (payload.reason === undefined || typeof payload.reason === 'string') &&
+        (payload.message === undefined || typeof payload.message === 'string') &&
+        (payload.requestId === undefined || typeof payload.requestId === 'string');
+}
+
 export function isValidPayloadForType(type: number, payload: unknown): boolean {
     switch (type) {
         case PACKET_TYPES.STATE_UPDATE:
@@ -204,6 +229,12 @@ export function isValidPayloadForType(type: number, payload: unknown): boolean {
             return isRttPongPayload(payload);
         case PACKET_TYPES.PEER_LATENCY_REPORT:
             return isPeerLatencyReportPayload(payload);
+        case PACKET_TYPES.SCENARIO_ACTION_REQUEST:
+            return isScenarioActionRequestPayload(payload);
+        case PACKET_TYPES.SCENARIO_ACTION_EXECUTE:
+            return isScenarioActionExecutePayload(payload);
+        case PACKET_TYPES.SCENARIO_ACTION_RESULT:
+            return isScenarioActionResultPayload(payload);
         // Intentionally permissive for binary/string audio chunks and future packet extensions.
         case PACKET_TYPES.AUDIO_CHUNK:
         default:

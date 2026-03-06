@@ -11,6 +11,7 @@ import { EntityType } from '../shared/contracts/IEntityState';
 import { RuntimeDiagnostics } from '../app/diagnostics/RuntimeDiagnostics';
 import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 import { NotificationRuntime } from '../app/notifications/NotificationRuntime';
+import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 
 export class HeadlessSession {
     public context: AppContext;
@@ -44,6 +45,7 @@ export class HeadlessSession {
         this.context.setRuntime('session', sessionMgr);
         this.context.setRuntime('drawing', new DrawingRuntime(this.context));
         this.context.setRuntime('mount', new MountRuntime(this.context));
+        this.context.setRuntime('scenarioActions', new ScenarioActionRuntime(this.context));
 
         this.context.setRuntime('network', this.network as any);
 

@@ -3,6 +3,7 @@ import type { ISessionConfig } from '../../app/AppContext';
 import type { IUpdatable } from '../../shared/contracts/IUpdatable';
 import type { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectModule } from './IObjectModule';
+import type { IScenarioActionProvider } from './IScenarioAction';
 
 export interface IScenarioLoadOptions {
     isHost: boolean;
@@ -32,6 +33,7 @@ export interface IScenarioModule extends IUpdatable {
     getDesktopLayout?(index: number, total: number): IDesktopScreenLayout;
     setHologramVisible?(visible: boolean): void;
     getObjectModules?(): IObjectModule[];
+    getActionProvider?(): IScenarioActionProvider;
     onPlayerJoined?(playerId: string): void;
     onPlayerLeft?(playerId: string): void;
 }

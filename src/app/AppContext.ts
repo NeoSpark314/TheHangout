@@ -25,6 +25,7 @@ import type { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import type { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
 import type { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 import type { NotificationRuntime } from './notifications/NotificationRuntime';
+import type { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -66,6 +67,7 @@ export interface IRuntimeRegistry {
     notify: NotificationRuntime;
     diagnostics: RuntimeDiagnostics;
     replicationDebug: ReplicationDebugRuntime;
+    scenarioActions: ScenarioActionRuntime;
 }
 
 /**

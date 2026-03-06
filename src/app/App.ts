@@ -33,6 +33,7 @@ import eventBus from './events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
+import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 
 /**
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
@@ -111,6 +112,7 @@ export class App {
         this.context.setRuntime('assets', new AssetRuntime(this.context));
         this.context.setRuntime('drawing', new DrawingRuntime(this.context));
         this.context.setRuntime('mount', new MountRuntime(this.context));
+        this.context.setRuntime('scenarioActions', new ScenarioActionRuntime(this.context));
         this.context.setRuntime('animation', new AnimationSystem());
         this.context.setRuntime('interaction', new InteractionSystem(this.context));
         this.context.setRuntime('vrUi', new VrUiRuntime(this.context));

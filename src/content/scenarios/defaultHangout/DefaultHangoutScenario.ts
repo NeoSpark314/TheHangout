@@ -10,6 +10,121 @@ import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScr
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 import { DefaultHangoutWorld } from './DefaultHangoutWorld';
+import * as THREE from 'three';
+import { EntityType } from '../../../shared/contracts/IEntityState';
+import type {
+    IScenarioActionDefinition,
+    IScenarioActionExecutionContext,
+    IScenarioActionExecutionResult,
+    IScenarioActionProvider,
+    IScenarioActionQueryContext
+} from '../../contracts/IScenarioAction';
+
+interface ISeatAssignment {
+    p: [number, number, number];
+    y: number;
+}
+
+interface ISeatAllReplicatedPayload {
+    seats: Record<string, ISeatAssignment>;
+}
+
+class DefaultHangoutActionProvider implements IScenarioActionProvider {
+    private static readonly ACTION_SEAT_ALL = 'seat-all';
+
+    public getActions(_context: IScenarioActionQueryContext): IScenarioActionDefinition[] {
+        return [
+            {
+                id: DefaultHangoutActionProvider.ACTION_SEAT_ALL,
+                label: 'Seat All',
+                description: 'Teleport all connected players into meeting seats around the table.',
+                requiredRole: 'moderator',
+                replicateToGuests: true
+            }
+        ];
+    }
+
+    public executeAction(
+        actionId: string,
+        payload: unknown,
+        context: IScenarioActionExecutionContext
+    ): IScenarioActionExecutionResult {
+        if (actionId !== DefaultHangoutActionProvider.ACTION_SEAT_ALL) {
+            return { ok: false, reason: `Unsupported action: ${actionId}` };
+        }
+
+        if (context.source === 'replicated') {
+            return this.applyReplicatedSeatAssignment(payload, context);
+        }
+
+        const players = Array.from(context.app.runtime.entity.entities.values())
+            .filter((entity) => entity.type === EntityType.PLAYER_AVATAR)
+            .map((entity) => entity.id)
+            .sort((a, b) => a.localeCompare(b));
+
+        if (players.length === 0) {
+            return { ok: false, reason: 'No active players to seat.' };
+        }
+
+        const seats: Record<string, ISeatAssignment> = {};
+        const radius = 1.9;
+        for (let i = 0; i < players.length; i++) {
+            const angle = (i / players.length) * Math.PI * 2 + Math.PI;
+            seats[players[i]] = {
+                p: [Math.sin(angle) * radius, 0.2, Math.cos(angle) * radius],
+                y: angle
+            };
+        }
+
+        this.teleportLocalPlayerIfAssigned(context, seats);
+
+        return {
+            ok: true,
+            message: `Seated ${players.length} player${players.length === 1 ? '' : 's'}.`,
+            replicatedPayload: { seats } satisfies ISeatAllReplicatedPayload
+        };
+    }
+
+    private applyReplicatedSeatAssignment(
+        payload: unknown,
+        context: IScenarioActionExecutionContext
+    ): IScenarioActionExecutionResult {
+        if (!isSeatAllReplicatedPayload(payload)) {
+            return { ok: false, reason: 'Missing seat assignment payload.' };
+        }
+
+        this.teleportLocalPlayerIfAssigned(context, payload.seats);
+        return { ok: true };
+    }
+
+    private teleportLocalPlayerIfAssigned(
+        context: IScenarioActionExecutionContext,
+        seats: Record<string, ISeatAssignment>
+    ): void {
+        const localPeerId = context.localPeerId;
+        const localPlayer = context.app.localPlayer;
+        if (!localPeerId || !localPlayer) return;
+
+        const seat = seats[localPeerId];
+        if (!seat) return;
+
+        localPlayer.teleportTo(new THREE.Vector3(seat.p[0], seat.p[1], seat.p[2]), seat.y, { targetSpace: 'player' });
+    }
+}
+
+function isSeatAllReplicatedPayload(payload: unknown): payload is ISeatAllReplicatedPayload {
+    if (!payload || typeof payload !== 'object') return false;
+    const candidate = payload as { seats?: Record<string, ISeatAssignment> };
+    if (!candidate.seats || typeof candidate.seats !== 'object') return false;
+
+    for (const seat of Object.values(candidate.seats)) {
+        if (!seat || !Array.isArray(seat.p) || seat.p.length !== 3) return false;
+        if (typeof seat.y !== 'number') return false;
+        if (typeof seat.p[0] !== 'number' || typeof seat.p[1] !== 'number' || typeof seat.p[2] !== 'number') return false;
+    }
+
+    return true;
+}
 
 export class DefaultHangoutScenario implements IScenarioModule {
     public readonly id = 'default-hangout';
@@ -17,6 +132,7 @@ export class DefaultHangoutScenario implements IScenarioModule {
     public readonly kind = 'social' as const;
     public readonly maxPlayers = 16;
     private readonly objectModules: IObjectModule[] = [new DrawingSurfaceObject(), new PenToolObject(), new GrabbableCubeObject(), new DrumPadArcObject(), new ChairObject(), new DebugBeaconObject()];
+    private readonly actionProvider = new DefaultHangoutActionProvider();
     private readonly world: DefaultHangoutWorld;
 
     constructor(session: SessionRuntime, context: AppContext) {
@@ -54,6 +170,10 @@ export class DefaultHangoutScenario implements IScenarioModule {
 
     public getObjectModules(): IObjectModule[] {
         return this.objectModules;
+    }
+
+    public getActionProvider(): IScenarioActionProvider {
+        return this.actionProvider;
     }
 
     public applyConfig(_context: AppContext, config: AppContext['sessionConfig']): void {

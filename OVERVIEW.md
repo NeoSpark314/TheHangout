@@ -166,8 +166,5 @@ These names are part of the architecture. New modules should follow them instead
 
 ## What To Read Next
 
-- [ARCHITECTURE_REFACTOR_SPEC.md](ARCHITECTURE_REFACTOR_SPEC.md) for the naming and structure rules that drove the refactor
-- [ENTITY_ARCHITECTURE_PLAN.md](ENTITY_ARCHITECTURE_PLAN.md) for the entity model rationale
-- [PLAYER_AVATAR_REFACTOR_PLAN.md](PLAYER_AVATAR_REFACTOR_PLAN.md) for the unified player-avatar design
 - [OBJECT_REPLICATION_POLICY.md](OBJECT_REPLICATION_POLICY.md) for object-scoped replication policy and usage patterns
-- [MOUNTING_V2.md](MOUNTING_V2.md) for the generalized mount scaffolding and next-step migration path
+

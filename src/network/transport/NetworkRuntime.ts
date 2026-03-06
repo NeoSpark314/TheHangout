@@ -16,6 +16,9 @@ import {
     ISessionConfigUpdatePayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
+    IScenarioActionExecutePayload,
+    IScenarioActionRequestPayload,
+    IScenarioActionResultPayload,
     IOwnershipTransferPayload
 } from '../../shared/contracts/INetworkPacket';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
@@ -163,6 +166,24 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.registerRoleAwareHandler(PACKET_TYPES.FEATURE_SNAPSHOT_REQUEST, {
             host: (senderId, _payload) => {
                 this.context.runtime.replication.sendSnapshotToPeer(senderId);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.SCENARIO_ACTION_REQUEST, {
+            host: (senderId, payload) => {
+                this.authoritativeHost.handleScenarioActionRequest(senderId, payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.SCENARIO_ACTION_EXECUTE, {
+            guest: (_senderId, payload) => {
+                this.context.runtime.scenarioActions.handleReplicatedAction(payload);
+            }
+        });
+
+        this.registerRoleAwareHandler(PACKET_TYPES.SCENARIO_ACTION_RESULT, {
+            guest: (_senderId, payload) => {
+                this.context.runtime.scenarioActions.handleActionResult(payload);
             }
         });
 
@@ -471,6 +492,36 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         if (this.context.sessionId) {
             this.sendData(this.context.sessionId, PACKET_TYPES.SESSION_CONFIG_UPDATE, payload);
         }
+    }
+
+    public requestScenarioAction(actionId: string, payload?: unknown): void {
+        const scenario = this.context.runtime.session.getActiveScenario();
+        const request: IScenarioActionRequestPayload = {
+            scenarioId: scenario.id,
+            actionId,
+            payload
+        };
+
+        if (this.context.isHost) {
+            const senderId = this.context.localPlayer?.id || this.localPeerId || this.peer?.id || null;
+            const outcome = this.context.runtime.scenarioActions.executeHostRequest(senderId, request);
+            if (outcome.executePayload) {
+                this.broadcast(PACKET_TYPES.SCENARIO_ACTION_EXECUTE, outcome.executePayload);
+            }
+            this.context.runtime.scenarioActions.handleActionResult(outcome.resultPayload);
+            return;
+        }
+
+        const sessionId = this.context.sessionId;
+        if (!sessionId) {
+            this.context.runtime.notify.warn('Cannot trigger scenario action while disconnected.', {
+                source: 'scenario-action',
+                code: 'scenario_action.disconnected'
+            });
+            return;
+        }
+
+        this.sendData(sessionId, PACKET_TYPES.SCENARIO_ACTION_REQUEST, request);
     }
 
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {

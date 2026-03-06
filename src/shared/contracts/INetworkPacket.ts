@@ -121,6 +121,30 @@ export interface IPeerLatencyReportPayload {
     reportedAt: number;
 }
 
+export interface IScenarioActionRequestPayload {
+    scenarioId: string;
+    actionId: string;
+    payload?: unknown;
+    requestId?: string;
+}
+
+export interface IScenarioActionExecutePayload {
+    scenarioId: string;
+    actionId: string;
+    payload?: unknown;
+    initiatedByPeerId?: string;
+    sentAt?: number;
+}
+
+export interface IScenarioActionResultPayload {
+    scenarioId: string;
+    actionId: string;
+    ok: boolean;
+    reason?: string;
+    message?: string;
+    requestId?: string;
+}
+
 // A discriminated union of all possible packet payloads
 export type NetworkPayload =
     | IOwnershipTransferPayload
@@ -143,4 +167,7 @@ export type NetworkPayload =
     | IRttPingPayload
     | IRttPongPayload
     | IPeerLatencyReportPayload
+    | IScenarioActionRequestPayload
+    | IScenarioActionExecutePayload
+    | IScenarioActionResultPayload
     | any; // Fallback for unsupported packets

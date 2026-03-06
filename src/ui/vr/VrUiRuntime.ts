@@ -41,6 +41,7 @@ export class VrUiRuntime implements IUpdatable {
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
+    private scenarioTabRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor(private context: AppContext) {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
@@ -74,6 +75,7 @@ export class VrUiRuntime implements IUpdatable {
             this.addSessionTab();
         }
         this.addSystemTab();
+        this.addScenarioTab();
         this.addDebugTab();
         this.addHelpTab();
 
@@ -1150,6 +1152,93 @@ export class VrUiRuntime implements IUpdatable {
         this.debugStatsInterval = setInterval(updateStats, 500);
     }
 
+    private addScenarioTab() {
+        if (!this.tabPanel) return;
+
+        const scenarioTab = this.tabPanel.addTab('Scenario');
+        const container = scenarioTab.container;
+        const title = new UILabel('Scenario Actions', 90, 52, 1080, 48);
+        title.font = getFont(UITheme.typography.sizes.title, 'bold');
+        title.textColor = UITheme.colors.accent;
+        title.textAlign = 'left';
+        container.addChild(title);
+
+        const subtitle = new UILabel('', 90, 102, 1080, 36);
+        subtitle.font = getFont(UITheme.typography.sizes.small, 'bold');
+        subtitle.textColor = UITheme.colors.textMuted;
+        subtitle.textAlign = 'left';
+        container.addChild(subtitle);
+
+        const listContainer = new UIElement(90, 160, 1080, 560);
+        listContainer.backgroundColor = 'transparent';
+        listContainer.borderWidth = 0;
+        container.addChild(listContainer);
+
+        const renderActions = () => {
+            const activeScenario = this.context.runtime.session.getActiveScenario();
+            subtitle.text = `Active Scenario: ${activeScenario.displayName}`;
+            listContainer.clearChildren();
+
+            const actions = this.context.runtime.scenarioActions.listActions();
+            if (actions.length === 0) {
+                const emptyLabel = new UILabel('No scenario actions available.', 0, 0, 900, 42);
+                emptyLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                emptyLabel.textColor = UITheme.colors.textMuted;
+                emptyLabel.textAlign = 'left';
+                listContainer.addChild(emptyLabel);
+                this.tablet?.ui.markDirty();
+                return;
+            }
+
+            actions.forEach((action, index) => {
+                const rowY = index * 120;
+                const button = new UIButton(action.label, 0, rowY, 300, 62, () => {
+                    if (!action.available) return;
+                    this.context.runtime.network.requestScenarioAction(action.id);
+                });
+                button.cornerRadius = 10;
+                button.borderColor = action.available ? UITheme.colors.secondary : UITheme.colors.textMuted;
+                button.textColor = action.available ? UITheme.colors.text : UITheme.colors.textMuted;
+                button.backgroundColor = action.available ? UITheme.colors.panelBgHover : UITheme.colors.panelBg;
+                listContainer.addChild(button);
+
+                const meta = new UILabel(
+                    `Role: ${action.requiredRole}`,
+                    330, rowY + 10, 240, 30
+                );
+                meta.font = getFont(UITheme.typography.sizes.small, 'bold');
+                meta.textColor = action.requiredRole === 'admin' ? UITheme.colors.secondary : UITheme.colors.primary;
+                meta.textAlign = 'left';
+                listContainer.addChild(meta);
+
+                const description = new UILabel(
+                    action.description || '',
+                    330, rowY + 42, 700, 34
+                );
+                description.font = getFont(UITheme.typography.sizes.small);
+                description.textColor = UITheme.colors.textMuted;
+                description.textAlign = 'left';
+                listContainer.addChild(description);
+
+                if (!action.available && action.disabledReason) {
+                    const disabled = new UILabel(action.disabledReason, 740, rowY + 10, 320, 30);
+                    disabled.font = getFont(UITheme.typography.sizes.small, 'bold');
+                    disabled.textColor = UITheme.colors.secondary;
+                    disabled.textAlign = 'right';
+                    listContainer.addChild(disabled);
+                }
+            });
+
+            this.tablet?.ui.markDirty();
+        };
+
+        renderActions();
+        if (this.scenarioTabRefreshInterval) {
+            clearInterval(this.scenarioTabRefreshInterval);
+        }
+        this.scenarioTabRefreshInterval = setInterval(renderActions, 1000);
+    }
+
     private addHelpTab() {
         if (!this.tabPanel) return;
 
@@ -1350,6 +1439,10 @@ export class VrUiRuntime implements IUpdatable {
         if (this.debugStatsInterval) {
             clearInterval(this.debugStatsInterval);
             this.debugStatsInterval = null;
+        }
+        if (this.scenarioTabRefreshInterval) {
+            clearInterval(this.scenarioTabRefreshInterval);
+            this.scenarioTabRefreshInterval = null;
         }
         if (this.keyboardHandler) {
             window.removeEventListener('keydown', this.keyboardHandler);

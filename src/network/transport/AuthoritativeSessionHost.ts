@@ -10,6 +10,7 @@ import {
     IRttPingPayload,
     IOwnershipReleasePayload,
     IOwnershipRequestPayload,
+    IScenarioActionRequestPayload,
     ISessionConfigUpdatePayload
 } from '../../shared/contracts/INetworkPacket';
 import {
@@ -92,6 +93,12 @@ export class AuthoritativeSessionHost {
         dispatcher.registerHandler(PACKET_TYPES.PEER_LATENCY_REPORT, {
             handle: (senderId: string, payload: IPeerLatencyReportPayload) => {
                 this.handlePeerLatencyReport(senderId, payload);
+            }
+        });
+
+        dispatcher.registerHandler(PACKET_TYPES.SCENARIO_ACTION_REQUEST, {
+            handle: (senderId: string, payload: IScenarioActionRequestPayload) => {
+                this.handleScenarioActionRequest(senderId, payload);
             }
         });
     }
@@ -291,6 +298,14 @@ export class AuthoritativeSessionHost {
             handlePeerLatencyReport?: (peerId: string, payload: IPeerLatencyReportPayload) => void;
         };
         transport.handlePeerLatencyReport?.(senderId, payload);
+    }
+
+    public handleScenarioActionRequest(senderId: string, payload: IScenarioActionRequestPayload): void {
+        const outcome = this.context.runtime.scenarioActions.executeHostRequest(senderId, payload);
+        this.transport.sendData(senderId, PACKET_TYPES.SCENARIO_ACTION_RESULT, outcome.resultPayload);
+        if (outcome.executePayload) {
+            this.transport.broadcast(PACKET_TYPES.SCENARIO_ACTION_EXECUTE, outcome.executePayload);
+        }
     }
 
     private filterRelayedPlayerInput(payload: IStateUpdatePacket[]): IStateUpdatePacket[] {

@@ -17,6 +17,9 @@ import {
     IOwnershipRequestPayload,
     IOwnershipTransferPayload,
     IPeerDisconnectPayload,
+    IScenarioActionExecutePayload,
+    IScenarioActionRequestPayload,
+    IScenarioActionResultPayload,
     ISessionConfigUpdatePayload
 } from '../../shared/contracts/INetworkPacket';
 import { IAudioChunkPayload } from '../../shared/contracts/IVoice';
@@ -48,6 +51,9 @@ export interface PacketPayloadMap {
     [PACKET_TYPES.RTT_PING]: IRttPingPayload;
     [PACKET_TYPES.RTT_PONG]: IRttPongPayload;
     [PACKET_TYPES.PEER_LATENCY_REPORT]: IPeerLatencyReportPayload;
+    [PACKET_TYPES.SCENARIO_ACTION_REQUEST]: IScenarioActionRequestPayload;
+    [PACKET_TYPES.SCENARIO_ACTION_EXECUTE]: IScenarioActionExecutePayload;
+    [PACKET_TYPES.SCENARIO_ACTION_RESULT]: IScenarioActionResultPayload;
 }
 
 export interface NetworkEnvelope<K extends keyof PacketPayloadMap = keyof PacketPayloadMap> {
