@@ -601,9 +601,11 @@ export class VrUiRuntime implements IUpdatable {
         // Hide 3D tablet
         this.tablet.setVisible(false);
 
-        // Hide desktop controls
+        // Hide desktop controls (use shared class-based visibility like FlatUiRuntime).
         const controls = document.getElementById('desktop-controls');
-        if (controls) controls.style.display = 'none';
+        if (controls) {
+            controls.classList.add('is-hidden');
+        }
     }
 
     private hide2DMenu(): void {
@@ -618,10 +620,10 @@ export class VrUiRuntime implements IUpdatable {
             this.tablet.setVisible(!!isVR);
         }
 
-        // Restore desktop controls if not in VR
+        // Restore desktop controls if not in VR.
         const controls = document.getElementById('desktop-controls');
         if (controls && !this.context.runtime.render?.isXRPresenting()) {
-            controls.style.display = 'block';
+            controls.classList.remove('is-hidden');
         }
     }
 

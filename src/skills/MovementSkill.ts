@@ -59,24 +59,29 @@ export class MovementSkill extends Skill {
         this._currentMove = { x: 0, y: 0 };
     }
 
-    private _attachInputListeners(player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
-        const canvas = document.getElementById('app');
-        if (!canvas) return;
+    private _attachInputListeners(player: PlayerAvatarEntity, runtime: IRuntimeRegistry): boolean {
+        const canvas =
+            (runtime.render?.renderer?.domElement as HTMLElement | undefined) ||
+            (document.getElementById('app') as HTMLElement | null) ||
+            undefined;
+        if (!canvas) return false;
 
-        canvas.addEventListener('click', () => {
+        canvas.addEventListener('mousedown', (e: MouseEvent) => {
+            if (e.button !== 2) return; // Right click only
             const render = runtime.render;
             if (render && !render.isXRPresenting()) {
                 canvas.requestPointerLock();
             }
         });
+
+        return true;
     }
 
     public update(delta: number, player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
         const render = runtime.render;
 
         if (!this._inputListenersAttached) {
-            this._attachInputListeners(player, runtime);
-            this._inputListenersAttached = true;
+            this._inputListenersAttached = this._attachInputListeners(player, runtime);
         }
 
         const isVR = render.isXRPresenting();

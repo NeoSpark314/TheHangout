@@ -60,8 +60,12 @@ export class InputRuntime implements IUpdatable {
     private _initMouseLook(): void {
         document.addEventListener('mousemove', (e) => {
             const render = this.context.runtime.render;
-            const canvas = document.getElementById('app');
-            if (document.pointerLockElement === canvas && render && !render.isXRPresenting()) {
+            const appContainer = document.getElementById('app');
+            const renderCanvas = render?.renderer?.domElement || null;
+            const lockEl = document.pointerLockElement;
+            const isLockedToApp = !!appContainer && lockEl === appContainer;
+            const isLockedToCanvas = !!renderCanvas && lockEl === renderCanvas;
+            if ((isLockedToApp || isLockedToCanvas) && render && !render.isXRPresenting()) {
                 eventBus.emit(EVENTS.INTENT_LOOK, {
                     yawDeltaRad: e.movementX * this.mouseLookRadiansPerPixel,
                     pitchDeltaRad: e.movementY * this.mouseLookRadiansPerPixel
