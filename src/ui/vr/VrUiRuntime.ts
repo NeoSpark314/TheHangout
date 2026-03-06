@@ -1,7 +1,7 @@
 import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { TabletSurfaceEntity } from '../../world/entities/TabletSurfaceEntity';
-import { UITabPanel, UIElement, UIButton, UILabel, UIToggle } from '../shared/canvasui';
+import { UITabPanel, UIElement, UIButton, UILabel, UIToggle, UITab } from '../shared/canvasui';
 import { UITheme, getFont } from '../shared/UITheme';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import { EntityType } from '../../shared/contracts/IEntityState';
@@ -26,9 +26,9 @@ export class VrUiRuntime implements IUpdatable {
     private menuOrb: THREE.Mesh | null = null;
     private interactOrb: THREE.Mesh | null = null;
 
-    private peersTab: any = null; // Store UITab handle
-    private sessionTab: any = null;
-    private systemTab: any = null;
+    private peersTab: UITab | null = null;
+    private sessionTab: UITab | null = null;
+    private systemTab: UITab | null = null;
     private refreshPeersList: (() => void) | null = null;
     private peersRefreshCleanup: (() => void) | null = null;
     private onVoiceStateHandler: (() => void) | null = null;
@@ -57,7 +57,7 @@ export class VrUiRuntime implements IUpdatable {
         this.controllerCursor = new ControllerPointer('vr-menu-controller-cursor');
     }
 
-    private shouldRefreshTabUi(tab: { container: UIElement } | null): boolean {
+    private shouldRefreshTabUi(tab: UITab | null): boolean {
         if (!this.tablet || !tab || !this.context.isMenuOpen) {
             return false;
         }
@@ -90,7 +90,7 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     private registerTabRefresh(
-        tabGetter: () => { container: UIElement } | null,
+        tabGetter: () => UITab | null,
         refresh: () => void,
         options: {
             events?: string[];

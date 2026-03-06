@@ -14,6 +14,9 @@ export class UIPointerSkill extends Skill {
     // Desktop mouse properties
     private mouseLine: THREE.Line;
     private mouseDot: THREE.Mesh;
+    private readonly tempOrigin = new THREE.Vector3();
+    private readonly tempQuat = new THREE.Quaternion();
+    private readonly tempDirection = new THREE.Vector3();
 
     private _handlers: Array<{ event: string, handler: any }> = [];
 
@@ -136,9 +139,9 @@ export class UIPointerSkill extends Skill {
                     const pos = handState.pointerPose.position || handState.pose.position;
                     const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
-                    const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
-                    const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
-                    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+                    const origin = this.tempOrigin.set(pos.x, pos.y, pos.z);
+                    const quat = this.tempQuat.set(rot.x, rot.y, rot.z, rot.w);
+                    const direction = this.tempDirection.set(0, 0, -1).applyQuaternion(quat);
 
                     this.raycaster.set(origin, direction);
 
@@ -212,9 +215,9 @@ export class UIPointerSkill extends Skill {
         const pos = handState.pointerPose.position || handState.pose.position;
         const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
 
-        const origin = new THREE.Vector3(pos.x, pos.y, pos.z);
-        const quat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
-        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+        const origin = this.tempOrigin.set(pos.x, pos.y, pos.z);
+        const quat = this.tempQuat.set(rot.x, rot.y, rot.z, rot.w);
+        const direction = this.tempDirection.set(0, 0, -1).applyQuaternion(quat);
 
         this.raycaster.set(origin, direction);
 
