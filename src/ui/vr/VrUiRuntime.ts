@@ -39,6 +39,7 @@ export class VrUiRuntime implements IUpdatable {
     private canvasClickHandler: ((e: MouseEvent) => void) | null = null;
     private canvasMouseLeaveHandler: ((e: MouseEvent) => void) | null = null;
     private debugStatsInterval: ReturnType<typeof setInterval> | null = null;
+    private sessionMicMeterInterval: ReturnType<typeof setInterval> | null = null;
     private scenarioRefreshCleanup: (() => void) | null = null;
     private readonly tabVisibleRefreshWatchers: Array<{
         tabGetter: () => UITab | null;
@@ -925,6 +926,19 @@ export class VrUiRuntime implements IUpdatable {
         micTitle.textAlign = 'left';
         systemContainer.addChild(micTitle);
 
+        const micMeterTrack = new UIElement(360, 90, 200, 28);
+        micMeterTrack.backgroundColor = UITheme.colors.panelBg;
+        micMeterTrack.borderColor = UITheme.colors.textMuted;
+        micMeterTrack.borderWidth = 2;
+        micMeterTrack.cornerRadius = 8;
+        systemContainer.addChild(micMeterTrack);
+
+        const micMeterFill = new UIElement(0, 0, 0, 28);
+        micMeterFill.backgroundColor = UITheme.colors.primary;
+        micMeterFill.borderWidth = 0;
+        micMeterFill.cornerRadius = 8;
+        micMeterTrack.addChild(micMeterFill);
+
         let micPage = 0;
         const micsPerPage = 6;
         const renderMicSelector = async () => {
@@ -1043,6 +1057,23 @@ export class VrUiRuntime implements IUpdatable {
         this.sessionMicRefreshHandler = () => { void renderMicSelector(); };
         eventBus.on(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
         void renderMicSelector();
+
+        if (this.sessionMicMeterInterval) {
+            clearInterval(this.sessionMicMeterInterval);
+            this.sessionMicMeterInterval = null;
+        }
+        let smoothedLevel = 0;
+        this.sessionMicMeterInterval = setInterval(() => {
+            if (!this.shouldRefreshTabUi(this.systemTab)) return;
+            const raw = this.context.voiceEnabled ? media.getLocalVolume() : 0;
+            const gated = raw < 0.03 ? 0 : raw;
+            smoothedLevel = smoothedLevel * 0.7 + gated * 0.3;
+            const nextWidth = Math.round(200 * Math.max(0, Math.min(1, smoothedLevel)));
+            if (nextWidth !== micMeterFill.width) {
+                micMeterFill.width = nextWidth;
+                this.tablet?.ui.markDirty();
+            }
+        }, 80);
 
         const leaveBtn = new UIButton("Leave Session", 440, 630, 400, 80, () => {
             const render = this.context.runtime.render;
@@ -1666,6 +1697,10 @@ export class VrUiRuntime implements IUpdatable {
         if (this.scenarioRefreshCleanup) {
             this.scenarioRefreshCleanup();
             this.scenarioRefreshCleanup = null;
+        }
+        if (this.sessionMicMeterInterval) {
+            clearInterval(this.sessionMicMeterInterval);
+            this.sessionMicMeterInterval = null;
         }
         if (this.sessionMicRefreshHandler) {
             eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
