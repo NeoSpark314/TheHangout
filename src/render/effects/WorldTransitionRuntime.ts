@@ -115,6 +115,7 @@ export class WorldTransitionRuntime implements IUpdatable {
     private totalTimeSec = 0;
     private pendingSwitch: (() => void) | null = null;
     private switchTriggered = false;
+    private hudVisibleBeforeTransition: boolean | null = null;
     private readonly transitionMaterial: THREE.ShaderMaterial;
 
     constructor(private readonly context: AppContext) {
@@ -212,6 +213,11 @@ export class WorldTransitionRuntime implements IUpdatable {
         const scene = this.context.runtime.render?.scene;
         if (!scene) return;
         scene.overrideMaterial = this.transitionMaterial;
+        const hudGroup = this.context.runtime.hud?.group;
+        if (hudGroup) {
+            this.hudVisibleBeforeTransition = hudGroup.visible;
+            hudGroup.visible = false;
+        }
         if (typeof document !== 'undefined') {
             document.body.classList.add('world-transition-active');
         }
@@ -222,6 +228,11 @@ export class WorldTransitionRuntime implements IUpdatable {
         if (scene && scene.overrideMaterial === this.transitionMaterial) {
             scene.overrideMaterial = null;
         }
+        const hudGroup = this.context.runtime.hud?.group;
+        if (hudGroup && this.hudVisibleBeforeTransition !== null) {
+            hudGroup.visible = this.hudVisibleBeforeTransition;
+        }
+        this.hudVisibleBeforeTransition = null;
         if (typeof document !== 'undefined') {
             document.body.classList.remove('world-transition-active');
         }
