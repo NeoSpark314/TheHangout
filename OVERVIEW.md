@@ -75,8 +75,9 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - Content modules can also wrap low-level engine entities. For example, [PenToolObject.ts](src/content/objects/PenToolObject.ts) is the content-facing module, while [PenToolEntity.ts](src/world/entities/PenToolEntity.ts) remains the low-level replicated primitive it spawns.
 - The same pattern now applies to default physics props: [GrabbableCubeObject.ts](src/content/objects/GrabbableCubeObject.ts) wraps the low-level grabbable physics-entity spawn path for scenario-owned cubes.
 - Shared drawing is now content-owned: [DrawingSurfaceObject.ts](src/content/objects/DrawingSurfaceObject.ts) is a replicated object instance that owns stroke state and late-join snapshots.
+- [DrawingRuntime.ts](src/content/runtime/DrawingRuntime.ts) provides a thin facade for routing commands to the active, scenario-owned `drawing-surface` object instance.
 - The drum pads now follow the same content-owned model: [DrumPadArcObject.ts](src/content/objects/DrumPadArcObject.ts) is a self-contained replicated object that owns its own meshes, colliders, hit detection, audio, and sync.
-- Local mounting now has an explicit state-machine-shaped runtime API (`request/grant/reject/release`) exposed through object runtime context, while preserving backward-compatible `mountLocal/unmountLocal` calls for existing objects.
+- Local mounting now has an explicit state-machine-shaped runtime API (`request/grant/reject/release`) managed by [MountRuntime.ts](src/content/runtime/MountRuntime.ts) and exposed through object runtime context, which also gracefully handles input-driven unmounting.
 - Scenario-owned runtime state should either be tracked through `ObjectInstanceRegistry` or be explicitly cleaned up in the scenario's `unload()` path.
 
 ### Networking
@@ -103,11 +104,12 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - Dedicated/headless sessions run the same `SessionRuntime` lifecycle without a render scene, so render-only setup should stay separate from gameplay/state setup.
 - Contributors writing new objects should start from `IObjectRuntimeContext` plus `BaseObjectInstance` / `BaseReplicatedObjectInstance`, not from raw `AppContext`.
 
-### Input and Tracking
+### Input, Tracking, and Skills
 
 - Tracking state is owned by providers such as [DesktopTrackingProvider.ts](src/input/providers/DesktopTrackingProvider.ts) and [XRTrackingProvider.ts](src/input/providers/XRTrackingProvider.ts).
 - [InputRuntime.ts](src/input/controllers/InputRuntime.ts) translates device state into gameplay-facing intents and interactions.
 - Local interaction logic should read tracking state from the tracking runtime, not from duplicated mirrors on entities.
+- General avatar interaction capabilities (e.g. `GrabSkill`, `MovementSkill`, `UIPointerSkill`) live in `src/skills/`. Skills are stateful logic units attached to the local player to interpret intentional inputs and translate them into systemic effects.
 
 ### Rendering and Views
 
