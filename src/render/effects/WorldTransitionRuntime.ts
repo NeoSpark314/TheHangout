@@ -135,8 +135,6 @@ export class WorldTransitionRuntime implements IUpdatable {
             depthTest: true,
             depthWrite: false,
             fog: false,
-            skinning: true,
-            morphTargets: true,
             side: THREE.DoubleSide
         });
 

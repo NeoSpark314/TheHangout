@@ -5,6 +5,7 @@ import { IInteractable } from '../shared/contracts/IInteractable';
 import { IHoldable } from '../shared/contracts/IHoldable';
 import { isHoldable, isInteractable, isMovableHoldable } from '../shared/utils/TypeGuards';
 import type { IRuntimeRegistry } from '../app/AppContext';
+import type { IEntity } from '../shared/contracts/IEntity';
 import eventBus from '../app/events/EventBus';
 import { EVENTS } from '../shared/constants/Constants';
 import { IHandIntentPayload } from '../shared/contracts/IIntents';
@@ -64,8 +65,7 @@ export class GrabSkill extends Skill {
                 const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
                 const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
 
-                let mesh = (nearest as any).view?.mesh;
-                if (!mesh && (nearest as any).mesh) mesh = (nearest as any).mesh;
+                let mesh = (nearest as unknown as IEntity).view?.mesh ?? (nearest as unknown as IEntity).mesh;
 
                 const offsetPos = new THREE.Vector3();
                 const offsetQuat = new THREE.Quaternion();

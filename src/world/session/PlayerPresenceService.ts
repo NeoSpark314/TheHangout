@@ -1,4 +1,5 @@
 import { EntityFactory } from '../spawning/EntityFactory';
+import { PlayerAvatarEntity } from '../entities/PlayerAvatarEntity';
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants.ts';
@@ -56,7 +57,7 @@ export class PlayerPresenceService {
         console.log(`[PlayerPresenceService] Removing entity for disconnected peer: ${peerId} (type: ${entity.type})`);
 
         const isPlayer = entity.type === EntityType.PLAYER_AVATAR;
-        const name = isPlayer ? (entity as any).name : 'A player'; // Handle gracefully until IPlayerAvatarEntity interface is wired
+        const name = isPlayer ? (entity as PlayerAvatarEntity).name : 'A player'; // Handle gracefully until IPlayerAvatarEntity interface is wired
 
         // Critical: Always trigger destruction and removal
         runtime.entity.removeEntity(peerId);

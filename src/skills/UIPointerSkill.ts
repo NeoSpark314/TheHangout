@@ -223,7 +223,7 @@ export class UIPointerSkill extends Skill {
         const session = render.getXRSession();
         if (!session) return;
 
-        const source = session.inputSources.find((s) => s.handedness === hand && !!s.gamepad);
+        const source = Array.from(session.inputSources).find((s: XRInputSource) => s.handedness === hand && !!s.gamepad);
         const gamepad = source?.gamepad;
         if (!gamepad) return;
 

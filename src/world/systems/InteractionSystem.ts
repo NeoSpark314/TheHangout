@@ -106,8 +106,7 @@ export class InteractionSystem {
                     }
                 } else {
                     // Fallback to standard mesh calculation
-                    let mesh = (entity as any).view?.mesh;
-                    if (!mesh && (entity as any).mesh) mesh = (entity as any).mesh;
+                    let mesh = entity.view?.mesh ?? entity.mesh;
                     if (!mesh) continue;
 
                     // Ensure the world matrix is up to date for this frame
