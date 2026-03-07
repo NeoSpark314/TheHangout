@@ -1397,15 +1397,15 @@ export class VrUiRuntime implements IUpdatable {
             this.debugStatsInterval = null;
         }
 
-        const debugManager = this.context.runtime.debugRender;
-        const debugSettings = debugManager?.getSettings();
+        const debugRenderer = this.context.runtime.debugRender;
+        const debugSettings = debugRenderer?.getSettings();
 
         const overlayToggle = new UIToggle(
             "Physics Debug Overlay",
             debugSettings?.enabled ?? false,
             90, 70, 620, 52,
             (checked) => {
-                debugManager?.setEnabled(checked);
+                debugRenderer?.setEnabled(checked);
                 this.tablet?.ui.markDirty();
             }
         );

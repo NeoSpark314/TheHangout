@@ -165,7 +165,7 @@ class ChairInstance extends BaseReplicatedObjectInstance {
                 canMount: (playerId, occupiedBy) => !occupiedBy || occupiedBy === playerId,
                 onOccupancyChanged: () => this.applySeatVisualState()
             },
-            (eventType, data, options) => this.emitSyncEvent(eventType, data, options),
+            (eventType, data, options) => this.emitSyncEvent(eventType, data as Record<string, any>, options),
             CHAIR_MOUNT_EVENTS
         );
     }

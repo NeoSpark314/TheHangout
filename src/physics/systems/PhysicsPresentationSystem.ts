@@ -11,13 +11,12 @@ export class PhysicsPresentationSystem implements IUpdatable {
     constructor(private context: AppContext) { }
 
     public update(delta: number, _frame?: XRFrame): void {
-        const entityManager = this.context.runtime.entity;
-        if (!entityManager) return;
+        const entityRegistry = this.context.runtime.entity;
+        if (!entityRegistry) return;
 
-        for (const entity of entityManager.entities.values()) {
+        for (const entity of entityRegistry.entities.values()) {
             if (entity.type !== EntityType.PHYSICS_PROP) continue;
             (entity as PhysicsPropEntity).present(delta);
         }
     }
 }
-

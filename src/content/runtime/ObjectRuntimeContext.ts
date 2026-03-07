@@ -6,8 +6,9 @@ import type {
     IPhysicsBodyHandle,
     IPhysicsColliderHandle
 } from '../contracts/IObjectRuntimeContext';
+import type { IVector3 } from '../../shared/contracts/IMath';
 import type { IObjectSpawnConfig } from '../contracts/IObjectModule';
-import type { TLocalMountStateReason } from '../contracts/IMounting';
+import type { ILocalMountBinding, TLocalMountStateReason } from '../contracts/IMounting';
 import type { IObjectReplicationEmitOptions } from '../contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
 
@@ -37,7 +38,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.physics = {
-            createStaticCuboidCollider: (hx: number, hy: number, hz: number, position: any, rotation: any) =>
+            createStaticCuboidCollider: (hx: number, hy: number, hz: number, position: IVector3, rotation?: { x: number; y: number; z: number; w: number }) =>
                 this.app.runtime.physics.createStaticCuboidCollider(hx, hy, hz, position, rotation),
             registerInteractionCollider: (collider: any, target: any) => {
                 this.app.runtime.physics.registerInteractionCollider(collider, target as any);
@@ -51,19 +52,19 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.audio = {
-            playDrumPadHit: (options: any) => {
+            playDrumPadHit: (options: { frequency: number; intensity: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playDrumPadHit(options);
             },
-            playSequencerBeat: (options: any) => {
+            playSequencerBeat: (options: { beat: 'kick' | 'snare' | 'hat' | 'bass'; intensity?: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playSequencerBeat(options);
             },
-            playMelodyNote: (options: any) => {
+            playMelodyNote: (options: { frequency: number; intensity?: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playMelodyNote(options);
             },
-            playArpNote: (options: any) => {
+            playArpNote: (options: { frequency: number; intensity?: number; brightness?: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playArpNote(options);
             },
-            playFxSweep: (options: any) => {
+            playFxSweep: (options: { down?: boolean; intensity?: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playFxSweep(options);
             }
         };
@@ -78,18 +79,18 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.sync = {
-            emit: (eventType: string, data: any, options?: IObjectReplicationEmitOptions) => {
+            emit: (eventType: string, data: Record<string, any>, options?: IObjectReplicationEmitOptions) => {
                 this.app.runtime.session.emitObjectInstanceEvent(this.instanceId, eventType, data, options);
             }
         };
 
         this.mount = {
-            requestLocalMount: (options: any) => this.app.runtime.mount.requestLocalMount(options),
-            grantLocalMount: (options: any) => this.app.runtime.mount.grantLocalMount(options),
+            requestLocalMount: (options: ILocalMountBinding) => this.app.runtime.mount.requestLocalMount(options),
+            grantLocalMount: (options: ILocalMountBinding) => this.app.runtime.mount.grantLocalMount(options),
             rejectLocalMount: () => this.app.runtime.mount.rejectLocalMount(),
             releaseLocalMount: (ownerInstanceId?: string, reason?: TLocalMountStateReason) =>
                 this.app.runtime.mount.releaseLocalMount(ownerInstanceId, reason),
-            mountLocal: (options: any) => this.app.runtime.mount.mountLocal(options),
+            mountLocal: (options: ILocalMountBinding) => this.app.runtime.mount.mountLocal(options),
             unmountLocal: (ownerInstanceId?: string, reason?: TLocalMountStateReason) =>
                 this.app.runtime.mount.unmountLocal(ownerInstanceId, reason),
             isMountedLocal: (ownerInstanceId?: string) => this.app.runtime.mount.isMountedLocal(ownerInstanceId),

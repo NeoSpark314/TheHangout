@@ -20,7 +20,7 @@ export abstract class BaseReplicatedObjectInstance extends BaseObjectInstance im
         this.replicationKey = `object:${moduleId}:${context.instanceId}`;
     }
 
-    protected emitSyncEvent(eventType: string, data: unknown, options?: IObjectReplicationEmitOptions): void {
+    protected emitSyncEvent(eventType: string, data: Record<string, any>, options?: IObjectReplicationEmitOptions): void {
         this.context.sync.emit(eventType, data, options);
     }
 

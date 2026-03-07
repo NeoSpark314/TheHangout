@@ -5,6 +5,8 @@ import type { IObjectSpawnConfig } from './IObjectModule';
 import type { IObjectReplicationEmitOptions } from './IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
 import type { ILocalMountBinding, ILocalMountStatus, TLocalMountStateReason } from './IMounting';
+import type { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
+import type { ITrackingState } from '../../shared/contracts/ITrackingProvider';
 
 export interface IPhysicsBodyHandle {
     readonly id: number;
@@ -67,12 +69,12 @@ export interface IObjectRuntimeContext {
     };
 
     tracking: {
-        getState(): any;
-        getLocalPlayer(): AppContext['localPlayer'];
+        getState(): ITrackingState;
+        getLocalPlayer(): PlayerAvatarEntity | null;
     };
 
     sync: {
-        emit(eventType: string, data: unknown, options?: IObjectReplicationEmitOptions): void;
+        emit(eventType: string, data: Record<string, any>, options?: IObjectReplicationEmitOptions): void;
     };
 
     mount: {

@@ -22,14 +22,14 @@ export class InteractionSystem {
         const hits = this.context.runtime.render.raycast(ray.origin, ray.direction, maxDist);
         if (hits.length === 0) return null;
 
-        const entityManager = this.context.runtime.entity;
+        const entityRegistry = this.context.runtime.entity;
 
         for (const hit of hits) {
             let hitObj: THREE.Object3D | null = hit.object;
             while (hitObj) {
                 const entityId = hitObj.userData.entityId;
                 if (entityId) {
-                    const entity = entityManager.getEntity(entityId);
+                    const entity = entityRegistry.getEntity(entityId);
                     if (entity && isHoldable(entity) && isInteractable(entity) && !entity.heldBy) {
                         return {
                             interactable: entity as unknown as IInteractable,

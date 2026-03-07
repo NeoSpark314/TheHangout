@@ -184,10 +184,9 @@ export class PhysicsRuntime {
         physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
-        const entityManager = this.context.runtime.entity;
-        if (entityManager) {
-            entityManager.addEntity(physicsEntity);
-        }
+        const entityRegistry = this.context.runtime.entity;
+        if (!entityRegistry) return null;
+        entityRegistry.addEntity(physicsEntity);
 
         return physicsEntity;
     }
