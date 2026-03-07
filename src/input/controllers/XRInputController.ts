@@ -27,7 +27,7 @@ type XRJointPoseCapableFrame = XRFrame & {
     getJointPose(joint: XRJointSpace, baseSpace: XRSpace): XRJointPose | null;
 };
 
-export class XRInputManager {
+export class XRInputController {
     public move: { x: number, y: number } = { x: 0, y: 0 };
     public turn: number = 0;
     private menuPressed = false;

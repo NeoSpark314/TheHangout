@@ -1,4 +1,4 @@
-export class KeyboardManager {
+export class KeyboardController {
     private keyboard: Record<string, boolean> = {};
     private justPressed: Set<string> = new Set();
 

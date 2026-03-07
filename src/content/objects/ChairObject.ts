@@ -7,7 +7,7 @@ import type { IHoldable } from '../../shared/contracts/IHoldable';
 import type { IInteractable } from '../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
 import type { IVector3 } from '../../shared/contracts/IMath';
-import type { IMountableObject } from '../contracts/IMountableObject';
+
 import type { ILocalMountBinding } from '../contracts/IMounting';
 import {
     AuthoritativeSingleMountReplicator,
@@ -121,7 +121,7 @@ class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
     }
 }
 
-class ChairInstance extends BaseReplicatedObjectInstance implements IMountableObject {
+class ChairInstance extends BaseReplicatedObjectInstance {
     private static readonly MOUNT_POINT_ID = 'seat-0';
 
     public readonly replicationPolicy: IObjectReplicationPolicy = {
@@ -190,19 +190,19 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
         }
     }
 
-    public canMount(playerId: string): boolean {
+    private canMount(playerId: string): boolean {
         return this.mountReplication.canMount(playerId);
     }
 
-    public mount(playerId: string): boolean {
+    private mount(playerId: string): boolean {
         return this.mountReplication.mount(playerId);
     }
 
-    public unmount(playerId: string): void {
+    private unmount(playerId: string): void {
         this.mountReplication.unmount(playerId, 'released');
     }
 
-    public isOccupied(): boolean {
+    private isOccupied(): boolean {
         return this.mountReplication.isOccupied();
     }
 
@@ -264,7 +264,7 @@ class ChairInstance extends BaseReplicatedObjectInstance implements IMountableOb
         const backMesh = this.seatEntity.mesh.children[1] as THREE.Mesh | undefined;
         const seatMat = seatMesh?.material as THREE.MeshStandardMaterial | undefined;
         const backMat = backMesh?.material as THREE.MeshStandardMaterial | undefined;
-        const occupied = !!this.occupiedBy;
+        const occupied = !!this.mountReplication.getOccupiedBy();
         const emissiveIntensity = occupied ? 0.18 : (this.hovered ? 0.1 : 0.03);
         const emissiveColor = occupied ? 0x00ff99 : 0x003344;
 

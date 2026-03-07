@@ -1,7 +1,7 @@
 import { INPUT_CONFIG } from '../../shared/constants/Constants';
 import { IStickShapeConfig, shapeStickRadial } from './StickInputUtils';
 
-export class GamepadManager {
+export class GamepadController {
     public move = { x: 0, y: 0 };
     public look = { x: 0, y: 0 };
     public buttons: Record<number, boolean> = {};

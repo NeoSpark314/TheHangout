@@ -1,7 +1,7 @@
 import { VirtualJoystick } from './VirtualJoystick';
 import { IStickShapeConfig, shapeStickRadial } from './StickInputUtils';
 
-export class MobileJoystickManager {
+export class MobileJoystickController {
     public move: VirtualJoystick | null = null;
     public look: VirtualJoystick | null = null;
     private readonly moveShape: IStickShapeConfig = { innerDeadzone: 0.1, outerDeadzone: 0.98, exponent: 1.5 };

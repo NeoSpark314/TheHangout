@@ -6,12 +6,12 @@ import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IMoveIntentPayload, ILookIntentPayload, IHandIntentPayload, IVRSnapTurnPayload } from '../../shared/contracts/IIntents';
 
-import { KeyboardManager } from './KeyboardController';
-import { GamepadManager } from './GamepadController';
-import { MobileJoystickManager } from './MobileJoystickController';
+import { KeyboardController } from './KeyboardController';
+import { GamepadController } from './GamepadController';
+import { MobileJoystickController } from './MobileJoystickController';
 import { NonVRReachAssistController } from './DesktopReachAssistController';
 import { NonVRInteractionController } from './DesktopInteractionController';
-import { XRInputManager } from './XRInputController';
+import { XRInputController } from './XRInputController';
 import { GestureUtils } from '../../shared/utils/GestureUtils';
 import { GrabSkill } from '../../skills/GrabSkill';
 
@@ -22,12 +22,12 @@ export type DesktopInputMode = 'keyboardMouse' | 'controller';
  * Provides a unified interface for querying movement semantic intentions and handling VR pointers.
  */
 export class InputRuntime implements IUpdatable {
-    public keyboard: KeyboardManager;
-    public gamepad: GamepadManager;
-    public mobileJoystick: MobileJoystickManager;
+    public keyboard: KeyboardController;
+    public gamepad: GamepadController;
+    public mobileJoystick: MobileJoystickController;
     public nonVRReachAssist: NonVRReachAssistController;
     public nonVRInteraction: NonVRInteractionController;
-    public xrInput: XRInputManager;
+    public xrInput: XRInputController;
     private desktopInputMode: DesktopInputMode = 'keyboardMouse';
     private lastDesktopInputAt: Record<DesktopInputMode, number> = {
         keyboardMouse: 0,
@@ -46,12 +46,12 @@ export class InputRuntime implements IUpdatable {
     private readonly mobileLookMaxRadiansPerSec = 1.1;
 
     constructor(private context: AppContext) {
-        this.keyboard = new KeyboardManager();
-        this.gamepad = new GamepadManager();
-        this.mobileJoystick = new MobileJoystickManager();
+        this.keyboard = new KeyboardController();
+        this.gamepad = new GamepadController();
+        this.mobileJoystick = new MobileJoystickController();
         this.nonVRReachAssist = new NonVRReachAssistController(context);
         this.nonVRInteraction = new NonVRInteractionController(context);
-        this.xrInput = new XRInputManager(context);
+        this.xrInput = new XRInputController(context);
 
         this._initMouseLook();
         this._initDesktopInputModeTracking();
