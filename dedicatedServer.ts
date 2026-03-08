@@ -1,11 +1,4 @@
 // dedicatedServer.ts — Local Node.js server for TheHangout
-// Serves the built app + runs PeerJS signaling locally.
-//
-// Usage:
-//   npm run build    # Build the client first
-//   npm run serve    # Start this server
-//   Open https://localhost:9000
-
 import express from 'express';
 import https from 'https';
 import fs from 'fs';
@@ -14,61 +7,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
 import { getCertificate } from '@vitejs/plugin-basic-ssl';
-import multer from 'multer';
 
 import { HeadlessSession } from './src/server/HeadlessSession.ts';
 import { DedicatedSessionTransport } from './src/server/DedicatedSessionTransport.ts';
-import { PACKET_TYPES } from './src/shared/constants/Constants.ts';
-import {
-    IDesktopSourcesStatusRequestPayload,
-    IDesktopSourcesStatusResponsePayload,
-    IDesktopStreamSummonPayload,
-    IDesktopStreamStopPayload
-} from './src/shared/contracts/INetworkPacket.ts';
-
-const activeSessions = new Map<string, HeadlessSession>(); // sessionId -> HeadlessSession
-const globalDesktopSources = new Map<string, WebSocket>(); // key -> source websocket
-const desktopSourceBySocket = new WeakMap<WebSocket, string>(); // source websocket -> key
-const desktopRoutes = new Map<string, { sessionId: string; name?: string; summonedBy: string; summonerName?: string; anchor?: [number, number, number]; quaternion?: [number, number, number, number] }>(); // key -> route metadata
-const capturingKeys = new Set<string>(); // key -> currently broadcasting
-const relaySourceSubscriptions = new Map<WebSocket, { sessionId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
+import { AssetController } from './src/server/assets/AssetController.ts';
+import { DesktopRelayManager } from './src/server/DesktopRelayManager.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const activeSessions = new Map<string, HeadlessSession>();
 
-// --- Assets Storage Setup ---
-const ASSETS_DIR = path.join(__dirname, 'storage', 'assets');
-const THUMBS_DIR = path.join(ASSETS_DIR, 'thumbnails');
-if (!fs.existsSync(ASSETS_DIR)) {
-    fs.mkdirSync(ASSETS_DIR, { recursive: true });
-}
-if (!fs.existsSync(THUMBS_DIR)) {
-    fs.mkdirSync(THUMBS_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        if (file.fieldname === 'thumbnail') {
-            cb(null, THUMBS_DIR);
-        } else {
-            cb(null, ASSETS_DIR);
-        }
-    },
-    filename: (req, file, cb) => {
-        // Keep original filename but prevent directory traversal
-        const safeName = path.basename(file.originalname);
-        if (file.fieldname === 'thumbnail') {
-            // Force .webp for thumbnails if we want, or just keep same name
-            cb(null, safeName + '.webp');
-        } else {
-            cb(null, safeName);
-        }
-    }
-});
-const upload = multer({ storage });
-
-// --- CLI args (with env var fallback) ---
+// --- CLI args ---
 const { values: args } = parseArgs({
     options: {
         port: { type: 'string', short: 'p', default: process.env.PORT || '443' },
@@ -81,723 +31,151 @@ const { values: args } = parseArgs({
 const PORT = parseInt(args.port as string);
 
 // --- SSL Setup ---
-// Use custom certs via --key/--cert, or fallback to basic-ssl cert generation.
-const customKey = args.key || null;
-const customCert = args.cert || null;
-
 async function resolveSslOptions(): Promise<https.ServerOptions> {
-    if (customKey && customCert) {
-        console.log(`[Server] Using custom SSL cert: ${customCert}`);
+    if (args.key && args.cert) {
         return {
-            key: fs.readFileSync(customKey as string),
-            cert: fs.readFileSync(customCert as string)
+            key: fs.readFileSync(args.key as string),
+            cert: fs.readFileSync(args.cert as string)
         };
     }
-
     const certDir = path.join(__dirname, 'node_modules', '.vite', 'basic-ssl');
-    try {
-        const pem = await getCertificate(certDir);
-        console.log(`[Server] Using generated basic-ssl certificate (${certDir}).`);
-        // basic-ssl emits a PEM bundle containing both key and cert.
-        return { key: pem, cert: pem };
-    } catch (error) {
-        console.error('[Server] Failed to load/generate basic-ssl certificate.', error);
-        throw error;
-    }
+    const pem = await getCertificate(certDir);
+    return { key: pem, cert: pem };
 }
 
 const sslOptions = await resolveSslOptions();
 
+// --- Helpers ---
 function sendPacketToSession(sessionId: string, type: number, payload: unknown): void {
     const session = activeSessions.get(sessionId);
     if (!session) return;
     const envelope = JSON.stringify({ type, payload });
-    const envelopeLength = envelope.length;
     for (const ws of session.network.connections.values()) {
-        if (ws?.readyState === 1) {
-            ws.send(envelope);
-            session.network.bytesSent += envelopeLength;
-            session.context.runtime.diagnostics.recordNetworkSent(envelopeLength);
-        }
+        if (ws?.readyState === 1) ws.send(envelope);
     }
 }
 
 function sendBinaryToSession(sessionId: string, data: Buffer): void {
     const session = activeSessions.get(sessionId);
     if (!session) return;
-    const dataLength = data.length;
     for (const ws of session.network.connections.values()) {
-        if (ws?.readyState === 1) {
-            ws.send(data);
-            session.network.bytesSent += dataLength;
-            session.context.runtime.diagnostics.recordNetworkSent(dataLength);
-        }
+        if (ws?.readyState === 1) ws.send(data);
     }
 }
 
-function buildSourceStatusPayload(sessionId: string, requestedKeys: string[]): IDesktopSourcesStatusResponsePayload {
-    const statuses: Record<string, boolean> = {};
-    const requestedSet = new Set(requestedKeys);
-
-    // 1. Report online status for anything the client specifically asked about
-    for (const key of requestedKeys) {
-        statuses[key] = globalDesktopSources.has(key);
-    }
-
-    // 2. Identify all keys currently active in THIS session
-    const sessionActiveKeys: string[] = [];
-    const activeNames: Record<string, string> = {};
-    const activeSummonerNames: Record<string, string> = {};
-
-    for (const [key, route] of desktopRoutes.entries()) {
-        if (route.sessionId === sessionId) {
-            sessionActiveKeys.push(key);
-            activeNames[key] = route.name || key;
-            activeSummonerNames[key] = route.summonerName || 'Someone';
-            // Also ensure online status is reported for these so client knows they're available
-            statuses[key] = globalDesktopSources.has(key);
-        }
-    }
-
-    // 3. Capturing keys (union of requested + session-active)
-    const allRelevantKeys = new Set([...requestedKeys, ...sessionActiveKeys]);
-    const capturing = Array.from(allRelevantKeys).filter(k => capturingKeys.has(k));
-
-    const response = {
-        statuses,
-        activeKeys: sessionActiveKeys,
-        capturingKeys: capturing,
-        activeNames,
-        activeSummonerNames
-    };
-    return response;
-}
-
-function sendSourceStatusToRelayClient(ws: WebSocket, sessionId: string, keys: string[]): void {
-    if (ws.readyState !== 1) return;
-    const payload = buildSourceStatusPayload(sessionId, keys);
-    ws.send(JSON.stringify({
-        type: PACKET_TYPES.DESKTOP_SOURCES_STATUS_RESPONSE,
-        payload
-    }));
-}
-
-function notifySubscribedClientsForKey(key: string): void {
-    const route = desktopRoutes.get(key);
-    const isWatched = !!route; // If it has a route, it's summoned in a session
-
-    // 1. Notify the source itself about its watch status
-    const sourceWs = globalDesktopSources.get(key);
-    if (sourceWs && sourceWs.readyState === 1) {
-        sourceWs.send(JSON.stringify({
-            type: 'watch-status',
-            key,
-            isWatched
-        }));
-    }
-
-    // 2. Notify relay clients (the UI)
-    for (const [ws, sub] of relaySourceSubscriptions.entries()) {
-        const isRequested = sub.keys.has(key);
-        const isInSession = route && route.sessionId === sub.sessionId;
-
-        if (isRequested || isInSession) {
-            sendSourceStatusToRelayClient(ws, sub.sessionId, Array.from(sub.keys));
-        }
-    }
-}
-
-function stopRoutedStreamsForSession(sessionId: string): void {
-    for (const [key, route] of Array.from(desktopRoutes.entries())) {
-        if (route.sessionId !== sessionId) continue;
-        desktopRoutes.delete(key);
-        notifySubscribedClientsForKey(key);
-    }
-}
+// --- Managers ---
+const relayManager = new DesktopRelayManager(activeSessions, sendPacketToSession, sendBinaryToSession);
+const assetController = new AssetController(__dirname);
 
 // --- Express App ---
 const app = express();
-
-// API: Server info endpoint for client auto-detection
-app.get('/api/server-info', (req, res) => {
-    res.json({
-        local: true,
-        peerPath: '/peerjs',
-        version: process.env.npm_package_version || '1.0.0alpha'
-    });
-});
-
 app.use(express.json());
 
+// API: Server info
+app.get('/api/server-info', (req, res) => {
+    res.json({ local: true, peerPath: '/peerjs', version: process.env.npm_package_version || '1.0.0' });
+});
+
+// Admin API
 app.get('/api/admin/sessions', (req, res) => {
-    const data = [];
-    for (const [id, session] of activeSessions.entries()) {
-        data.push(session.getStats());
-    }
-    res.json(data);
+    res.json(Array.from(activeSessions.values()).map(s => s.getStats()));
 });
 
 app.get('/api/admin/server-stats', (req, res) => {
-    const memory = process.memoryUsage();
-    const uptime = Math.floor(process.uptime());
-    res.json({
-        uptime,
-        ram: Math.round(memory.rss / 1024 / 1024)
-    });
+    res.json({ uptime: Math.floor(process.uptime()), ram: Math.round(process.memoryUsage().rss / 1024 / 1024) });
 });
 
 app.post('/api/admin/session/:id/command', (req, res) => {
-    const { id } = req.params;
-    const { command, payload } = req.body;
-    const session = activeSessions.get(id);
-
+    const session = activeSessions.get(req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
-    console.log(`[Admin] Command received for ${id}: ${command}`, payload);
-
-    switch (command) {
-        case 'switch_scenario': {
-            const scenarioId = typeof payload === 'string' ? payload : payload?.scenarioId;
-            if (typeof scenarioId !== 'string' || scenarioId.trim().length === 0) {
-                return res.status(400).json({ error: 'Missing scenarioId' });
-            }
-            session.network.requestSessionConfigUpdate({
-                activeScenarioId: scenarioId.trim()
-            });
-            break;
-        }
-        case 'broadcast':
-            session.network.broadcastNotification(payload || 'System Announcement');
-            break;
-        default:
-            return res.status(400).json({ error: 'Unknown command' });
+    const { command, payload } = req.body;
+    if (command === 'switch_scenario') {
+        const scenarioId = typeof payload === 'string' ? payload : payload?.scenarioId;
+        session.network.requestSessionConfigUpdate({ activeScenarioId: scenarioId });
+    } else if (command === 'broadcast') {
+        session.network.broadcastNotification(payload || 'System Announcement');
     }
-
     res.json({ success: true });
 });
 
-// --- Assets API ---
+// Controllers
+assetController.register(app);
 
-// List all assets
-app.get('/api/assets', (req, res) => {
-    try {
-        const files = fs.readdirSync(ASSETS_DIR).filter(f => f !== 'thumbnails');
-        const fileList = files.map(file => {
-            const stats = fs.statSync(path.join(ASSETS_DIR, file));
-            const thumbName = file + '.webp';
-            const hasThumb = fs.existsSync(path.join(THUMBS_DIR, thumbName));
-            return {
-                name: file,
-                size: stats.size,
-                mtime: stats.mtime,
-                url: `/storage/assets/${file}`,
-                thumbnailUrl: hasThumb ? `/storage/assets/thumbnails/${thumbName}` : null
-            };
-        });
-        res.json(fileList);
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to list assets' });
-    }
-});
+// Static Serving
+app.use('/admin', express.static(path.join(__dirname, 'src', 'server', 'admin')));
+app.use('/share', express.static(path.join(__dirname, 'src', 'server', 'share')));
+app.use('/server-ui', express.static(path.join(__dirname, 'src', 'server', 'ui')));
 
-// Upload a new asset
-app.post('/api/assets/upload', upload.fields([
-    { name: 'file', maxCount: 1 },
-    { name: 'thumbnail', maxCount: 1 }
-]), (req, res) => {
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    if (!files || !files.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
-    }
-    const uploadedFile = files.file[0];
-    const thumbnailFile = files.thumbnail ? files.thumbnail[0] : null;
-
-    res.json({
-        success: true,
-        file: {
-            name: uploadedFile.filename,
-            url: `/storage/assets/${uploadedFile.filename}`,
-            thumbnailUrl: thumbnailFile ? `/storage/assets/thumbnails/${thumbnailFile.filename}` : null
-        }
-    });
-});
-
-// Delete an asset
-app.delete('/api/assets/:filename', (req, res) => {
-    const { filename } = req.params;
-    const safeName = path.basename(filename);
-    const filePath = path.join(ASSETS_DIR, safeName);
-
-    if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'File not found' });
-    }
-
-    try {
-        fs.unlinkSync(filePath);
-        const thumbPath = path.join(THUMBS_DIR, safeName + '.webp');
-        if (fs.existsSync(thumbPath)) {
-            fs.unlinkSync(thumbPath);
-        }
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to delete file' });
-    }
-});
-
-// Serve the static admin dashboard files
-const adminPath = path.join(__dirname, 'src', 'server', 'admin');
-app.use('/admin', express.static(adminPath));
-
-// Serve dedicated desktop sharing page
-const sharePath = path.join(__dirname, 'src', 'server', 'share');
-app.use('/share', express.static(sharePath));
-
-// Serve shared styling primitives for server-hosted UIs
-const serverUiPath = path.join(__dirname, 'src', 'server', 'ui');
-app.use('/server-ui', express.static(serverUiPath));
-
-// Serve assets storage
-app.use('/storage/assets', express.static(ASSETS_DIR));
-
-// Serve assets management UI
-const assetsUiPath = path.join(__dirname, 'src', 'server', 'assets');
-app.use('/assets', express.static(assetsUiPath));
-
-// Serve the built client
 const distPath = path.join(__dirname, 'dist');
-if (!fs.existsSync(distPath)) {
-    console.warn('[Server] Warning: dist/ not found. Run "npm run build" first.');
-}
 app.use(express.static(distPath));
 
-// --- HTTPS Server (must exist before PeerJS) ---
+// --- Servers ---
 const server = https.createServer(sslOptions, app);
 
-const peerServer = ExpressPeerServer(server, {
-    path: '/',
-    allow_discovery: true,
-    // Removing 'proxied: true' for now to debug 'Invalid frame header'
-    // as some proxies/environments don't like transformations.
-});
-
+// PeerJS
+const peerServer = ExpressPeerServer(server, { path: '/', allow_discovery: true });
 app.use('/peerjs', peerServer);
 
-// SPA fallback — Express 5 requires named catch-all parameter
-app.get('{*path}', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-});
+// WebSocket Relay & Desktop Sharing
+const wssRelay = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+const wssDesktop = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
-peerServer.on('connection', (client) => {
-    console.log(`[PeerJS] Peer connected: ${client.getId()} `);
-});
-
-peerServer.on('disconnect', (client) => {
-    console.log(`[PeerJS] Peer disconnected: ${client.getId()} `);
-});
-
-peerServer.on('error', (err) => {
-    console.error('[PeerJS] Server Error:', err);
-});
-
-// --- WebSocket Relay (Fallback for restricted networks) ---
-const wss = new WebSocketServer({
-    noServer: true,
-    perMessageDeflate: false // Disable compression to avoid 'Invalid frame header' in some environments
-});
-
-const desktopSourceWss = new WebSocketServer({
-    noServer: true,
-    perMessageDeflate: false
-});
-
-// Take over 'upgrade' handling to ensure strict routing between PeerJS and Relay
 const originalUpgradeListeners = server.listeners('upgrade').slice();
 server.removeAllListeners('upgrade');
 
 server.on('upgrade', (request, socket, head) => {
-    try {
-        const url = new URL(request.url || '', `https://${request.headers.host || 'localhost'}`);
-        const pathname = url.pathname;
-        console.log(`[Server] Upgrade Request: ${pathname}`);
+    const pathname = new URL(request.url || '', `https://${request.headers.host}`).pathname;
+    if (relayManager.handleUpgrade(pathname, request, socket, head, wssRelay, wssDesktop)) return;
 
-        if (pathname === '/relay') {
-            console.log('[Server] Routing to Relay...');
-            wss.handleUpgrade(request, socket, head, (ws) => {
-                console.log('[Server] Relay Handshake Complete');
-                wss.emit('connection', ws, request);
-            });
-        } else if (pathname === '/desktop-source') {
-            console.log('[Server] Routing to Desktop Source...');
-            desktopSourceWss.handleUpgrade(request, socket, head, (ws) => {
-                console.log('[Server] Desktop Source Handshake Complete');
-                desktopSourceWss.emit('connection', ws, request);
-            });
-        } else {
-            // Pass to PeerJS or other listeners
-            if (originalUpgradeListeners.length > 0) {
-                originalUpgradeListeners.forEach(l => l(request, socket, head));
-            } else {
-                console.log(`[Server] No handler for upgrade path: ${pathname}`);
-                socket.destroy();
-            }
-        }
-    } catch (e) {
-        console.error('[Server] Upgrade processing error:', e);
-        socket.destroy();
-    }
+    originalUpgradeListeners.forEach(l => l(request, socket, head));
 });
-wss.on('connection', (ws) => {
-    console.log('[Relay] New Connection established');
+
+wssRelay.on('connection', (ws) => {
     let currentSessionId: string | null = null;
     let currentPeerId: string | null = null;
-    let currentSubscribedKeys: Set<string> = new Set();
 
     ws.on('message', (message) => {
-        try {
-            const data = typeof message === 'string' ? JSON.parse(message) : JSON.parse(message.toString());
-
-            if (data.type === 'join') {
-                currentSessionId = data.sessionId;
-                currentPeerId = data.peerId;
-
-                if (!currentSessionId || !currentPeerId) return;
-
-                if (!activeSessions.has(currentSessionId)) {
-                    const networkMgr = new DedicatedSessionTransport();
-                    const session = new HeadlessSession(currentSessionId, networkMgr);
-                    activeSessions.set(currentSessionId, session);
-                    session.start();
-                }
-
-                const session = activeSessions.get(currentSessionId);
-                if (session) {
-                    session.network.addClient(currentPeerId, ws);
-                    console.log(`[Relay] Peer ${currentPeerId} joined session ${currentSessionId}`);
-                }
-
-            } else {
-                if (currentSessionId && currentPeerId) {
-                    if (data.type === PACKET_TYPES.DESKTOP_SOURCES_STATUS_REQUEST) {
-                        const payload = (data.payload || {}) as IDesktopSourcesStatusRequestPayload;
-                        const keys = Array.isArray(payload.keys)
-                            ? payload.keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
-                            : [];
-                        currentSubscribedKeys = new Set(keys);
-                        relaySourceSubscriptions.set(ws, {
-                            sessionId: currentSessionId,
-                            keys: currentSubscribedKeys
-                        });
-
-                        sendSourceStatusToRelayClient(ws, currentSessionId, keys);
-                        return;
-                    }
-
-                    if (data.type === PACKET_TYPES.DESKTOP_STREAM_SUMMON) {
-                        const payload = (data.payload || {}) as IDesktopStreamSummonPayload;
-                        const key = typeof payload.key === 'string' ? payload.key.trim() : '';
-                        if (!key) return;
-
-                        const sourceWs = globalDesktopSources.get(key);
-                        if (!sourceWs || sourceWs.readyState !== 1) {
-                            sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
-                                key,
-                                sessionId: currentSessionId
-                            });
-                            return;
-                        }
-
-                        // Allow summoning non-capturing online sources
-                        // if (!capturingKeys.has(key)) {
-                        //     // Source not yet broadcasting
-                        //     return;
-                        // }
-
-                        desktopRoutes.set(key, {
-                            sessionId: currentSessionId,
-                            name: payload.name,
-                            summonedBy: currentPeerId,
-                            summonerName: payload.summonerName || 'Someone',
-                            anchor: payload.anchor,
-                            quaternion: payload.quaternion
-                        });
-                        notifySubscribedClientsForKey(key);
-
-                        sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_SUMMONED, {
-                            key,
-                            name: payload.name,
-                            sessionId: currentSessionId,
-                            anchor: payload.anchor,
-                            quaternion: payload.quaternion,
-                            summonedByPeerId: currentPeerId,
-                            summonedByName: payload.summonerName || 'Someone'
-                        });
-
-                        sendPacketToSession(currentSessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
-                            kind: 'desktop_stream_started',
-                            actorPeerId: currentPeerId,
-                            actorName: payload.name || 'Someone',
-                            subjectName: payload.name || key,
-                            sentAt: Date.now()
-                        });
-                        return;
-                    }
-
-                    if (data.type === PACKET_TYPES.DESKTOP_STREAM_STOP) {
-                        const payload = (data.payload || {}) as IDesktopStreamStopPayload;
-                        const key = typeof payload.key === 'string' ? payload.key.trim() : '';
-                        if (!key) return;
-                        const route = desktopRoutes.get(key);
-                        if (!route || route.sessionId !== currentSessionId) return;
-
-                        desktopRoutes.delete(key);
-                        notifySubscribedClientsForKey(key);
-                        sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
-                            key,
-                            sessionId: currentSessionId
-                        });
-
-                        sendPacketToSession(currentSessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
-                            kind: 'desktop_stream_stopped',
-                            actorPeerId: currentPeerId,
-                            subjectName: route?.name || key,
-                            sentAt: Date.now()
-                        });
-                        return;
-                    }
-
-                    const session = activeSessions.get(currentSessionId);
-                    if (session) {
-                        session.network.handleMessage(currentPeerId, data);
-                    }
-                }
+        const data = JSON.parse(message.toString());
+        if (data.type === 'join') {
+            currentSessionId = data.sessionId;
+            currentPeerId = data.peerId;
+            if (!activeSessions.has(currentSessionId)) {
+                const session = new HeadlessSession(currentSessionId, new DedicatedSessionTransport());
+                activeSessions.set(currentSessionId, session);
+                session.start();
             }
-        } catch (e) {
-            console.error('[Relay] Error processing message:', e);
+            activeSessions.get(currentSessionId)?.network.addClient(currentPeerId, ws);
+        } else if (currentSessionId && currentPeerId) {
+            if (relayManager.handleRelayConnection(ws, currentSessionId, currentPeerId, data)) return;
+            activeSessions.get(currentSessionId)?.network.handleMessage(currentPeerId, data);
         }
     });
 
     ws.on('close', () => {
-        relaySourceSubscriptions.delete(ws);
-
-        // Auto-Cleanup Desktop Streams owned by this peer
-        if (currentPeerId && currentSessionId) {
-            for (const [key, route] of desktopRoutes.entries()) {
-                if (route.summonedBy === currentPeerId && route.sessionId === currentSessionId) {
-                    desktopRoutes.delete(key);
-                    notifySubscribedClientsForKey(key);
-                    sendPacketToSession(currentSessionId, PACKET_TYPES.DESKTOP_STREAM_STOPPED, {
-                        key,
-                        sessionId: currentSessionId
-                    });
-
-                    sendPacketToSession(currentSessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
-                        kind: 'desktop_stream_stopped',
-                        actorPeerId: 'system',
-                        actorName: 'System',
-                        subjectName: route.name || key,
-                        message: `Screen stopped because the owner left the session.`,
-                        sentAt: Date.now()
-                    });
-                }
-            }
-        }
-
         if (currentSessionId && currentPeerId) {
+            relayManager.handleRelayDisconnect(ws, currentPeerId, currentSessionId);
             const session = activeSessions.get(currentSessionId);
             if (session) {
                 session.network.removeClient(currentPeerId);
-                console.log(`[Relay] Peer ${currentPeerId} left session ${currentSessionId}`);
-
                 if (session.network.connections.size === 0) {
-                    stopRoutedStreamsForSession(currentSessionId);
+                    relayManager.stopRoutedStreamsForSession(currentSessionId);
                     session.stop();
                     activeSessions.delete(currentSessionId);
-                    console.log(`[Relay] Closed empty session ${currentSessionId}`);
                 }
             }
         }
     });
 });
 
-desktopSourceWss.on('connection', (ws) => {
-    let registeredKey: string | null = null;
-    console.log('[DesktopSource] Connection established');
-
-    ws.on('message', (message) => {
-        try {
-            if (Buffer.isBuffer(message)) {
-                const firstByte = message.readUInt8(0);
-                if (firstByte === PACKET_TYPES.DESKTOP_STREAM_FRAME) {
-                    const keyLen = message.readUInt8(1);
-                    const key = message.toString('utf8', 2, 2 + keyLen);
-
-                    // Only relay if this source is currently capturing
-                    if (capturingKeys.has(key)) {
-                        const route = desktopRoutes.get(key);
-                        if (route && route.sessionId) {
-                            const session = activeSessions.get(route.sessionId);
-                            if (session) {
-                                session.network.bytesReceived += message.length;
-                                session.context.runtime.diagnostics.recordNetworkReceived(message.length);
-                            }
-                            sendBinaryToSession(route.sessionId, message);
-                        }
-                    }
-                    return;
-                }
-            }
-
-            const data = typeof message === 'string' ? JSON.parse(message) : JSON.parse(message.toString());
-            console.log(`[DesktopSource] Received JSON: ${JSON.stringify(data).substring(0, 100)}`);
-
-            if (data.type === 'register-global-source') {
-                const nextKey = typeof data.key === 'string' ? data.key.trim() : '';
-                if (!nextKey) {
-                    ws.send(JSON.stringify({ type: 'source-error', message: 'Missing key' }));
-                    return;
-                }
-
-                const existingWs = globalDesktopSources.get(nextKey);
-                const hadCollision = !!existingWs && existingWs !== ws;
-                if (existingWs && existingWs !== ws) {
-                    try {
-                        existingWs.send(JSON.stringify({ type: 'source-error', message: 'Replaced by a new source with same key' }));
-                        existingWs.close();
-                    } catch { }
-                }
-
-                if (registeredKey && registeredKey !== nextKey) {
-                    globalDesktopSources.delete(registeredKey);
-                    notifySubscribedClientsForKey(registeredKey);
-                }
-
-                registeredKey = nextKey;
-                globalDesktopSources.set(nextKey, ws);
-                desktopSourceBySocket.set(ws, nextKey);
-
-                console.log(`[DesktopSource] Registered "${nextKey}". Total sources: ${globalDesktopSources.size}`);
-                notifySubscribedClientsForKey(nextKey);
-
-                ws.send(JSON.stringify({
-                    type: 'source-registered',
-                    key: nextKey,
-                    collision: hadCollision
-                }));
-                return;
-            }
-
-            if (data.type === 'source-capture-started') {
-                const key = typeof data.key === 'string' ? data.key.trim() : '';
-                if (!key) return;
-                console.log(`[DesktopSource] Capture STARTED for "${key}"`);
-                capturingKeys.add(key);
-                notifySubscribedClientsForKey(key);
-                return;
-            }
-
-            if (data.type === 'source-frame') {
-                const key = typeof data.key === 'string' ? data.key.trim() : '';
-                if (!key) return;
-                const route = desktopRoutes.get(key);
-                if (!route) return;
-                if (route.sessionId && !activeSessions.has(route.sessionId)) {
-                    desktopRoutes.delete(key);
-                    notifySubscribedClientsForKey(key);
-                    return;
-                }
-
-                const session = activeSessions.get(route.sessionId);
-                if (session) {
-                    const rawLength = JSON.stringify(data).length;
-                    session.network.bytesReceived += rawLength;
-                    session.context.runtime.diagnostics.recordNetworkReceived(rawLength);
-                }
-
-                sendPacketToSession(route.sessionId, PACKET_TYPES.DESKTOP_STREAM_FRAME, {
-                    key,
-                    name: route.name || key,
-                    sessionId: route.sessionId,
-                    dataUrl: data.dataUrl,
-                    width: data.width,
-                    height: data.height,
-                    ts: data.ts || Date.now(),
-                    anchor: route.anchor,
-                    quaternion: route.quaternion
-                });
-                return;
-            }
-
-            if (data.type === 'source-capture-stopped') {
-                const key = typeof data.key === 'string' ? data.key.trim() : '';
-                if (!key) return;
-                capturingKeys.delete(key);
-                notifySubscribedClientsForKey(key);
-
-                const route = desktopRoutes.get(key);
-                if (route) {
-                    sendPacketToSession(route.sessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
-                        kind: 'desktop_stream_stopped',
-                        subjectName: route.name || key,
-                        sentAt: Date.now()
-                    });
-                }
-                return;
-            }
-        } catch (e) {
-            console.error('[DesktopSource] Error processing message:', e);
-        }
-    });
-
-    ws.on('close', () => {
-        const key = registeredKey || desktopSourceBySocket.get(ws) || null;
-        if (key) {
-            console.log(`[DesktopSource] Connection CLOSED for "${key}"`);
-        } else {
-            console.log('[DesktopSource] Anonymous connection CLOSED');
-        }
-
-        if (!key) return;
-
-        if (globalDesktopSources.get(key) === ws) {
-            globalDesktopSources.delete(key);
-            capturingKeys.delete(key);
-        }
-        desktopSourceBySocket.delete(ws);
-        notifySubscribedClientsForKey(key);
-
-        const route = desktopRoutes.get(key);
-        if (route) {
-            desktopRoutes.delete(key);
-            notifySubscribedClientsForKey(key);
-            sendPacketToSession(route.sessionId, PACKET_TYPES.DESKTOP_STREAM_OFFLINE, {
-                key,
-                sessionId: route.sessionId
-            });
-
-            sendPacketToSession(route.sessionId, PACKET_TYPES.SESSION_NOTIFICATION, {
-                kind: 'desktop_stream_offline',
-                subjectName: route.name || key,
-                sentAt: Date.now()
-            });
-        }
-        console.log(`[DesktopSource] Disconnected source ${key}`);
-    });
+wssDesktop.on('connection', (ws) => {
+    ws.on('message', (msg) => relayManager.handleDesktopSourceMessage(ws, msg));
+    ws.on('close', () => relayManager.handleDesktopSourceDisconnect(ws));
 });
 
-// --- Start ---
+// SPA Fallback
+app.get('{*path}', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+
 server.listen(PORT, '0.0.0.0', () => {
-    const interfaces = Object.values(os.networkInterfaces())
-        .flat()
-        .filter((i: any) => i && i.family === 'IPv4' && !i.internal);
-
-    console.log('');
-    console.log('  ╔══════════════════════════════════════════╗');
-    console.log('  ║        TheHangout — Dedicated Server         ║');
-    console.log('  ╠══════════════════════════════════════════╣');
-    console.log(`  ║  Local:   https://localhost:${PORT}/`);
-    for (const iface of interfaces) {
-        if (iface) console.log(`  ║  Network: https://${iface.address}:${PORT}/`);
-    }
-    console.log('  ╚══════════════════════════════════════════╝');
-    console.log('');
+    console.log(`\n  TheHangout — Dedicated Server\n  https://localhost:${PORT}/\n`);
 });
