@@ -1,6 +1,7 @@
 import type { AppContext } from '../../../app/AppContext';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
+import { WideCircleVisuals } from './WideCircleVisuals';
 
 export class WideCircleScenario implements IScenarioModule {
     public readonly id = 'wide-circle';
@@ -9,6 +10,7 @@ export class WideCircleScenario implements IScenarioModule {
     public readonly maxPlayers = 16;
 
     constructor(private session: SessionRuntime) { }
+    private visuals: WideCircleVisuals | null = null;
 
     public load(context: AppContext, options: IScenarioLoadOptions): void {
         this.session.ensureGroundPhysics();
@@ -16,11 +18,25 @@ export class WideCircleScenario implements IScenarioModule {
         if (context.sessionConfig.seed !== seed) {
             context.sessionConfig = { ...context.sessionConfig, seed };
         }
+        if (this.visuals) {
+            this.visuals.destroy();
+            this.visuals = null;
+        }
+        if (this.session.scene) {
+            this.visuals = new WideCircleVisuals(this.session.scene, seed);
+        }
     }
 
-    public unload(_context: AppContext): void { }
+    public unload(_context: AppContext): void {
+        if (this.visuals) {
+            this.visuals.destroy();
+            this.visuals = null;
+        }
+    }
 
-    public update(_delta: number): void { }
+    public update(delta: number): void {
+        this.visuals?.update(delta);
+    }
 
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
         const radius = 4.2;
