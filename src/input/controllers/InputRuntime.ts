@@ -12,6 +12,7 @@ import { MobileJoystickController } from './MobileJoystickController';
 import { NonVRReachAssistController } from './DesktopReachAssistController';
 import { NonVRInteractionController } from './DesktopInteractionController';
 import { XRInputController } from './XRInputController';
+import { XRHapticsController } from './XRHapticsController';
 import { GestureUtils } from '../../shared/utils/GestureUtils';
 import { GrabSkill } from '../../skills/GrabSkill';
 
@@ -28,6 +29,7 @@ export class InputRuntime implements IUpdatable {
     public nonVRReachAssist: NonVRReachAssistController;
     public nonVRInteraction: NonVRInteractionController;
     public xrInput: XRInputController;
+    public xrHaptics: XRHapticsController;
     private desktopInputMode: DesktopInputMode = 'keyboardMouse';
     private lastDesktopInputAt: Record<DesktopInputMode, number> = {
         keyboardMouse: 0,
@@ -52,6 +54,7 @@ export class InputRuntime implements IUpdatable {
         this.nonVRReachAssist = new NonVRReachAssistController(context);
         this.nonVRInteraction = new NonVRInteractionController(context);
         this.xrInput = new XRInputController(context);
+        this.xrHaptics = new XRHapticsController(context);
 
         this._initMouseLook();
         this._initDesktopInputModeTracking();
@@ -135,6 +138,14 @@ export class InputRuntime implements IUpdatable {
 
     public getDesktopInputMode(): DesktopInputMode {
         return this.desktopInputMode;
+    }
+
+    public pulseUiHover(hand: 'left' | 'right'): void {
+        this.xrHaptics.pulseUiHover(hand);
+    }
+
+    public pulseGrabHint(hand: 'left' | 'right'): void {
+        this.xrHaptics.pulseGrabHint(hand);
     }
 
     public getMovementVector(): { x: number, y: number } {

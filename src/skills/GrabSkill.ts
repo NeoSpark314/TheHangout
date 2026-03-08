@@ -265,8 +265,8 @@ export class GrabSkill extends Skill {
         this.heldObjects.clear();
         this.objectHolds.clear();
         this.history.clear();
-        this._updateHighlight(player.id, 'left', null);
-        this._updateHighlight(player.id, 'right', null);
+        this._updateHighlight(player.id, 'left', null, player.appContext.runtime);
+        this._updateHighlight(player.id, 'right', null, player.appContext.runtime);
     }
 
     public update(delta: number, player: PlayerAvatarEntity, runtime: IRuntimeRegistry): void {
@@ -316,7 +316,7 @@ export class GrabSkill extends Skill {
                     }
                 }
 
-                this._updateHighlight(player.id, hand, null);
+                this._updateHighlight(player.id, hand, null, runtime);
             } else {
                 let result: { interactable: IInteractable, distance: number } | null = null;
                 if (handState.active) {
@@ -324,7 +324,7 @@ export class GrabSkill extends Skill {
                     const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
                     result = runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 }
-                this._updateHighlight(player.id, hand, result?.interactable || null);
+                this._updateHighlight(player.id, hand, result?.interactable || null, runtime);
             }
         }
     }
@@ -529,12 +529,17 @@ export class GrabSkill extends Skill {
         return key;
     }
 
-    private _updateHighlight(playerId: string, hand: HandId, nearest: IInteractable | null): void {
+    private _updateHighlight(playerId: string, hand: HandId, nearest: IInteractable | null, runtime: IRuntimeRegistry): void {
         const current = this.highlightedEntities[hand];
         const hoverSourceId = `${playerId}:${hand}`;
         if (current !== nearest) {
             if (current) current.onHoverExit(hoverSourceId);
-            if (nearest) nearest.onHoverEnter(hoverSourceId);
+            if (nearest) {
+                nearest.onHoverEnter(hoverSourceId);
+                if (isHoldable(nearest)) {
+                    runtime.input.pulseGrabHint(hand);
+                }
+            }
             this.highlightedEntities[hand] = nearest;
         }
     }
