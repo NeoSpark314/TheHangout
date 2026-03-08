@@ -16,6 +16,14 @@ export class EntityRegistry implements IUpdatable {
 
     public defaultType: string = 'unknown';
 
+    private resolveObjectInstanceIdFromEntityId(moduleId: string, entityId: string): string {
+        // Backward compatibility for older simple-shared-object entity ids ("prop_<instanceId>").
+        if (moduleId === 'simple-shared-object' && entityId.startsWith('prop_')) {
+            return entityId.slice('prop_'.length);
+        }
+        return entityId;
+    }
+
     public discover(id: string, type: string, config: Record<string, any> = {}): IEntity | null {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
@@ -24,19 +32,21 @@ export class EntityRegistry implements IUpdatable {
 
         if (moduleId && typeof moduleId === 'string') {
             console.log(`[EntityRegistry] Discovering entity ${id} as part of object module: ${moduleId}`);
+            const instanceId = this.resolveObjectInstanceIdFromEntityId(moduleId, entityId);
             // Check if it's already being handled by a spawned instance to avoid loops
-            const existingInstance = this.context.runtime.session?.getObjectInstance(id.replace('prop_', ''));
+            const existingInstance = this.context.runtime.session?.getObjectInstance(instanceId);
             if (existingInstance) {
                 const primary = existingInstance.getPrimaryEntity?.();
                 if (primary) return primary;
             }
 
             const spawnConfig: any = {
-                id: id.replace('prop_', ''),
+                id: instanceId,
+                entityId,
                 halfExtents: config.he ? { x: config.he[0], y: config.he[1], z: config.he[2] } : undefined,
                 position: config.p ? { x: config.p[0], y: config.p[1], z: config.p[2] } : undefined,
                 isAuthority: false,
-                ownerId: config.o || config.ownerId,
+                ownerId: config.o ?? config.ownerId,
                 url: config.url
             };
 

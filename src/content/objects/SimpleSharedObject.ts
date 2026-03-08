@@ -35,7 +35,12 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         this.group.name = `simple-shared-object:${this.id}`;
 
         const position = config.position || { x: 0, y: 1.15, z: 0 };
-        const ownerId = config.ownerId as string;
+        const ownerId = (typeof config.ownerId === 'string' || config.ownerId === null)
+            ? config.ownerId
+            : undefined;
+        const entityId = (typeof config.entityId === 'string' && config.entityId.length > 0)
+            ? config.entityId
+            : this.id;
 
         // Only show a loading placeholder if we have a url to load.
         // When spawned via EntityRegistry.discover() the url is absent from the
@@ -51,7 +56,7 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         // wiring hover/grab detection and pose tracking via PhysicsPropEntity.present().
         this.propEntity = EntityFactory.createGrabbable(
             context.app,
-            `prop_${this.id}`,
+            entityId,
             0.5,
             position,
             this.group as any,
