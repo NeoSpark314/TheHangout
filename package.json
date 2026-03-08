@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "serve": "tsx dedicatedServer.ts",
     "refactor:arch:dry-run": "node scripts/migrate-architecture.mjs",

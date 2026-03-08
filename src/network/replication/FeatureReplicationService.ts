@@ -72,6 +72,7 @@ export interface IReplicatedFeature {
 export class FeatureReplicationService {
     private features: Map<string, IReplicatedFeature> = new Map();
     private pendingSnapshots: Map<string, unknown> = new Map();
+    private pendingEvents: Map<string, IReplicatedFeatureEventPayload[]> = new Map();
     private eventSeq: number = 0;
     private seenEventIds: Set<string> = new Set();
     private seenEventQueue: string[] = [];
@@ -89,6 +90,20 @@ export class FeatureReplicationService {
             if (debug?.shouldTrackFeature(feature.featureId)) {
                 debug.recordSnapshotPendingApplied(feature.featureId);
             }
+        }
+
+        const pendingEvents = this.pendingEvents.get(feature.featureId);
+        if (pendingEvents && pendingEvents.length > 0) {
+            for (const event of pendingEvents) {
+                feature.onEvent(event.eventType, event.data, {
+                    eventId: event.eventId,
+                    originPeerId: event.originPeerId,
+                    senderId: null,
+                    local: false,
+                    sentAt: event.sentAt
+                });
+            }
+            this.pendingEvents.delete(feature.featureId);
         }
     }
 
@@ -248,8 +263,17 @@ export class FeatureReplicationService {
 
         const feature = this.features.get(payload.featureId);
         if (!feature) {
+            // Queue event for unknown feature
+            let queue = this.pendingEvents.get(payload.featureId);
+            if (!queue) {
+                queue = [];
+                this.pendingEvents.set(payload.featureId, queue);
+            }
+            queue.push(payload);
+
             if (debugEnabled) {
                 debug!.recordDropMissingFeature(payload.featureId, payload.eventType, payload.eventId);
+                // Actually it's not a drop anymore, it's a queue, but we use the debug to see it.
             }
             return;
         }

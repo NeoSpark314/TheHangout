@@ -135,7 +135,10 @@ export class PhysicsRuntime {
         position: IVector3,
         mesh: any,
         view?: IView<any>,
-        halfExtents?: IVector3
+        halfExtents?: IVector3,
+        moduleId?: string,
+        ownerId?: string | null,
+        url?: string
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
 
@@ -179,7 +182,11 @@ export class PhysicsRuntime {
             grabbable: true,
             spawnPosition: position,
             view: finalView,
-            grabRadius: Math.max(hx, hy, hz)
+            grabRadius: Math.max(hx, hy, hz),
+            halfExtents,
+            moduleId,
+            ownerId,
+            url
         });
         physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
@@ -189,6 +196,55 @@ export class PhysicsRuntime {
         entityRegistry.addEntity(physicsEntity);
 
         return physicsEntity;
+    }
+
+    public updateGrabbableCollider(
+        entityId: string,
+        mesh: any,
+        size: number,
+        halfExtents?: IVector3
+    ): void {
+        const entityRegistry = this.context.runtime.entity;
+        if (!entityRegistry || !this.world) return;
+
+        const entity = entityRegistry.getEntity(entityId) as PhysicsPropEntity;
+        if (!entity || !entity.rigidBody) return;
+
+        const rigidBody = entity.rigidBody;
+        const debugEntry = this.debugBodies.get(rigidBody.handle);
+        if (!debugEntry) return;
+
+        // Remove old colliders
+        for (const collider of debugEntry.colliders) {
+            this.colliderToEntity.delete(collider.handle);
+            this.interactionColliders.delete(collider.handle);
+            this.world.removeCollider(collider, true);
+        }
+        debugEntry.colliders = [];
+        this.entityToPrimaryCollider.delete(entityId);
+
+        // Create new collider
+        const hx = halfExtents?.x ?? (size / 2);
+        const hy = halfExtents?.y ?? (size / 2);
+        const hz = halfExtents?.z ?? (size / 2);
+
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+            .setRestitution(0.2)
+            .setFriction(0.7)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+
+        const collider = this.world.createCollider(colliderDesc, rigidBody);
+
+        debugEntry.colliders.push(collider);
+        this.colliderToEntity.set(collider.handle, entity);
+        if (entity.isHoldable) {
+            this.interactionColliders.set(collider.handle, entity);
+        }
+        this.entityToPrimaryCollider.set(entityId, collider);
+
+        // Update grab radius
+        const newGrabRadius = Math.max(hx, hy, hz);
+        (entity as any).grabRadius = Math.max(0.03, newGrabRadius);
     }
 
     public createSensorBody(

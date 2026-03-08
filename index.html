@@ -26,6 +26,7 @@
         <div class="inline-row">
           <input type="text" id="player-name" class="grow" placeholder="Enter your name" />
           <button id="avatar-btn" class="icon-btn" title="Customize Avatar">👤</button>
+          <button id="extensions-btn" class="icon-btn" title="Extensions / Settings">⚙️</button>
         </div>
       </div>
 
@@ -68,6 +69,15 @@
           </div>
           <button id="close-avatar-btn" class="primary-btn">Done</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Extension Settings Modal -->
+    <div id="extensions-dialog" class="modal-overlay is-hidden">
+      <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+        <h2>Extension Settings</h2>
+        <div id="extensions-container" class="settings-container"></div>
+        <button id="close-extensions-btn" class="primary-btn">Done</button>
       </div>
     </div>
 

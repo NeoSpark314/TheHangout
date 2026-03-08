@@ -12,6 +12,7 @@ import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 import { ControllerPointer } from '../shared/ControllerPointer';
 import * as THREE from 'three';
 import { GrabSkill } from '../../skills/GrabSkill';
+import { ConfigRegistry } from '../../shared/config/ConfigRegistry';
 
 export class VrUiRuntime implements IUpdatable {
     public tablet: TabletSurfaceEntity | null = null;
@@ -38,6 +39,7 @@ export class VrUiRuntime implements IUpdatable {
     private menuIntentHandler: (() => void) | null = null;
     private menuOpenRecenterIntentHandler: (() => void) | null = null;
     private hasInitialVrMenuRecentered = false;
+    private spawnerRefreshCleanup: (() => void) | null = null;
     private wasXrPresentingLastFrame = false;
     private keyboardHandler: ((e: KeyboardEvent) => void) | null = null;
     private canvasMouseMoveHandler: ((e: MouseEvent) => void) | null = null;
@@ -223,6 +225,7 @@ export class VrUiRuntime implements IUpdatable {
         this.addScenarioTab();
         this.addDebugTab();
         this.addHelpTab();
+        this.addSpawnerTab();
 
         this.setupMenuIntentHandler();
         this.setupKeyboardListeners();
@@ -1645,6 +1648,165 @@ export class VrUiRuntime implements IUpdatable {
         );
     }
 
+    private addSpawnerTab() {
+        if (!this.tabPanel) return;
+
+        const spawnerTab = this.tabPanel.addTab('My Files');
+        const container = spawnerTab.container;
+        const title = this.createTabTitle('Spawn Custom Files', 90, 52, 1080, 48, 'left');
+        title.textColor = UITheme.colors.accent;
+        container.addChild(title);
+
+        const subtitle = new UILabel('Spawn your configured 3D models and images into the world', 90, 102, 1080, 36);
+        subtitle.font = getFont(UITheme.typography.sizes.small, 'bold');
+        subtitle.textColor = UITheme.colors.textMuted;
+        subtitle.textAlign = 'left';
+        container.addChild(subtitle);
+
+        const listContainer = this.createPlainContainer(90, 160, 1080, 560);
+        container.addChild(listContainer);
+
+        const renderSpawner = () => {
+            listContainer.clearChildren();
+            let rowY = 0;
+
+            const schemas = [
+                { id: 'user_models', objectId: 'dynamic-model' },
+                { id: 'user_images', objectId: 'dynamic-image' }
+            ];
+
+            let hasItems = false;
+
+            schemas.forEach(({ id, objectId }) => {
+                const items = ConfigRegistry.getKeyValueList(id) || [];
+                if (items.length === 0) return;
+
+                hasItems = true;
+
+                const sectionLabel = new UILabel(id === 'user_models' ? '3D Models' : 'Images', 0, rowY + 10, 900, 40);
+                sectionLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                sectionLabel.textColor = UITheme.colors.primary;
+                sectionLabel.textAlign = 'left';
+                listContainer.addChild(sectionLabel);
+
+                rowY += 60;
+
+                items.forEach((item) => {
+                    const button = new UIButton(item.name, 0, rowY, 300, 62, async () => {
+                        if (button.text === 'Downloading...') return;
+
+                        const originalText = button.text;
+                        button.text = 'Downloading...';
+                        this.tablet?.ui.markDirty();
+
+                        let halfExtents: { x: number, y: number, z: number } | undefined;
+
+                        try {
+                            if (id === 'user_models') {
+                                const model = await this.context.runtime.assets.getNormalizedModel(item.value, 0.5);
+                                const box = new THREE.Box3().setFromObject(model);
+                                const size = box.getSize(new THREE.Vector3());
+                                halfExtents = { x: size.x / 2, y: size.y / 2, z: size.z / 2 };
+                            } else {
+                                const texture = await this.context.runtime.assets.loadTexture(item.value);
+                                const image = texture.image as HTMLImageElement;
+                                const aspect = image.width / image.height;
+                                const height = 0.5;
+                                const width = height * aspect;
+                                halfExtents = { x: width / 2, y: height / 2, z: 0.05 };
+                            }
+                        } catch (err) {
+                            console.error('Failed to pre-load asset bounds', err);
+                            button.text = 'Error Loading';
+                            this.tablet?.ui.markDirty();
+                            setTimeout(() => {
+                                button.text = originalText;
+                                this.tablet?.ui.markDirty();
+                            }, 2000);
+                            return;
+                        }
+
+                        button.text = originalText;
+                        this.tablet?.ui.markDirty();
+
+                        const localPlayer = this.context.localPlayer;
+                        const targetPosition = localPlayer
+                            ? {
+                                x: localPlayer.headState.position.x,
+                                y: localPlayer.headState.position.y - 0.2,
+                                z: localPlayer.headState.position.z
+                            }
+                            : { x: 0, y: 1.2, z: -1.8 };
+
+                        if (localPlayer) {
+                            const forward = new THREE.Vector3(0, 0, -1);
+                            const headQuat = new THREE.Quaternion(
+                                localPlayer.headState.quaternion.x,
+                                localPlayer.headState.quaternion.y,
+                                localPlayer.headState.quaternion.z,
+                                localPlayer.headState.quaternion.w
+                            );
+                            forward.applyQuaternion(headQuat).multiplyScalar(1.0);
+                            targetPosition.x += forward.x;
+                            targetPosition.y += Math.max(-0.1, forward.y);
+                            targetPosition.z += forward.z;
+                        }
+
+                        const localId = this.context.localPlayer?.id || 'local';
+                        this.context.runtime.session.spawnObjectModule(objectId, {
+                            position: targetPosition,
+                            url: item.value,
+                            halfExtents,
+                            ownerId: localId,
+                            isAuthority: true
+                        });
+
+                        if (this.context.isMenuOpen) {
+                            this.toggle2DMenu();
+                        }
+                    });
+
+                    button.cornerRadius = 10;
+                    button.borderColor = UITheme.colors.secondary;
+                    button.textColor = UITheme.colors.text;
+                    button.backgroundColor = UITheme.colors.panelBg;
+                    button.hoverColor = UITheme.colors.panelBgHover;
+                    listContainer.addChild(button);
+
+                    const urlLabel = new UILabel(item.value, 330, rowY + 14, 730, 34);
+                    urlLabel.font = getFont(UITheme.typography.sizes.small);
+                    urlLabel.textColor = UITheme.colors.textMuted;
+                    urlLabel.textAlign = 'left';
+                    listContainer.addChild(urlLabel);
+
+                    rowY += 80;
+                });
+
+                rowY += 20;
+            });
+
+            if (!hasItems) {
+                const emptyLabel = new UILabel('No files configured. Add some in the extension settings (Desktop UI).', 0, 0, 1080, 42);
+                emptyLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
+                emptyLabel.textColor = UITheme.colors.textMuted;
+                emptyLabel.textAlign = 'left';
+                listContainer.addChild(emptyLabel);
+            }
+
+            this.tablet?.ui.markDirty();
+        };
+
+        renderSpawner();
+        this.spawnerRefreshCleanup?.();
+        this.spawnerRefreshCleanup = this.registerTabRefresh(
+            () => spawnerTab,
+            renderSpawner,
+            {
+                refreshOnVisible: true
+            }
+        );
+    }
+
     private addHelpTab() {
         if (!this.tabPanel) return;
 
@@ -1874,6 +2036,10 @@ export class VrUiRuntime implements IUpdatable {
         if (this.scenarioRefreshCleanup) {
             this.scenarioRefreshCleanup();
             this.scenarioRefreshCleanup = null;
+        }
+        if (this.spawnerRefreshCleanup) {
+            this.spawnerRefreshCleanup();
+            this.spawnerRefreshCleanup = null;
         }
         if (this.sessionMicMeterInterval) {
             clearInterval(this.sessionMicMeterInterval);

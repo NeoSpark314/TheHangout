@@ -5,6 +5,7 @@ import { isMobile } from '../../shared/utils/DeviceUtils';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { ControllerPointer } from '../shared/ControllerPointer';
 import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
+import { ConfigRegistry, IConfigSchema } from '../../shared/config/ConfigRegistry';
 
 export class FlatUiRuntime implements IUpdatable {
     private static readonly KEYBOARD_MOUSE_HELP_HTML = [
@@ -35,6 +36,10 @@ export class FlatUiRuntime implements IUpdatable {
     private avatarDialog: HTMLElement;
     private closeAvatarBtn: HTMLButtonElement;
     private avatarColorInput: HTMLInputElement;
+    private extensionsBtn: HTMLButtonElement | null;
+    private extensionsDialog: HTMLElement | null;
+    private closeExtensionsBtn: HTMLButtonElement | null;
+    private extensionsContainer: HTMLElement | null;
     private voiceBtn: HTMLButtonElement | null;
     private statusText: HTMLElement;
     private errorText: HTMLElement;
@@ -68,6 +73,12 @@ export class FlatUiRuntime implements IUpdatable {
         this.avatarDialog = document.getElementById('avatar-dialog')!;
         this.closeAvatarBtn = document.getElementById('close-avatar-btn') as HTMLButtonElement;
         this.avatarColorInput = document.getElementById('avatar-color') as HTMLInputElement;
+
+        this.extensionsBtn = document.getElementById('extensions-btn') as HTMLButtonElement | null;
+        this.extensionsDialog = document.getElementById('extensions-dialog');
+        this.closeExtensionsBtn = document.getElementById('close-extensions-btn') as HTMLButtonElement | null;
+        this.extensionsContainer = document.getElementById('extensions-container');
+
         this.voiceBtn = document.getElementById('voice-btn') as HTMLButtonElement;
         this.statusText = document.getElementById('status-text')!;
         this.errorText = document.getElementById('error-text')!;
@@ -137,6 +148,19 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.closeAvatarBtn) {
             this.closeAvatarBtn.addEventListener('click', () => {
                 this.hideElement(this.avatarDialog);
+            });
+        }
+
+        if (this.extensionsBtn && this.extensionsDialog) {
+            this.extensionsBtn.addEventListener('click', () => {
+                this.renderExtensionSettings();
+                this.showElement(this.extensionsDialog!);
+            });
+        }
+
+        if (this.closeExtensionsBtn && this.extensionsDialog) {
+            this.closeExtensionsBtn.addEventListener('click', () => {
+                this.hideElement(this.extensionsDialog!);
             });
         }
 
@@ -507,6 +531,115 @@ export class FlatUiRuntime implements IUpdatable {
             rowEl.appendChild(keyInput);
             rowEl.appendChild(removeBtn);
             this.myScreensList.appendChild(rowEl);
+        }
+    }
+
+    private renderExtensionSettings(): void {
+        if (!this.extensionsContainer) return;
+        this.extensionsContainer.innerHTML = '';
+
+        const schemas = ConfigRegistry.getSchemas();
+        if (schemas.length === 0) {
+            this.extensionsContainer.innerHTML = '<p class="status">No extensions registered.</p>';
+            return;
+        }
+
+        for (const schema of schemas) {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'input-group';
+
+            const header = document.createElement('h3');
+            header.textContent = schema.title;
+            header.style.marginBottom = '5px';
+            groupEl.appendChild(header);
+
+            if (schema.description) {
+                const desc = document.createElement('p');
+                desc.textContent = schema.description;
+                desc.style.fontSize = '0.9em';
+                desc.style.color = '#ccc';
+                desc.style.marginBottom = '10px';
+                groupEl.appendChild(desc);
+            }
+
+            if (schema.type === 'key-value-list') {
+                const listContainer = document.createElement('div');
+                listContainer.className = 'screens-list';
+
+                const renderList = () => {
+                    listContainer.innerHTML = '';
+                    const items = ConfigRegistry.getKeyValueList(schema.id) || [];
+
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        const rowEl = document.createElement('div');
+                        rowEl.className = 'screen-row';
+
+                        const nameInput = document.createElement('input');
+                        nameInput.type = 'text';
+                        nameInput.placeholder = 'Name';
+                        nameInput.value = item.name;
+                        nameInput.className = 'screen-input';
+
+                        const targetInput = document.createElement('input');
+                        targetInput.type = 'text';
+                        targetInput.placeholder = 'URL';
+                        targetInput.value = item.value;
+                        targetInput.className = 'screen-input';
+
+                        const removeBtn = document.createElement('button');
+                        removeBtn.className = 'primary-btn secondary-style screen-btn-compact';
+                        removeBtn.type = 'button';
+                        removeBtn.textContent = 'Remove';
+
+                        const updateRow = () => {
+                            const newItems = [...ConfigRegistry.getKeyValueList(schema.id) || []];
+                            if (newItems[i]) {
+                                newItems[i] = { name: nameInput.value, value: targetInput.value };
+                                ConfigRegistry.setKeyValueList(schema.id, newItems);
+                            }
+                        };
+
+                        nameInput.addEventListener('input', updateRow);
+                        targetInput.addEventListener('input', updateRow);
+                        removeBtn.addEventListener('click', () => {
+                            const newItems = [...ConfigRegistry.getKeyValueList(schema.id) || []];
+                            newItems.splice(i, 1);
+                            ConfigRegistry.setKeyValueList(schema.id, newItems);
+                            renderList();
+                        });
+
+                        rowEl.appendChild(nameInput);
+                        rowEl.appendChild(targetInput);
+                        rowEl.appendChild(removeBtn);
+                        listContainer.appendChild(rowEl);
+                    }
+                };
+
+                renderList();
+                groupEl.appendChild(listContainer);
+
+                const addBtn = document.createElement('button');
+                addBtn.className = 'primary-btn secondary-style';
+                addBtn.type = 'button';
+                addBtn.textContent = 'Add Item';
+                addBtn.style.marginTop = '10px';
+                addBtn.addEventListener('click', () => {
+                    const items = ConfigRegistry.getKeyValueList(schema.id) || [];
+                    items.push({ name: `Item ${items.length + 1}`, value: schema.defaultTarget || '' });
+                    ConfigRegistry.setKeyValueList(schema.id, items);
+                    renderList();
+                });
+                groupEl.appendChild(addBtn);
+            }
+
+            this.extensionsContainer.appendChild(groupEl);
+
+            // Add a separator between schemas
+            const hr = document.createElement('hr');
+            hr.style.borderColor = '#444';
+            hr.style.margin = '20px 0';
+            this.extensionsContainer.appendChild(hr);
         }
     }
 

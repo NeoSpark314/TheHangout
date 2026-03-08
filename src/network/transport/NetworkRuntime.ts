@@ -552,6 +552,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 if (this.context.localPlayer && stateData.id === this.context.localPlayer.id) continue;
 
                 const config = {
+                    ...stateData.state,
                     spawnPos: { x: 0, y: 0, z: 0 },
                     spawnYaw: 0,
                     isAuthority: false,

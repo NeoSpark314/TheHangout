@@ -45,6 +45,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     public spawnPosition: IVector3 | null;
     public heldBy: string | null = null;
     private grabRadius: number;
+    public halfExtents?: IVector3;
+    public moduleId?: string;
 
     private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
@@ -83,6 +85,13 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.isGrabbable = options.grabbable || false;
         this.spawnPosition = options.spawnPosition ? { ...options.spawnPosition } : null;
         this.grabRadius = Math.max(0.03, options.grabRadius ?? 0.06);
+        this.halfExtents = options.halfExtents;
+        this.moduleId = options.moduleId;
+        this.ownerId = options.ownerId !== undefined ? options.ownerId : null;
+        if (options.url) {
+            // Some objects might use this directly if they don't have a separate Instance class
+            (this as any).url = options.url;
+        }
 
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
@@ -386,9 +395,10 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             p: [pos.x, pos.y, pos.z],
             q: [rot.x, rot.y, rot.z, rot.w],
             v: [vel.x, vel.y, vel.z],
-            b: this.heldBy,
-            ownerId: this.ownerId
-        };
+            ownerId: this.ownerId,
+            m: this.moduleId,
+            he: this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined
+        } as IPhysicsEntityState;
     }
 
     public applyNetworkState(state: Partial<IEntityState>): void {

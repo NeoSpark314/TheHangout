@@ -19,7 +19,33 @@ export class EntityRegistry implements IUpdatable {
     public discover(id: string, type: string, config: Record<string, any> = {}): IEntity | null {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
-        console.log(`[EntityRegistry] Discovering new ${type} with ID: ${id}`);
+        const entityId = id;
+        const moduleId = config.m;
+
+        if (moduleId && typeof moduleId === 'string') {
+            console.log(`[EntityRegistry] Discovering entity ${id} as part of object module: ${moduleId}`);
+            // Check if it's already being handled by a spawned instance to avoid loops
+            const existingInstance = this.context.runtime.session?.getObjectInstance(id.replace('prop_', ''));
+            if (existingInstance) {
+                const primary = existingInstance.getPrimaryEntity?.();
+                if (primary) return primary;
+            }
+
+            const spawnConfig: any = {
+                id: id.replace('prop_', ''),
+                halfExtents: config.he ? { x: config.he[0], y: config.he[1], z: config.he[2] } : undefined,
+                position: config.p ? { x: config.p[0], y: config.p[1], z: config.p[2] } : undefined,
+                isAuthority: false,
+                ownerId: config.o || config.ownerId,
+                url: config.url
+            };
+
+            const instance = this.context.runtime.session?.spawnObjectInstance(moduleId, spawnConfig);
+            if (instance) {
+                return instance.getPrimaryEntity?.() || null;
+            }
+        }
+
         const entity = EntityFactory.spawn(this.context, type, id, config);
 
         if (entity) {

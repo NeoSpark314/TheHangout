@@ -8,10 +8,40 @@ import { AppContext } from '../../app/AppContext';
  */
 export class AssetRuntime {
     private loader = new GLTFLoader();
+    private textureLoader = new THREE.TextureLoader();
     private cache: Map<string, THREE.Group> = new Map();
     private loadingPromises: Map<string, Promise<THREE.Group>> = new Map();
+    private textureCache: Map<string, THREE.Texture> = new Map();
+    private texturePromises: Map<string, Promise<THREE.Texture>> = new Map();
 
     constructor(private context: AppContext) { }
+
+    public async loadTexture(url: string): Promise<THREE.Texture> {
+        if (this.textureCache.has(url)) {
+            return this.textureCache.get(url)!;
+        }
+
+        if (this.texturePromises.has(url)) {
+            return this.texturePromises.get(url)!;
+        }
+
+        const promise = new Promise<THREE.Texture>((resolve, reject) => {
+            this.textureLoader.load(url,
+                (texture) => {
+                    this.textureCache.set(url, texture);
+                    resolve(texture);
+                },
+                undefined,
+                (error) => reject(error)
+            );
+        });
+
+        this.texturePromises.set(url, promise);
+        const result = await promise;
+        this.texturePromises.delete(url);
+
+        return result;
+    }
 
     public async loadGLTF(url: string): Promise<THREE.Group> {
         if (this.cache.has(url)) {

@@ -31,7 +31,10 @@ export class EntityFactory {
                 config.size || 0.12,
                 config.position || { x: 0, y: 0, z: 0 },
                 config.mesh,
-                config.halfExtents
+                config.halfExtents,
+                config.m || config.moduleId,
+                config.ownerId || config.o,
+                config.url
             );
         });
         this.register('PEN', (context, id, config) => this.createPen(context, id, config));
@@ -91,7 +94,10 @@ export class EntityFactory {
         size: number,
         position: IVector3,
         mesh: THREE.Mesh,
-        halfExtents?: IVector3
+        halfExtents?: IVector3,
+        moduleId?: string,
+        ownerId?: string | null,
+        url?: string
     ): PhysicsPropEntity | null {
         const runtime = context.runtime;
         const render = runtime.render;
@@ -109,7 +115,7 @@ export class EntityFactory {
             view.addToInteractionGroup(render.interactionGroup);
         }
 
-        return runtime.physics.createGrabbable(id, size, position, mesh, view, halfExtents);
+        return runtime.physics.createGrabbable(id, size, position, mesh, view, halfExtents, moduleId, ownerId, url);
     }
 
     public static createPen(context: AppContext, id: string, config: Record<string, any>): PenToolEntity | null {

@@ -35,6 +35,7 @@ import { EVENTS } from '../shared/constants/Constants';
 import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
 import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
+import { ConfigRegistry } from '../shared/config/ConfigRegistry';
 
 /**
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
@@ -94,6 +95,21 @@ export class App {
     }
 
     private initializeRuntime(): void {
+        ConfigRegistry.register({
+            id: 'user_models',
+            title: '3D Model URLs',
+            description: 'Provide URLs to .glb files to spawn them in the world.',
+            type: 'key-value-list',
+            defaultTarget: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf'
+        });
+        ConfigRegistry.register({
+            id: 'user_images',
+            title: 'Image URLs',
+            description: 'Provide URLs to images to spawn them as floating squares.',
+            type: 'key-value-list',
+            defaultTarget: 'https://play.thehangout.app/th-logo.png'
+        });
+
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
         this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
         this.context.setRuntime('notify', new NotificationRuntime());

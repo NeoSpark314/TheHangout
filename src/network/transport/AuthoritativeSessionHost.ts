@@ -145,6 +145,7 @@ export class AuthoritativeSessionHost {
             let entity = runtime.entity.getEntity(stateData.id);
             if (!entity) {
                 const config = {
+                    ...stateData.state,
                     spawnPos: { x: 0, y: 0, z: 0 },
                     spawnYaw: 0,
                     isAuthority: false,
