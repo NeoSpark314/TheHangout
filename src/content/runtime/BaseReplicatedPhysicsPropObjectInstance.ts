@@ -13,6 +13,8 @@ interface IReplicatedPhysicsPropInit {
     ownerId?: string | null;
     url?: string;
     entityId?: string;
+    scale?: number;
+    dualGrabScalable?: boolean;
 }
 
 export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplicatedObjectInstance {
@@ -34,7 +36,9 @@ export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplic
             init.halfExtents,
             moduleId,
             init.ownerId,
-            init.url
+            init.url,
+            init.scale,
+            init.dualGrabScalable
         );
 
         if (this.propEntity) {

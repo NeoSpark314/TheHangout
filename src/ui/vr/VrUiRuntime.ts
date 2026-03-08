@@ -1702,7 +1702,7 @@ export class VrUiRuntime implements IUpdatable {
                     this.context.runtime.session.spawnPortableObjectModule('simple-shared-object', {
                         position: targetPosition,
                         url: item.value,
-                        ownerId: localId,
+                        ownerId: this.context.isHost ? null : localId,
                         isAuthority: true
                     });
 

@@ -21,16 +21,29 @@ export abstract class ReplicatedEntity implements IEntity, INetworkable<any> {
     /**
      * Standardized way to claim control over an entity.
      */
-    public requestOwnership(): void {
+    public requestOwnership(): boolean {
         const localId = this.context.localPlayer?.id || 'local';
-        if (this.ownerId === localId) return;
+        if (this.ownerId === localId) return true;
 
+        if (this.context.isHost) {
+            this.ownerId = localId;
+            this.isAuthority = true;
+            return true;
+        }
+
+        // On guests, avoid creating split-brain authority when another peer
+        // already owns the entity. Wait for host transfer ACK first.
+        if (this.ownerId && this.ownerId !== localId) {
+            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { entityId: this.id });
+            return false;
+        }
+
+        // Optimistic claim is only safe for currently-unowned entities.
         this.ownerId = localId;
         this.isAuthority = true;
 
-        if (!this.context.isHost) {
-            eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { entityId: this.id });
-        }
+        eventBus.emit(EVENTS.REQUEST_OWNERSHIP, { entityId: this.id });
+        return true;
     }
 
     /**

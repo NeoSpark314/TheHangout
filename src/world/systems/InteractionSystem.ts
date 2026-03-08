@@ -16,6 +16,7 @@ export class InteractionSystem {
         point: THREE.Vector3,
         maxDist: number
     ): { interactable: IInteractable, distance: number, contactPoint?: THREE.Vector3 } | null {
+        const localId = this.context.localPlayer?.id || 'local';
         let nearest: IInteractable | null = null;
         let minDist = maxDist;
 
@@ -40,7 +41,7 @@ export class InteractionSystem {
         for (const entity of this.context.runtime.entity.entities.values()) {
             if (entity.type === EntityType.PHYSICS_PROP) continue;
             // Check if it's holdable, interactable and NOT currently held
-            if (isHoldable(entity) && isInteractable(entity) && !entity.heldBy) {
+            if (isHoldable(entity) && isInteractable(entity) && (!entity.heldBy || entity.heldBy === localId)) {
                 const entityRadius = this.getEntityGrabRadius(entity as unknown as { getGrabRadius?: () => number });
                 // Check if the entity provides specific grab handles
                 const grabRoots = (entity.getGrabRoots && typeof entity.getGrabRoots === 'function')

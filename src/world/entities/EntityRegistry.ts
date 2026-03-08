@@ -56,7 +56,8 @@ export class EntityRegistry implements IUpdatable {
                 position: config.p ? { x: config.p[0], y: config.p[1], z: config.p[2] } : undefined,
                 isAuthority: false,
                 ownerId: config.o ?? config.ownerId,
-                url: config.url
+                url: config.url,
+                scale: config.s
             };
 
             const instance = this.context.runtime.session?.spawnObjectInstance(moduleId, spawnConfig);

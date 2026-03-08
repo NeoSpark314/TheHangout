@@ -138,7 +138,9 @@ export class PhysicsRuntime {
         halfExtents?: IVector3,
         moduleId?: string,
         ownerId?: string | null,
-        url?: string
+        url?: string,
+        scale?: number,
+        dualGrabScalable?: boolean
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
 
@@ -186,7 +188,9 @@ export class PhysicsRuntime {
             halfExtents,
             moduleId,
             ownerId,
-            url
+            url,
+            initialScale: scale,
+            dualGrabScalable
         });
         physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
@@ -194,6 +198,9 @@ export class PhysicsRuntime {
         const entityRegistry = this.context.runtime.entity;
         if (!entityRegistry) return null;
         entityRegistry.addEntity(physicsEntity);
+        if (typeof scale === 'number' && Number.isFinite(scale) && physicsEntity.supportsDualGrabScale()) {
+            physicsEntity.setUniformScale(scale);
+        }
 
         return physicsEntity;
     }
@@ -360,6 +367,7 @@ export class PhysicsRuntime {
         gripRadius: number
     ): { target: PhysicsInteractionTarget; distance: number; point: IVector3 } | null {
         if (!this.world) return null;
+        const localId = this.context.localPlayer?.id || 'local';
         this.grabQueryShape.radius = Math.max(0.01, gripRadius);
 
         let nearestTarget: PhysicsInteractionTarget | null = null;
@@ -372,7 +380,8 @@ export class PhysicsRuntime {
             this.grabQueryShape,
             (collider) => {
                 const target = this.interactionColliders.get(collider.handle);
-                if (!target || !!target.heldBy) return true;
+                if (!target) return true;
+                if (target.heldBy && target.heldBy !== localId) return true;
 
                 const projection = collider.projectPoint({ x: point.x, y: point.y, z: point.z }, true);
                 if (!projection) return true;

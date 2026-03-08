@@ -51,6 +51,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private targetPos: IVector3 = { x: 0, y: 0, z: 0 };
     private targetRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
     private lerpFactor: number = 0.2;
+    private heldLerpFactor: number = 0.5;
 
     private simMode: PhysicsSimMode = PhysicsSimMode.AuthoritativeDynamic;
 
@@ -76,6 +77,12 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private lastSyncAwake: boolean = true;
     private lastSyncHeldBy: string | null = null;
     private lastSyncOwnerId: string | null = null;
+    private lastSyncScale: number = 1;
+    private uniformScale: number = 1;
+    private dualGrabScalable: boolean = false;
+    private baseHalfExtents: IVector3 | null = null;
+    private minScale: number = 0.25;
+    private maxScale: number = 3.0;
 
     constructor(protected context: AppContext, id: string, isAuthority: boolean, rigidBody: RAPIER.RigidBody, options: any = {}) {
         super(context, id, options.type || EntityType.PHYSICS_PROP, isAuthority);
@@ -86,8 +93,19 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.spawnPosition = options.spawnPosition ? { ...options.spawnPosition } : null;
         this.grabRadius = Math.max(0.03, options.grabRadius ?? 0.06);
         this.halfExtents = options.halfExtents;
+        this.baseHalfExtents = options.halfExtents ? { ...options.halfExtents } : null;
         this.moduleId = options.moduleId;
         this.ownerId = options.ownerId !== undefined ? options.ownerId : null;
+        this.dualGrabScalable = options.dualGrabScalable === true;
+        if (typeof options.minScale === 'number' && Number.isFinite(options.minScale)) {
+            this.minScale = Math.max(0.05, options.minScale);
+        }
+        if (typeof options.maxScale === 'number' && Number.isFinite(options.maxScale)) {
+            this.maxScale = Math.max(this.minScale, options.maxScale);
+        }
+        if (typeof options.initialScale === 'number' && Number.isFinite(options.initialScale)) {
+            this.uniformScale = Math.max(this.minScale, Math.min(this.maxScale, options.initialScale));
+        }
         if (options.url) {
             // Some objects might use this directly if they don't have a separate Instance class
             (this as any).url = options.url;
@@ -101,6 +119,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.proxyRenderRot = { ...this.targetRot };
         this.presentPos = { ...this.targetPos };
         this.presentRot = { ...this.targetRot };
+        this.applyVisualScale();
+        this.applyScaledCollider();
 
         this.syncAuthority();
         this.refreshSimMode();
@@ -211,7 +231,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         if (!this.rigidBody) return;
-        this.requestOwnership();
+        const hasAuthority = this.requestOwnership();
+        if (!hasAuthority) return;
 
         this.pendingReleaseArmed = false;
         this.heldBy = playerId;
@@ -227,6 +248,36 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
 
     public getGrabRadius(): number {
         return this.grabRadius;
+    }
+
+    public supportsDualGrabScale(): boolean {
+        return this.dualGrabScalable;
+    }
+
+    public getUniformScale(): number {
+        return this.uniformScale;
+    }
+
+    public getDualGrabScaleLimits(): { min: number; max: number } {
+        return { min: this.minScale, max: this.maxScale };
+    }
+
+    public getBaseHalfExtents(): IVector3 | null {
+        return this.baseHalfExtents ? { ...this.baseHalfExtents } : null;
+    }
+
+    public setBaseHalfExtents(halfExtents: IVector3): void {
+        this.baseHalfExtents = { ...halfExtents };
+        this.applyScaledCollider();
+    }
+
+    public setUniformScale(scale: number): void {
+        if (!this.dualGrabScalable || !Number.isFinite(scale)) return;
+        const clamped = Math.max(this.minScale, Math.min(this.maxScale, scale));
+        if (Math.abs(clamped - this.uniformScale) < 0.0001) return;
+        this.uniformScale = clamped;
+        this.applyVisualScale();
+        this.applyScaledCollider();
     }
 
     public updateGrabbedPose(pose: IPose): void {
@@ -336,10 +387,11 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
                     this.proxyRenderRot = { ...this.targetRot };
                     this.proxyInitialized = true;
                 } else {
-                    this.proxyRenderPos.x += (this.targetPos.x - this.proxyRenderPos.x) * this.lerpFactor;
-                    this.proxyRenderPos.y += (this.targetPos.y - this.proxyRenderPos.y) * this.lerpFactor;
-                    this.proxyRenderPos.z += (this.targetPos.z - this.proxyRenderPos.z) * this.lerpFactor;
-                    this.nlerpQuaternion(this.proxyRenderRot, this.targetRot, this.lerpFactor);
+                    const followLerp = this.heldBy ? this.heldLerpFactor : this.lerpFactor;
+                    this.proxyRenderPos.x += (this.targetPos.x - this.proxyRenderPos.x) * followLerp;
+                    this.proxyRenderPos.y += (this.targetPos.y - this.proxyRenderPos.y) * followLerp;
+                    this.proxyRenderPos.z += (this.targetPos.z - this.proxyRenderPos.z) * followLerp;
+                    this.nlerpQuaternion(this.proxyRenderRot, this.targetRot, followLerp);
                 }
 
                 this.presentPos = this.proxyRenderPos;
@@ -359,10 +411,20 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     public getNetworkState(fullSync: boolean = false): Partial<IEntityState> | null {
-        const isAwake = !this.rigidBody.isSleeping();
-        const pos = this.rigidBody.translation();
-        const rot = this.rigidBody.rotation();
-        const vel = this.rigidBody.linvel();
+        const isHeldAuthoritative = this.isAuthority && !!this.heldBy;
+        const isAwake = isHeldAuthoritative ? true : !this.rigidBody.isSleeping();
+        const rbPos = this.rigidBody.translation();
+        const rbRot = this.rigidBody.rotation();
+        const rbVel = this.rigidBody.linvel();
+        const pos = isHeldAuthoritative
+            ? { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z }
+            : { x: rbPos.x, y: rbPos.y, z: rbPos.z };
+        const rot = isHeldAuthoritative
+            ? { x: this.targetRot.x, y: this.targetRot.y, z: this.targetRot.z, w: this.targetRot.w }
+            : { x: rbRot.x, y: rbRot.y, z: rbRot.z, w: rbRot.w };
+        const vel = isHeldAuthoritative
+            ? { x: 0, y: 0, z: 0 }
+            : { x: rbVel.x, y: rbVel.y, z: rbVel.z };
 
         if (!fullSync) {
             const posChanged = Math.abs(pos.x - this.lastSyncPos.x) > 0.001 ||
@@ -376,7 +438,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
 
             const stateChanged = isAwake !== this.lastSyncAwake ||
                 this.heldBy !== this.lastSyncHeldBy ||
-                this.ownerId !== this.lastSyncOwnerId;
+                this.ownerId !== this.lastSyncOwnerId ||
+                (this.dualGrabScalable && Math.abs(this.uniformScale - this.lastSyncScale) > 0.0001);
 
             if (!isAwake && !posChanged && !rotChanged && !stateChanged) {
                 return null;
@@ -388,6 +451,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.lastSyncAwake = isAwake;
         this.lastSyncHeldBy = this.heldBy;
         this.lastSyncOwnerId = this.ownerId;
+        this.lastSyncScale = this.uniformScale;
 
         return {
             id: this.id,
@@ -398,16 +462,28 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             b: this.heldBy,
             ownerId: this.ownerId,
             m: this.moduleId,
-            he: this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined
+            he: this.baseHalfExtents
+                ? [this.baseHalfExtents.x, this.baseHalfExtents.y, this.baseHalfExtents.z]
+                : (this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined),
+            s: this.dualGrabScalable ? this.uniformScale : undefined
         } as IPhysicsEntityState;
     }
 
     public applyNetworkState(state: Partial<IEntityState>): void {
+        const prevOwnerId = this.ownerId;
+        const prevHeldBy = this.heldBy;
         this.syncNetworkState(state);
 
         if (this.isAuthority) return;
 
         const propState = state as Partial<IPhysicsEntityState>;
+        if (propState.he && propState.he.length === 3) {
+            const incomingBaseHalfExtents = { x: propState.he[0], y: propState.he[1], z: propState.he[2] };
+            if (!this.baseHalfExtents || this.hasSignificantExtentsDelta(this.baseHalfExtents, incomingBaseHalfExtents)) {
+                this.setBaseHalfExtents(incomingBaseHalfExtents);
+            }
+        }
+
         const snapshot: INetworkSnapshot = {
             receivedAtMs: this.nowMs(),
             position: propState.p ? { x: propState.p[0], y: propState.p[1], z: propState.p[2] } : { ...this.targetPos },
@@ -415,6 +491,12 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             velocity: propState.v ? { x: propState.v[0], y: propState.v[1], z: propState.v[2] } : { x: 0, y: 0, z: 0 },
             heldBy: propState.b || null
         };
+
+        const ownerChanged = this.ownerId !== prevOwnerId;
+        const heldChanged = snapshot.heldBy !== prevHeldBy;
+        if (ownerChanged || heldChanged) {
+            this.clearSnapshotBuffer();
+        }
         this.snapshotBuffer.push(snapshot);
 
         if (this.snapshotBuffer.length > this.maxSnapshots) {
@@ -427,6 +509,11 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         }
 
         this.heldBy = snapshot.heldBy;
+        if (this.dualGrabScalable && typeof propState.s === 'number' && Number.isFinite(propState.s)) {
+            this.uniformScale = Math.max(this.minScale, Math.min(this.maxScale, propState.s));
+            this.applyVisualScale();
+            this.applyScaledCollider();
+        }
         this.copyVec3(this.targetPos, snapshot.position);
         this.copyQuat(this.targetRot, snapshot.quaternion);
 
@@ -495,6 +582,14 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
 
     private updateProxyTargetFromBuffer(): void {
         if (this.snapshotBuffer.length === 0) return;
+
+        const latest = this.snapshotBuffer[this.snapshotBuffer.length - 1];
+        if (latest.heldBy) {
+            this.copyVec3(this.targetPos, latest.position);
+            this.copyQuat(this.targetRot, latest.quaternion);
+            this.heldBy = latest.heldBy;
+            return;
+        }
 
         const now = this.nowMs();
         const sampleTime = now - this.interpolationDelayMs;
@@ -588,6 +683,36 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private applyVisualScale(): void {
+        const mesh = this.view?.mesh;
+        if (!mesh) return;
+        mesh.scale.set(this.uniformScale, this.uniformScale, this.uniformScale);
+    }
+
+    private applyScaledCollider(): void {
+        const runtimePhysics = this.context.runtime.physics;
+        if (!runtimePhysics) return;
+
+        const source = this.baseHalfExtents ?? this.halfExtents;
+        if (!source) return;
+
+        const scaled = this.dualGrabScalable
+            ? {
+                x: source.x * this.uniformScale,
+                y: source.y * this.uniformScale,
+                z: source.z * this.uniformScale
+            }
+            : { ...source };
+
+        runtimePhysics.updateGrabbableCollider(this.id, undefined, 0.5, scaled);
+        this.halfExtents = scaled;
+    }
+
+    private hasSignificantExtentsDelta(a: IVector3, b: IVector3): boolean {
+        const eps = 0.0001;
+        return Math.abs(a.x - b.x) > eps || Math.abs(a.y - b.y) > eps || Math.abs(a.z - b.z) > eps;
     }
 
     private emitOwnershipReleaseNow(): void {

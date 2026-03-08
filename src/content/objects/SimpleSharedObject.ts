@@ -42,7 +42,9 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
             halfExtents: DEFAULT_HALF_EXTENTS,
             ownerId,
             url: typeof config.url === 'string' ? config.url : undefined,
-            entityId
+            entityId,
+            scale: typeof config.scale === 'number' ? config.scale : undefined,
+            dualGrabScalable: true
         });
 
         this.group = group;
@@ -77,15 +79,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
 
     private updateCollider(halfExtents: { x: number; y: number; z: number }): void {
         if (!this.propEntity) return;
-        // Resize the local physics collider to match the loaded asset bounds.
-        // Every peer does this independently after their own download completes.
-        this.context.app.runtime.physics?.updateGrabbableCollider(
-            this.propEntity.id,
-            undefined,
-            0.5,
-            halfExtents
-        );
-        this.propEntity.halfExtents = halfExtents;
+        this.propEntity.setBaseHalfExtents(halfExtents);
     }
 
     private loadUrl(newUrl: string): void {
@@ -172,9 +166,10 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
     }
 
     public captureReplicationSnapshot(): unknown {
+        const baseHalfExtents = this.propEntity?.getBaseHalfExtents?.() || this.propEntity?.halfExtents;
         return {
             url: this.url,
-            halfExtents: this.propEntity?.halfExtents
+            halfExtents: baseHalfExtents
         };
     }
 

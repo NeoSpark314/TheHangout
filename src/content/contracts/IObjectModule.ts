@@ -14,6 +14,7 @@ export interface IObjectSpawnConfig {
     color?: number;
     url?: string;
     halfExtents?: IVector3;
+    scale?: number;
 }
 
 export type IObjectSpawnContext = IObjectRuntimeContext;
