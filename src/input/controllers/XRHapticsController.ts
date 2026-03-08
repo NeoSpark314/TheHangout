@@ -17,18 +17,18 @@ interface IHapticPreset {
 export class XRHapticsController {
     private readonly lastPulseAt = new Map<string, number>();
     private readonly uiHoverPreset: IHapticPreset = {
-        intensity: 0.18,
-        durationMs: 18,
+        intensity: 0.55,
+        durationMs: 30,
         cooldownMs: 70,
-        weakMagnitude: 0.14,
-        strongMagnitude: 0.14
+        weakMagnitude: 0.45,
+        strongMagnitude: 0.55
     };
     private readonly grabHintPreset: IHapticPreset = {
-        intensity: 0.2,
-        durationMs: 22,
+        intensity: 0.65,
+        durationMs: 36,
         cooldownMs: 120,
-        weakMagnitude: 0.16,
-        strongMagnitude: 0.18
+        weakMagnitude: 0.55,
+        strongMagnitude: 0.65
     };
 
     constructor(private context: AppContext) { }
@@ -56,20 +56,39 @@ export class XRHapticsController {
 
         this.lastPulseAt.set(key, nowMs);
 
-        const hapticActuator = (gamepad as any).hapticActuators?.[0];
-        if (hapticActuator?.pulse) {
-            void hapticActuator.pulse(preset.intensity, preset.durationMs);
-            return;
+        let didPulse = false;
+        const hapticActuators = (gamepad as any).hapticActuators as Array<{ pulse?: (v: number, ms: number) => Promise<boolean> | boolean }> | undefined;
+        if (hapticActuators && hapticActuators.length > 0) {
+            for (const actuator of hapticActuators) {
+                if (!actuator?.pulse) continue;
+                didPulse = true;
+                try {
+                    void actuator.pulse(preset.intensity, preset.durationMs);
+                } catch {
+                    // Ignore per-actuator failures and continue trying others.
+                }
+            }
         }
 
-        const vibrationActuator = (gamepad as any).vibrationActuator;
-        if (vibrationActuator?.playEffect) {
-            void vibrationActuator.playEffect('dual-rumble', {
-                startDelay: 0,
-                duration: preset.durationMs,
-                weakMagnitude: preset.weakMagnitude ?? preset.intensity,
-                strongMagnitude: preset.strongMagnitude ?? preset.intensity
-            });
+        const vibrationActuator = (gamepad as any).vibrationActuator as {
+            playEffect?: (type: string, params: {
+                startDelay: number;
+                duration: number;
+                weakMagnitude: number;
+                strongMagnitude: number;
+            }) => Promise<boolean> | boolean;
+        } | undefined;
+        if (!didPulse && vibrationActuator?.playEffect) {
+            try {
+                void vibrationActuator.playEffect('dual-rumble', {
+                    startDelay: 0,
+                    duration: preset.durationMs,
+                    weakMagnitude: preset.weakMagnitude ?? preset.intensity,
+                    strongMagnitude: preset.strongMagnitude ?? preset.intensity
+                });
+            } catch {
+                // Ignore unsupported effect/type failures.
+            }
         }
     }
 
@@ -84,13 +103,17 @@ export class XRHapticsController {
             return null;
         }
 
+        let fallback: Gamepad | null = null;
         for (const source of session.inputSources) {
+            if (source.gamepad && !fallback) {
+                fallback = source.gamepad;
+            }
             if (source.handedness === hand && source.gamepad) {
                 return source.gamepad;
             }
         }
 
-        return null;
+        // Some runtimes may not expose stable handedness immediately.
+        return fallback;
     }
 }
-
