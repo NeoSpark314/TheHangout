@@ -39,18 +39,31 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- Assets Storage Setup ---
 const ASSETS_DIR = path.join(__dirname, 'storage', 'assets');
+const THUMBS_DIR = path.join(ASSETS_DIR, 'thumbnails');
 if (!fs.existsSync(ASSETS_DIR)) {
     fs.mkdirSync(ASSETS_DIR, { recursive: true });
+}
+if (!fs.existsSync(THUMBS_DIR)) {
+    fs.mkdirSync(THUMBS_DIR, { recursive: true });
 }
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, ASSETS_DIR);
+        if (file.fieldname === 'thumbnail') {
+            cb(null, THUMBS_DIR);
+        } else {
+            cb(null, ASSETS_DIR);
+        }
     },
     filename: (req, file, cb) => {
         // Keep original filename but prevent directory traversal
         const safeName = path.basename(file.originalname);
-        cb(null, safeName);
+        if (file.fieldname === 'thumbnail') {
+            // Force .webp for thumbnails if we want, or just keep same name
+            cb(null, safeName + '.webp');
+        } else {
+            cb(null, safeName);
+        }
     }
 });
 const upload = multer({ storage });
@@ -268,14 +281,17 @@ app.post('/api/admin/session/:id/command', (req, res) => {
 // List all assets
 app.get('/api/assets', (req, res) => {
     try {
-        const files = fs.readdirSync(ASSETS_DIR);
+        const files = fs.readdirSync(ASSETS_DIR).filter(f => f !== 'thumbnails');
         const fileList = files.map(file => {
             const stats = fs.statSync(path.join(ASSETS_DIR, file));
+            const thumbName = file + '.webp';
+            const hasThumb = fs.existsSync(path.join(THUMBS_DIR, thumbName));
             return {
                 name: file,
                 size: stats.size,
                 mtime: stats.mtime,
-                url: `/storage/assets/${file}`
+                url: `/storage/assets/${file}`,
+                thumbnailUrl: hasThumb ? `/storage/assets/thumbnails/${thumbName}` : null
             };
         });
         res.json(fileList);
@@ -285,15 +301,23 @@ app.get('/api/assets', (req, res) => {
 });
 
 // Upload a new asset
-app.post('/api/assets/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
+app.post('/api/assets/upload', upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'thumbnail', maxCount: 1 }
+]), (req, res) => {
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    if (!files || !files.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
+    const uploadedFile = files.file[0];
+    const thumbnailFile = files.thumbnail ? files.thumbnail[0] : null;
+
     res.json({
         success: true,
         file: {
-            name: req.file.filename,
-            url: `/storage/assets/${req.file.filename}`
+            name: uploadedFile.filename,
+            url: `/storage/assets/${uploadedFile.filename}`,
+            thumbnailUrl: thumbnailFile ? `/storage/assets/thumbnails/${thumbnailFile.filename}` : null
         }
     });
 });
@@ -310,6 +334,10 @@ app.delete('/api/assets/:filename', (req, res) => {
 
     try {
         fs.unlinkSync(filePath);
+        const thumbPath = path.join(THUMBS_DIR, safeName + '.webp');
+        if (fs.existsSync(thumbPath)) {
+            fs.unlinkSync(thumbPath);
+        }
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete file' });

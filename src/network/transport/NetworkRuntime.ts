@@ -28,6 +28,7 @@ import { NetworkEnvelope, PacketPayloadMap } from '../protocol/PacketTypes';
 import { IReplicatedFeatureEventPayload, IReplicatedFeatureSnapshotPayload } from '../replication/FeatureReplicationService';
 import { IAudioChunkPayload, IAudioChunkReceiver } from '../../shared/contracts/IVoice';
 import { AuthoritativeSessionHost } from './AuthoritativeSessionHost';
+import { applyEntityStateUpdates } from './EntityStateUpdateApplier';
 
 /**
  * Architectural Role: Responsible for establishing and managing peer-to-peer WebRTC connections.
@@ -543,57 +544,12 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         source: 'state_update' | 'player_input' = 'state_update',
         senderId?: string
     ): void {
-        const runtime = this.context.runtime;
-        const localId = this.context.localPlayer?.id || 'local';
-        for (const stateData of entityStates) {
-            let entity = runtime.entity.getEntity(stateData.id);
-            if (!entity) {
-                // Skip if this is actually us (should already be in entities, but be safe)
-                if (this.context.localPlayer && stateData.id === this.context.localPlayer.id) continue;
-
-                const config = {
-                    ...stateData.state,
-                    spawnPos: { x: 0, y: 0, z: 0 },
-                    spawnYaw: 0,
-                    isAuthority: false,
-                    controlMode: stateData.type === EntityType.PLAYER_AVATAR ? 'remote' : undefined
-                };
-                entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
-            }
-            const state = stateData.state as { ownerId?: string | null; o?: string | null; b?: string | null; p?: number[] };
-            const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
-            const incomingOwnerId = hasOwnershipHint
-                ? (state.ownerId !== undefined ? state.ownerId : state.o)
-                : undefined;
-            const incomingHeldBy = state.b ?? undefined;
-
-            if (entity && source === 'player_input' && stateData.type !== EntityType.PLAYER_AVATAR) {
-                const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
-
-                if (this.context.isHost) {
-                    if (currentOwnerId && senderId && currentOwnerId !== senderId) {
-                        continue;
-                    }
-
-                    if (
-                        currentOwnerId === null &&
-                        incomingOwnerId !== undefined &&
-                        incomingOwnerId === senderId &&
-                        incomingHeldBy === senderId
-                    ) {
-                        (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
-                        entity.isAuthority = false;
-                    }
-                } else if (incomingOwnerId !== undefined) {
-                    (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
-                    entity.isAuthority = (incomingOwnerId === localId) || (incomingOwnerId === null && this.context.isHost);
-                }
-            }
-            if (entity && !entity.isAuthority) {
-                const networkable = entity as unknown as INetworkable<unknown>;
-                if (networkable.applyNetworkState) networkable.applyNetworkState(stateData.state);
-            }
-        }
+        applyEntityStateUpdates(this.context, entityStates, {
+            source,
+            authorityMode: this.context.isHost ? 'host' : 'guest',
+            senderId,
+            skipLocalPlayerSelfDiscover: true
+        });
     }
 
     public relayToOthers(senderId: string, type: number, payload: unknown): void {

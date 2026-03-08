@@ -33,7 +33,11 @@ export class EntityRegistry implements IUpdatable {
         if (moduleId && typeof moduleId === 'string') {
             console.log(`[EntityRegistry] Discovering entity ${id} as part of object module: ${moduleId}`);
             const module = this.context.runtime.session?.getObjectModuleDefinition(moduleId);
-            if (module && module.networked === false) {
+            if (!module) {
+                console.warn(`[EntityRegistry] Cannot discover unknown object module from network state: ${moduleId}`);
+                return null;
+            }
+            if (module.networked === false) {
                 console.warn(`[EntityRegistry] Ignoring non-networked object module from network state: ${moduleId}`);
                 return null;
             }
@@ -59,6 +63,9 @@ export class EntityRegistry implements IUpdatable {
             if (instance) {
                 return instance.getPrimaryEntity?.() || null;
             }
+
+            console.warn(`[EntityRegistry] Failed to spawn object module instance for discovered entity: ${moduleId} (${id})`);
+            return null;
         }
 
         const entity = EntityFactory.spawn(this.context, type, id, config);

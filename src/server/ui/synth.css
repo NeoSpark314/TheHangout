@@ -239,6 +239,17 @@ body {
     box-shadow: 0 0 18px rgba(239, 68, 68, 0.28);
 }
 
+.synth-button.is-success {
+    border-color: var(--synth-success);
+    color: var(--synth-success);
+}
+
+.synth-button.is-success:hover:not(:disabled) {
+    background: var(--synth-success);
+    color: var(--synth-bg);
+    box-shadow: 0 0 18px rgba(0, 255, 100, 0.35);
+}
+
 .synth-status-panel {
     display: flex;
     gap: 16px;

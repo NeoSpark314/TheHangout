@@ -1,9 +1,9 @@
-import { AppContext } from '../../app/AppContext';
-import { NetworkDispatcher } from '../protocol/PacketDispatcher';
-import { PacketPayloadMap } from '../protocol/PacketTypes';
-import { NetworkSynchronizer, INetworkTransport } from '../replication/StateSynchronizer';
-import { PACKET_TYPES } from '../../shared/constants/Constants';
-import { EntityType, IStateUpdatePacket } from '../../shared/contracts/IEntityState';
+import { AppContext } from '../../app/AppContext.ts';
+import { NetworkDispatcher } from '../protocol/PacketDispatcher.ts';
+import { PacketPayloadMap } from '../protocol/PacketTypes.ts';
+import { NetworkSynchronizer, INetworkTransport } from '../replication/StateSynchronizer.ts';
+import { PACKET_TYPES } from '../../shared/constants/Constants.ts';
+import { EntityType, IStateUpdatePacket } from '../../shared/contracts/IEntityState.ts';
 import {
     IFeatureSnapshotRequestPayload,
     IPeerLatencyReportPayload,
@@ -12,11 +12,12 @@ import {
     IOwnershipRequestPayload,
     IScenarioActionRequestPayload,
     ISessionConfigUpdatePayload
-} from '../../shared/contracts/INetworkPacket';
+} from '../../shared/contracts/INetworkPacket.ts';
 import {
     IReplicatedFeatureEventPayload,
     IReplicatedFeatureSnapshotPayload
-} from '../replication/FeatureReplicationService';
+} from '../replication/FeatureReplicationService.ts';
+import { applyEntityStateUpdates } from './EntityStateUpdateApplier.ts';
 
 export interface IAuthoritativeHostTransport extends INetworkTransport {
     relayToOthers(senderId: string, type: number, payload: unknown): void;
@@ -139,56 +140,11 @@ export class AuthoritativeSessionHost {
     }
 
     public applyStateUpdate(entityStates: IStateUpdatePacket[], senderId?: string): void {
-        const runtime = this.context.runtime;
-
-        for (const stateData of entityStates) {
-            let entity = runtime.entity.getEntity(stateData.id);
-            if (!entity) {
-                const config = {
-                    ...stateData.state,
-                    spawnPos: { x: 0, y: 0, z: 0 },
-                    spawnYaw: 0,
-                    isAuthority: false,
-                    controlMode: stateData.type === EntityType.PLAYER_AVATAR ? 'remote' : undefined
-                };
-                entity = runtime.entity.discover(stateData.id, stateData.type, config) || undefined;
-            }
-
-            const state = stateData.state as { ownerId?: string | null; o?: string | null; b?: string | null };
-            const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
-            const incomingOwnerId = hasOwnershipHint
-                ? (state.ownerId !== undefined ? state.ownerId : state.o)
-                : undefined;
-            const incomingHeldBy = state.b ?? undefined;
-
-            if (entity && stateData.type !== EntityType.PLAYER_AVATAR) {
-                const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
-
-                // Only the current owner may drive the prop while ownership is leased.
-                if (currentOwnerId && senderId && currentOwnerId !== senderId) {
-                    continue;
-                }
-
-                // Allow the first packet after a local claim to establish owner identity on the host,
-                // but only while the sender is actively holding the prop. Without the heldBy guard,
-                // a late post-release packet can silently reclaim ownership after the host already
-                // accepted the release, which leaves tools like the pen stuck with a stale owner.
-                if (
-                    currentOwnerId === null &&
-                    incomingOwnerId !== undefined &&
-                    incomingOwnerId === senderId &&
-                    incomingHeldBy === senderId
-                ) {
-                    (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
-                    entity.isAuthority = false;
-                }
-            }
-
-            if (entity && !entity.isAuthority) {
-                const networkable = entity as { applyNetworkState?: (state: unknown) => void };
-                networkable.applyNetworkState?.(stateData.state);
-            }
-        }
+        applyEntityStateUpdates(this.context, entityStates, {
+            source: 'player_input',
+            authorityMode: 'host',
+            senderId
+        });
     }
 
     public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
