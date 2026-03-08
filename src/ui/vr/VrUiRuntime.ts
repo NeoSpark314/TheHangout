@@ -1657,7 +1657,7 @@ export class VrUiRuntime implements IUpdatable {
         title.textColor = UITheme.colors.accent;
         container.addChild(title);
 
-        const subtitle = new UILabel('Spawn your configured 3D models and images into the world', 90, 102, 1080, 36);
+        const subtitle = new UILabel('Spawn your configured items into the world', 90, 102, 1080, 36);
         subtitle.font = getFont(UITheme.typography.sizes.small, 'bold');
         subtitle.textColor = UITheme.colors.textMuted;
         subtitle.textAlign = 'left';
@@ -1670,82 +1670,61 @@ export class VrUiRuntime implements IUpdatable {
             listContainer.clearChildren();
             let rowY = 0;
 
-            const schemas = [
-                { id: 'user_models', objectId: 'simple-shared-object' },
-                { id: 'user_images', objectId: 'simple-shared-object' }
-            ];
+            const items = ConfigRegistry.getKeyValueList('user_items') || [];
+            const hasItems = items.length > 0;
 
-            let hasItems = false;
-
-            schemas.forEach(({ id, objectId }) => {
-                const items = ConfigRegistry.getKeyValueList(id) || [];
-                if (items.length === 0) return;
-
-                hasItems = true;
-
-                const sectionLabel = new UILabel(id === 'user_models' ? '3D Models' : 'Images', 0, rowY + 10, 900, 40);
-                sectionLabel.font = getFont(UITheme.typography.sizes.body, 'bold');
-                sectionLabel.textColor = UITheme.colors.primary;
-                sectionLabel.textAlign = 'left';
-                listContainer.addChild(sectionLabel);
-
-                rowY += 60;
-
-                items.forEach((item) => {
-                    const button = new UIButton(item.name, 0, rowY, 300, 62, () => {
-                        const localPlayer = this.context.localPlayer;
-                        const targetPosition = localPlayer
-                            ? {
-                                x: localPlayer.headState.position.x,
-                                y: localPlayer.headState.position.y - 0.2,
-                                z: localPlayer.headState.position.z
-                            }
-                            : { x: 0, y: 1.2, z: -1.8 };
-
-                        if (localPlayer) {
-                            const forward = new THREE.Vector3(0, 0, -1);
-                            const headQuat = new THREE.Quaternion(
-                                localPlayer.headState.quaternion.x,
-                                localPlayer.headState.quaternion.y,
-                                localPlayer.headState.quaternion.z,
-                                localPlayer.headState.quaternion.w
-                            );
-                            forward.applyQuaternion(headQuat).multiplyScalar(1.0);
-                            targetPosition.x += forward.x;
-                            targetPosition.y += Math.max(-0.1, forward.y);
-                            targetPosition.z += forward.z;
+            items.forEach((item) => {
+                const button = new UIButton(item.name, 0, rowY, 300, 62, () => {
+                    const localPlayer = this.context.localPlayer;
+                    const targetPosition = localPlayer
+                        ? {
+                            x: localPlayer.headState.position.x,
+                            y: localPlayer.headState.position.y - 0.2,
+                            z: localPlayer.headState.position.z
                         }
+                        : { x: 0, y: 1.2, z: -1.8 };
 
-                        const localId = this.context.localPlayer?.id || 'local';
-                        this.context.runtime.session.spawnPortableObjectModule(objectId, {
-                            position: targetPosition,
-                            url: item.value,
-                            ownerId: localId,
-                            isAuthority: true
-                        });
+                    if (localPlayer) {
+                        const forward = new THREE.Vector3(0, 0, -1);
+                        const headQuat = new THREE.Quaternion(
+                            localPlayer.headState.quaternion.x,
+                            localPlayer.headState.quaternion.y,
+                            localPlayer.headState.quaternion.z,
+                            localPlayer.headState.quaternion.w
+                        );
+                        forward.applyQuaternion(headQuat).multiplyScalar(1.0);
+                        targetPosition.x += forward.x;
+                        targetPosition.y += Math.max(-0.1, forward.y);
+                        targetPosition.z += forward.z;
+                    }
 
-                        if (this.context.isMenuOpen) {
-                            this.toggle2DMenu();
-                        }
+                    const localId = this.context.localPlayer?.id || 'local';
+                    this.context.runtime.session.spawnPortableObjectModule('simple-shared-object', {
+                        position: targetPosition,
+                        url: item.value,
+                        ownerId: localId,
+                        isAuthority: true
                     });
 
-                    button.cornerRadius = 10;
-                    button.borderColor = UITheme.colors.secondary;
-                    button.textColor = UITheme.colors.text;
-                    button.backgroundColor = UITheme.colors.panelBg;
-                    button.hoverColor = UITheme.colors.panelBgHover;
-                    listContainer.addChild(button);
-
-                    const urlLabel = new UILabel(item.value, 330, rowY + 14, 730, 34);
-                    urlLabel.font = getFont(UITheme.typography.sizes.small);
-                    urlLabel.textColor = UITheme.colors.textMuted;
-                    urlLabel.textAlign = 'left';
-                    listContainer.addChild(urlLabel);
-
-                    rowY += 80;
+                    if (this.context.isMenuOpen) {
+                        this.toggle2DMenu();
+                    }
                 });
 
-                rowY += 20;
+                button.cornerRadius = 10;
+                button.borderColor = UITheme.colors.secondary;
+                button.textColor = UITheme.colors.text;
+                button.backgroundColor = UITheme.colors.panelBg;
+                button.hoverColor = UITheme.colors.panelBgHover;
+                listContainer.addChild(button);
+
+                const urlLabel = new UILabel(item.value, 330, rowY + 14, 730, 34);
+                urlLabel.font = getFont(UITheme.typography.sizes.small);
+                urlLabel.textColor = UITheme.colors.textMuted;
+                urlLabel.textAlign = 'left';
+                listContainer.addChild(urlLabel);
+
+                rowY += 80;
             });
 
             if (!hasItems) {

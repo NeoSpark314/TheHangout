@@ -624,9 +624,13 @@ export class FlatUiRuntime implements IUpdatable {
                 addBtn.type = 'button';
                 addBtn.textContent = 'Add Item';
                 addBtn.style.marginTop = '10px';
-                addBtn.addEventListener('click', () => {
+                addBtn.addEventListener('click', async () => {
+                    const clipboardUrl = await this.tryReadClipboardUrl();
                     const items = ConfigRegistry.getKeyValueList(schema.id) || [];
-                    items.push({ name: `Item ${items.length + 1}`, value: schema.defaultTarget || '' });
+                    const fallbackValue = schema.defaultTarget || '';
+                    const value = clipboardUrl || fallbackValue;
+                    const defaultName = this.getDefaultItemName(value, items.length + 1);
+                    items.push({ name: defaultName, value });
                     ConfigRegistry.setKeyValueList(schema.id, items);
                     renderList();
                 });
@@ -652,6 +656,42 @@ export class FlatUiRuntime implements IUpdatable {
             this.copyInviteLinkBtn.textContent = '✅';
             setTimeout(() => { this.copyInviteLinkBtn.textContent = originalIcon; }, 2000);
         }).catch(() => { this.setStatus('Copy Failed'); });
+    }
+
+    private async tryReadClipboardUrl(): Promise<string | null> {
+        if (!navigator.clipboard?.readText) return null;
+        try {
+            const raw = (await navigator.clipboard.readText()).trim();
+            if (!raw) return null;
+            const parsed = new URL(raw);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+            return parsed.toString();
+        } catch {
+            return null;
+        }
+    }
+
+    private getDefaultItemName(urlText: string, itemIndex: number): string {
+        if (!urlText) {
+            return `Item ${itemIndex}`;
+        }
+
+        try {
+            const parsed = new URL(urlText);
+            const rawName = parsed.pathname.split('/').filter(Boolean).pop() || '';
+            if (!rawName) {
+                return parsed.hostname || `Item ${itemIndex}`;
+            }
+
+            const decoded = decodeURIComponent(rawName);
+            const withoutQuery = decoded.split('?')[0].split('#')[0];
+            const dotIndex = withoutQuery.lastIndexOf('.');
+            const stem = dotIndex > 0 ? withoutQuery.slice(0, dotIndex) : withoutQuery;
+            const normalized = stem.replace(/[_\-]+/g, ' ').trim();
+            return normalized.length > 0 ? normalized : `Item ${itemIndex}`;
+        } catch {
+            return `Item ${itemIndex}`;
+        }
     }
 
     public setStatus(msg: string): void {

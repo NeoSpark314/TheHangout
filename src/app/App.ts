@@ -96,19 +96,30 @@ export class App {
 
     private initializeRuntime(): void {
         ConfigRegistry.register({
-            id: 'user_models',
-            title: '3D Model URLs',
-            description: 'Provide URLs to .glb files to spawn them in the world.',
-            type: 'key-value-list',
-            defaultTarget: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf'
-        });
-        ConfigRegistry.register({
-            id: 'user_images',
-            title: 'Image URLs',
-            description: 'Provide URLs to images to spawn them as floating squares.',
+            id: 'user_items',
+            title: 'Shared Item URLs',
+            description: 'Provide item URLs to spawn them in the world.',
             type: 'key-value-list',
             defaultTarget: 'https://play.thehangout.app/th-logo.png'
         });
+
+        // Backward-compat migration: merge legacy model/image lists into unified items.
+        const unifiedItems = ConfigRegistry.getKeyValueList('user_items');
+        if (unifiedItems.length === 0) {
+            const legacyModels = ConfigRegistry.getKeyValueList('user_models');
+            const legacyImages = ConfigRegistry.getKeyValueList('user_images');
+            const merged: Array<{ name: string; value: string }> = [];
+            const seen = new Set<string>();
+            for (const item of [...legacyModels, ...legacyImages]) {
+                const key = `${item.name}|${item.value}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                merged.push(item);
+            }
+            if (merged.length > 0) {
+                ConfigRegistry.setKeyValueList('user_items', merged);
+            }
+        }
 
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
         this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
