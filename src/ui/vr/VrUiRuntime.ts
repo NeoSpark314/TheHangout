@@ -1692,43 +1692,7 @@ export class VrUiRuntime implements IUpdatable {
                 rowY += 60;
 
                 items.forEach((item) => {
-                    const button = new UIButton(item.name, 0, rowY, 300, 62, async () => {
-                        if (button.text === 'Downloading...') return;
-
-                        const originalText = button.text;
-                        button.text = 'Downloading...';
-                        this.tablet?.ui.markDirty();
-
-                        let halfExtents: { x: number, y: number, z: number } | undefined;
-
-                        try {
-                            if (id === 'user_models') {
-                                const model = await this.context.runtime.assets.getNormalizedModel(item.value, 0.5);
-                                const box = new THREE.Box3().setFromObject(model);
-                                const size = box.getSize(new THREE.Vector3());
-                                halfExtents = { x: size.x / 2, y: size.y / 2, z: size.z / 2 };
-                            } else {
-                                const texture = await this.context.runtime.assets.loadTexture(item.value);
-                                const image = texture.image as HTMLImageElement;
-                                const aspect = image.width / image.height;
-                                const height = 0.5;
-                                const width = height * aspect;
-                                halfExtents = { x: width / 2, y: height / 2, z: 0.05 };
-                            }
-                        } catch (err) {
-                            console.error('Failed to pre-load asset bounds', err);
-                            button.text = 'Error Loading';
-                            this.tablet?.ui.markDirty();
-                            setTimeout(() => {
-                                button.text = originalText;
-                                this.tablet?.ui.markDirty();
-                            }, 2000);
-                            return;
-                        }
-
-                        button.text = originalText;
-                        this.tablet?.ui.markDirty();
-
+                    const button = new UIButton(item.name, 0, rowY, 300, 62, () => {
                         const localPlayer = this.context.localPlayer;
                         const targetPosition = localPlayer
                             ? {
@@ -1756,7 +1720,6 @@ export class VrUiRuntime implements IUpdatable {
                         this.context.runtime.session.spawnObjectModule(objectId, {
                             position: targetPosition,
                             url: item.value,
-                            halfExtents,
                             ownerId: localId,
                             isAuthority: true
                         });

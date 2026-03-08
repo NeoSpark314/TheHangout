@@ -10,6 +10,17 @@ function isModel(url: string): boolean {
     return ext === 'glb' || ext === 'gltf';
 }
 
+/** Default collider half-extents used before the real asset bounds are known. */
+const DEFAULT_HALF_EXTENTS = { x: 0.15, y: 0.15, z: 0.15 };
+
+function createLoadingPlaceholder(): { mesh: THREE.Mesh; geo: THREE.BufferGeometry; mat: THREE.Material } {
+    const geo = new THREE.SphereGeometry(0.15, 8, 6);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00aaff, wireframe: true, transparent: true, opacity: 0.5 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'placeholder';
+    return { mesh, geo, mat };
+}
+
 export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     private url: string | null = null;
     private group: THREE.Group;
@@ -24,23 +35,16 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         this.group.name = `simple-shared-object:${this.id}`;
 
         const position = config.position || { x: 0, y: 1.15, z: 0 };
-        const halfExtents = config.halfExtents as { x: number, y: number, z: number } | undefined;
-
-        // Create a temporary wireframe placeholder if bounds are known
-        if (halfExtents) {
-            const hx = halfExtents.x, hy = halfExtents.y, hz = halfExtents.z;
-            const geo = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
-            const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.3 });
-            const placeholder = new THREE.Mesh(geo, mat);
-            placeholder.name = 'placeholder';
-            this.group.add(placeholder);
-            this.addCleanup(() => {
-                geo.dispose();
-                mat.dispose();
-            });
-        }
-
         const ownerId = config.ownerId as string;
+
+        // Only show a loading placeholder if we have a url to load.
+        // When spawned via EntityRegistry.discover() the url is absent from the
+        // entity state packet, so we defer the placeholder to applyReplicationSnapshot.
+        if (config.url && context.app.runtime.render) {
+            const { mesh, geo, mat } = createLoadingPlaceholder();
+            this.group.add(mesh);
+            this.addCleanup(() => { geo.dispose(); mat.dispose(); });
+        }
 
         // Pass this.group as the mesh. EntityFactory wraps it in a PhysicsPropView,
         // which adds it to both render.scene and render.interactionGroup — correctly
@@ -51,7 +55,7 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
             0.5,
             position,
             this.group as any,
-            halfExtents || { x: 0.25, y: 0.25, z: 0.05 },
+            DEFAULT_HALF_EXTENTS,
             'simple-shared-object',
             ownerId,
             config.url as string
@@ -81,6 +85,20 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         }
     }
 
+    private updateCollider(halfExtents: { x: number; y: number; z: number }): void {
+        if (!this.propEntity) return;
+        // Resize the local physics collider to match the loaded asset bounds.
+        // Every peer does this independently after their own download completes,
+        // so no explicit bounds sync event is needed.
+        this.context.app.runtime.physics?.updateGrabbableCollider(
+            this.propEntity.id,
+            undefined,
+            0.5,
+            halfExtents
+        );
+        this.propEntity.halfExtents = halfExtents;
+    }
+
     private loadUrl(newUrl: string): void {
         this.url = newUrl;
         if (!this.url || this.loaded) return;
@@ -98,12 +116,18 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     private loadAsModel(url: string): void {
         this.context.app.runtime.assets.getNormalizedModel(url, 0.5)
             .then(model => {
-                this.replacePlaceholder(model);
-                // Propagate entityId onto all loaded sub-meshes so hover detection works.
-                const entityId = this.propEntity?.id;
-                if (entityId) {
-                    model.traverse(child => { child.userData.entityId = entityId; });
+                // Compute real bounds from the loaded model and resize the collider.
+                const box = new THREE.Box3().setFromObject(model);
+                const size = box.getSize(new THREE.Vector3());
+                const halfExtents = { x: size.x / 2, y: size.y / 2, z: size.z / 2 };
+                this.updateCollider(halfExtents);
+
+                // Propagate entityId onto all sub-meshes so hover detection works.
+                if (this.propEntity?.id) {
+                    model.traverse(child => { child.userData.entityId = this.propEntity!.id; });
                 }
+
+                this.replacePlaceholder(model);
             })
             .catch(err => {
                 console.error('[SimpleSharedInstance] Failed to load model:', url, err);
@@ -113,9 +137,12 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     private loadAsImage(url: string): void {
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load(url, (texture) => {
-            const halfExtents = this.propEntity?.halfExtents || { x: 0.25, y: 0.25, z: 0.05 };
-            const width = halfExtents.x * 2;
-            const height = halfExtents.y * 2;
+            const image = texture.image as HTMLImageElement;
+            const aspect = image.width / image.height;
+            const height = 0.5;
+            const width = height * aspect;
+            const halfExtents = { x: width / 2, y: height / 2, z: 0.05 };
+            this.updateCollider(halfExtents);
 
             const geometry = new THREE.PlaneGeometry(width, height);
             const material = new THREE.MeshStandardMaterial({
@@ -126,7 +153,6 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
 
             const mesh = new THREE.Mesh(geometry, material);
             mesh.name = 'image-content';
-            // Propagate entityId so hover detection works on the image plane.
             if (this.propEntity?.id) {
                 mesh.userData.entityId = this.propEntity.id;
             }
@@ -158,6 +184,13 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         this.group.add(content);
     }
 
+    // Required so EntityRegistry.discover() can return this entity directly
+    // instead of falling back to EntityFactory.spawn(), which would create a
+    // second PhysicsPropEntity with NullView and overwrite the correct one.
+    public getPrimaryEntity(): PhysicsPropEntity | null {
+        return this.propEntity;
+    }
+
     public captureReplicationSnapshot(): unknown {
         return {
             url: this.url,
@@ -168,10 +201,22 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     public applyReplicationSnapshot(snapshot: unknown): void {
         if (!snapshot || typeof snapshot !== 'object') return;
         const payload = snapshot as { url?: string };
-        if (payload.url) {
+
+        // Only show loader and start the download if not already in progress.
+        // When the instance was created via EntityRegistry.discover() (entity state
+        // arrived before the feature snapshot), config.url is already set and
+        // this.loaded is already true — adding another placeholder here would
+        // create an orphaned mesh that replacePlaceholder can never find.
+        if (!this.loaded && payload.url) {
+            if (this.context.app.runtime.render) {
+                const { mesh, geo, mat } = createLoadingPlaceholder();
+                this.group.add(mesh);
+                this.addCleanup(() => { geo.dispose(); mat.dispose(); });
+            }
             this.loadUrl(payload.url);
         }
     }
+
 
     public destroy(): void {
         this._destroyed = true;
