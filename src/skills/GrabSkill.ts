@@ -179,16 +179,25 @@ export class GrabSkill extends Skill {
                 objectHold.secondaryHand = null;
                 objectHold.dualOffsetPos = null;
                 objectHold.dualOffsetQuat = null;
+                const remaining = this.heldObjects.get(objectHold.primaryHand);
+                if (remaining) {
+                    this._refreshSingleHandOffsetFromCurrentPose(objectHold.primaryHand, remaining, player.appContext.runtime);
+                }
                 this.heldObjects.delete(hand);
                 this.history.delete(hand);
                 return;
             }
 
             if (objectHold.primaryHand === hand && objectHold.secondaryHand) {
-                objectHold.primaryHand = objectHold.secondaryHand;
+                const nextPrimary = objectHold.secondaryHand;
+                objectHold.primaryHand = nextPrimary;
                 objectHold.secondaryHand = null;
                 objectHold.dualOffsetPos = null;
                 objectHold.dualOffsetQuat = null;
+                const promoted = this.heldObjects.get(nextPrimary);
+                if (promoted) {
+                    this._refreshSingleHandOffsetFromCurrentPose(nextPrimary, promoted, player.appContext.runtime);
+                }
                 this.heldObjects.delete(hand);
                 this.history.delete(hand);
                 return;
@@ -365,6 +374,25 @@ export class GrabSkill extends Skill {
         });
 
         this._recordPosition(hand, handPos);
+    }
+
+    private _refreshSingleHandOffsetFromCurrentPose(hand: HandId, held: IHeldHandState, runtime: IRuntimeRegistry): void {
+        if (!held.movable) return;
+        const handPose = this._readHandPose(runtime, hand);
+        if (!handPose) return;
+        const mesh = this._getEntityMesh(held.entity);
+        if (!mesh) return;
+
+        mesh.updateMatrixWorld(true);
+        const objPos = new THREE.Vector3();
+        const objQuat = new THREE.Quaternion();
+        mesh.getWorldPosition(objPos);
+        mesh.getWorldQuaternion(objQuat);
+
+        const handTransform = new THREE.Matrix4().compose(handPose.position, handPose.quaternion, new THREE.Vector3(1, 1, 1));
+        const objTransform = new THREE.Matrix4().compose(objPos, objQuat, new THREE.Vector3(1, 1, 1));
+        const offsetTransform = handTransform.clone().invert().multiply(objTransform);
+        offsetTransform.decompose(held.offsetPos, held.offsetQuat, new THREE.Vector3());
     }
 
     private _updateDualGrabbedPose(objectHold: IObjectHoldState, runtime: IRuntimeRegistry): void {
