@@ -439,8 +439,8 @@ export class PhysicsRuntime {
         this.interactionColliders.delete(collider.id);
     }
 
-    public removeRigidBody(rigidBodyHandle: IPhysicsBodyHandle | null | undefined): void {
-        const rigidBody = rigidBodyHandle ? (rigidBodyHandle as RuntimePhysicsBodyHandle).rigidBody : null;
+    public removeRigidBody(rigidBodyHandle: IPhysicsBodyHandle | RAPIER.RigidBody | null | undefined): void {
+        const rigidBody = this.resolveRigidBody(rigidBodyHandle);
         if (!this.world || !rigidBody) return;
 
         const entry = this.debugBodies.get(rigidBody.handle);
@@ -466,6 +466,31 @@ export class PhysicsRuntime {
         }
 
         this.world.removeRigidBody(rigidBody);
+    }
+
+    private resolveRigidBody(
+        handle: IPhysicsBodyHandle | RAPIER.RigidBody | null | undefined
+    ): RAPIER.RigidBody | null {
+        if (!handle || !this.world) {
+            return null;
+        }
+
+        const asRuntimeHandle = handle as RuntimePhysicsBodyHandle;
+        if (asRuntimeHandle.rigidBody && typeof asRuntimeHandle.rigidBody.handle === 'number') {
+            return asRuntimeHandle.rigidBody;
+        }
+
+        const asRigidBody = handle as RAPIER.RigidBody;
+        if (typeof asRigidBody.handle === 'number' && typeof (asRigidBody as any).translation === 'function') {
+            return asRigidBody;
+        }
+
+        const asIdHandle = handle as IPhysicsBodyHandle;
+        if (typeof asIdHandle.id === 'number') {
+            return this.world.getRigidBody(asIdHandle.id) || null;
+        }
+
+        return null;
     }
 
     private registerDebugBody(id: string, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider, entity?: PhysicsPropEntity): void {
