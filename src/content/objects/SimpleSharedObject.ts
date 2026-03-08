@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IObjectReplicationMeta, IObjectReplicationPolicy } from '../contracts/IReplicatedObjectInstance';
+import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 import { EntityFactory } from '../../world/spawning/EntityFactory';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
@@ -11,16 +11,11 @@ function isModel(url: string): boolean {
 }
 
 export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
-    public readonly replicationPolicy: IObjectReplicationPolicy = {
-        relayIncomingFromPeer: 'others',
-        includeInSnapshot: true,
-        defaultLocalEcho: true
-    };
-
     private url: string | null = null;
     private group: THREE.Group;
     private propEntity: PhysicsPropEntity | null = null;
     private loaded = false;
+    private _destroyed = false;
 
     constructor(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
         super(context, 'simple-shared-object');
@@ -39,11 +34,17 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
             const placeholder = new THREE.Mesh(geo, mat);
             placeholder.name = 'placeholder';
             this.group.add(placeholder);
+            this.addCleanup(() => {
+                geo.dispose();
+                mat.dispose();
+            });
         }
 
-        const isAuthority = config.isAuthority !== undefined ? config.isAuthority : context.app.isHost;
         const ownerId = config.ownerId as string;
 
+        // Pass this.group as the mesh. EntityFactory wraps it in a PhysicsPropView,
+        // which adds it to both render.scene and render.interactionGroup — correctly
+        // wiring hover/grab detection and pose tracking via PhysicsPropEntity.present().
         this.propEntity = EntityFactory.createGrabbable(
             context.app,
             `prop_${this.id}`,
@@ -62,14 +63,20 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
                     this.context.app.runtime.entity?.removeEntity(this.propEntity.id);
                 }
             });
-        }
 
-        if (config.url) {
-            this.loadUrl(config.url as string);
-            if (isAuthority) {
-                setTimeout(() => {
-                    this.emitSyncEvent('set-url', { url: config.url });
-                }, 0);
+            if (config.url) {
+                const urlStr = config.url as string;
+                this.loadUrl(urlStr);
+
+                // Only the authoritative peer emits the url sync event.
+                // Use propEntity.isAuthority as the single source of truth — it
+                // accounts for ownerId-based authority via syncAuthority().
+                if (this.propEntity.isAuthority) {
+                    setTimeout(() => {
+                        if (this._destroyed) return;
+                        this.emitSyncEvent('set-url', { url: urlStr });
+                    }, 0);
+                }
             }
         }
     }
@@ -92,6 +99,11 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         this.context.app.runtime.assets.getNormalizedModel(url, 0.5)
             .then(model => {
                 this.replacePlaceholder(model);
+                // Propagate entityId onto all loaded sub-meshes so hover detection works.
+                const entityId = this.propEntity?.id;
+                if (entityId) {
+                    model.traverse(child => { child.userData.entityId = entityId; });
+                }
             })
             .catch(err => {
                 console.error('[SimpleSharedInstance] Failed to load model:', url, err);
@@ -114,6 +126,10 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
 
             const mesh = new THREE.Mesh(geometry, material);
             mesh.name = 'image-content';
+            // Propagate entityId so hover detection works on the image plane.
+            if (this.propEntity?.id) {
+                mesh.userData.entityId = this.propEntity.id;
+            }
 
             this.replacePlaceholder(mesh);
 
@@ -155,6 +171,11 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         if (payload.url) {
             this.loadUrl(payload.url);
         }
+    }
+
+    public destroy(): void {
+        this._destroyed = true;
+        super.destroy();
     }
 
     public onReplicationEvent(eventType: string, data: unknown, _meta: IObjectReplicationMeta): void {
