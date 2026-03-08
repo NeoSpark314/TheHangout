@@ -1516,7 +1516,7 @@ export class VrUiRuntime implements IUpdatable {
                 targetPosition.z += forward.z;
             }
 
-            this.context.runtime.session.spawnObjectModule('debug-beacon', {
+            this.context.runtime.session.spawnPortableObjectModule('debug-beacon', {
                 position: targetPosition
             });
             this.tablet?.ui.markDirty();
@@ -1717,7 +1717,7 @@ export class VrUiRuntime implements IUpdatable {
                         }
 
                         const localId = this.context.localPlayer?.id || 'local';
-                        this.context.runtime.session.spawnObjectModule(objectId, {
+                        this.context.runtime.session.spawnPortableObjectModule(objectId, {
                             position: targetPosition,
                             url: item.value,
                             ownerId: localId,

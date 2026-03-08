@@ -5,6 +5,7 @@ import type { IObjectRuntimeContext } from './IObjectRuntimeContext';
 
 export interface IObjectSpawnConfig {
     id?: string;
+    entityId?: string;
     position?: IVector3;
     rotationY?: number;
     ownerId?: string | null;

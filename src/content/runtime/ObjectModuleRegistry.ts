@@ -41,6 +41,7 @@ function isSpawnedObjectInstance(value: unknown): value is ISpawnedObjectInstanc
 
 export class ObjectModuleRegistry {
     private readonly modules = new Map<string, IObjectModule>();
+    private instanceSequence = 0;
 
     public replaceAll(nextModules: IObjectModule[]): void {
         this.modules.clear();
@@ -69,7 +70,7 @@ export class ObjectModuleRegistry {
         const module = this.modules.get(moduleId);
         if (!module) return null;
 
-        const instanceId = config.id || `${moduleId}-${Math.random().toString(36).slice(2, 8)}`;
+        const instanceId = config.id || this.generateInstanceId(moduleId);
         const result = module.spawn(new ObjectRuntimeContext(app, instanceId), config);
         if (!result) return null;
 
@@ -79,5 +80,12 @@ export class ObjectModuleRegistry {
 
         const entity = result as IEntity;
         return new EntityBackedObjectInstance(app, entity.id, moduleId, entity);
+    }
+
+    private generateInstanceId(moduleId: string): string {
+        this.instanceSequence += 1;
+        const seq = this.instanceSequence.toString(36);
+        const ts = Date.now().toString(36);
+        return `${moduleId}-${ts}-${seq}`;
     }
 }

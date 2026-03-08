@@ -16,6 +16,7 @@ import { ExpressPeerServer } from 'peer';
 import { parseArgs } from 'node:util';
 import { WebSocketServer, WebSocket } from 'ws';
 import { getCertificate } from '@vitejs/plugin-basic-ssl';
+import multer from 'multer';
 
 import { HeadlessSession } from './src/server/HeadlessSession.ts';
 import { DedicatedSessionTransport } from './src/server/DedicatedSessionTransport.ts';
@@ -35,6 +36,24 @@ const capturingKeys = new Set<string>(); // key -> currently broadcasting
 const relaySourceSubscriptions = new Map<WebSocket, { sessionId: string; keys: Set<string> }>(); // relay ws -> subscribed keys
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// --- Assets Storage Setup ---
+const ASSETS_DIR = path.join(__dirname, 'storage', 'assets');
+if (!fs.existsSync(ASSETS_DIR)) {
+    fs.mkdirSync(ASSETS_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, ASSETS_DIR);
+    },
+    filename: (req, file, cb) => {
+        // Keep original filename but prevent directory traversal
+        const safeName = path.basename(file.originalname);
+        cb(null, safeName);
+    }
+});
+const upload = multer({ storage });
 
 // --- CLI args (with env var fallback) ---
 const { values: args } = parseArgs({
@@ -244,6 +263,59 @@ app.post('/api/admin/session/:id/command', (req, res) => {
     res.json({ success: true });
 });
 
+// --- Assets API ---
+
+// List all assets
+app.get('/api/assets', (req, res) => {
+    try {
+        const files = fs.readdirSync(ASSETS_DIR);
+        const fileList = files.map(file => {
+            const stats = fs.statSync(path.join(ASSETS_DIR, file));
+            return {
+                name: file,
+                size: stats.size,
+                mtime: stats.mtime,
+                url: `/storage/assets/${file}`
+            };
+        });
+        res.json(fileList);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to list assets' });
+    }
+});
+
+// Upload a new asset
+app.post('/api/assets/upload', upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    res.json({
+        success: true,
+        file: {
+            name: req.file.filename,
+            url: `/storage/assets/${req.file.filename}`
+        }
+    });
+});
+
+// Delete an asset
+app.delete('/api/assets/:filename', (req, res) => {
+    const { filename } = req.params;
+    const safeName = path.basename(filename);
+    const filePath = path.join(ASSETS_DIR, safeName);
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    try {
+        fs.unlinkSync(filePath);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete file' });
+    }
+});
+
 // Serve the static admin dashboard files
 const adminPath = path.join(__dirname, 'src', 'server', 'admin');
 app.use('/admin', express.static(adminPath));
@@ -255,6 +327,13 @@ app.use('/share', express.static(sharePath));
 // Serve shared styling primitives for server-hosted UIs
 const serverUiPath = path.join(__dirname, 'src', 'server', 'ui');
 app.use('/server-ui', express.static(serverUiPath));
+
+// Serve assets storage
+app.use('/storage/assets', express.static(ASSETS_DIR));
+
+// Serve assets management UI
+const assetsUiPath = path.join(__dirname, 'src', 'server', 'assets');
+app.use('/assets', express.static(assetsUiPath));
 
 // Serve the built client
 const distPath = path.join(__dirname, 'dist');

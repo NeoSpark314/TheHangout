@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
-import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
-import { EntityFactory } from '../../world/spawning/EntityFactory';
-import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
+import { BaseReplicatedPhysicsPropObjectInstance } from '../runtime/BaseReplicatedPhysicsPropObjectInstance';
 
 function isModel(url: string): boolean {
     const ext = url.split('.').pop()?.toLowerCase();
@@ -21,26 +19,34 @@ function createLoadingPlaceholder(): { mesh: THREE.Mesh; geo: THREE.BufferGeomet
     return { mesh, geo, mat };
 }
 
-export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
+export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstance {
     private url: string | null = null;
     private group: THREE.Group;
-    private propEntity: PhysicsPropEntity | null = null;
     private loaded = false;
     private _destroyed = false;
 
     constructor(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
-        super(context, 'simple-shared-object');
-
-        this.group = new THREE.Group();
-        this.group.name = `simple-shared-object:${this.id}`;
-
+        const group = new THREE.Group();
         const position = config.position || { x: 0, y: 1.15, z: 0 };
         const ownerId = (typeof config.ownerId === 'string' || config.ownerId === null)
             ? config.ownerId
             : undefined;
         const entityId = (typeof config.entityId === 'string' && config.entityId.length > 0)
             ? config.entityId
-            : this.id;
+            : (typeof config.id === 'string' ? config.id : undefined);
+
+        super(context, 'simple-shared-object', {
+            size: 0.5,
+            position,
+            mesh: group as any,
+            halfExtents: DEFAULT_HALF_EXTENTS,
+            ownerId,
+            url: typeof config.url === 'string' ? config.url : undefined,
+            entityId
+        });
+
+        this.group = group;
+        this.group.name = `simple-shared-object:${this.id}`;
 
         // Only show a loading placeholder if we have a url to load.
         // When spawned via EntityRegistry.discover() the url is absent from the
@@ -51,41 +57,17 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
             this.addCleanup(() => { geo.dispose(); mat.dispose(); });
         }
 
-        // Pass this.group as the mesh. EntityFactory wraps it in a PhysicsPropView,
-        // which adds it to both render.scene and render.interactionGroup — correctly
-        // wiring hover/grab detection and pose tracking via PhysicsPropEntity.present().
-        this.propEntity = EntityFactory.createGrabbable(
-            context.app,
-            entityId,
-            0.5,
-            position,
-            this.group as any,
-            DEFAULT_HALF_EXTENTS,
-            'simple-shared-object',
-            ownerId,
-            config.url as string
-        );
+        if (this.propEntity && config.url) {
+            const urlStr = config.url as string;
+            this.loadUrl(urlStr);
 
-        if (this.propEntity) {
-            this.addCleanup(() => {
-                if (this.propEntity) {
-                    this.context.app.runtime.entity?.removeEntity(this.propEntity.id);
-                }
-            });
-
-            if (config.url) {
-                const urlStr = config.url as string;
-                this.loadUrl(urlStr);
-
-                // Only the authoritative peer emits the url sync event.
-                // Use propEntity.isAuthority as the single source of truth — it
-                // accounts for ownerId-based authority via syncAuthority().
-                if (this.propEntity.isAuthority) {
-                    setTimeout(() => {
-                        if (this._destroyed) return;
-                        this.emitSyncEvent('set-url', { url: urlStr });
-                    }, 0);
-                }
+            // Only the authoritative peer emits the url sync event.
+            // Use propEntity.isAuthority as the single source of truth.
+            if (this.propEntity.isAuthority) {
+                setTimeout(() => {
+                    if (this._destroyed) return;
+                    this.emitSyncEvent('set-url', { url: urlStr });
+                }, 0);
             }
         }
     }
@@ -93,8 +75,7 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     private updateCollider(halfExtents: { x: number; y: number; z: number }): void {
         if (!this.propEntity) return;
         // Resize the local physics collider to match the loaded asset bounds.
-        // Every peer does this independently after their own download completes,
-        // so no explicit bounds sync event is needed.
+        // Every peer does this independently after their own download completes.
         this.context.app.runtime.physics?.updateGrabbableCollider(
             this.propEntity.id,
             undefined,
@@ -121,13 +102,11 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     private loadAsModel(url: string): void {
         this.context.app.runtime.assets.getNormalizedModel(url, 0.5)
             .then(model => {
-                // Compute real bounds from the loaded model and resize the collider.
                 const box = new THREE.Box3().setFromObject(model);
                 const size = box.getSize(new THREE.Vector3());
                 const halfExtents = { x: size.x / 2, y: size.y / 2, z: size.z / 2 };
                 this.updateCollider(halfExtents);
 
-                // Propagate entityId onto all sub-meshes so hover detection works.
                 if (this.propEntity?.id) {
                     model.traverse(child => { child.userData.entityId = this.propEntity!.id; });
                 }
@@ -189,13 +168,6 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         this.group.add(content);
     }
 
-    // Required so EntityRegistry.discover() can return this entity directly
-    // instead of falling back to EntityFactory.spawn(), which would create a
-    // second PhysicsPropEntity with NullView and overwrite the correct one.
-    public getPrimaryEntity(): PhysicsPropEntity | null {
-        return this.propEntity;
-    }
-
     public captureReplicationSnapshot(): unknown {
         return {
             url: this.url,
@@ -208,10 +180,6 @@ export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
         const payload = snapshot as { url?: string };
 
         // Only show loader and start the download if not already in progress.
-        // When the instance was created via EntityRegistry.discover() (entity state
-        // arrived before the feature snapshot), config.url is already set and
-        // this.loaded is already true — adding another placeholder here would
-        // create an orphaned mesh that replacePlaceholder can never find.
         if (!this.loaded && payload.url) {
             if (this.context.app.runtime.render) {
                 const { mesh, geo, mat } = createLoadingPlaceholder();

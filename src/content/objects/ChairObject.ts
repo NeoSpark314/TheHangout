@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IObjectReplicationMeta, IObjectReplicationPolicy } from '../contracts/IReplicatedObjectInstance';
+import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
 import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IHoldable } from '../../shared/contracts/IHoldable';
 import type { IInteractable } from '../../shared/contracts/IInteractable';
@@ -123,12 +123,6 @@ class ChairSeatEntity implements IEntity, IHoldable, IInteractable {
 
 class ChairInstance extends BaseReplicatedObjectInstance {
     private static readonly MOUNT_POINT_ID = 'seat-0';
-
-    public readonly replicationPolicy: IObjectReplicationPolicy = {
-        relayIncomingFromPeer: 'others',
-        includeInSnapshot: true,
-        defaultLocalEcho: true
-    };
 
     private readonly seatPosition: THREE.Vector3;
     private readonly seatYaw: number;

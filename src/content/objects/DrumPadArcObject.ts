@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import type { IObjectReplicationMeta, IObjectReplicationPolicy, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
+import type { IObjectReplicationMeta, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
@@ -68,12 +68,6 @@ interface IActivePadPhrase {
 }
 
 class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplicatedObjectInstance {
-    public readonly replicationPolicy: IObjectReplicationPolicy = {
-        relayIncomingFromPeer: 'others',
-        includeInSnapshot: true,
-        defaultLocalEcho: true
-    };
-
     private readonly padMeshes: THREE.Mesh[] = [];
     private readonly padPositions: THREE.Vector3[] = [];
     private readonly padFlash: number[] = [];

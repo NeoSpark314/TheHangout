@@ -27,3 +27,5 @@ dist-ssr
 # Testing
 playwright-report/
 test-results/
+
+storage/

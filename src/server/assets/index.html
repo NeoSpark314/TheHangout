@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TheHangout Admin - Assets</title>
+    <link rel="stylesheet" href="/server-ui/synth.css">
+    <style>
+        .assets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 24px;
+        }
+
+        .asset-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .asset-info {
+            flex-grow: 1;
+        }
+
+        .asset-name {
+            font-weight: 700;
+            color: var(--synth-primary);
+            word-break: break-all;
+            margin-bottom: 4px;
+        }
+
+        .asset-meta {
+            font-size: 0.8rem;
+            color: var(--synth-text-dim);
+        }
+
+        .asset-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .upload-zone {
+            margin-bottom: 32px;
+            padding: 32px;
+            border: 2px dashed var(--synth-border);
+            border-radius: var(--synth-radius-lg);
+            text-align: center;
+            transition: border-color 0.2s;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--synth-primary);
+            background: var(--synth-primary-soft);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-label {
+            cursor: pointer;
+            display: block;
+        }
+    </style>
+</head>
+
+<body class="admin-page">
+    <div class="server-shell">
+        <header class="server-header">
+            <div>
+                <p class="synth-eyebrow">Dedicated Server</p>
+                <h1 class="server-title">ASSETS <span class="server-subtitle">v1.0-headless</span></h1>
+            </div>
+            <div>
+                <a href="/admin" class="synth-button is-secondary">Back to Dashboard</a>
+            </div>
+        </header>
+
+        <section class="synth-card synth-panel">
+            <h2 class="synth-section-title">Upload New Asset</h2>
+            <div id="upload-zone" class="upload-zone">
+                <label for="file-input" class="upload-label">
+                    <p class="synth-lead">Drag & drop files here or click to browse</p>
+                    <p class="synth-muted">(Images, 3D Models, etc.)</p>
+                </label>
+                <input type="file" id="file-input" class="file-input">
+            </div>
+            <div id="upload-progress" style="display: none; margin-top: 10px;">
+                <div class="synth-label">Uploading...</div>
+            </div>
+        </section>
+
+        <section>
+            <div class="server-header" style="margin-top: 40px; margin-bottom: 10px;">
+                <h2 class="synth-section-title">Server Files</h2>
+                <button id="refresh-btn" class="synth-button"
+                    style="padding: 6px 12px; font-size: 0.8rem;">Refresh</button>
+            </div>
+            <div id="assets-list" class="assets-grid">
+                <div class="synth-empty">Loading assets...</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="assets.js"></script>
+</body>
+
+</html>

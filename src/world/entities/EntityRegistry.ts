@@ -32,6 +32,11 @@ export class EntityRegistry implements IUpdatable {
 
         if (moduleId && typeof moduleId === 'string') {
             console.log(`[EntityRegistry] Discovering entity ${id} as part of object module: ${moduleId}`);
+            const module = this.context.runtime.session?.getObjectModuleDefinition(moduleId);
+            if (module && module.networked === false) {
+                console.warn(`[EntityRegistry] Ignoring non-networked object module from network state: ${moduleId}`);
+                return null;
+            }
             const instanceId = this.resolveObjectInstanceIdFromEntityId(moduleId, entityId);
             // Check if it's already being handled by a spawned instance to avoid loops
             const existingInstance = this.context.runtime.session?.getObjectInstance(instanceId);

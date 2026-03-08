@@ -190,6 +190,10 @@ export class SessionRuntime implements IUpdatable {
         return this.objectModuleRegistry.listIds();
     }
 
+    public getObjectModuleDefinition(moduleId: string) {
+        return this.objectModuleRegistry.get(moduleId);
+    }
+
     public spawnObjectInstance(id: string, config: IObjectSpawnConfig = {}): ISpawnedObjectInstance | null {
         const instance = this.objectModuleRegistry.spawn(id, this.context, config);
         if (!instance) {
@@ -205,6 +209,19 @@ export class SessionRuntime implements IUpdatable {
         const instance = this.spawnObjectInstance(id, config);
         if (!instance) return null;
         return instance.getPrimaryEntity?.() ?? instance;
+    }
+
+    public spawnPortableObjectModule(id: string, config: IObjectSpawnConfig = {}) {
+        const module = this.objectModuleRegistry.get(id);
+        if (!module) {
+            console.warn(`[SessionRuntime] Cannot spawn unknown object module: ${id}`);
+            return null;
+        }
+        if (module.portable === false) {
+            console.warn(`[SessionRuntime] Refusing portable spawn for non-portable module: ${id}`);
+            return null;
+        }
+        return this.spawnObjectModule(id, config);
     }
 
     public registerScenario(scenario: IScenarioModule): void {
