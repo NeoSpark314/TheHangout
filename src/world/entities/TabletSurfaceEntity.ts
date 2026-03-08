@@ -9,8 +9,8 @@ import { CanvasUI } from '../../ui/shared/canvasui';
 import { PlayerAvatarEntity } from './PlayerAvatarEntity';
 
 export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
-    private static readonly DEFAULT_RELATIVE_POSITION = new THREE.Vector3(0, -0.3, -0.35);
-    private static readonly DEFAULT_RELATIVE_QUATERNION = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.1, 0, 0));
+    private static readonly DEFAULT_RELATIVE_POSITION = new THREE.Vector3(0, -0.1, -0.5);
+    private static readonly DEFAULT_RELATIVE_QUATERNION = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.0, 0, 0));
 
     public id: string;
     public type: string = 'TABLET';
