@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { EntityFactory } from '../../world/spawning/EntityFactory';
 import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
+import { applyBoxEdgeGlow } from '../../render/materials/BoxEdgeGlow';
+import { createSynthBlockMaterial } from '../../render/materials/SynthBlockMaterial';
 
 export class PropBuilder {
     private scene: THREE.Scene;
@@ -116,55 +118,80 @@ export class PropBuilder {
 
     private createPodest(): void {
         this.podest = new THREE.Group();
-        const podestMat = new THREE.MeshStandardMaterial({
-            color: 0x0a0a20,
-            metalness: 0.8, roughness: 0.5, emissive: 0x000510
+        const podestMat = createSynthBlockMaterial({
+            topColor: 0x1f6fb5,
+            bottomColor: 0x070d1f,
+            edgeColor: 0xb8eaff,
+            edgeThicknessWorld: 0.012,
+            edgeFeatherWorld: 0.008,
+            edgeIntensity: 0.45,
+            rimIntensity: 0.08
         });
-        const wireMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3 });
         const blockGeo = new THREE.BoxGeometry(1.0, 0.2, 1.0);
+        const podestCount = 8 * 8;
+        const podestMesh = new THREE.InstancedMesh(blockGeo, podestMat, podestCount);
+        const podestPosition = new THREE.Vector3();
+        const podestQuaternion = new THREE.Quaternion();
+        const podestScale = new THREE.Vector3(1, 1, 1);
+        const podestMatrix = new THREE.Matrix4();
+        let instanceIndex = 0;
 
         for (let x = -4; x < 4; x++) {
             for (let z = -4; z < 4; z++) {
                 const hOffset = this.random() * 0.05;
-                if (this.scene) {
-                    const segment = new THREE.Mesh(blockGeo, podestMat);
-                    segment.position.set(x + 0.5, 0.1 + hOffset, z + 0.5);
-                    const segmentOutline = new THREE.LineSegments(new THREE.EdgesGeometry(blockGeo), wireMat);
-                    segment.add(segmentOutline);
-                    this.podest.add(segment);
-                }
+                const px = x + 0.5;
+                const py = 0.1 + hOffset;
+                const pz = z + 0.5;
+
+                podestPosition.set(px, py, pz);
+                podestMatrix.compose(podestPosition, podestQuaternion, podestScale);
+                podestMesh.setMatrixAt(instanceIndex, podestMatrix);
+                instanceIndex++;
 
                 // Add static physics collider
                 if (this.context.runtime.physics) {
-                    const colliderBody = this.context.runtime.physics.createCuboid(0.5, 0.1, 0.5, { x: x + 0.5, y: 0.1 + hOffset, z: z + 0.5 }, null, true);
+                    const colliderBody = this.context.runtime.physics.createCuboid(0.5, 0.1, 0.5, { x: px, y: py, z: pz }, null, true);
                     if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
                 }
             }
         }
+        podestMesh.instanceMatrix.needsUpdate = true;
+        this.podest.add(podestMesh);
         if (this.scene) this.scene.add(this.podest);
     }
 
     private createDecorations(): void {
         this.decorations = new THREE.Group();
-        const pillarMat = new THREE.MeshStandardMaterial({
-            color: 0x050515, metalness: 0.9, roughness: 0.1, emissive: 0x001122
+        const pillarMat = createSynthBlockMaterial({
+            topColor: 0x864bc6,
+            bottomColor: 0x120724,
+            edgeColor: 0xdfc7ff,
+            edgeThicknessWorld: 0.012,
+            edgeFeatherWorld: 0.008,
+            edgeIntensity: 0.4,
+            rimIntensity: 0.1
         });
-        const wireMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 });
+        const pillarGeo = new THREE.BoxGeometry(1, 1, 1);
+        const pillarCount = 12;
+        const pillarMesh = new THREE.InstancedMesh(pillarGeo, pillarMat, pillarCount);
+        const pillarPosition = new THREE.Vector3();
+        const pillarQuaternion = new THREE.Quaternion();
+        const pillarScale = new THREE.Vector3();
+        const pillarMatrix = new THREE.Matrix4();
+        let instanceIndex = 0;
 
         for (let i = 0; i < 12; i++) {
             const angle = (i / 12) * Math.PI * 2;
             const h = 0.5 + this.random() * 2.5;
             const w = 0.4 + this.random() * 0.6;
-            const geo = new THREE.BoxGeometry(w, h, w);
             const posX = Math.sin(angle) * (6.0 + this.random() * 2);
             const posZ = Math.cos(angle) * (6.0 + this.random() * 2);
 
-            if (this.scene) {
-                const pillar = new THREE.Mesh(geo, pillarMat);
-                pillar.position.set(posX, h / 2, posZ);
-                pillar.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), wireMat));
-                this.decorations.add(pillar);
-            }
+            pillarPosition.set(posX, h / 2, posZ);
+            pillarScale.set(w, h, w);
+            pillarMatrix.compose(pillarPosition, pillarQuaternion, pillarScale);
+            pillarMesh.setMatrixAt(instanceIndex, pillarMatrix);
+            instanceIndex++;
 
             // Add static physics collider
             if (this.context.runtime.physics) {
@@ -172,6 +199,8 @@ export class PropBuilder {
                 if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
             }
         }
+        pillarMesh.instanceMatrix.needsUpdate = true;
+        this.decorations.add(pillarMesh);
         if (this.scene) this.scene.add(this.decorations);
     }
 
@@ -205,10 +234,6 @@ export class PropBuilder {
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, base.y, z);
             mesh.rotation.y = yaw;
-            mesh.add(new THREE.LineSegments(
-                new THREE.EdgesGeometry(geo),
-                new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })
-            ));
 
             const id = `domino-${i}`;
             EntityFactory.createGrabbable(
@@ -277,6 +302,12 @@ export class PropBuilder {
             });
             mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(pos.x, pos.y, pos.z);
+            applyBoxEdgeGlow(mesh, mat, { x: 0.06, y: 0.06, z: 0.06 }, {
+                edgeColor: 0xffffff,
+                edgeThicknessWorld: 0.0035,
+                edgeFeatherWorld: 0.0018,
+                intensity: 0.42
+            });
         }
 
         const entityId = `admin-spawn-${Date.now()}`;
