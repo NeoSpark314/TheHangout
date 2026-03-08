@@ -47,6 +47,9 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
 
         this.group = group;
         this.group.name = `simple-shared-object:${this.id}`;
+        if (this.propEntity?.id) {
+            this.group.userData.entityId = this.propEntity.id;
+        }
 
         // Only show a loading placeholder if we have a url to load.
         // When spawned via EntityRegistry.discover() the url is absent from the
@@ -177,12 +180,20 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
 
     public applyReplicationSnapshot(snapshot: unknown): void {
         if (!snapshot || typeof snapshot !== 'object') return;
-        const payload = snapshot as { url?: string };
+        const payload = snapshot as { url?: string; halfExtents?: { x?: number; y?: number; z?: number } };
+
+        const he = payload.halfExtents;
+        if (he && typeof he.x === 'number' && typeof he.y === 'number' && typeof he.z === 'number') {
+            this.updateCollider({ x: he.x, y: he.y, z: he.z });
+        }
 
         // Only show loader and start the download if not already in progress.
         if (!this.loaded && payload.url) {
             if (this.context.app.runtime.render) {
                 const { mesh, geo, mat } = createLoadingPlaceholder();
+                if (this.propEntity?.id) {
+                    mesh.userData.entityId = this.propEntity.id;
+                }
                 this.group.add(mesh);
                 this.addCleanup(() => { geo.dispose(); mat.dispose(); });
             }

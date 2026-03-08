@@ -55,7 +55,7 @@ export class GrabSkill extends Skill {
                 nearestContactPoint = currentNearest?.contactPoint || null;
             }
 
-            if (isHoldable(nearest)) {
+            if (isHoldable(nearest) && !nearest.heldBy) {
 
                 // Calculate grab offset to prevent jumping
                 const pos = handState.pointerPose.position || handState.pose.position;
@@ -165,6 +165,11 @@ export class GrabSkill extends Skill {
 
     public deactivate(player: PlayerAvatarEntity): void {
         super.deactivate(player);
+        // Ensure entities are cleanly released if this skill is deactivated while holding.
+        // This prevents stale held state from leaking across scene/runtime transitions.
+        for (const held of this.heldObjects.values()) {
+            held.entity.onRelease();
+        }
         for (const { event, handler } of this._handlers) {
             eventBus.off(event, handler);
         }
@@ -231,7 +236,6 @@ export class GrabSkill extends Skill {
                 this._updateHighlight(player.id, hand, null);
             } else {
                 let result: { interactable: IInteractable, distance: number } | null = null;
-                const targetPos = new THREE.Vector3(handState.pose.position.x, handState.pose.position.y, handState.pose.position.z);
 
                 // Unified logic: only use proximity check if the hand is active (extended/tracked)
                 if (handState.active) {

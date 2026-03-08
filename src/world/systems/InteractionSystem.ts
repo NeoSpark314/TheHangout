@@ -9,52 +9,6 @@ export class InteractionSystem {
     }
 
     /**
-     * Finds the first interactable object hit by a ray, including hit distance/point.
-     * Pointer-driven input layers can use this for local focus logic without teaching
-     * gameplay systems about non-XR interaction modes.
-     */
-    public findInteractableHitUnderRay(
-        ray: { origin: THREE.Vector3, direction: THREE.Vector3 },
-        maxDist: number
-    ): { interactable: IInteractable; distance: number; point: THREE.Vector3 } | null {
-        if (!this.context.runtime.render) return null;
-
-        const hits = this.context.runtime.render.raycast(ray.origin, ray.direction, maxDist);
-        if (hits.length === 0) return null;
-
-        const entityRegistry = this.context.runtime.entity;
-
-        for (const hit of hits) {
-            let hitObj: THREE.Object3D | null = hit.object;
-            while (hitObj) {
-                const entityId = hitObj.userData.entityId;
-                if (entityId) {
-                    const entity = entityRegistry.getEntity(entityId);
-                    if (entity && isHoldable(entity) && isInteractable(entity) && !entity.heldBy) {
-                        return {
-                            interactable: entity as unknown as IInteractable,
-                            distance: hit.distance,
-                            point: hit.point.clone()
-                        };
-                    }
-                    // We hit a mesh linked to an entity, but it wasn't interactable, so stop climbing the tree
-                    break;
-                }
-                hitObj = hitObj.parent;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Convenience wrapper for callers that only need the interactable.
-     */
-    public findInteractableUnderRay(ray: { origin: THREE.Vector3, direction: THREE.Vector3 }, maxDist: number): IInteractable | null {
-        return this.findInteractableHitUnderRay(ray, maxDist)?.interactable || null;
-    }
-
-    /**
      * Finds the absolute nearest interactable to a world point.
      * Best for VR near-grab.
      */
