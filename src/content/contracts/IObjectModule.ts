@@ -10,7 +10,10 @@ export interface IObjectSpawnConfig {
     rotationY?: number;
     ownerId?: string | null;
     isAuthority?: boolean;
-    [key: string]: unknown;
+    size?: number;
+    color?: number;
+    url?: string;
+    halfExtents?: IVector3;
 }
 
 export type IObjectSpawnContext = IObjectRuntimeContext;

@@ -56,3 +56,9 @@ Use this checklist when adding a new object module under `src/content/objects`.
   - Spawn object on one peer
   - Verify late-join state
   - Verify grab/release/position sync
+
+## 10) Spawn config typing
+
+- Keep spawn config keys explicit and typed.
+- Avoid broad catch-all config shapes for new object APIs.
+- If a new key is shared across multiple objects, add it to `IObjectSpawnConfig`.
