@@ -46,8 +46,6 @@ export class FlatUiRuntime implements IUpdatable {
     private versionInfo: HTMLElement;
     private shaInfo: HTMLElement;
     private desktopControls: HTMLElement | null;
-    private myScreensList: HTMLElement | null;
-    private addScreenBtn: HTMLButtonElement | null;
     private mobileHud: HTMLElement | null;
     private mobileMenuBtn: HTMLButtonElement | null;
     private mobilePrimaryActionBtn: HTMLButtonElement | null;
@@ -85,8 +83,6 @@ export class FlatUiRuntime implements IUpdatable {
         this.versionInfo = document.getElementById('app-version')!;
         this.shaInfo = document.getElementById('git-sha')!;
         this.desktopControls = document.getElementById('desktop-controls');
-        this.myScreensList = document.getElementById('my-screens-list');
-        this.addScreenBtn = document.getElementById('add-screen-btn') as HTMLButtonElement | null;
         this.mobileHud = document.getElementById('mobile-hud');
         this.mobileMenuBtn = document.getElementById('mobile-menu-btn') as HTMLButtonElement | null;
         this.mobilePrimaryActionBtn = document.getElementById('mobile-action-btn') as HTMLButtonElement | null;
@@ -173,15 +169,6 @@ export class FlatUiRuntime implements IUpdatable {
             });
         }
 
-        if (this.addScreenBtn) {
-            this.addScreenBtn.addEventListener('click', () => {
-                const screens = this.context.runtime.remoteDesktop.getConfigs();
-                screens.push({ name: `Screen ${screens.length + 1}`, key: '' });
-                this.context.runtime.remoteDesktop.setConfigs(screens);
-                this.renderMyScreensEditor();
-            });
-        }
-
         if (this.mobileMenuBtn) {
             this.mobileMenuBtn.addEventListener('click', () => {
                 if (this.mobileHudEnabled) {
@@ -245,19 +232,17 @@ export class FlatUiRuntime implements IUpdatable {
             this.updateVoiceButton(this.context.voiceAutoEnable);
         });
         eventBus.on(EVENTS.DESKTOP_SCREENS_UPDATED, () => {
-            this.renderMyScreensEditor();
+            if (this.extensionsDialog && !this.isElementHidden(this.extensionsDialog)) {
+                this.renderExtensionSettings();
+            }
         });
 
         this.loadFromStorage();
-        this.renderMyScreensEditor();
         this.updateDesktopControlsHint();
         this.markPanelReady();
 
         // Desktop screen sharing is only for dedicated server mode
-        if (!this.context.isLocalServer) {
-            const screensGroup = document.getElementById('avatar-screens-group');
-            if (screensGroup) this.hideElement(screensGroup);
-        }
+        // Settings dialog owns screen management UI.
     }
 
     public update(delta: number): void {
@@ -476,10 +461,8 @@ export class FlatUiRuntime implements IUpdatable {
         });
     }
 
-    private renderMyScreensEditor(): void {
-        if (!this.myScreensList) return;
-        this.myScreensList.innerHTML = '';
-
+    private renderScreensEditor(listHost: HTMLElement): void {
+        listHost.innerHTML = '';
         const screens = this.context.runtime.remoteDesktop.getConfigs();
         for (let i = 0; i < screens.length; i++) {
             const row = screens[i];
@@ -524,13 +507,13 @@ export class FlatUiRuntime implements IUpdatable {
                 const next = this.context.runtime.remoteDesktop.getConfigs();
                 next.splice(i, 1);
                 this.context.runtime.remoteDesktop.setConfigs(next);
-                this.renderMyScreensEditor();
+                this.renderScreensEditor(listHost);
             });
 
             rowEl.appendChild(nameInput);
             rowEl.appendChild(keyInput);
             rowEl.appendChild(removeBtn);
-            this.myScreensList.appendChild(rowEl);
+            listHost.appendChild(rowEl);
         }
     }
 
@@ -538,9 +521,52 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.extensionsContainer) return;
         this.extensionsContainer.innerHTML = '';
 
+        if (this.context.isLocalServer) {
+            const screensGroup = document.createElement('div');
+            screensGroup.className = 'input-group';
+
+            const header = document.createElement('h3');
+            header.textContent = 'My Screens';
+            header.style.marginBottom = '5px';
+            screensGroup.appendChild(header);
+
+            const desc = document.createElement('p');
+            desc.textContent = 'Configure screen name and secret key pairs for remote desktop sharing.';
+            desc.style.fontSize = '0.9em';
+            desc.style.color = '#ccc';
+            desc.style.marginBottom = '10px';
+            screensGroup.appendChild(desc);
+
+            const listContainer = document.createElement('div');
+            listContainer.className = 'screens-list';
+            this.renderScreensEditor(listContainer);
+            screensGroup.appendChild(listContainer);
+
+            const addScreenBtn = document.createElement('button');
+            addScreenBtn.className = 'primary-btn secondary-style';
+            addScreenBtn.type = 'button';
+            addScreenBtn.textContent = 'Add Screen';
+            addScreenBtn.style.marginTop = '10px';
+            addScreenBtn.addEventListener('click', () => {
+                const screens = this.context.runtime.remoteDesktop.getConfigs();
+                screens.push({ name: `Screen ${screens.length + 1}`, key: '' });
+                this.context.runtime.remoteDesktop.setConfigs(screens);
+                this.renderScreensEditor(listContainer);
+            });
+            screensGroup.appendChild(addScreenBtn);
+
+            this.extensionsContainer.appendChild(screensGroup);
+            const screensHr = document.createElement('hr');
+            screensHr.style.borderColor = '#444';
+            screensHr.style.margin = '20px 0';
+            this.extensionsContainer.appendChild(screensHr);
+        }
+
         const schemas = ConfigRegistry.getSchemas();
         if (schemas.length === 0) {
-            this.extensionsContainer.innerHTML = '<p class="status">No extensions registered.</p>';
+            if (!this.context.isLocalServer) {
+                this.extensionsContainer.innerHTML = '<p class="status">No extensions registered.</p>';
+            }
             return;
         }
 
