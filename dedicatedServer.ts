@@ -32,12 +32,30 @@ const PORT = parseInt(args.port as string);
 
 // --- SSL Setup ---
 async function resolveSslOptions(): Promise<https.ServerOptions> {
+    // 1. Priority: Command line / Environment variables
     if (args.key && args.cert) {
+        console.log('[SSL] Using certificates provided via arguments.');
         return {
             key: fs.readFileSync(args.key as string),
             cert: fs.readFileSync(args.cert as string)
         };
     }
+
+    // 2. Secondary: Check .certs directory
+    const localCertDir = path.join(__dirname, '.certs');
+    const localKeyPath = path.join(localCertDir, 'key.pem');
+    const localCertPath = path.join(localCertDir, 'cert.pem');
+
+    if (fs.existsSync(localKeyPath) && fs.existsSync(localCertPath)) {
+        console.log(`[SSL] Using certificates found in ${localCertDir}`);
+        return {
+            key: fs.readFileSync(localKeyPath),
+            cert: fs.readFileSync(localCertPath)
+        };
+    }
+
+    // 3. Fallback: Vite basic-ssl
+    console.log('[SSL] No certificates found. Generating temporary self-signed certificate...');
     const certDir = path.join(__dirname, 'node_modules', '.vite', 'basic-ssl');
     const pem = await getCertificate(certDir);
     return { key: pem, cert: pem };
@@ -61,6 +79,20 @@ function sendBinaryToSession(sessionId: string, data: Buffer): void {
     for (const ws of session.network.connections.values()) {
         if (ws?.readyState === 1) ws.send(data);
     }
+}
+
+function getLocalIpAddresses(): string[] {
+    const interfaces = os.networkInterfaces();
+    const addresses: string[] = ['localhost'];
+    for (const [name, netInterface] of Object.entries(interfaces)) {
+        if (!netInterface) continue;
+        for (const address of netInterface) {
+            if (address.family === 'IPv4' && !address.internal) {
+                addresses.push(address.address);
+            }
+        }
+    }
+    return addresses;
 }
 
 // --- Managers ---
@@ -112,6 +144,18 @@ app.use(express.static(distPath));
 
 // --- Servers ---
 const server = https.createServer(sslOptions, app);
+
+server.on('error', (err: any) => {
+    if (err.code === 'EACCES') {
+        console.error(`\n[FATAL] Permission denied for port ${PORT}.`);
+        console.error(`Starting a server on port ${PORT} usually requires elevated (Admin/Sudo) privileges.\n`);
+    } else if (err.code === 'EADDRINUSE') {
+        console.error(`\n[FATAL] Port ${PORT} is already in use by another process.\n`);
+    } else {
+        console.error(`\n[FATAL] Server error:`, err);
+    }
+    process.exit(1);
+});
 
 // PeerJS
 const peerServer = ExpressPeerServer(server, { path: '/', allow_discovery: true });
@@ -177,5 +221,10 @@ wssDesktop.on('connection', (ws) => {
 app.get('{*path}', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n  TheHangout — Dedicated Server\n  https://localhost:${PORT}/\n`);
+    const ips = getLocalIpAddresses();
+    console.log(`\n  TheHangout — Dedicated Server`);
+    ips.forEach(ip => {
+        console.log(`  https://${ip}:${PORT}/`);
+    });
+    console.log('');
 });
