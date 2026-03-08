@@ -1671,8 +1671,8 @@ export class VrUiRuntime implements IUpdatable {
             let rowY = 0;
 
             const schemas = [
-                { id: 'user_models', objectId: 'dynamic-model' },
-                { id: 'user_images', objectId: 'dynamic-image' }
+                { id: 'user_models', objectId: 'simple-shared-object' },
+                { id: 'user_images', objectId: 'simple-shared-object' }
             ];
 
             let hasItems = false;

@@ -5,7 +5,12 @@ import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectIns
 import { EntityFactory } from '../../world/spawning/EntityFactory';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 
-export class DynamicModelInstance extends BaseReplicatedObjectInstance {
+function isModel(url: string): boolean {
+    const ext = url.split('.').pop()?.toLowerCase();
+    return ext === 'glb' || ext === 'gltf';
+}
+
+export class SimpleSharedInstance extends BaseReplicatedObjectInstance {
     public readonly replicationPolicy: IObjectReplicationPolicy = {
         relayIncomingFromPeer: 'others',
         includeInSnapshot: true,
@@ -18,18 +23,15 @@ export class DynamicModelInstance extends BaseReplicatedObjectInstance {
     private loaded = false;
 
     constructor(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
-        super(context, 'dynamic-model');
+        super(context, 'simple-shared-object');
 
         this.group = new THREE.Group();
-        this.group.name = `dynamic-model:${this.id}`;
-
-        // Wrap the group in a standard physical grabbable prop entity.
-        // It manages network sync for position/rotation.
-        // The URL is synced by this BaseReplicatedObjectInstance.
+        this.group.name = `simple-shared-object:${this.id}`;
 
         const position = config.position || { x: 0, y: 1.15, z: 0 };
         const halfExtents = config.halfExtents as { x: number, y: number, z: number } | undefined;
 
+        // Create a temporary wireframe placeholder if bounds are known
         if (halfExtents) {
             const hx = halfExtents.x, hy = halfExtents.y, hz = halfExtents.z;
             const geo = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
@@ -40,7 +42,19 @@ export class DynamicModelInstance extends BaseReplicatedObjectInstance {
         }
 
         const isAuthority = config.isAuthority !== undefined ? config.isAuthority : context.app.isHost;
-        this.propEntity = EntityFactory.createGrabbable(context.app, `prop_${this.id}`, 0.5, position, this.group as any, halfExtents, 'dynamic-model', config.ownerId as string, config.url as string);
+        const ownerId = config.ownerId as string;
+
+        this.propEntity = EntityFactory.createGrabbable(
+            context.app,
+            `prop_${this.id}`,
+            0.5,
+            position,
+            this.group as any,
+            halfExtents || { x: 0.25, y: 0.25, z: 0.05 },
+            'simple-shared-object',
+            ownerId,
+            config.url as string
+        );
 
         if (this.propEntity) {
             this.addCleanup(() => {
@@ -50,11 +64,9 @@ export class DynamicModelInstance extends BaseReplicatedObjectInstance {
             });
         }
 
-        // If spawned locally (not from a remote snapshot), we start with the config URL.
         if (config.url) {
             this.loadUrl(config.url as string);
             if (isAuthority) {
-                // Defer to ensure we're attached to the replication host
                 setTimeout(() => {
                     this.emitSyncEvent('set-url', { url: config.url });
                 }, 0);
@@ -67,25 +79,67 @@ export class DynamicModelInstance extends BaseReplicatedObjectInstance {
         if (!this.url || this.loaded) return;
         this.loaded = true;
 
-        if (this.context.app.runtime.render) {
-            this.context.app.runtime.assets.getNormalizedModel(this.url, 0.5)
-                .then(model => {
-                    const placeholder = this.group.getObjectByName('placeholder');
-                    if (placeholder) {
-                        this.group.remove(placeholder);
-                        if ((placeholder as THREE.Mesh).geometry) (placeholder as THREE.Mesh).geometry.dispose();
-                        if (Array.isArray((placeholder as THREE.Mesh).material)) {
-                            ((placeholder as THREE.Mesh).material as THREE.Material[]).forEach(m => m.dispose());
-                        } else {
-                            ((placeholder as THREE.Mesh).material as THREE.Material).dispose();
-                        }
-                    }
-                    this.group.add(model);
-                })
-                .catch(err => {
-                    console.error('[DynamicModelInstance] Failed to load model:', this.url, err);
-                });
+        if (!this.context.app.runtime.render) return;
+
+        if (isModel(this.url)) {
+            this.loadAsModel(this.url);
+        } else {
+            this.loadAsImage(this.url);
         }
+    }
+
+    private loadAsModel(url: string): void {
+        this.context.app.runtime.assets.getNormalizedModel(url, 0.5)
+            .then(model => {
+                this.replacePlaceholder(model);
+            })
+            .catch(err => {
+                console.error('[SimpleSharedInstance] Failed to load model:', url, err);
+            });
+    }
+
+    private loadAsImage(url: string): void {
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(url, (texture) => {
+            const halfExtents = this.propEntity?.halfExtents || { x: 0.25, y: 0.25, z: 0.05 };
+            const width = halfExtents.x * 2;
+            const height = halfExtents.y * 2;
+
+            const geometry = new THREE.PlaneGeometry(width, height);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                roughness: 0.8
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = 'image-content';
+
+            this.replacePlaceholder(mesh);
+
+            this.addCleanup(() => {
+                geometry.dispose();
+                material.dispose();
+            });
+        }, undefined, (err) => {
+            console.error('[SimpleSharedInstance] Failed to load image:', url, err);
+        });
+    }
+
+    private replacePlaceholder(content: THREE.Object3D): void {
+        const placeholder = this.group.getObjectByName('placeholder');
+        if (placeholder) {
+            this.group.remove(placeholder);
+            if (placeholder instanceof THREE.Mesh) {
+                placeholder.geometry.dispose();
+                if (Array.isArray(placeholder.material)) {
+                    placeholder.material.forEach(m => m.dispose());
+                } else {
+                    placeholder.material.dispose();
+                }
+            }
+        }
+        this.group.add(content);
     }
 
     public captureReplicationSnapshot(): unknown {
@@ -113,14 +167,14 @@ export class DynamicModelInstance extends BaseReplicatedObjectInstance {
     }
 }
 
-export class DynamicModelObject implements IObjectModule {
-    public readonly id = 'dynamic-model';
-    public readonly displayName = 'Dynamic 3D Model';
+export class SimpleSharedObject implements IObjectModule {
+    public readonly id = 'simple-shared-object';
+    public readonly displayName = 'Shared Asset';
     public readonly tags = ['dynamic', 'shared', 'prop'];
     public readonly networked = true;
     public readonly portable = true;
 
-    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): DynamicModelInstance {
-        return new DynamicModelInstance(context, config);
+    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): SimpleSharedInstance {
+        return new SimpleSharedInstance(context, config);
     }
 }

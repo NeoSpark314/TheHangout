@@ -5,8 +5,7 @@ import { DrawingSurfaceObject } from '../../objects/DrawingSurfaceObject';
 import { DrumPadArcObject } from '../../objects/DrumPadArcObject';
 import { GrabbableCubeObject } from '../../objects/GrabbableCubeObject';
 import { PenToolObject } from '../../objects/PenToolObject';
-import { DynamicModelObject } from '../../objects/DynamicModelObject';
-import { DynamicImageObject } from '../../objects/DynamicImageObject';
+import { SimpleSharedObject } from '../../objects/SimpleSharedObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
@@ -171,8 +170,7 @@ export class DefaultHangoutScenario implements IScenarioModule {
         new DrumPadArcObject(),
         new ChairObject(),
         new DebugBeaconObject(),
-        new DynamicModelObject(),
-        new DynamicImageObject()
+        new SimpleSharedObject()
     ];
     private readonly actionProvider = new DefaultHangoutActionProvider();
     private readonly world: DefaultHangoutWorld;
