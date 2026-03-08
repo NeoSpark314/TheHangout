@@ -85,9 +85,38 @@ export class PropBuilder {
         }
 
         if (this.context.runtime.physics) {
-            const tableBody = this.context.runtime.physics.createHexagon(2.0, 0.5, { x: 0, y: 0.8, z: 0 }, tableGroup, true);
+            // Exact regular-hex tabletop from 3 rotated strips:
+            // For a regular hexagon built from CylinderGeometry radius R, side length s = R.
+            // The strip half-width is the apothem: a = s * sqrt(3) / 2.
+            const tableRadius = 2.0;
+            const sideLength = tableRadius;
+            const apothem = sideLength * Math.sqrt(3) * 0.5;
+            const stripHalfNormal = apothem;   // distance from center to each matched hex side
+            // Keep strips just inside the visual hex edge length to avoid tiny overhangs.
+            const stripHalfTangent = sideLength * 0.5;
+            const topHalfThickness = 0.05;
+            const topY = 1.0;
+
+            const topBodies: Array<THREE.Quaternion> = [
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0),
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 3),
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (2 * Math.PI) / 3)
+            ];
+
+            for (const q of topBodies) {
+                const body = this.context.runtime.physics.createCuboid(
+                    stripHalfNormal,
+                    topHalfThickness,
+                    stripHalfTangent,
+                    { x: 0, y: topY, z: 0 },
+                    null,
+                    true,
+                    { x: q.x, y: q.y, z: q.z, w: q.w }
+                );
+                if (body) this.staticPhysicsBodies.push(body);
+            }
+
             const baseBody = this.context.runtime.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
-            if (tableBody) this.staticPhysicsBodies.push(tableBody);
             if (baseBody) this.staticPhysicsBodies.push(baseBody);
         }
     }

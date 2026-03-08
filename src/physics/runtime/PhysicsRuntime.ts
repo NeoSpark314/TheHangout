@@ -97,11 +97,22 @@ export class PhysicsRuntime {
         this.registerDebugBody('ground', groundBody, groundCollider);
     }
 
-    public createCuboid(hx: number, hy: number, hz: number, position: IVector3, mesh: any, isStatic: boolean = false): RAPIER.RigidBody | undefined {
+    public createCuboid(
+        hx: number,
+        hy: number,
+        hz: number,
+        position: IVector3,
+        mesh: any,
+        isStatic: boolean = false,
+        rotation?: { x: number; y: number; z: number; w: number }
+    ): RAPIER.RigidBody | undefined {
         if (!this.world) return;
         const rigidBodyDesc = isStatic
             ? RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
             : RAPIER.RigidBodyDesc.dynamic().setTranslation(position.x, position.y, position.z);
+        if (rotation) {
+            rigidBodyDesc.setRotation(rotation);
+        }
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
             .setFriction(1.0)
