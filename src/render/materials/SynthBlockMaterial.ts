@@ -33,22 +33,18 @@ varying vec3 vViewDir;
 varying vec3 vAxisWorldScale;
 
 void main() {
-    vec3 transformed = position;
-    vec3 n = normal;
-    mat4 localToWorld;
+    vec4 localPos = vec4(position, 1.0);
+    mat4 localToWorld = modelMatrix;
 
     #ifdef USE_INSTANCING
-    transformed = (instanceMatrix * vec4(transformed, 1.0)).xyz;
-    n = mat3(instanceMatrix) * n;
     localToWorld = modelMatrix * instanceMatrix;
-    #else
-    localToWorld = modelMatrix;
     #endif
 
-    vec4 worldPos = modelMatrix * vec4(transformed, 1.0);
+    vec4 worldPos = localToWorld * localPos;
     vLocalPos = position;
     vWorldPos = worldPos.xyz;
-    vWorldNormal = normalize(mat3(modelMatrix) * n);
+    mat3 normalMatrixLocalToWorld = mat3(transpose(inverse(localToWorld)));
+    vWorldNormal = normalize(normalMatrixLocalToWorld * normal);
     vViewDir = normalize(cameraPosition - worldPos.xyz);
     vAxisWorldScale = vec3(
         length(localToWorld[0].xyz),
@@ -108,6 +104,8 @@ void main() {
     color = mix(color, max(color, uEdgeColor), clamp(edgeMask * uEdgeIntensity, 0.0, 1.0));
 
     gl_FragColor = vec4(color, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
 }
         `.trim(),
         depthWrite: true,

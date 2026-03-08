@@ -127,37 +127,15 @@ export class PropBuilder {
             edgeIntensity: 0.45,
             rimIntensity: 0.08
         });
-        const blockGeo = new THREE.BoxGeometry(1.0, 0.2, 1.0);
-        const podestCount = 8 * 8;
-        const podestMesh = new THREE.InstancedMesh(blockGeo, podestMat, podestCount);
-        const podestPosition = new THREE.Vector3();
-        const podestQuaternion = new THREE.Quaternion();
-        const podestScale = new THREE.Vector3(1, 1, 1);
-        const podestMatrix = new THREE.Matrix4();
-        let instanceIndex = 0;
-
-        for (let x = -4; x < 4; x++) {
-            for (let z = -4; z < 4; z++) {
-                const hOffset = this.random() * 0.05;
-                const px = x + 0.5;
-                const py = 0.1 + hOffset;
-                const pz = z + 0.5;
-
-                podestPosition.set(px, py, pz);
-                podestMatrix.compose(podestPosition, podestQuaternion, podestScale);
-                podestMesh.setMatrixAt(instanceIndex, podestMatrix);
-                instanceIndex++;
-
-                // Add static physics collider
-                if (this.context.runtime.physics) {
-                    const colliderBody = this.context.runtime.physics.createCuboid(0.5, 0.1, 0.5, { x: px, y: py, z: pz }, null, true);
-                    if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
-                }
-            }
-        }
-        podestMesh.instanceMatrix.needsUpdate = true;
+        const podestMesh = new THREE.Mesh(new THREE.BoxGeometry(8.0, 0.22, 8.0), podestMat);
+        podestMesh.position.set(0, 0.11, 0);
         this.podest.add(podestMesh);
         if (this.scene) this.scene.add(this.podest);
+
+        if (this.context.runtime.physics) {
+            const body = this.context.runtime.physics.createCuboid(4.0, 0.11, 4.0, { x: 0, y: 0.11, z: 0 }, null, true);
+            if (body) this.staticPhysicsBodies.push(body);
+        }
     }
 
     private createDecorations(): void {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ISessionConfig } from '../../app/AppContext';
+import { createSynthBlockMaterial } from '../../render/materials/SynthBlockMaterial';
 
 export class EnvironmentBuilder {
     private static decorationsVisible: boolean = true;
@@ -14,6 +15,7 @@ export class EnvironmentBuilder {
     private gridUniforms: any = null;
     private lights: THREE.Group | null = null;
     private sun: THREE.Mesh | null = null;
+    private skyline: THREE.Group | null = null;
 
     constructor(scene: THREE.Scene, randomFunc: () => number) {
         this.scene = scene;
@@ -47,6 +49,7 @@ export class EnvironmentBuilder {
         if (!this.floor) this.createFloor();
         if (!this.lights) this.setupLighting();
         if (!this.sun) this.createSynthwaveSun();
+        if (!this.skyline) this.createFloatingMegacubeSkyline();
         this.applyDecorationVisibility();
     }
 
@@ -254,6 +257,74 @@ export class EnvironmentBuilder {
         this.decorationRoot?.add(this.sun);
     }
 
+    private createFloatingMegacubeSkyline(): void {
+        this.ensureDecorationRoot();
+        this.skyline = new THREE.Group();
+        this.skyline.name = 'floating-megacube-skyline';
+
+        const material = createSynthBlockMaterial({
+            topColor: 0x7ea7ff,
+            bottomColor: 0x140d2b,
+            edgeColor: 0xd9e5ff,
+            edgeThicknessWorld: 0.75,
+            edgeFeatherWorld: 0.35,
+            edgeIntensity: 0.3,
+            rimIntensity: 0.08
+        });
+        material.transparent = true;
+        material.opacity = 0.82;
+        material.depthWrite = true;
+
+        const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const towerCount = 10;
+
+        for (let i = 0; i < towerCount; i++) {
+            const angle = (i / towerCount) * Math.PI * 2 + this.random() * 0.32;
+            const radius = 230 + this.random() * 75;
+            const baseX = Math.sin(angle) * radius;
+            const baseZ = Math.cos(angle) * radius;
+            const stackCount = 2 + Math.floor(this.random() * 3);
+
+            let currentY = 28 + this.random() * 12;
+            let topY = currentY;
+            for (let j = 0; j < stackCount; j++) {
+                const width = 18 + this.random() * 24;
+                const height = 10 + this.random() * 22;
+                const depth = 18 + this.random() * 24;
+
+                const cube = new THREE.Mesh(cubeGeometry, material);
+                cube.position.set(
+                    baseX + (this.random() - 0.5) * 8,
+                    currentY + height * 0.5,
+                    baseZ + (this.random() - 0.5) * 8
+                );
+                cube.scale.set(width, height, depth);
+                cube.rotation.y = this.random() * Math.PI * 2;
+                this.skyline.add(cube);
+
+                currentY += height + 8 + this.random() * 14;
+                topY = Math.max(topY, cube.position.y + height * 0.5);
+            }
+
+            // Add a thin structural spine so towers read as grounded futuristic buildings.
+            if (this.random() > 0.25) {
+                const pillar = new THREE.Mesh(cubeGeometry, material);
+                const pillarWidth = 3.2 + this.random() * 2.0;
+                const pillarDepth = 3.2 + this.random() * 2.0;
+                const pillarBottom = -26 - this.random() * 14;
+                const pillarTop = topY + 16 + this.random() * 18;
+                const pillarHeight = pillarTop - pillarBottom;
+
+                pillar.position.set(baseX, pillarBottom + pillarHeight * 0.5, baseZ);
+                pillar.scale.set(pillarWidth, pillarHeight, pillarDepth);
+                pillar.rotation.y = this.random() * Math.PI * 2;
+                this.skyline.add(pillar);
+            }
+        }
+
+        this.decorationRoot?.add(this.skyline);
+    }
+
     private applyDecorationVisibility(): void {
         if (this.decorationRoot) {
             this.decorationRoot.visible = EnvironmentBuilder.decorationsVisible;
@@ -287,6 +358,7 @@ export class EnvironmentBuilder {
         remove(this.floor);
         remove(this.grid);
         remove(this.sun);
+        remove(this.skyline);
         remove(this.decorationRoot);
         remove(this.lights);
         this.decorationRoot = null;
@@ -296,6 +368,7 @@ export class EnvironmentBuilder {
         this.grid = null;
         this.lights = null;
         this.sun = null;
+        this.skyline = null;
         this.gridUniforms = null;
         if (this.scene) {
             this.scene.background = null;
