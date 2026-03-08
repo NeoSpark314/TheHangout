@@ -120,7 +120,24 @@ export class PhysicsRuntime {
         rigidBodyDesc.setTranslation(position.x, position.y, position.z);
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const hh = height / 2;
-        const colliderDesc = RAPIER.ColliderDesc.cylinder(hh, radius)
+
+        // Build a true 6-sided prism collider so physical shape matches the visual hex table top.
+        const vertices: number[] = [];
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const x = Math.sin(angle) * radius;
+            const z = Math.cos(angle) * radius;
+            vertices.push(x, hh, z);
+            vertices.push(x, -hh, z);
+        }
+
+        let colliderDesc = RAPIER.ColliderDesc.convexHull(new Float32Array(vertices));
+        if (!colliderDesc) {
+            // Fallback for runtimes that fail convex hull creation.
+            colliderDesc = RAPIER.ColliderDesc.cylinder(hh, radius);
+        }
+
+        colliderDesc
             .setFriction(1.0)
             .setRestitution(0.0)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
