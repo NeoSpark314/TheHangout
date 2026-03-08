@@ -395,6 +395,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             p: [pos.x, pos.y, pos.z],
             q: [rot.x, rot.y, rot.z, rot.w],
             v: [vel.x, vel.y, vel.z],
+            b: this.heldBy,
             ownerId: this.ownerId,
             m: this.moduleId,
             he: this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined

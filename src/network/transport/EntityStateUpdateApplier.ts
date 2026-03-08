@@ -46,15 +46,20 @@ export function applyEntityStateUpdates(
             const currentOwnerId = (entity as { ownerId?: string | null }).ownerId ?? null;
 
             if (options.authorityMode === 'host') {
-                if (currentOwnerId && options.senderId && currentOwnerId !== options.senderId) {
+                const senderMatchesCurrentOwner = !!options.senderId && currentOwnerId === options.senderId;
+                const incomingMatchesCurrentOwner = incomingOwnerId !== undefined && currentOwnerId === incomingOwnerId;
+                if (currentOwnerId && !senderMatchesCurrentOwner && !incomingMatchesCurrentOwner) {
                     continue;
                 }
 
                 if (
                     currentOwnerId === null &&
                     incomingOwnerId !== undefined &&
-                    incomingOwnerId === options.senderId &&
-                    incomingHeldBy === options.senderId
+                    incomingHeldBy !== undefined &&
+                    (
+                        (options.senderId !== undefined && incomingHeldBy === options.senderId) ||
+                        incomingHeldBy === incomingOwnerId
+                    )
                 ) {
                     (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;
                     entity.isAuthority = false;

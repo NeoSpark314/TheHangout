@@ -42,6 +42,10 @@ export class RemoteDesktopFeature implements IUpdatable {
 
     constructor(private context: AppContext) {
         this.loadConfigsFromStorage();
+        eventBus.on(EVENTS.SESSION_CONNECTED, () => {
+            // Late joiners need an initial status pull to discover already-active shared screens.
+            this.requestSourceStatus();
+        });
     }
 
     public update(_delta: number): void {
@@ -242,8 +246,8 @@ export class RemoteDesktopFeature implements IUpdatable {
         const incomingTs = Number(view.getBigUint64(2 + keyLen));
         const imageData = new Uint8Array(message, 2 + keyLen + 8);
 
-        const surface = this.surfacesByKey.get(key);
-        if (!surface) return;
+        const knownConfig = this.configs.find((cfg) => cfg.key === key);
+        const surface = this.ensureSurface(key, knownConfig?.name || key);
 
         this.capturingByKey.set(key, true);
         this.activeByKey.add(key);
