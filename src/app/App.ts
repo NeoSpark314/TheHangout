@@ -35,6 +35,7 @@ import { EVENTS } from '../shared/constants/Constants';
 import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
 import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
+import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../content/runtime/BuiltInScenarioPlugins';
 import { ConfigRegistry } from '../shared/config/ConfigRegistry';
 
 /**
@@ -135,7 +136,11 @@ export class App {
         this.context.setRuntime('player', new PlayerPresenceService(this.context));
         this.context.setRuntime('input', new InputRuntime(this.context));
         this.context.setRuntime('hud', new HudRuntime(this.context));
-        this.context.setRuntime('session', new SessionRuntime(this.context));
+        this.context.setRuntime('session', new SessionRuntime(
+            this.context,
+            BUILT_IN_SCENARIO_PLUGINS,
+            DEFAULT_SCENARIO_PLUGIN_ID
+        ));
         this.context.setRuntime('audio', new AudioRuntime(this.context));
         this.context.setRuntime('assets', new AssetRuntime(this.context));
         this.context.setRuntime('drawing', new DrawingRuntime(this.context));

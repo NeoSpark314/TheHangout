@@ -12,6 +12,7 @@ import { RuntimeDiagnostics } from '../app/diagnostics/RuntimeDiagnostics';
 import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
 import { NotificationRuntime } from '../app/notifications/NotificationRuntime';
 import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
+import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../content/runtime/BuiltInScenarioPlugins';
 
 export class HeadlessSession {
     public context: AppContext;
@@ -41,7 +42,11 @@ export class HeadlessSession {
         const physicsMgr = new PhysicsRuntime(this.context);
         this.context.setRuntime('physics', physicsMgr);
 
-        const sessionMgr = new SessionRuntime(this.context);
+        const sessionMgr = new SessionRuntime(
+            this.context,
+            BUILT_IN_SCENARIO_PLUGINS,
+            DEFAULT_SCENARIO_PLUGIN_ID
+        );
         this.context.setRuntime('session', sessionMgr);
         this.context.setRuntime('drawing', new DrawingRuntime(this.context));
         this.context.setRuntime('mount', new MountRuntime(this.context));

@@ -56,20 +56,22 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 
 ### Content, Scenarios, and Object Modules
 
-- [IScenarioModule.ts](src/content/contracts/IScenarioModule.ts) defines a loadable world package with a synchronous scenario lifecycle.
+- [IScenarioPlugin.ts](src/content/contracts/IScenarioPlugin.ts) defines the scenario registration/composition unit: metadata plus a factory that creates a live scenario instance.
+- [IScenarioModule.ts](src/content/contracts/IScenarioModule.ts) defines the live loadable world package with a synchronous scenario lifecycle.
 - [IObjectModule.ts](src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
 - [IObjectRuntimeContext.ts](src/content/contracts/IObjectRuntimeContext.ts) is the narrow contributor-facing authoring context for content objects.
 - Content interaction is XR-first: objects are typically `IHoldable` first, and only some holdables are movable (`IMovableHoldable` / legacy `IGrabbable`).
 - [ISpawnedObjectInstance.ts](src/content/contracts/ISpawnedObjectInstance.ts) is the runtime lifecycle contract for spawned content instances.
 - [IReplicatedObjectInstance.ts](src/content/contracts/IReplicatedObjectInstance.ts) adds per-instance sync hooks for content objects that need networked events and late-join snapshots.
-- [ScenarioRegistry.ts](src/content/runtime/ScenarioRegistry.ts) tracks available scenarios.
+- [ScenarioPluginRegistry.ts](src/content/runtime/ScenarioPluginRegistry.ts) tracks available scenario plugins.
+- [BuiltInScenarioPlugins.ts](src/content/runtime/BuiltInScenarioPlugins.ts) is the current composition point for built-in scenarios shipped with the app/server.
 - [ObjectModuleRegistry.ts](src/content/runtime/ObjectModuleRegistry.ts) tracks the object modules exposed by the active scenario.
 - [ObjectInstanceRegistry.ts](src/content/runtime/ObjectInstanceRegistry.ts) tracks active spawned content instances and destroys them on scenario unload.
 - [BaseObjectInstance.ts](src/content/runtime/BaseObjectInstance.ts) provides default cleanup tracking for scene objects, physics bodies, and per-instance disposables.
 - [BaseReplicatedObjectInstance.ts](src/content/runtime/BaseReplicatedObjectInstance.ts) adds ergonomic sync emission and the standard object replication key pattern.
 - [ObjectReplicationHost.ts](src/content/runtime/ObjectReplicationHost.ts) adapts replicated object instances onto the existing feature replication transport.
 - Replicated object instances can declare an object-scoped replication policy (`relayIncomingFromPeer`, `includeInSnapshot`, `defaultLocalEcho`) so object-specific sync behavior stays in object code instead of engine packet wiring.
-- [DefaultHangoutScenario.ts](src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario.
+- [DefaultHangoutScenario.ts](src/content/scenarios/defaultHangout/DefaultHangoutScenario.ts) is now the baseline meeting-room scenario and also exports its built-in plugin manifest.
 - Small experimental content can now be authored as compact object modules, such as [DebugBeaconObject.ts](src/content/objects/DebugBeaconObject.ts).
 - Fixed interactables such as [ChairObject.ts](src/content/objects/ChairObject.ts) now use the holdable path without pretending to be movable props.
 - Content modules can also wrap low-level engine entities. For example, [PenToolObject.ts](src/content/objects/PenToolObject.ts) is the content-facing module, while [PenToolEntity.ts](src/world/entities/PenToolEntity.ts) remains the low-level replicated primitive it spawns.
@@ -92,13 +94,14 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 
 ### Session and Spawn Rules
 
-- [SessionRuntime.ts](src/world/session/SessionRuntime.ts) now acts as the scenario host for the active session.
+- [SessionRuntime.ts](src/world/session/SessionRuntime.ts) now acts as the scenario host for the active session and instantiates the active scenario from a registered plugin.
 - [PlayerPresenceService.ts](src/world/session/PlayerPresenceService.ts) creates the local player avatar when the session is ready.
 - Guest spawn placement depends on `assignedSpawnIndex` from the host. Guest initialization is intentionally delayed until that host-assigned slot is available.
 - Spawn points come from the active scenario, not from a hardcoded global room implementation.
+- Built-in scenario plugins are currently composed in app/headless bootstrap and injected into `SessionRuntime` instead of being hard-registered inside the runtime itself.
 - The active scenario can expose its own object modules, and `SessionRuntime` can spawn them through the content-facing object module registry.
 - `SessionRuntime` now tracks spawned object instances, not just entity ids, so scenario unload can destroy content-owned runtime state as well as entity-backed objects.
-- Scenario changes are driven through shared session config updates, and `SessionRuntime` is the single owner of scenario switching.
+- Scenario changes are driven through shared session config updates, and `SessionRuntime` is the single owner of scenario switching and live scenario re-instantiation.
 - Scenario transitions are intentionally synchronous and atomic for now; unload, cleanup, load, and the follow-up host resync happen as one ordered lifecycle path.
 - After an authoritative scenario change, the host immediately rebroadcasts the full world snapshot plus feature snapshot so guests converge on the new scenario state quickly.
 - Dedicated/headless sessions run the same `SessionRuntime` lifecycle without a render scene, so render-only setup should stay separate from gameplay/state setup.
@@ -169,4 +172,5 @@ These names are part of the architecture. New modules should follow them instead
 ## What To Read Next
 
 - [OBJECT_REPLICATION_POLICY.md](OBJECT_REPLICATION_POLICY.md) for object-scoped replication policy and usage patterns
+- [src/content/runtime/BuiltInScenarioPlugins.ts](src/content/runtime/BuiltInScenarioPlugins.ts) for the current built-in scenario composition point
 

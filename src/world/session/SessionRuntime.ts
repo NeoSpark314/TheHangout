@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
-import { DefaultHangoutScenarioPlugin } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IObjectReplicationEmitOptions } from '../../content/contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
@@ -11,7 +10,6 @@ import type { IScenarioPlugin } from '../../content/contracts/IScenarioPlugin';
 import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegistry';
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioPluginRegistry } from '../../content/runtime/ScenarioPluginRegistry';
-import { WideCircleScenarioPlugin } from '../../content/scenarios/wideCircle/WideCircleScenario';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -27,11 +25,21 @@ export class SessionRuntime implements IUpdatable {
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
 
-    constructor(private context: AppContext) {
+    constructor(
+        private context: AppContext,
+        scenarioPlugins: IScenarioPlugin[],
+        defaultScenarioId?: string
+    ) {
         this.objectInstanceRegistry = new ObjectInstanceRegistry(context);
-        this.scenarioRegistry.register(DefaultHangoutScenarioPlugin);
-        this.scenarioRegistry.register(WideCircleScenarioPlugin);
-        this.activeScenarioPlugin = DefaultHangoutScenarioPlugin;
+        if (scenarioPlugins.length === 0) {
+            throw new Error('[SessionRuntime] At least one scenario plugin must be registered.');
+        }
+
+        for (const plugin of scenarioPlugins) {
+            this.scenarioRegistry.register(plugin);
+        }
+
+        this.activeScenarioPlugin = this.resolveInitialScenarioPlugin(defaultScenarioId);
         this.activeScenario = this.instantiateScenario(this.activeScenarioPlugin);
         this.refreshActiveObjectModules();
     }
@@ -343,6 +351,22 @@ export class SessionRuntime implements IUpdatable {
             app: this.context,
             session: this
         });
+    }
+
+    private resolveInitialScenarioPlugin(defaultScenarioId?: string): IScenarioPlugin {
+        if (defaultScenarioId) {
+            const configuredDefault = this.scenarioRegistry.get(defaultScenarioId);
+            if (configuredDefault) {
+                return configuredDefault;
+            }
+        }
+
+        const configuredSessionScenario = this.scenarioRegistry.get(this.context.sessionConfig.activeScenarioId);
+        if (configuredSessionScenario) {
+            return configuredSessionScenario;
+        }
+
+        return this.scenarioRegistry.list()[0];
     }
 
     private repositionLocalPlayerForActiveScenario(): void {
