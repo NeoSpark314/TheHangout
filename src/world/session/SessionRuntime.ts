@@ -2,15 +2,16 @@ import * as THREE from 'three';
 import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
-import { DefaultHangoutScenario } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
+import { DefaultHangoutScenarioPlugin } from '../../content/scenarios/defaultHangout/DefaultHangoutScenario';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IObjectReplicationEmitOptions } from '../../content/contracts/IReplicatedObjectInstance';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
+import type { IScenarioPlugin } from '../../content/contracts/IScenarioPlugin';
 import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegistry';
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
-import { ScenarioRegistry } from '../../content/runtime/ScenarioRegistry';
-import { WideCircleScenario } from '../../content/scenarios/wideCircle/WideCircleScenario';
+import { ScenarioPluginRegistry } from '../../content/runtime/ScenarioPluginRegistry';
+import { WideCircleScenarioPlugin } from '../../content/scenarios/wideCircle/WideCircleScenario';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -21,17 +22,17 @@ export class SessionRuntime implements IUpdatable {
     private isInitialized: boolean = false;
     private readonly objectInstanceRegistry: ObjectInstanceRegistry;
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
-    private readonly scenarioRegistry = new ScenarioRegistry();
+    private readonly scenarioRegistry = new ScenarioPluginRegistry();
+    private activeScenarioPlugin: IScenarioPlugin;
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
 
     constructor(private context: AppContext) {
         this.objectInstanceRegistry = new ObjectInstanceRegistry(context);
-        const defaultScenario = new DefaultHangoutScenario(this, context);
-        const wideCircleScenario = new WideCircleScenario(this);
-        this.scenarioRegistry.register(defaultScenario);
-        this.scenarioRegistry.register(wideCircleScenario);
-        this.activeScenario = defaultScenario;
+        this.scenarioRegistry.register(DefaultHangoutScenarioPlugin);
+        this.scenarioRegistry.register(WideCircleScenarioPlugin);
+        this.activeScenarioPlugin = DefaultHangoutScenarioPlugin;
+        this.activeScenario = this.instantiateScenario(this.activeScenarioPlugin);
         this.refreshActiveObjectModules();
     }
 
@@ -51,9 +52,10 @@ export class SessionRuntime implements IUpdatable {
         try {
             this.scene = scene;
             this._seed = this.context.sessionConfig.seed;
-            const configuredScenario = this.scenarioRegistry.get(this.context.sessionConfig.activeScenarioId);
-            if (configuredScenario) {
-                this.activeScenario = configuredScenario;
+            const configuredPlugin = this.scenarioRegistry.get(this.context.sessionConfig.activeScenarioId);
+            if (configuredPlugin && configuredPlugin.id !== this.activeScenarioPlugin.id) {
+                this.activeScenarioPlugin = configuredPlugin;
+                this.activeScenario = this.instantiateScenario(configuredPlugin);
             }
             this.refreshActiveObjectModules();
             this.activeScenario.load(this.context, {
@@ -224,11 +226,11 @@ export class SessionRuntime implements IUpdatable {
         return this.spawnObjectModule(id, config);
     }
 
-    public registerScenario(scenario: IScenarioModule): void {
-        this.scenarioRegistry.register(scenario);
+    public registerScenario(plugin: IScenarioPlugin): void {
+        this.scenarioRegistry.register(plugin);
     }
 
-    public getAvailableScenarios(): IScenarioModule[] {
+    public getAvailableScenarios(): IScenarioPlugin[] {
         return this.scenarioRegistry.list();
     }
 
@@ -241,13 +243,13 @@ export class SessionRuntime implements IUpdatable {
         options: Partial<IScenarioLoadOptions> = {},
         onSwitched?: () => void
     ): boolean {
-        const nextScenario = this.scenarioRegistry.get(id);
-        if (!nextScenario) {
+        const nextPlugin = this.scenarioRegistry.get(id);
+        if (!nextPlugin) {
             console.warn(`[SessionRuntime] Cannot switch to unknown scenario: ${id}`);
             return false;
         }
 
-        if (nextScenario.id === this.activeScenario.id) {
+        if (nextPlugin.id === this.activeScenarioPlugin.id) {
             onSwitched?.();
             return true;
         }
@@ -256,15 +258,15 @@ export class SessionRuntime implements IUpdatable {
             const transition = this.context.runtime.worldTransition;
             if (transition) {
                 transition.transitionScenario(() => {
-                    this.completeScenarioSwitch(nextScenario, options);
+                    this.completeScenarioSwitch(nextPlugin, options);
                     onSwitched?.();
                 });
             } else {
-                this.completeScenarioSwitch(nextScenario, options);
+                this.completeScenarioSwitch(nextPlugin, options);
                 onSwitched?.();
             }
         } else {
-            this.completeScenarioSwitch(nextScenario, options);
+            this.completeScenarioSwitch(nextPlugin, options);
             onSwitched?.();
         }
 
@@ -316,11 +318,12 @@ export class SessionRuntime implements IUpdatable {
         this.objectInstanceRegistry.removeAll();
     }
 
-    private completeScenarioSwitch(nextScenario: IScenarioModule, options: Partial<IScenarioLoadOptions>): void {
+    private completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): void {
         this.activeScenario.unload(this.context);
         this.clearScenarioOwnedState();
-        this.activeScenario = nextScenario;
-        this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextScenario.id };
+        this.activeScenarioPlugin = nextPlugin;
+        this.activeScenario = this.instantiateScenario(nextPlugin);
+        this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextPlugin.id };
         this._seed = options.seed ?? this.context.sessionConfig.seed;
         this.refreshActiveObjectModules();
 
@@ -333,6 +336,13 @@ export class SessionRuntime implements IUpdatable {
         }
 
         this.repositionLocalPlayerForActiveScenario();
+    }
+
+    private instantiateScenario(plugin: IScenarioPlugin): IScenarioModule {
+        return plugin.create({
+            app: this.context,
+            session: this
+        });
     }
 
     private repositionLocalPlayerForActiveScenario(): void {

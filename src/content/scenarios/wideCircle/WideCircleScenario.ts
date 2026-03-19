@@ -1,5 +1,6 @@
 import type { AppContext } from '../../../app/AppContext';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
+import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 import { WideCircleVisuals } from './WideCircleVisuals';
 
@@ -50,3 +51,20 @@ export class WideCircleScenario implements IScenarioModule {
         };
     }
 }
+
+export const WideCircleScenarioPlugin: IScenarioPlugin = {
+    id: 'wide-circle',
+    displayName: 'Wide Circle',
+    kind: 'social',
+    maxPlayers: 16,
+    capabilities: {
+        headless: true,
+        usesPhysics: true,
+        usesAudio: false,
+        hasActions: false,
+        hasPortableObjects: false
+    },
+    create({ session }) {
+        return new WideCircleScenario(session);
+    }
+};

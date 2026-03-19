@@ -9,6 +9,7 @@ import { SimpleSharedObject } from '../../objects/SimpleSharedObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
+import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 import { DefaultHangoutWorld } from './DefaultHangoutWorld';
 import * as THREE from 'three';
@@ -228,3 +229,20 @@ export class DefaultHangoutScenario implements IScenarioModule {
         this.world.setHologramVisible(visible);
     }
 }
+
+export const DefaultHangoutScenarioPlugin: IScenarioPlugin = {
+    id: 'default-hangout',
+    displayName: 'Default Hangout',
+    kind: 'social',
+    maxPlayers: 16,
+    capabilities: {
+        headless: true,
+        usesPhysics: true,
+        usesAudio: true,
+        hasActions: true,
+        hasPortableObjects: true
+    },
+    create({ app, session }) {
+        return new DefaultHangoutScenario(session, app);
+    }
+};
