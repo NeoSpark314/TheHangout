@@ -3,9 +3,12 @@ import eventBus from '../../app/events/EventBus';
 import { AppContext } from '../../app/AppContext';
 import { IVoiceStreamReceivedEvent } from '../../shared/contracts/IVoice';
 import { EVENTS, PACKET_TYPES } from '../../shared/constants/Constants';
+import { EntityType } from '../../shared/contracts/IEntityState';
 import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 
 export class VoiceRuntime {
+    private static readonly OUTBOUND_CALL_RETRY_MS = 3000;
+
     private localStream: MediaStream | null = null;
     private calls: Map<string, MediaConnection> = new Map();
     private remoteStreams: Map<string, MediaStream> = new Map();
@@ -18,19 +21,20 @@ export class VoiceRuntime {
     private websocket: WebSocket | null = null;
     private mediaRecorder: MediaRecorder | null = null;
     private preferredMicDeviceId: string | null = null;
+    private readonly lastCallAttemptAt: Map<string, number> = new Map();
+    private readonly callReconcileTimer: number | null = null;
 
     constructor(private context: AppContext) {
         this.preferredMicDeviceId = AppLocalStorage.getPreferredMicDeviceId() || null;
         eventBus.on(EVENTS.ENTITY_DISCOVERED, (peerId: string) => {
             const network = this.context.runtime.network;
             const localId = network?.peer?.id || network?.localPeerId;
-            const isRemoteNetworkPeer = !!network?.connections?.has(peerId);
 
             if (
                 this.localStream &&
                 network &&
                 network.peer &&
-                isRemoteNetworkPeer &&
+                this.isCallableRemotePeer(peerId) &&
                 peerId !== localId &&
                 !this.calls.has(peerId)
             ) {
@@ -45,6 +49,7 @@ export class VoiceRuntime {
                 this.calls.delete(peerId);
             }
             this.remoteStreams.delete(peerId);
+            this.lastCallAttemptAt.delete(peerId);
         });
 
         eventBus.on(EVENTS.PEER_JOINED_SESSION, (peerId: string) => {
@@ -63,6 +68,12 @@ export class VoiceRuntime {
             navigator.mediaDevices.addEventListener('devicechange', () => {
                 void this.handleDeviceChange();
             });
+        }
+
+        if (typeof window !== 'undefined') {
+            this.callReconcileTimer = window.setInterval(() => {
+                this.reconcileOutboundCalls();
+            }, VoiceRuntime.OUTBOUND_CALL_RETRY_MS);
         }
     }
 
@@ -173,14 +184,7 @@ export class VoiceRuntime {
             if (this.context.isLocalServer) {
                 this.startRecording();
             } else {
-                const network = this.context.runtime.network;
-                if (network && network.peer) {
-                    for (const peerId of network.connections.keys()) {
-                        if (!this.calls.has(peerId)) {
-                            this.callPeer(peerId);
-                        }
-                    }
-                }
+                this.reconcileOutboundCalls(true);
             }
 
             this.syncVoiceState();
@@ -332,11 +336,49 @@ export class VoiceRuntime {
         const network = this.context.runtime.network;
         const peer = network ? network.peer : null;
         const localId = peer?.id || network?.localPeerId;
-        if (!peer || !this.localStream || !network?.connections.has(targetPeerId) || targetPeerId === localId || this.calls.has(targetPeerId)) return;
+        if (!peer || !this.localStream || targetPeerId === localId || this.calls.has(targetPeerId)) return;
+        if (!this.isCallableRemotePeer(targetPeerId)) return;
+        this.lastCallAttemptAt.set(targetPeerId, Date.now());
 
         console.log(`[VoiceRuntime] Calling ${targetPeerId} for voice chat...`);
         const call = peer.call(targetPeerId, this.localStream);
         this.setupCall(call);
+    }
+
+    private getVoiceTargetPeerIds(): string[] {
+        const network = this.context.runtime.network;
+        const localId = network?.peer?.id || network?.localPeerId;
+
+        if (this.context.isLocalServer) {
+            return Array.from(network?.connections?.keys() || [])
+                .filter((peerId) => peerId !== localId);
+        }
+
+        const peerIds: string[] = [];
+        for (const entity of this.context.runtime.entity.entities.values()) {
+            if (entity.type !== EntityType.PLAYER_AVATAR) continue;
+            if ((entity as { controlMode?: 'local' | 'remote' }).controlMode !== 'remote') continue;
+            if (!entity.id || entity.id === localId) continue;
+            peerIds.push(entity.id);
+        }
+        return peerIds;
+    }
+
+    private isCallableRemotePeer(peerId: string): boolean {
+        if (!peerId) return false;
+
+        const network = this.context.runtime.network;
+        const localId = network?.peer?.id || network?.localPeerId;
+        if (peerId === localId) return false;
+
+        if (this.context.isLocalServer) {
+            return !!network?.connections?.has(peerId);
+        }
+
+        const entity = this.context.runtime.entity.getEntity(peerId);
+        if (!entity || entity.type !== EntityType.PLAYER_AVATAR) return false;
+
+        return (entity as { controlMode?: 'local' | 'remote' }).controlMode === 'remote';
     }
 
     private setupCall(call: MediaConnection): void {
@@ -345,6 +387,7 @@ export class VoiceRuntime {
             existingCall.close();
         }
         this.calls.set(call.peer, call);
+        this.lastCallAttemptAt.delete(call.peer);
         call.on('stream', (remoteStream: MediaStream) => {
             console.log(`[VoiceRuntime] Received voice stream from ${call.peer}`);
             this.remoteStreams.set(call.peer, remoteStream);
@@ -358,13 +401,35 @@ export class VoiceRuntime {
             if (this.calls.get(call.peer) === call) {
                 this.calls.delete(call.peer);
             }
+            if (!this.context.isLocalServer) {
+                this.reconcileOutboundCalls();
+            }
         });
         call.on('error', (err: any) => {
             console.error(`[VoiceRuntime] Call error with ${call.peer}:`, err);
             if (this.calls.get(call.peer) === call) {
                 this.calls.delete(call.peer);
             }
+            if (!this.context.isLocalServer) {
+                this.reconcileOutboundCalls();
+            }
         });
+    }
+
+    private reconcileOutboundCalls(force: boolean = false): void {
+        if (this.context.isLocalServer || !this.localStream) return;
+
+        for (const peerId of this.getVoiceTargetPeerIds()) {
+            if (this.calls.has(peerId)) continue;
+            if (!force && !this.shouldRetryCall(peerId)) continue;
+            this.callPeer(peerId);
+        }
+    }
+
+    private shouldRetryCall(peerId: string): boolean {
+        const lastAttempt = this.lastCallAttemptAt.get(peerId);
+        if (lastAttempt === undefined) return true;
+        return (Date.now() - lastAttempt) >= VoiceRuntime.OUTBOUND_CALL_RETRY_MS;
     }
 
     public getLocalVolume(): number {
