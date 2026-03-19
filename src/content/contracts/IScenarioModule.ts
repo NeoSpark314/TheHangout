@@ -4,6 +4,7 @@ import type { IUpdatable } from '../../shared/contracts/IUpdatable';
 import type { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectModule } from './IObjectModule';
 import type { IScenarioActionProvider } from './IScenarioAction';
+import type { IScenarioReplicationEmitOptions } from './IReplicatedScenarioModule';
 
 export interface IScenarioLoadOptions {
     isHost: boolean;
@@ -36,4 +37,5 @@ export interface IScenarioModule extends IUpdatable {
     getActionProvider?(): IScenarioActionProvider;
     onPlayerJoined?(playerId: string): void;
     onPlayerLeft?(playerId: string): void;
+    emitReplicationEvent?(eventType: string, data: unknown, options?: IScenarioReplicationEmitOptions): void;
 }

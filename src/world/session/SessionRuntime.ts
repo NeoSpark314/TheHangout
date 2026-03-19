@@ -4,12 +4,14 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IObjectReplicationEmitOptions } from '../../content/contracts/IReplicatedObjectInstance';
+import type { IScenarioReplicationEmitOptions, IReplicatedScenarioModule } from '../../content/contracts/IReplicatedScenarioModule';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
 import type { IScenarioLoadOptions, IScenarioModule } from '../../content/contracts/IScenarioModule';
 import type { IScenarioPlugin } from '../../content/contracts/IScenarioPlugin';
 import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegistry';
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioPluginRegistry } from '../../content/runtime/ScenarioPluginRegistry';
+import { ScenarioReplicationHost } from '../../content/runtime/ScenarioReplicationHost';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 
@@ -21,6 +23,7 @@ export class SessionRuntime implements IUpdatable {
     private readonly objectInstanceRegistry: ObjectInstanceRegistry;
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
     private readonly scenarioRegistry = new ScenarioPluginRegistry();
+    private readonly scenarioReplicationHost: ScenarioReplicationHost;
     private activeScenarioPlugin: IScenarioPlugin;
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
@@ -31,6 +34,7 @@ export class SessionRuntime implements IUpdatable {
         defaultScenarioId?: string
     ) {
         this.objectInstanceRegistry = new ObjectInstanceRegistry(context);
+        this.scenarioReplicationHost = new ScenarioReplicationHost(context);
         if (scenarioPlugins.length === 0) {
             throw new Error('[SessionRuntime] At least one scenario plugin must be registered.');
         }
@@ -71,6 +75,7 @@ export class SessionRuntime implements IUpdatable {
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
             });
+            this.attachScenarioReplicationIfNeeded();
             this.isInitialized = true;
         } catch (e) {
             console.error('[SessionRuntime] init crashed:', e);
@@ -163,6 +168,7 @@ export class SessionRuntime implements IUpdatable {
                     reason: 'reload'
                 });
                 this.refreshActiveObjectModules();
+                this.attachScenarioReplicationIfNeeded();
             }
             console.info(
                 `[SessionRuntime] Scenario reload completed` +
@@ -317,6 +323,14 @@ export class SessionRuntime implements IUpdatable {
         this.objectInstanceRegistry.remove(instanceId);
     }
 
+    public emitScenarioEvent(
+        eventType: string,
+        data: unknown,
+        options?: IScenarioReplicationEmitOptions
+    ): void {
+        this.scenarioReplicationHost.emit(eventType, data, options);
+    }
+
     private refreshActiveObjectModules(): void {
         this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
     }
@@ -327,6 +341,7 @@ export class SessionRuntime implements IUpdatable {
     }
 
     private completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): void {
+        this.scenarioReplicationHost.detach();
         this.activeScenario.unload(this.context);
         this.clearScenarioOwnedState();
         this.activeScenarioPlugin = nextPlugin;
@@ -341,16 +356,30 @@ export class SessionRuntime implements IUpdatable {
                 seed: options.seed ?? this.context.sessionConfig.seed,
                 reason: options.reason ?? 'scenario_switch'
             });
+            this.attachScenarioReplicationIfNeeded();
         }
 
         this.repositionLocalPlayerForActiveScenario();
     }
 
     private instantiateScenario(plugin: IScenarioPlugin): IScenarioModule {
-        return plugin.create({
+        const scenario = plugin.create({
             app: this.context,
             session: this
         });
+        scenario.emitReplicationEvent = (eventType, data, options) => {
+            this.emitScenarioEvent(eventType, data, options);
+        };
+        return scenario;
+    }
+
+    private attachScenarioReplicationIfNeeded(): void {
+        if (isReplicatedScenarioModule(this.activeScenario)) {
+            this.scenarioReplicationHost.attach(this.activeScenario);
+            return;
+        }
+
+        this.scenarioReplicationHost.detach();
     }
 
     private resolveInitialScenarioPlugin(defaultScenarioId?: string): IScenarioPlugin {
@@ -381,4 +410,10 @@ export class SessionRuntime implements IUpdatable {
     private emitSessionConfigApplied(): void {
         eventBus.emit(EVENTS.SESSION_CONFIG_APPLIED);
     }
+}
+
+function isReplicatedScenarioModule(value: IScenarioModule): value is IReplicatedScenarioModule {
+    const candidate = value as Partial<IReplicatedScenarioModule>;
+    return typeof candidate.replicationKey === 'string'
+        && typeof candidate.onScenarioReplicationEvent === 'function';
 }

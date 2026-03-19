@@ -58,6 +58,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 
 - [IScenarioPlugin.ts](src/content/contracts/IScenarioPlugin.ts) defines the scenario registration/composition unit: metadata plus a factory that creates a live scenario instance.
 - [IScenarioModule.ts](src/content/contracts/IScenarioModule.ts) defines the live loadable world package with a synchronous scenario lifecycle.
+- [IReplicatedScenarioModule.ts](src/content/contracts/IReplicatedScenarioModule.ts) adds scenario-scoped semantic events and late-join snapshots for scenario-owned state that should stay inside the scenario instead of becoming a dedicated object module.
 - [IObjectModule.ts](src/content/contracts/IObjectModule.ts) defines a self-contained spawnable content object.
 - [IObjectRuntimeContext.ts](src/content/contracts/IObjectRuntimeContext.ts) is the narrow contributor-facing authoring context for content objects.
 - Content interaction is XR-first: objects are typically `IHoldable` first, and only some holdables are movable (`IMovableHoldable` / legacy `IGrabbable`).
@@ -65,6 +66,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - [IReplicatedObjectInstance.ts](src/content/contracts/IReplicatedObjectInstance.ts) adds per-instance sync hooks for content objects that need networked events and late-join snapshots.
 - [ScenarioPluginRegistry.ts](src/content/runtime/ScenarioPluginRegistry.ts) tracks available scenario plugins.
 - [BuiltInScenarioPlugins.ts](src/content/runtime/BuiltInScenarioPlugins.ts) is the current composition point for built-in scenarios shipped with the app/server.
+- [ScenarioReplicationHost.ts](src/content/runtime/ScenarioReplicationHost.ts) attaches the active replicated scenario onto the generic feature replication transport.
 - [ObjectModuleRegistry.ts](src/content/runtime/ObjectModuleRegistry.ts) tracks the object modules exposed by the active scenario.
 - [ObjectInstanceRegistry.ts](src/content/runtime/ObjectInstanceRegistry.ts) tracks active spawned content instances and destroys them on scenario unload.
 - [BaseObjectInstance.ts](src/content/runtime/BaseObjectInstance.ts) provides default cleanup tracking for scene objects, physics bodies, and per-instance disposables.
@@ -102,6 +104,7 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 - The active scenario can expose its own object modules, and `SessionRuntime` can spawn them through the content-facing object module registry.
 - `SessionRuntime` now tracks spawned object instances, not just entity ids, so scenario unload can destroy content-owned runtime state as well as entity-backed objects.
 - Scenario changes are driven through shared session config updates, and `SessionRuntime` is the single owner of scenario switching and live scenario re-instantiation.
+- If the active scenario implements `IReplicatedScenarioModule`, `SessionRuntime` attaches it to the generic feature replication layer so scenario-owned state can emit semantic events and provide late-join snapshots without creating a dedicated object instance.
 - Scenario transitions are intentionally synchronous and atomic for now; unload, cleanup, load, and the follow-up host resync happen as one ordered lifecycle path.
 - After an authoritative scenario change, the host immediately rebroadcasts the full world snapshot plus feature snapshot so guests converge on the new scenario state quickly.
 - Dedicated/headless sessions run the same `SessionRuntime` lifecycle without a render scene, so render-only setup should stay separate from gameplay/state setup.
@@ -172,5 +175,6 @@ These names are part of the architecture. New modules should follow them instead
 ## What To Read Next
 
 - [OBJECT_REPLICATION_POLICY.md](OBJECT_REPLICATION_POLICY.md) for object-scoped replication policy and usage patterns
+- [SCENARIO_REPLICATION_POLICY.md](SCENARIO_REPLICATION_POLICY.md) for scenario-scoped semantic sync and late-join snapshot patterns
 - [src/content/runtime/BuiltInScenarioPlugins.ts](src/content/runtime/BuiltInScenarioPlugins.ts) for the current built-in scenario composition point
 
