@@ -34,7 +34,7 @@ const GUN_MAX_RANGE = 22;
 const GUN_FIRE_COOLDOWN_MS = 120;
 const GUN_RECOIL_DISTANCE = 0.035;
 const GUN_RECOIL_RECOVER_SPEED = 8.5;
-const GUN_IMPULSE_STRENGTH = 0.09;
+const GUN_IMPULSE_STRENGTH = 0.045;
 
 class PewPewGunInstance extends BaseReplicatedObjectInstance {
     public readonly replicationPolicy = {

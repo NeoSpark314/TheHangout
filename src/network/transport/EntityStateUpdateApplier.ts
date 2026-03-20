@@ -52,13 +52,25 @@ export function applyEntityStateUpdates(
                     continue;
                 }
 
-                if (
-                    currentOwnerId === null &&
+                const senderMatchesIncomingOwner =
+                    options.senderId !== undefined &&
                     incomingOwnerId !== undefined &&
-                    incomingHeldBy !== undefined &&
+                    incomingOwnerId === options.senderId;
+                const canAdoptOptimisticUnownedClaim =
+                    currentOwnerId === null &&
+                    senderMatchesIncomingOwner &&
+                    stateData.type === EntityType.PHYSICS_PROP;
+
+                if (
+                    canAdoptOptimisticUnownedClaim ||
                     (
-                        (options.senderId !== undefined && incomingHeldBy === options.senderId) ||
-                        incomingHeldBy === incomingOwnerId
+                        currentOwnerId === null &&
+                        incomingOwnerId !== undefined &&
+                        incomingHeldBy !== undefined &&
+                        (
+                            (options.senderId !== undefined && incomingHeldBy === options.senderId) ||
+                            incomingHeldBy === incomingOwnerId
+                        )
                     )
                 ) {
                     (entity as { ownerId?: string | null }).ownerId = incomingOwnerId;

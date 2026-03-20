@@ -457,6 +457,7 @@ export class PhysicsRuntime {
             { x: point.x, y: point.y, z: point.z },
             true
         );
+        this.context.runtime.network?.syncEntityNow(entity.id, true);
         return true;
     }
     public raycast(origin: IVector3, direction: IVector3, maxDist: number): IPhysicsRayHit | null {
