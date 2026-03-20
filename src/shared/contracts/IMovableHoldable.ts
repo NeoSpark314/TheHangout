@@ -12,5 +12,12 @@ export interface IMovableHoldable extends IHoldable {
      * The returned pose is the object's transform relative to the holding hand.
      */
     getCanonicalGrabOffset?(hand: 'left' | 'right'): IPose;
+
+    /**
+     * Optional authored preference for which tracked controller orientation
+     * should drive the held object. Position still comes from the grip pose.
+     */
+    getPreferredHeldQuaternionSpace?(): 'grip' | 'pointer';
 }
+
 

@@ -92,7 +92,7 @@ export class GrabSkill extends Skill {
             const offsetPos = new THREE.Vector3();
             const offsetQuat = new THREE.Quaternion();
             const movable = isMovableHoldable(nearest);
-            const handPose = movable ? this._getMovableHandPose(handState) : this._getPointerPreferredHandPose(handState);
+            const handPose = movable ? this._getMovableHandPose(nearest as unknown as IMovableHoldable, handState) : this._getPointerPreferredHandPose(handState);
             const handPos = handPose.position;
             const handQuat = handPose.quaternion;
             const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
@@ -365,7 +365,7 @@ export class GrabSkill extends Skill {
         trackingHands: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands']
     ): void {
         const handState = trackingHands[hand];
-        const handPose = this._getMovableHandPose(handState);
+        const handPose = this._getMovableHandPose(held.entity as unknown as IMovableHoldable, handState);
 
         const handPos = handPose.position;
         const handQuat = handPose.quaternion;
@@ -391,7 +391,7 @@ export class GrabSkill extends Skill {
             return;
         }
 
-        const handPose = this._readHandPose(runtime, hand);
+        const handPose = this._readHandPose(runtime, hand, held.entity as unknown as IMovableHoldable);
         if (!handPose) return;
         const mesh = this._getEntityMesh(held.entity);
         if (!mesh) return;
@@ -411,8 +411,8 @@ export class GrabSkill extends Skill {
     private _updateDualGrabbedPose(objectHold: IObjectHoldState, runtime: IRuntimeRegistry): void {
         if (!objectHold.secondaryHand || !isMovableHoldable(objectHold.entity)) return;
 
-        const primaryPose = this._readHandPose(runtime, objectHold.primaryHand);
-        const secondaryPose = this._readHandPose(runtime, objectHold.secondaryHand);
+        const primaryPose = this._readHandPose(runtime, objectHold.primaryHand, objectHold.entity as unknown as IMovableHoldable);
+        const secondaryPose = this._readHandPose(runtime, objectHold.secondaryHand, objectHold.entity as unknown as IMovableHoldable);
         if (!primaryPose || !secondaryPose) return;
 
         const midpoint = primaryPose.position.clone().add(secondaryPose.position).multiplyScalar(0.5);
@@ -436,8 +436,8 @@ export class GrabSkill extends Skill {
 
     private _initializeDualGrab(objectHold: IObjectHoldState, runtime: IRuntimeRegistry): void {
         if (!objectHold.secondaryHand) return;
-        const primaryPose = this._readHandPose(runtime, objectHold.primaryHand);
-        const secondaryPose = this._readHandPose(runtime, objectHold.secondaryHand);
+        const primaryPose = this._readHandPose(runtime, objectHold.primaryHand, objectHold.entity as unknown as IMovableHoldable);
+        const secondaryPose = this._readHandPose(runtime, objectHold.secondaryHand, objectHold.entity as unknown as IMovableHoldable);
         if (!primaryPose || !secondaryPose) return;
 
         const mesh = this._getEntityMesh(objectHold.entity);
@@ -485,10 +485,10 @@ export class GrabSkill extends Skill {
         scalable.setUniformScale(clamped);
     }
 
-    private _readHandPose(runtime: IRuntimeRegistry, hand: HandId): { position: THREE.Vector3; quaternion: THREE.Quaternion } | null {
+    private _readHandPose(runtime: IRuntimeRegistry, hand: HandId, entity?: IMovableHoldable): { position: THREE.Vector3; quaternion: THREE.Quaternion } | null {
         const handState = runtime.tracking.getState().hands[hand];
         if (!handState.active) return null;
-        return this._getMovableHandPose(handState);
+        return this._getMovableHandPose(entity, handState);
     }
 
     private _getCanonicalGrabOffset(entity: IMovableHoldable, hand: HandId): { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } } | null {
@@ -497,12 +497,13 @@ export class GrabSkill extends Skill {
         return offset;
     }
 
-    private _getMovableHandPose(handState: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands'][HandId]): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
+    private _getMovableHandPose(entity: IMovableHoldable | undefined, handState: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands'][HandId]): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
         const pos = handState.pose.position;
-        const rot = handState.pose.quaternion;
+        const preferredSpace = entity?.getPreferredHeldQuaternionSpace?.() ?? 'grip';
+        const rotSource = preferredSpace === 'pointer' ? (handState.pointerPose.quaternion || handState.pose.quaternion) : handState.pose.quaternion;
         return {
             position: new THREE.Vector3(pos.x, pos.y, pos.z),
-            quaternion: new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w)
+            quaternion: new THREE.Quaternion(rotSource.x, rotSource.y, rotSource.z, rotSource.w)
         };
     }
 
@@ -622,6 +623,7 @@ export class GrabSkill extends Skill {
         return velocity;
     }
 }
+
 
 
 

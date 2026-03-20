@@ -86,6 +86,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
                 this.handleInteraction(event);
             };
             entity.getCanonicalGrabOffset = (hand: 'left' | 'right') => canonicalGunGrip(hand);
+            entity.getPreferredHeldQuaternionSpace = () => 'pointer';
         }
     }
 
@@ -140,14 +141,14 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         if ((now - this.lastFireAtMs) < GUN_FIRE_COOLDOWN_MS) return;
         this.lastFireAtMs = now;
 
-        const payload = this.computeShotPayload();
+        const payload = this.computeShotPayload(event.hand === 'left' || event.hand === 'right' ? event.hand : undefined);
         if (!payload) return;
 
         this.presentShot(payload);
         this.emitSyncEvent(GUN_FIRE_EVENT, payload, { localEcho: false });
     }
 
-    private computeShotPayload(): IGunFirePayload | null {
+    private computeShotPayload(hand?: 'left' | 'right'): IGunFirePayload | null {
         const muzzle = this.muzzleMarker;
         if (!muzzle) return null;
 
@@ -156,7 +157,20 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         const muzzleQuat = new THREE.Quaternion();
         muzzle.getWorldPosition(origin);
         muzzle.getWorldQuaternion(muzzleQuat);
-        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(muzzleQuat).normalize();
+
+        const direction = new THREE.Vector3(0, 0, -1);
+        if (hand) {
+            const handState = this.context.tracking.getState()?.hands?.[hand];
+            const pointerQuat = handState?.pointerPose?.quaternion;
+            if (pointerQuat) {
+                direction.applyQuaternion(new THREE.Quaternion(pointerQuat.x, pointerQuat.y, pointerQuat.z, pointerQuat.w));
+            } else {
+                direction.applyQuaternion(muzzleQuat);
+            }
+        } else {
+            direction.applyQuaternion(muzzleQuat);
+        }
+        direction.normalize();
         end.copy(origin).addScaledVector(direction, GUN_MAX_RANGE);
 
         const render = this.context.app.runtime.render;
@@ -340,11 +354,16 @@ function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THRE
 }
 
 function canonicalGunGrip(hand: 'left' | 'right'): IPose {
-    const x = hand === 'left' ? 0.012 : -0.012;
-    const euler = new THREE.Euler(THREE.MathUtils.degToRad(-4), 0, hand === 'left' ? THREE.MathUtils.degToRad(3) : THREE.MathUtils.degToRad(-3), 'XYZ');
+    const x = hand === 'left' ? 0.01 : -0.01;
+    const euler = new THREE.Euler(
+        THREE.MathUtils.degToRad(6),
+        0,
+        hand === 'left' ? THREE.MathUtils.degToRad(5) : THREE.MathUtils.degToRad(-5),
+        'XYZ'
+    );
     const quat = new THREE.Quaternion().setFromEuler(euler);
     return {
-        position: { x, y: -0.05, z: 0.11 },
+        position: { x, y: 0.078, z: -0.038 },
         quaternion: { x: quat.x, y: quat.y, z: quat.z, w: quat.w }
     };
 }
@@ -369,3 +388,4 @@ export class PewPewGunObject implements IObjectModule {
         return new PewPewGunInstance(context, config);
     }
 }
+
