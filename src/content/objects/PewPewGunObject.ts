@@ -45,6 +45,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
     private readonly meshRoot: THREE.Group | null;
     private readonly slideMesh: THREE.Mesh | null;
     private readonly muzzleMarker: THREE.Object3D | null;
+    private readonly barrelRearMarker: THREE.Object3D | null;
     private readonly fxRoot: THREE.Group | null;
     private readonly tracerFx: ITracerFx[] = [];
     private readonly impactFx: IImpactFx[] = [];
@@ -59,6 +60,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         this.meshRoot = built.root;
         this.slideMesh = built.slide;
         this.muzzleMarker = built.muzzle;
+        this.barrelRearMarker = built.barrelRear;
         this.fxRoot = context.app.runtime.render ? this.ownSceneObject(new THREE.Group()) : null;
         if (this.fxRoot) {
             this.fxRoot.name = `pew-pew-gun-fx:${this.id}`;
@@ -141,36 +143,26 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         if ((now - this.lastFireAtMs) < GUN_FIRE_COOLDOWN_MS) return;
         this.lastFireAtMs = now;
 
-        const payload = this.computeShotPayload(event.hand === 'left' || event.hand === 'right' ? event.hand : undefined);
+        const payload = this.computeShotPayload();
         if (!payload) return;
 
         this.presentShot(payload);
         this.emitSyncEvent(GUN_FIRE_EVENT, payload, { localEcho: false });
     }
 
-    private computeShotPayload(hand?: 'left' | 'right'): IGunFirePayload | null {
+    private computeShotPayload(): IGunFirePayload | null {
         const muzzle = this.muzzleMarker;
-        if (!muzzle) return null;
+        const barrelRear = this.barrelRearMarker;
+        if (!muzzle || !barrelRear) return null;
 
         const origin = new THREE.Vector3();
+        const rear = new THREE.Vector3();
         const end = new THREE.Vector3();
-        const muzzleQuat = new THREE.Quaternion();
         muzzle.getWorldPosition(origin);
-        muzzle.getWorldQuaternion(muzzleQuat);
+        barrelRear.getWorldPosition(rear);
 
-        const direction = new THREE.Vector3(0, 0, -1);
-        if (hand) {
-            const handState = this.context.tracking.getState()?.hands?.[hand];
-            const pointerQuat = handState?.pointerPose?.quaternion;
-            if (pointerQuat) {
-                direction.applyQuaternion(new THREE.Quaternion(pointerQuat.x, pointerQuat.y, pointerQuat.z, pointerQuat.w));
-            } else {
-                direction.applyQuaternion(muzzleQuat);
-            }
-        } else {
-            direction.applyQuaternion(muzzleQuat);
-        }
-        direction.normalize();
+        const direction = origin.clone().sub(rear).normalize();
+        if (direction.lengthSq() < 0.000001) return null;
         end.copy(origin).addScaledVector(direction, GUN_MAX_RANGE);
 
         const render = this.context.app.runtime.render;
@@ -178,11 +170,18 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         if (render) {
             const hits = render.raycast(origin, direction, GUN_MAX_RANGE);
             for (const intersection of hits) {
+                if (intersection.distance < 0.12) {
+                    continue;
+                }
+
                 const entityId = intersection.object.userData?.entityId as string | undefined;
                 if (entityId && entityId === this.id) {
                     continue;
                 }
                 if (entityId && this.gunEntity && entityId === this.gunEntity.id) {
+                    continue;
+                }
+                if (entityId && this.gunEntity?.heldBy && entityId === this.gunEntity.heldBy) {
                     continue;
                 }
                 end.copy(intersection.point);
@@ -207,6 +206,28 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         this.playShotSound(payload);
     }
 
+
+    private spawnMuzzleFlash(payload: IGunFirePayload): void {
+        if (!this.fxRoot) return;
+
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xfff0a0,
+            emissive: 0xffcc66,
+            emissiveIntensity: 1.1,
+            transparent: true,
+            opacity: 0.95,
+            metalness: 0.05,
+            roughness: 0.35,
+            depthWrite: false
+        });
+        const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.028, 0), material);
+        mesh.position.set(payload.origin[0], payload.origin[1], payload.origin[2]);
+        mesh.scale.set(1.4, 0.7, 0.7);
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        this.fxRoot.add(mesh);
+        this.impactFx.push({ mesh, material, life: 0.45 });
+    }
     private spawnTracer(payload: IGunFirePayload): void {
         if (!this.fxRoot) return;
 
@@ -259,7 +280,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
     }
 }
 
-function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THREE.Object3D } {
+function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THREE.Object3D; barrelRear: THREE.Object3D } {
     const root = new THREE.Group();
     root.name = 'pew-pew-gun';
 
@@ -340,6 +361,10 @@ function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THRE
     frontSight.position.set(0, 0.065, -0.235);
     root.add(rearSight, frontSight);
 
+    const barrelRear = new THREE.Object3D();
+    barrelRear.position.set(0, 0.018, -0.085);
+    root.add(barrelRear);
+
     const muzzle = new THREE.Object3D();
     muzzle.position.set(0, 0.018, -0.255);
     root.add(muzzle);
@@ -350,7 +375,7 @@ function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THRE
         mesh.userData.entityId = 'pending';
     });
 
-    return { root, slide, muzzle };
+    return { root, slide, muzzle, barrelRear };
 }
 
 function canonicalGunGrip(hand: 'left' | 'right'): IPose {
@@ -388,4 +413,9 @@ export class PewPewGunObject implements IObjectModule {
         return new PewPewGunInstance(context, config);
     }
 }
+
+
+
+
+
 
