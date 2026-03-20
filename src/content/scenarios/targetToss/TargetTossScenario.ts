@@ -54,6 +54,12 @@ interface ITargetTossStateSyncPayload {
     state: ITargetTossState;
 }
 
+interface IScoreFeedbackPayload {
+    points: number;
+    color: number;
+    position: { x: number; y: number; z: number };
+}
+
 class TargetTossActionProvider implements IScenarioActionProvider {
     private static readonly ACTION_RESET_GAME = 'reset-game';
 
@@ -87,6 +93,84 @@ class TargetTossActionProvider implements IScenarioActionProvider {
 
         this.scenario.resetGame();
         return { ok: true, message: 'Target Toss reset.' };
+    }
+}
+
+class TargetTossScorePopup {
+    public readonly root = new THREE.Group();
+    private readonly mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+    private readonly texture: THREE.CanvasTexture;
+    private readonly lifetimeSec = 0.95;
+    private readonly riseSpeed = 0.8;
+    private elapsedSec = 0;
+    private readonly tmpWorld = new THREE.Vector3();
+    private readonly tmpLookTarget = new THREE.Vector3();
+
+    constructor(points: number, color: number, position: { x: number; y: number; z: number }) {
+        this.root.name = 'target-toss-score-popup';
+        this.root.position.set(position.x, position.y + 0.22, position.z);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 384;
+        canvas.height = 192;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Unable to create score popup canvas context.');
+        }
+
+        const label = '+' + points.toString();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 26;
+        ctx.strokeStyle = 'rgba(10, 24, 40, 0.82)';
+        ctx.font = '700 118px "Segoe UI", Arial, sans-serif';
+        ctx.strokeText(label, canvas.width * 0.5, canvas.height * 0.52);
+        ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+        ctx.fillText(label, canvas.width * 0.5, canvas.height * 0.52);
+
+        this.texture = new THREE.CanvasTexture(canvas);
+        this.texture.generateMipmaps = false;
+        this.texture.minFilter = THREE.LinearFilter;
+        this.texture.magFilter = THREE.LinearFilter;
+
+        this.mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.72, 0.36),
+            new THREE.MeshBasicMaterial({
+                map: this.texture,
+                transparent: true,
+                depthWrite: false
+            })
+        );
+        this.root.add(this.mesh);
+    }
+
+    public update(deltaSec: number, camera: THREE.Camera | null | undefined): boolean {
+        this.elapsedSec += deltaSec;
+        if (this.elapsedSec >= this.lifetimeSec) {
+            return false;
+        }
+
+        const t = this.elapsedSec / this.lifetimeSec;
+        this.root.position.y += deltaSec * this.riseSpeed;
+        this.root.scale.setScalar(1 + t * 0.18);
+        this.mesh.material.opacity = 1 - t;
+
+        if (camera) {
+            this.root.getWorldPosition(this.tmpWorld);
+            this.tmpLookTarget.set(camera.position.x, this.tmpWorld.y, camera.position.z);
+            this.root.lookAt(this.tmpLookTarget);
+        }
+
+        return true;
+    }
+
+    public dispose(): void {
+        this.texture.dispose();
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        this.root.removeFromParent();
     }
 }
 
@@ -258,7 +342,7 @@ const TARGET_DEFINITIONS: ITargetDefinition[] = [
     {
         id: 'main-target-zone',
         position: { x: 0.0, y: 0.04, z: -5.9 },
-        size: { x: 1.65, y: 0.03, z: 1.65 },
+        size: { x: 2.95, y: 0.05, z: 2.95 },
         rings: [
             { radius: 0.42, points: 30, color: 0xffcf57 },
             { radius: 0.86, points: 20, color: 0x7cf2a1 },
@@ -290,6 +374,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     private scoredBallIds = new Set<string>();
     private resetQueuedAtMs: number | null = null;
     private scoreboard: TargetTossScoreboardVisual | null = null;
+    private readonly scorePopups: TargetTossScorePopup[] = [];
     private collisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
     private previousBackground: THREE.Color | THREE.Texture | null = null;
     private previousFog: THREE.Fog | THREE.FogExp2 | null = null;
@@ -337,6 +422,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
 
         this.scoreboard?.dispose();
         this.scoreboard = null;
+        this.disposeScorePopups();
 
         this.targets.forEach((target) => {
             if (target.collider?.body) {
@@ -384,10 +470,12 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             this.updatePendingReset();
         }
 
+        const camera = this.context.runtime.render?.camera;
         if (this.scoreboard) {
-            this.scoreboard.faceCamera(this.context.runtime.render?.camera);
+            this.scoreboard.faceCamera(camera);
             this.refreshScoreboardVisual();
         }
+        this.updateScorePopups(_delta, camera);
     }
 
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
@@ -417,9 +505,16 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     public onScenarioReplicationEvent(eventType: string, data: unknown, _meta: IScenarioReplicationMeta): void {
-        if (eventType !== 'state-sync') return;
-        if (!isStateSyncPayload(data)) return;
-        this.applyState(data.state);
+        if (eventType === 'state-sync') {
+            if (!isStateSyncPayload(data)) return;
+            this.applyState(data.state);
+            return;
+        }
+
+        if (eventType === 'score-feedback') {
+            if (!isScoreFeedbackPayload(data)) return;
+            this.presentScoreFeedback(data);
+        }
     }
 
     public captureScenarioReplicationSnapshot(): unknown {
@@ -703,12 +798,13 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             const entityId = this.resolveBallEntityIdFromCollision(data);
             if (!entityId || this.scoredBallIds.has(entityId)) return;
 
-            const points = this.resolvePointsForBall(entityId, target);
-            if (points === null) return;
+            const feedback = this.resolveScoreFeedback(entityId, target);
+            if (!feedback) return;
 
             this.scoredBallIds.add(entityId);
             this.countBallThrow(entityId);
-            this.awardPoints(points);
+            this.awardPoints(feedback.points);
+            this.emitScoreFeedback(feedback);
         };
 
         eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.collisionStartedHandler);
@@ -724,7 +820,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         return null;
     }
 
-    private resolvePointsForBall(ballId: string, target: ITargetRuntime): number | null {
+    private resolveScoreFeedback(ballId: string, target: ITargetRuntime): IScoreFeedbackPayload | null {
         const entity = this.getBallEntity(ballId);
         if (!entity) return null;
 
@@ -735,7 +831,11 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
 
         for (const ring of target.rings) {
             if (radialDistance <= ring.radius) {
-                return ring.points;
+                return {
+                    points: ring.points,
+                    color: ring.color,
+                    position: { x: translation.x, y: Math.max(translation.y, 0.08), z: translation.z }
+                };
             }
         }
 
@@ -797,10 +897,58 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.broadcastState();
     }
 
+    private emitScoreFeedback(payload: IScoreFeedbackPayload): void {
+        this.emitReplicationEvent?.('score-feedback', payload);
+    }
+
+    private presentScoreFeedback(payload: IScoreFeedbackPayload): void {
+        this.playScoreFeedbackSound(payload);
+
+        const scene = this.context.runtime.render?.scene;
+        if (!scene || typeof document === 'undefined') return;
+
+        const popup = new TargetTossScorePopup(payload.points, payload.color, payload.position);
+        this.scorePopups.push(popup);
+        this.root.add(popup.root);
+    }
+
+    private playScoreFeedbackSound(payload: IScoreFeedbackPayload): void {
+        const audio = this.context.runtime.audio;
+        if (!audio) return;
+
+        const frequency = payload.points >= 30
+            ? 1046.5
+            : payload.points >= 20
+                ? 880
+                : 698.46;
+        const intensity = payload.points >= 30 ? 0.92 : payload.points >= 20 ? 0.8 : 0.68;
+        audio.playMelodyNote({
+            frequency,
+            intensity,
+            position: payload.position
+        });
+    }
+
+    private updateScorePopups(deltaSec: number, camera: THREE.Camera | null | undefined): void {
+        for (let i = this.scorePopups.length - 1; i >= 0; i -= 1) {
+            const popup = this.scorePopups[i];
+            if (popup.update(deltaSec, camera)) continue;
+            popup.dispose();
+            this.scorePopups.splice(i, 1);
+        }
+    }
+
+    private disposeScorePopups(): void {
+        for (const popup of this.scorePopups) {
+            popup.dispose();
+        }
+        this.scorePopups.length = 0;
+    }
+
     private queueTurnReset(): void {
         if (this.state.resetPending) return;
         this.state.resetPending = true;
-        this.resetQueuedAtMs = this.nowMs() + 2400;
+        this.resetQueuedAtMs = this.nowMs() + 3600;
     }
 
     private advanceTurnAndResetBalls(): void {
@@ -917,6 +1065,18 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 }
 
+function isScoreFeedbackPayload(value: unknown): value is IScoreFeedbackPayload {
+    const candidate = value as Partial<IScoreFeedbackPayload> | null;
+    const position = candidate?.position as Partial<{ x: number; y: number; z: number }> | undefined;
+    return !!candidate
+        && typeof candidate.points === 'number'
+        && typeof candidate.color === 'number'
+        && !!position
+        && typeof position.x === 'number'
+        && typeof position.y === 'number'
+        && typeof position.z === 'number';
+}
+
 function isStateSyncPayload(value: unknown): value is ITargetTossStateSyncPayload {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as { state?: Partial<ITargetTossState> };
@@ -951,7 +1111,7 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
     capabilities: {
         headless: true,
         usesPhysics: true,
-        usesAudio: false,
+        usesAudio: true,
         hasActions: true,
         hasPortableObjects: true
     },
