@@ -16,10 +16,10 @@ import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 import type { PhysicsPropEntity } from '../../../world/entities/PhysicsPropEntity';
 import type { IPhysicsColliderHandle } from '../../contracts/IObjectRuntimeContext';
 import type { PlayerAvatarEntity } from '../../../world/entities/PlayerAvatarEntity';
-import { BALL_DEFINITIONS, TARGET_DEFINITIONS, TARGET_TOSS_RESET_DELAY_MS } from './TargetTossConfig';
+import { BALL_DEFINITIONS, TARGET_DEFINITIONS, TARGET_TOSS_MIN_SCORE_VIEW_MS, TARGET_TOSS_RESET_DELAY_MS } from './TargetTossConfig';
 import { TargetTossActionProvider } from './TargetTossActionProvider';
 import { TargetTossScorePopup } from './TargetTossScorePopup';
-import { evaluateSettledScores, evaluateThrowProgress } from './TargetTossGameLogic';
+import { areAllCountedBallsAtRest, evaluateSettledScores, evaluateThrowProgress } from './TargetTossGameLogic';
 import { buildTargetTossEnvironment } from './TargetTossEnvironment';
 import { TargetTossScoreboardVisual } from './TargetTossScoreboardVisual';
 import type {
@@ -51,6 +51,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     private countedBallIds = new Set<string>();
     private scoredBallIds = new Set<string>();
     private resetQueuedAtMs: number | null = null;
+    private lastScoreAtMs: number | null = null;
     private scoreboard: TargetTossScoreboardVisual | null = null;
     private readonly scorePopups: TargetTossScorePopup[] = [];
     private previousBackground: THREE.Color | THREE.Texture | null = null;
@@ -133,6 +134,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.countedBallIds.clear();
         this.scoredBallIds.clear();
         this.resetQueuedAtMs = null;
+        this.lastScoreAtMs = null;
     }
 
     public update(_delta: number): void {
@@ -140,6 +142,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             this.reconcilePlayers();
             this.updateThrowProgress();
             this.updateSettledScores();
+            this.updateResetReadiness();
             this.updatePendingReset();
         }
 
@@ -212,6 +215,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.countedBallIds.clear();
         this.scoredBallIds.clear();
         this.resetQueuedAtMs = null;
+        this.lastScoreAtMs = null;
 
         this.state = {
             playerOrder: this.collectPlayerOrder(),
@@ -280,6 +284,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         });
 
         for (const entry of scored) {
+            this.lastScoreAtMs = this.nowMs();
             this.scoredBallIds.add(entry.ballId);
             this.countBallThrow(entry.ballId);
             this.awardPoints(entry.feedback.points);
@@ -297,12 +302,20 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (!progress.changed) return;
 
         this.state.throwsTaken = progress.throwsTaken;
-        if (this.state.throwsTaken >= 3) {
-            this.queueTurnReset();
-        }
         this.broadcastState();
     }
 
+    private updateResetReadiness(): void {
+        if (this.state.throwsTaken < this.ballIds.length) return;
+        if (!areAllCountedBallsAtRest({
+            countedBallIds: this.countedBallIds,
+            getBallEntity: (ballId) => this.getBallEntity(ballId)
+        })) {
+            return;
+        }
+
+        this.queueTurnReset();
+    }
     private updatePendingReset(): void {
         if (this.resetQueuedAtMs === null) return;
         if (this.nowMs() < this.resetQueuedAtMs) return;
@@ -315,9 +328,6 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (this.countedBallIds.has(ballId)) return;
         this.countedBallIds.add(ballId);
         this.state.throwsTaken = this.countedBallIds.size;
-        if (this.state.throwsTaken >= 3) {
-            this.queueTurnReset();
-        }
     }
 
     private awardPoints(points: number): void {
@@ -377,9 +387,16 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private queueTurnReset(): void {
-        if (this.state.resetPending) return;
+        if (this.resetQueuedAtMs !== null) return;
+
+        const now = this.nowMs();
         this.state.resetPending = true;
-        this.resetQueuedAtMs = this.nowMs() + TARGET_TOSS_RESET_DELAY_MS;
+        const desiredDeadline = Math.max(
+            now + TARGET_TOSS_RESET_DELAY_MS,
+            this.lastScoreAtMs !== null ? this.lastScoreAtMs + TARGET_TOSS_MIN_SCORE_VIEW_MS : 0
+        );
+        this.resetQueuedAtMs = desiredDeadline;
+        this.broadcastState();
     }
 
     private advanceTurnAndResetBalls(): void {
@@ -393,6 +410,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.state.resetPending = false;
         this.countedBallIds.clear();
         this.scoredBallIds.clear();
+        this.lastScoreAtMs = null;
         this.resetBallsToRack();
         this.broadcastState();
     }
@@ -550,3 +568,5 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
         return new TargetTossScenario(session, app);
     }
 };
+
+

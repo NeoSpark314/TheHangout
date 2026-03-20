@@ -250,15 +250,15 @@ export class PhysicsRuntime {
 
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
-            .setLinearDamping(0.38)
-            .setAngularDamping(0.18)
+            .setLinearDamping(0.72)
+            .setAngularDamping(1.6)
             .setCanSleep(true)
             .setSleeping(true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const colliderDesc = RAPIER.ColliderDesc.ball(radius)
-            .setRestitution(0.35)
-            .setFriction(0.62)
+            .setRestitution(0.1)
+            .setFriction(1.15)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
@@ -823,3 +823,4 @@ export class PhysicsRuntime {
     }
 
 }
+

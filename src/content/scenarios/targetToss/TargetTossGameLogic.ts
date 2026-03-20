@@ -1,5 +1,14 @@
 import type { PhysicsPropEntity } from '../../../world/entities/PhysicsPropEntity';
-import { BALL_DEFINITIONS } from './TargetTossConfig';
+import {
+    BALL_DEFINITIONS,
+    TARGET_TOSS_RESET_REST_PLANAR_SPEED_MAX,
+    TARGET_TOSS_RESET_REST_VERTICAL_SPEED_MAX,
+    TARGET_TOSS_SCORE_SETTLED_MAX_HEIGHT,
+    TARGET_TOSS_SCORE_SETTLED_PLANAR_SPEED_MAX,
+    TARGET_TOSS_SCORE_SETTLED_VERTICAL_SPEED_MAX,
+    TARGET_TOSS_THROW_COUNT_FORWARD_OFFSET,
+    TARGET_TOSS_THROW_COUNT_MIN_DISTANCE
+} from './TargetTossConfig';
 import type { IScoreFeedbackPayload, ITargetRuntime } from './TargetTossTypes';
 
 export function evaluateSettledScores(params: {
@@ -20,9 +29,11 @@ export function evaluateSettledScores(params: {
         const velocity = entity.rigidBody.linvel();
         const planarSpeed = Math.hypot(velocity.x, velocity.z);
         const verticalSpeed = Math.abs(velocity.y);
-        const isSettled = entity.rigidBody.isSleeping() || (planarSpeed <= 0.42 && verticalSpeed <= 0.2);
+        const isSettled = entity.rigidBody.isSleeping()
+            || (planarSpeed <= TARGET_TOSS_SCORE_SETTLED_PLANAR_SPEED_MAX
+                && verticalSpeed <= TARGET_TOSS_SCORE_SETTLED_VERTICAL_SPEED_MAX);
         if (!isSettled) continue;
-        if (translation.y > 0.42) continue;
+        if (translation.y > TARGET_TOSS_SCORE_SETTLED_MAX_HEIGHT) continue;
 
         const feedback = resolveScoreFeedback(entity, params.targets);
         if (!feedback) continue;
@@ -51,8 +62,8 @@ export function evaluateThrowProgress(params: {
             translation.y - ball.position.y,
             translation.z - ball.position.z
         );
-        const leftRackForward = translation.z < (ball.position.z - 1.15);
-        if (!leftRackForward && movedDistance < 2.0) continue;
+        const leftRackForward = translation.z < (ball.position.z - TARGET_TOSS_THROW_COUNT_FORWARD_OFFSET);
+        if (!leftRackForward && movedDistance < TARGET_TOSS_THROW_COUNT_MIN_DISTANCE) continue;
 
         params.countedBallIds.add(ball.id);
         changed = true;
@@ -62,6 +73,29 @@ export function evaluateThrowProgress(params: {
         changed,
         throwsTaken: params.countedBallIds.size
     };
+}
+
+export function areAllCountedBallsAtRest(params: {
+    countedBallIds: ReadonlySet<string>;
+    getBallEntity: (ballId: string) => PhysicsPropEntity | null;
+}): boolean {
+    if (params.countedBallIds.size === 0) return false;
+
+    for (const ballId of params.countedBallIds) {
+        const entity = params.getBallEntity(ballId);
+        if (!entity) return false;
+
+        const velocity = entity.rigidBody.linvel();
+        const planarSpeed = Math.hypot(velocity.x, velocity.z);
+        const verticalSpeed = Math.abs(velocity.y);
+        if (!entity.rigidBody.isSleeping()
+            && (planarSpeed > TARGET_TOSS_RESET_REST_PLANAR_SPEED_MAX
+                || verticalSpeed > TARGET_TOSS_RESET_REST_VERTICAL_SPEED_MAX)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function resolveScoreFeedback(
