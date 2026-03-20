@@ -87,15 +87,13 @@ export class GrabSkill extends Skill {
             const alreadyHeldByLocal = !!existing;
             if (nearest.heldBy && !alreadyHeldByLocal) return;
 
-            const pos = handState.pointerPose.position || handState.pose.position;
-            const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
-            const handPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-            const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
-            const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
-
             const offsetPos = new THREE.Vector3();
             const offsetQuat = new THREE.Quaternion();
             const movable = isMovableHoldable(nearest);
+            const handPose = movable ? this._getMovableHandPose(handState) : this._getPointerPreferredHandPose(handState);
+            const handPos = handPose.position;
+            const handQuat = handPose.quaternion;
+            const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
             const mesh = this._getEntityMesh(nearest);
 
             if (mesh && movable) {
@@ -359,11 +357,10 @@ export class GrabSkill extends Skill {
         trackingHands: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands']
     ): void {
         const handState = trackingHands[hand];
-        const pos = handState.pointerPose.position || handState.pose.position;
-        const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
+        const handPose = this._getMovableHandPose(handState);
 
-        const handPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-        const handQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
+        const handPos = handPose.position;
+        const handQuat = handPose.quaternion;
         const targetPos = new THREE.Vector3().copy(held.offsetPos).applyQuaternion(handQuat).add(handPos);
         const targetQuat = new THREE.Quaternion().copy(handQuat).multiply(held.offsetQuat);
 
@@ -475,6 +472,19 @@ export class GrabSkill extends Skill {
     private _readHandPose(runtime: IRuntimeRegistry, hand: HandId): { position: THREE.Vector3; quaternion: THREE.Quaternion } | null {
         const handState = runtime.tracking.getState().hands[hand];
         if (!handState.active) return null;
+        return this._getMovableHandPose(handState);
+    }
+
+    private _getMovableHandPose(handState: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands'][HandId]): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
+        const pos = handState.pose.position;
+        const rot = handState.pose.quaternion;
+        return {
+            position: new THREE.Vector3(pos.x, pos.y, pos.z),
+            quaternion: new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w)
+        };
+    }
+
+    private _getPointerPreferredHandPose(handState: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands'][HandId]): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
         const pos = handState.pointerPose.position || handState.pose.position;
         const rot = handState.pointerPose.quaternion || handState.pose.quaternion;
         return {
@@ -548,21 +558,43 @@ export class GrabSkill extends Skill {
         if (!this.history.has(id)) this.history.set(id, []);
         const h = this.history.get(id)!;
         h.push({ pos: pos.clone(), time: performance.now() });
-        if (h.length > 5) h.shift();
+        if (h.length > 10) h.shift();
     }
 
     private _computeThrowVelocity(id: HandId): THREE.Vector3 {
         const h = this.history.get(id);
         if (!h || h.length < 2) return new THREE.Vector3(0, 0, 0);
 
-        const oldest = h[0];
-        const newest = h[h.length - 1];
-        const dt = (newest.time - oldest.time) / 1000;
-        if (dt < 0.001) return new THREE.Vector3(0, 0, 0);
+        const newestTime = h[h.length - 1].time;
+        const recent = h.filter((sample) => (newestTime - sample.time) <= 180);
+        const samples = recent.length >= 2 ? recent : h;
+        if (samples.length < 2) return new THREE.Vector3(0, 0, 0);
 
-        const velocity = new THREE.Vector3().subVectors(newest.pos, oldest.pos).divideScalar(dt);
-        const maxSpeed = 15;
+        const velocity = new THREE.Vector3();
+        let totalWeight = 0;
+
+        for (let i = 1; i < samples.length; i++) {
+            const previous = samples[i - 1];
+            const current = samples[i];
+            const dt = (current.time - previous.time) / 1000;
+            if (dt < 0.001) continue;
+
+            const segmentVelocity = new THREE.Vector3()
+                .subVectors(current.pos, previous.pos)
+                .divideScalar(dt);
+            const recencyWeight = i / (samples.length - 1);
+            const weight = 0.35 + recencyWeight * recencyWeight * 1.65;
+            velocity.addScaledVector(segmentVelocity, weight);
+            totalWeight += weight;
+        }
+
+        if (totalWeight <= 0.0001) return new THREE.Vector3(0, 0, 0);
+
+        velocity.divideScalar(totalWeight);
+        const maxSpeed = 18;
         if (velocity.length() > maxSpeed) velocity.normalize().multiplyScalar(maxSpeed);
         return velocity;
     }
 }
+
+

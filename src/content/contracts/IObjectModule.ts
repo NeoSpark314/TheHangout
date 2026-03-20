@@ -15,6 +15,12 @@ export interface IObjectSpawnConfig {
     url?: string;
     halfExtents?: IVector3;
     scale?: number;
+    physics?: {
+        linearDamping?: number;
+        angularDamping?: number;
+        friction?: number;
+        restitution?: number;
+    };
 }
 
 export type IObjectSpawnContext = IObjectRuntimeContext;
@@ -30,3 +36,4 @@ export interface IObjectModule {
 
     spawn(context: IObjectRuntimeContext, config: IObjectSpawnConfig): IObjectSpawnResult;
 }
+
