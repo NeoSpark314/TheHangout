@@ -19,6 +19,7 @@ import type { PlayerAvatarEntity } from '../../../world/entities/PlayerAvatarEnt
 import { BALL_DEFINITIONS, TARGET_DEFINITIONS, TARGET_TOSS_RESET_DELAY_MS } from './TargetTossConfig';
 import { TargetTossActionProvider } from './TargetTossActionProvider';
 import { TargetTossScorePopup } from './TargetTossScorePopup';
+import { evaluateSettledScores, evaluateThrowProgress } from './TargetTossGameLogic';
 import { buildTargetTossEnvironment } from './TargetTossEnvironment';
 import { TargetTossScoreboardVisual } from './TargetTossScoreboardVisual';
 import type {
@@ -271,86 +272,31 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private updateSettledScores(): void {
-        if (this.state.resetPending) return;
+        const scored = evaluateSettledScores({
+            ballIds: this.ballIds,
+            scoredBallIds: this.scoredBallIds,
+            targets: this.targets,
+            getBallEntity: (ballId) => this.getBallEntity(ballId)
+        });
 
-        for (const ballId of this.ballIds) {
-            if (this.scoredBallIds.has(ballId)) continue;
-
-            const feedback = this.resolveSettledScoreFeedback(ballId);
-            if (!feedback) continue;
-
-            this.scoredBallIds.add(ballId);
-            this.countBallThrow(ballId);
-            this.awardPoints(feedback.points);
-            this.emitScoreFeedback(feedback);
+        for (const entry of scored) {
+            this.scoredBallIds.add(entry.ballId);
+            this.countBallThrow(entry.ballId);
+            this.awardPoints(entry.feedback.points);
+            this.emitScoreFeedback(entry.feedback);
         }
-    }
-
-    private resolveSettledScoreFeedback(ballId: string): IScoreFeedbackPayload | null {
-        const entity = this.getBallEntity(ballId);
-        if (!entity) return null;
-
-        const translation = entity.rigidBody.translation();
-        const velocity = entity.rigidBody.linvel();
-        const planarSpeed = Math.hypot(velocity.x, velocity.z);
-        const verticalSpeed = Math.abs(velocity.y);
-        const isSettled = entity.rigidBody.isSleeping() || (planarSpeed <= 0.42 && verticalSpeed <= 0.2);
-        if (!isSettled) return null;
-        if (translation.y > 0.42) return null;
-
-        for (const target of this.targets) {
-            const feedback = this.resolveScoreFeedback(ballId, target);
-            if (feedback) return feedback;
-        }
-
-        return null;
-    }
-    private resolveScoreFeedback(ballId: string, target: ITargetRuntime): IScoreFeedbackPayload | null {
-        const entity = this.getBallEntity(ballId);
-        if (!entity) return null;
-
-        const translation = entity.rigidBody.translation();
-        const dx = translation.x - target.position.x;
-        const dz = translation.z - target.position.z;
-        const radialDistance = Math.hypot(dx, dz);
-
-        for (const ring of target.rings) {
-            if (radialDistance <= ring.radius) {
-                return {
-                    points: ring.points,
-                    color: ring.color,
-                    position: { x: translation.x, y: Math.max(translation.y, 0.08), z: translation.z }
-                };
-            }
-        }
-
-        return null;
     }
 
     private updateThrowProgress(): void {
         if (this.state.resetPending) return;
 
-        let changed = false;
-        for (const ball of BALL_DEFINITIONS) {
-            if (this.countedBallIds.has(ball.id)) continue;
-            const entity = this.getBallEntity(ball.id);
-            if (!entity) continue;
+        const progress = evaluateThrowProgress({
+            countedBallIds: this.countedBallIds,
+            getBallEntity: (ballId) => this.getBallEntity(ballId)
+        });
+        if (!progress.changed) return;
 
-            const translation = entity.rigidBody.translation();
-            const movedDistance = Math.hypot(
-                translation.x - ball.position.x,
-                translation.y - ball.position.y,
-                translation.z - ball.position.z
-            );
-            const leftRackForward = translation.z < (ball.position.z - 1.15);
-            if (!leftRackForward && movedDistance < 2.0) continue;
-
-            this.countedBallIds.add(ball.id);
-            changed = true;
-        }
-
-        if (!changed) return;
-        this.state.throwsTaken = this.countedBallIds.size;
+        this.state.throwsTaken = progress.throwsTaken;
         if (this.state.throwsTaken >= 3) {
             this.queueTurnReset();
         }
