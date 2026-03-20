@@ -5,6 +5,7 @@ import { IVector3 } from '../../shared/contracts/IMath';
 import { IView } from '../../shared/contracts/IView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
 import { AppContext } from '../../app/AppContext';
+import { NullView } from '../../render/views/NullView';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { EntityType } from '../../shared/contracts/IEntityState';
@@ -230,6 +231,52 @@ export class PhysicsRuntime {
             physicsEntity.setUniformScale(scale);
         }
 
+        return physicsEntity;
+    }
+
+    public createSphereGrabbable(
+        id: string,
+        radius: number,
+        position: IVector3,
+        mesh: any,
+        view?: IView<any>,
+        moduleId?: string,
+        ownerId?: string | null
+    ): PhysicsPropEntity | null {
+        if (!this.world) return null;
+
+        const entityId = id || `sphere-grabbable-${this.nextPhysicsId++}`;
+        const finalView = view ?? new NullView(entityId);
+
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(position.x, position.y, position.z)
+            .setLinearDamping(0.38)
+            .setAngularDamping(0.18)
+            .setCanSleep(true)
+            .setSleeping(true);
+
+        const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+        const colliderDesc = RAPIER.ColliderDesc.ball(radius)
+            .setRestitution(0.35)
+            .setFriction(0.62)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+        const collider = this.world.createCollider(colliderDesc, rigidBody);
+
+        const physicsEntity = new PhysicsPropEntity(this.context, entityId, this.context.isHost, rigidBody, {
+            grabbable: true,
+            spawnPosition: position,
+            view: finalView,
+            grabRadius: radius,
+            halfExtents: { x: radius, y: radius, z: radius },
+            moduleId,
+            ownerId
+        });
+        physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
+        this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
+
+        const entityRegistry = this.context.runtime.entity;
+        if (!entityRegistry) return null;
+        entityRegistry.addEntity(physicsEntity);
         return physicsEntity;
     }
 

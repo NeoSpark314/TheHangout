@@ -134,6 +134,40 @@ export class EntityFactory {
         );
     }
 
+    public static createSphereGrabbable(
+        context: AppContext,
+        id: string,
+        radius: number,
+        position: IVector3,
+        mesh: THREE.Mesh,
+        moduleId?: string,
+        ownerId?: string | null
+    ): PhysicsPropEntity | null {
+        const runtime = context.runtime;
+        const render = runtime.render;
+        const view = render && mesh ? new PhysicsPropView(mesh, id) : new NullView(id);
+
+        if (!runtime.physics) {
+            console.error('[EntityFactory] Physics runtime not found');
+            return null;
+        }
+
+        if (render && view instanceof PhysicsPropView) {
+            view.addToScene(render.scene);
+            view.addToInteractionGroup(render.interactionGroup);
+        }
+
+        return runtime.physics.createSphereGrabbable(
+            id,
+            radius,
+            position,
+            mesh,
+            view,
+            moduleId,
+            ownerId
+        );
+    }
+
     public static createPen(context: AppContext, id: string, config: Record<string, any>): PenToolEntity | null {
         const runtime = context.runtime;
         const render = runtime.render;
