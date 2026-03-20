@@ -97,6 +97,8 @@ The app is still object-oriented and runtime-driven, but the structure now separ
 ### Session and Spawn Rules
 
 - [SessionRuntime.ts](src/world/session/SessionRuntime.ts) now acts as the scenario host for the active session and instantiates the active scenario from a registered plugin.
+- Host startup flows through [FlatUiRuntime.ts](src/ui/flat/FlatUiRuntime.ts) -> CREATE_SESSION -> [NetworkRuntime.ts](src/network/transport/NetworkRuntime.ts) -> ensureGameplayStarted() in [App.ts](src/app/App.ts) -> SessionRuntime.init(...), so the initial scenario comes from context.sessionConfig.activeScenarioId at host-session creation time.
+- For development, the flat UI now supports a host-only scenario override via ?scenario=<scenario-id> in the app URL. If the id matches a registered scenario plugin, clicking Host starts the new hosted session in that scenario without changing the normal default in [AppContext.ts](src/app/AppContext.ts).
 - [PlayerPresenceService.ts](src/world/session/PlayerPresenceService.ts) creates the local player avatar when the session is ready.
 - Guest spawn placement depends on `assignedSpawnIndex` from the host. Guest initialization is intentionally delayed until that host-assigned slot is available.
 - Spawn points come from the active scenario, not from a hardcoded global room implementation.

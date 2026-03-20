@@ -57,6 +57,7 @@ export class FlatUiRuntime implements IUpdatable {
     private joysticksInitialized: boolean = false;
     private mobileHudEnabled: boolean = false;
     private inviteSessionId: string | null = null;
+    private hostScenarioOverrideId: string | null = null;
     private desktopHelpMode: 'keyboardMouse' | 'controller' | null = null;
 
     constructor(private context: AppContext) {
@@ -99,6 +100,7 @@ export class FlatUiRuntime implements IUpdatable {
         const urlParams = new URLSearchParams(window.location.search);
         const sessionIdToJoin = urlParams.get('session')?.trim() || null;
         this.inviteSessionId = sessionIdToJoin;
+        this.hostScenarioOverrideId = urlParams.get('scenario')?.trim() || null;
 
         // Invite links only prefill the session id; joining/hosting keeps the same UI flow.
         this.setupDefaultMode();
@@ -436,6 +438,7 @@ export class FlatUiRuntime implements IUpdatable {
             this.clearError();
             this.saveToStorage();
 
+            this.applyHostScenarioOverride();
             this.context.isHost = true;
             this.setStatus('Creating session...');
             eventBus.emit(EVENTS.CREATE_SESSION, customId);
@@ -673,6 +676,21 @@ export class FlatUiRuntime implements IUpdatable {
         }
     }
 
+    private applyHostScenarioOverride(): void {
+        const scenarioId = this.hostScenarioOverrideId;
+        if (!scenarioId) return;
+
+        const availableScenarioIds = this.context.runtime.session?.getAvailableScenarioIds?.() ?? [];
+        if (!availableScenarioIds.includes(scenarioId)) {
+            console.warn('[FlatUiRuntime] Ignoring unknown host scenario override: ' + scenarioId);
+            return;
+        }
+
+        this.context.sessionConfig = {
+            ...this.context.sessionConfig,
+            activeScenarioId: scenarioId
+        };
+    }
     private handleInlineCopy(): void {
         const sessionId = this.sessionIdInput.value.trim() || 'DefaultMeetingSession';
         const url = new URL(window.location.href);
