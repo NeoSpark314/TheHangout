@@ -3,6 +3,7 @@ import { Skill } from './Skill';
 import { PlayerAvatarEntity } from '../world/entities/PlayerAvatarEntity';
 import { IInteractable } from '../shared/contracts/IInteractable';
 import { IHoldable } from '../shared/contracts/IHoldable';
+import type { IMovableHoldable } from '../shared/contracts/IMovableHoldable';
 import { isHoldable, isInteractable, isMovableHoldable } from '../shared/utils/TypeGuards';
 import type { IRuntimeRegistry } from '../app/AppContext';
 import type { IEntity } from '../shared/contracts/IEntity';
@@ -97,16 +98,22 @@ export class GrabSkill extends Skill {
             const handTransform = new THREE.Matrix4().compose(handPos, handQuat, new THREE.Vector3(1, 1, 1));
             const mesh = this._getEntityMesh(nearest);
 
-            if (mesh && movable) {
-                mesh.updateMatrixWorld(true);
-                const objPos = new THREE.Vector3();
-                const objQuat = new THREE.Quaternion();
-                mesh.getWorldPosition(objPos);
-                mesh.getWorldQuaternion(objQuat);
+            if (movable) {
+                const canonicalOffset = this._getCanonicalGrabOffset(nearest as unknown as IMovableHoldable, hand);
+                if (canonicalOffset) {
+                    offsetPos.set(canonicalOffset.position.x, canonicalOffset.position.y, canonicalOffset.position.z);
+                    offsetQuat.set(canonicalOffset.quaternion.x, canonicalOffset.quaternion.y, canonicalOffset.quaternion.z, canonicalOffset.quaternion.w);
+                } else if (mesh) {
+                    mesh.updateMatrixWorld(true);
+                    const objPos = new THREE.Vector3();
+                    const objQuat = new THREE.Quaternion();
+                    mesh.getWorldPosition(objPos);
+                    mesh.getWorldQuaternion(objQuat);
 
-                const objTransform = new THREE.Matrix4().compose(objPos, objQuat, new THREE.Vector3(1, 1, 1));
-                const offsetTransform = handTransform.clone().invert().multiply(objTransform);
-                offsetTransform.decompose(offsetPos, offsetQuat, new THREE.Vector3());
+                    const objTransform = new THREE.Matrix4().compose(objPos, objQuat, new THREE.Vector3(1, 1, 1));
+                    const offsetTransform = handTransform.clone().invert().multiply(objTransform);
+                    offsetTransform.decompose(offsetPos, offsetQuat, new THREE.Vector3());
+                }
             }
 
             let holdPose: THREE.Object3D | null = null;
@@ -376,6 +383,14 @@ export class GrabSkill extends Skill {
 
     private _refreshSingleHandOffsetFromCurrentPose(hand: HandId, held: IHeldHandState, runtime: IRuntimeRegistry): void {
         if (!held.movable) return;
+
+        const canonicalOffset = this._getCanonicalGrabOffset(held.entity as unknown as IMovableHoldable, hand);
+        if (canonicalOffset) {
+            held.offsetPos.set(canonicalOffset.position.x, canonicalOffset.position.y, canonicalOffset.position.z);
+            held.offsetQuat.set(canonicalOffset.quaternion.x, canonicalOffset.quaternion.y, canonicalOffset.quaternion.z, canonicalOffset.quaternion.w);
+            return;
+        }
+
         const handPose = this._readHandPose(runtime, hand);
         if (!handPose) return;
         const mesh = this._getEntityMesh(held.entity);
@@ -474,6 +489,12 @@ export class GrabSkill extends Skill {
         const handState = runtime.tracking.getState().hands[hand];
         if (!handState.active) return null;
         return this._getMovableHandPose(handState);
+    }
+
+    private _getCanonicalGrabOffset(entity: IMovableHoldable, hand: HandId): { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } } | null {
+        const offset = entity.getCanonicalGrabOffset?.(hand);
+        if (!offset) return null;
+        return offset;
     }
 
     private _getMovableHandPose(handState: ReturnType<IRuntimeRegistry['tracking']['getState']>['hands'][HandId]): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
@@ -601,6 +622,8 @@ export class GrabSkill extends Skill {
         return velocity;
     }
 }
+
+
 
 
 

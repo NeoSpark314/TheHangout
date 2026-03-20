@@ -6,4 +6,11 @@ import { IHoldable } from './IHoldable';
  */
 export interface IMovableHoldable extends IHoldable {
     updateGrabbedPose(pose: IPose): void;
+
+    /**
+     * Optional authored object-in-hand offset for canonical grips.
+     * The returned pose is the object's transform relative to the holding hand.
+     */
+    getCanonicalGrabOffset?(hand: 'left' | 'right'): IPose;
 }
+
