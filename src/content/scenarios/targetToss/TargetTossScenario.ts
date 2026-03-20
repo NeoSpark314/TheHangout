@@ -25,12 +25,17 @@ import type { PhysicsPropEntity } from '../../../world/entities/PhysicsPropEntit
 import type { IPhysicsColliderHandle } from '../../contracts/IObjectRuntimeContext';
 import type { PlayerAvatarEntity } from '../../../world/entities/PlayerAvatarEntity';
 
+interface ITargetRingDefinition {
+    radius: number;
+    points: number;
+    color: number;
+}
+
 interface ITargetDefinition {
     id: string;
-    points: number;
     position: { x: number; y: number; z: number };
     size: { x: number; y: number; z: number };
-    color: number;
+    rings: ITargetRingDefinition[];
 }
 
 interface ITargetRuntime extends ITargetDefinition {
@@ -244,32 +249,21 @@ class TargetTossScoreboardVisual {
 }
 
 const BALL_DEFINITIONS = [
-    { id: 'target-toss-ball-a', position: { x: -0.45, y: 1.15, z: 2.6 }, color: 0xff8b3d },
-    { id: 'target-toss-ball-b', position: { x: 0.0, y: 1.15, z: 2.6 }, color: 0xffc145 },
-    { id: 'target-toss-ball-c', position: { x: 0.45, y: 1.15, z: 2.6 }, color: 0xff5f6d }
+    { id: 'target-toss-ball-a', position: { x: -0.45, y: 1.05, z: 2.6 }, color: 0xff8b3d },
+    { id: 'target-toss-ball-b', position: { x: 0.0, y: 1.05, z: 2.6 }, color: 0xffc145 },
+    { id: 'target-toss-ball-c', position: { x: 0.45, y: 1.05, z: 2.6 }, color: 0xff5f6d }
 ] as const;
 
 const TARGET_DEFINITIONS: ITargetDefinition[] = [
     {
-        id: 'near-left',
-        points: 10,
-        position: { x: -1.35, y: 1.4, z: -4.0 },
-        size: { x: 0.45, y: 0.45, z: 0.16 },
-        color: 0x4ddcff
-    },
-    {
-        id: 'center-mid',
-        points: 20,
-        position: { x: 0.0, y: 1.65, z: -5.5 },
-        size: { x: 0.5, y: 0.5, z: 0.16 },
-        color: 0x7cff8f
-    },
-    {
-        id: 'far-right',
-        points: 30,
-        position: { x: 1.4, y: 1.95, z: -7.2 },
-        size: { x: 0.56, y: 0.56, z: 0.16 },
-        color: 0xffc857
+        id: 'main-target-zone',
+        position: { x: 0.0, y: 0.04, z: -5.9 },
+        size: { x: 1.65, y: 0.03, z: 1.65 },
+        rings: [
+            { radius: 0.42, points: 30, color: 0xffcf57 },
+            { radius: 0.86, points: 20, color: 0x7cf2a1 },
+            { radius: 1.35, points: 10, color: 0x59d7ff }
+        ]
     }
 ];
 
@@ -479,7 +473,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (this.targets.length > 0) return;
 
         for (const definition of TARGET_DEFINITIONS) {
-            const collider = this.context.runtime.physics.createStaticCuboidCollider(
+            const collider = this.context.runtime.physics.createStaticCuboidSensor(
                 definition.size.x * 0.5,
                 definition.size.y * 0.5,
                 definition.size.z * 0.5,
@@ -495,7 +489,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             1.45 * 0.5,
             0.22 * 0.5,
             0.55 * 0.5,
-            { x: 0, y: 0.93, z: 2.6 }
+            { x: 0, y: 0.76, z: 2.6 }
         );
     }
 
@@ -523,12 +517,12 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             })
         );
         floor.rotation.x = -Math.PI / 2;
-        floor.position.y = 0.02;
+        floor.position.y = 0.005;
         floor.receiveShadow = true;
         this.root.add(floor);
 
         const lane = new THREE.Mesh(
-            new THREE.BoxGeometry(4.5, 0.06, 12.5),
+            new THREE.BoxGeometry(4.5, 0.03, 12.5),
             new THREE.MeshStandardMaterial({
                 color: 0x1b7fd1,
                 emissive: 0x0f4f8a,
@@ -537,7 +531,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
                 roughness: 0.48
             })
         );
-        lane.position.set(0, 0.05, -1.0);
+        lane.position.set(0, 0.015, -1.0);
         this.root.add(lane);
 
         const throwLine = new THREE.Mesh(
@@ -550,7 +544,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
                 roughness: 0.3
             })
         );
-        throwLine.position.set(0, 0.1, 1.95);
+        throwLine.position.set(0, 0.028, 1.95);
         this.root.add(throwLine);
 
         const rack = new THREE.Mesh(
@@ -563,7 +557,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
                 roughness: 0.55
             })
         );
-        rack.position.set(0, 0.93, 2.6);
+        rack.position.set(0, 0.76, 2.6);
         this.root.add(rack);
 
         const meadowRing = new THREE.Mesh(
@@ -578,57 +572,48 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             })
         );
         meadowRing.rotation.x = -Math.PI / 2;
-        meadowRing.position.y = 0.021;
+        meadowRing.position.y = 0.007;
         this.root.add(meadowRing);
 
         for (const target of TARGET_DEFINITIONS) {
-            const stand = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.08, 0.12, target.position.y, 14),
+            const outerRing = target.rings[target.rings.length - 1];
+            if (!outerRing) continue;
+
+            const baseDisc = new THREE.Mesh(
+                new THREE.CircleGeometry(outerRing.radius + 0.12, 48),
                 new THREE.MeshStandardMaterial({
-                    color: 0x19446d,
-                    emissive: 0x0d2742,
-                    emissiveIntensity: 0.2,
-                    metalness: 0.24,
-                    roughness: 0.55
+                    color: 0x1a4f39,
+                    emissive: 0x133726,
+                    emissiveIntensity: 0.08,
+                    metalness: 0.03,
+                    roughness: 0.94
                 })
             );
-            stand.position.set(target.position.x, target.position.y * 0.5, target.position.z);
-            this.root.add(stand);
+            baseDisc.rotation.x = -Math.PI / 2;
+            baseDisc.position.set(target.position.x, 0.032, target.position.z);
+            this.root.add(baseDisc);
 
-            const board = new THREE.Mesh(
-                new THREE.CylinderGeometry(target.size.x * 0.55, target.size.x * 0.55, target.size.z, 32),
-                new THREE.MeshStandardMaterial({
-                    color: target.color,
-                    emissive: target.color,
-                    emissiveIntensity: 0.28,
-                    metalness: 0.18,
-                    roughness: 0.28
-                })
-            );
-            board.rotation.z = Math.PI * 0.5;
-            board.position.set(target.position.x, target.position.y, target.position.z);
-            this.root.add(board);
-
-            const ring = new THREE.Mesh(
-                new THREE.TorusGeometry(target.size.x * 0.42, 0.04, 12, 32),
-                new THREE.MeshStandardMaterial({
-                    color: 0xffffff,
-                    emissive: 0xffffff,
-                    emissiveIntensity: 0.18,
-                    metalness: 0.35,
-                    roughness: 0.22
-                })
-            );
-            ring.rotation.y = Math.PI * 0.5;
-            ring.position.set(target.position.x, target.position.y, target.position.z + 0.1);
-            this.root.add(ring);
-
-            const marker = new THREE.Mesh(
-                new THREE.PlaneGeometry(0.5, 0.24),
-                new THREE.MeshBasicMaterial({ color: 0x062238 })
-            );
-            marker.position.set(target.position.x, target.position.y - target.size.y * 0.8, target.position.z + 0.12);
-            this.root.add(marker);
+            for (let i = target.rings.length - 1; i >= 0; i -= 1) {
+                const ringDef = target.rings[i];
+                const innerRadius = i > 0 ? target.rings[i - 1].radius : 0;
+                const ringGeometry = innerRadius > 0.001
+                    ? new THREE.RingGeometry(innerRadius + 0.03, ringDef.radius, 48)
+                    : new THREE.CircleGeometry(ringDef.radius, 48);
+                const ring = new THREE.Mesh(
+                    ringGeometry,
+                    new THREE.MeshStandardMaterial({
+                        color: ringDef.color,
+                        emissive: ringDef.color,
+                        emissiveIntensity: 0.16,
+                        metalness: 0.08,
+                        roughness: 0.72,
+                        side: THREE.DoubleSide
+                    })
+                );
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.set(target.position.x, 0.036 + (target.rings.length - i) * 0.004, target.position.z);
+                this.root.add(ring);
+            }
         }
 
         if (!this.scoreboard) {
@@ -718,9 +703,12 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             const entityId = this.resolveBallEntityIdFromCollision(data);
             if (!entityId || this.scoredBallIds.has(entityId)) return;
 
+            const points = this.resolvePointsForBall(entityId, target);
+            if (points === null) return;
+
             this.scoredBallIds.add(entityId);
             this.countBallThrow(entityId);
-            this.awardPoints(target.points);
+            this.awardPoints(points);
         };
 
         eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.collisionStartedHandler);
@@ -733,6 +721,24 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (data.entityBId && (this.ballIds as readonly string[]).includes(data.entityBId)) {
             return data.entityBId;
         }
+        return null;
+    }
+
+    private resolvePointsForBall(ballId: string, target: ITargetRuntime): number | null {
+        const entity = this.getBallEntity(ballId);
+        if (!entity) return null;
+
+        const translation = entity.rigidBody.translation();
+        const dx = translation.x - target.position.x;
+        const dz = translation.z - target.position.z;
+        const radialDistance = Math.hypot(dx, dz);
+
+        for (const ring of target.rings) {
+            if (radialDistance <= ring.radius) {
+                return ring.points;
+            }
+        }
+
         return null;
     }
 

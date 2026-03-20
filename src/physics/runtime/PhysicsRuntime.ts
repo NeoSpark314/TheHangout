@@ -504,6 +504,29 @@ export class PhysicsRuntime {
         return this.createColliderHandle(collider);
     }
 
+    public createStaticCuboidSensor(
+        hx: number,
+        hy: number,
+        hz: number,
+        position: IVector3,
+        rotation?: { x: number; y: number; z: number; w: number }
+    ): IPhysicsColliderHandle | null {
+        if (!this.world) return null;
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z);
+        if (rotation) {
+            bodyDesc.setRotation(rotation);
+        }
+        const body = this.world.createRigidBody(bodyDesc);
+        const collider = this.world.createCollider(
+            RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+                .setSensor(true)
+                .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+            body
+        );
+        this.registerDebugBody(`static-sensor-${this.nextPhysicsId++}`, body, collider);
+        return this.createColliderHandle(collider);
+    }
+
     public registerInteractionCollider(collider: IPhysicsColliderHandle | null | undefined, target: PhysicsInteractionTarget): void {
         if (!collider) return;
         this.interactionColliders.set(collider.id, target);
