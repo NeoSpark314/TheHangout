@@ -1,12 +1,24 @@
-# Scenario Replication Policy
+# Scenario Replication Reference
 
-This project supports scenario-scoped sync so scenario-owned runtime state can stay inside the active scenario instead of being forced into a dedicated content object.
+This document is the narrow reference for scenario-scoped replication.
+For general scenario creation guidance, start with [SCENARIO_AUTHORING_GUIDE.md](SCENARIO_AUTHORING_GUIDE.md).
 
-## Goals
+## Purpose
 
-- Keep scenario-specific game state inside the scenario when that state is not worth promoting into a reusable object module.
-- Reuse the existing generic feature replication transport instead of adding scenario-specific packet handlers.
-- Support semantic events and late-join snapshot restoration for the active scenario.
+Scenario replication exists so scenario-owned shared state can stay inside the active scenario instead of being forced into a dedicated replicated object.
+
+Use it for:
+
+- scoreboards
+- turn and round state
+- puzzle state
+- temporary minigame state that should disappear on scenario switch
+
+Do not use it for:
+
+- continuous transform sync
+- high-frequency physics state
+- state that clearly belongs to one spawned world object
 
 ## Where It Lives
 
@@ -26,11 +38,11 @@ This project supports scenario-scoped sync so scenario-owned runtime state can s
 - `captureScenarioReplicationSnapshot?()`
 - `applyScenarioReplicationSnapshot?(snapshot)`
 
-Optional helper injected by `SessionRuntime` onto live scenario instances:
+Convenience helper injected by `SessionRuntime` onto the live scenario instance:
 
 - `emitReplicationEvent?(eventType, data, options)`
 
-This helper is only a convenience wrapper. The authoritative contract is the replicated-scenario interface above.
+The injected helper is optional convenience only. The actual contract is the replicated-scenario interface above.
 
 ## Policy Surface
 
@@ -44,37 +56,17 @@ Per-emit override:
 
 - `emitReplicationEvent(eventType, data, { localEcho?: boolean })`
 
-## Semantics
+## Policy Semantics
 
 - `relayIncomingFromPeer`
-  - `others` (default): when host receives an event from a guest, host relays it to all other peers.
-  - `none`: host processes the event locally but does not fan it out.
+  - `others` (default): when the host receives an event from a guest, it relays it to all peers except the sender.
+  - `none`: the host processes the event locally but does not fan it out.
 - `includeInSnapshot`
-  - `true` (default): scenario snapshot participates in late-join feature snapshot payload.
-  - `false`: scenario is omitted from late-join snapshot fan-out.
+  - `true` (default): the scenario contributes snapshot data for late join.
+  - `false`: the scenario is omitted from the late-join feature snapshot.
 - `defaultLocalEcho`
   - `true` (default): local emit is applied immediately before network send.
   - `false`: local emit skips immediate local application.
-
-## Recommended Use
-
-Use scenario replication when:
-
-- the state is tightly coupled to one scenario
-- the state should disappear completely on scenario switch
-- extracting a dedicated object module would add noise rather than clarity
-
-Examples:
-
-- scoreboard state for a one-off activity scenario
-- round/turn state owned by a minigame scenario
-- scenario-local trigger or puzzle state
-
-Prefer object replication when:
-
-- the state belongs to a spawned object instance
-- the thing being synchronized has a clear object identity in the world
-- the same logic should be reusable across scenarios
 
 ## Lifecycle
 
@@ -133,9 +125,9 @@ class MyScenario implements IReplicatedScenarioModule {
 }
 ```
 
-## Design Notes
+## Notes
 
-- Scenario replication reuses the same feature replication transport as content objects.
-- No new packet type was added for scenarios.
-- The API is intentionally event/snapshot oriented, not high-frequency transform sync.
-- Continuous physics and avatar transforms should remain in their specialized pipelines.
+- Scenario replication reuses the generic feature replication transport.
+- No new scenario-specific packet type was added.
+- The API is intentionally event/snapshot oriented rather than high-frequency state sync.
+- Physics transforms and avatar motion should remain in their dedicated pipelines.
