@@ -34,6 +34,7 @@ const GUN_MAX_RANGE = 22;
 const GUN_FIRE_COOLDOWN_MS = 120;
 const GUN_RECOIL_DISTANCE = 0.035;
 const GUN_RECOIL_RECOVER_SPEED = 8.5;
+const GUN_IMPULSE_STRENGTH = 0.09;
 
 class PewPewGunInstance extends BaseReplicatedObjectInstance {
     public readonly replicationPolicy = {
@@ -177,6 +178,18 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
                     if (entity?.type !== EntityType.PLAYER_AVATAR) {
                         end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);
                         hit = true;
+
+                        if (entity?.type === EntityType.PHYSICS_PROP) {
+                            this.context.app.runtime.physics?.applyImpulseAtPoint(
+                                physicsHit.entityId,
+                                {
+                                    x: direction.x * GUN_IMPULSE_STRENGTH,
+                                    y: direction.y * GUN_IMPULSE_STRENGTH,
+                                    z: direction.z * GUN_IMPULSE_STRENGTH
+                                },
+                                physicsHit.point
+                            );
+                        }
                     }
                 } else {
                     end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);
@@ -410,4 +423,5 @@ export class PewPewGunObject implements IObjectModule {
         return new PewPewGunInstance(context, config);
     }
 }
+
 

@@ -231,7 +231,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         if (!this.rigidBody) return;
-        const hasAuthority = this.requestOwnership();
+        const hasAuthority = this.requestImmediatePhysicsAuthority();
         if (!hasAuthority) return;
 
         this.pendingReleaseArmed = false;
@@ -291,6 +291,17 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
 
         this.rigidBody.setNextKinematicTranslation(pose.position);
         this.rigidBody.setNextKinematicRotation(pose.quaternion);
+    }
+
+    public requestImmediatePhysicsAuthority(): boolean {
+        if (!this.rigidBody) return false;
+        const hasAuthority = this.requestOwnership();
+        if (!hasAuthority || !this.isAuthority) return false;
+
+        this.pendingReleaseArmed = false;
+        this.refreshSimMode();
+        this.rigidBody.wakeUp();
+        return true;
     }
 
     public onNetworkEvent(type: string, payload: any): void {

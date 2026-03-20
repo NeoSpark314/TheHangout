@@ -445,6 +445,20 @@ export class PhysicsRuntime {
     }
 
 
+    public applyImpulseAtPoint(entityId: string, impulse: IVector3, point: IVector3): boolean {
+        const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
+        if (!entity || entity.type !== EntityType.PHYSICS_PROP || !entity.rigidBody) return false;
+        if (entity.heldBy) return false;
+        if (!entity.requestImmediatePhysicsAuthority()) return false;
+
+        entity.rigidBody.wakeUp();
+        entity.rigidBody.applyImpulseAtPoint(
+            { x: impulse.x, y: impulse.y, z: impulse.z },
+            { x: point.x, y: point.y, z: point.z },
+            true
+        );
+        return true;
+    }
     public raycast(origin: IVector3, direction: IVector3, maxDist: number): IPhysicsRayHit | null {
         if (!this.world) return null;
 
@@ -852,6 +866,7 @@ export class PhysicsRuntime {
     }
 
 }
+
 
 
 
