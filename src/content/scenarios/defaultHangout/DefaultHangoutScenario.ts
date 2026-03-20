@@ -5,6 +5,7 @@ import { DrawingSurfaceObject } from '../../objects/DrawingSurfaceObject';
 import { DrumPadArcObject } from '../../objects/DrumPadArcObject';
 import { GrabbableCubeObject } from '../../objects/GrabbableCubeObject';
 import { PenToolObject } from '../../objects/PenToolObject';
+import { PewPewGunObject } from '../../objects/PewPewGunObject';
 import { SimpleSharedObject } from '../../objects/SimpleSharedObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
@@ -167,6 +168,7 @@ export class DefaultHangoutScenario implements IScenarioModule {
     private readonly objectModules: IObjectModule[] = [
         new DrawingSurfaceObject(),
         new PenToolObject(),
+        new PewPewGunObject(),
         new GrabbableCubeObject(),
         new DrumPadArcObject(),
         new ChairObject(),
@@ -246,3 +248,4 @@ export const DefaultHangoutScenarioPlugin: IScenarioPlugin = {
         return new DefaultHangoutScenario(session, app);
     }
 };
+

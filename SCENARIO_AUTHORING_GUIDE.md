@@ -13,6 +13,18 @@ Use this guide when you want to:
 
 For scenario replication details, also read [SCENARIO_REPLICATION_POLICY.md](SCENARIO_REPLICATION_POLICY.md).
 
+## Design Principle
+
+The Hangout prioritizes embodied feel and shared presence over strict competitive authority.
+
+For scenario design, that means:
+
+- optimize for immediate local responsiveness when a player acts
+- use host-authoritative logic for shared score or round state when it adds clarity
+- replicate semantic outcomes and stable shared state so the world feels coherent and believable to everyone
+- do not chase identical per-frame simulation if it harms feel and is not needed for the activity
+
+A good scenario should feel like a real shared place that could plausibly exist, even if some gameplay logic is only eventually consistent.
 ## Current Model
 
 A scenario has two layers:
@@ -284,3 +296,4 @@ Good entry points for contributors:
 
 `DefaultHangoutScenario` shows the baseline social-space pattern.
 `TargetTossScenario` shows the current minigame pattern with scenario-owned game state and a reusable shared prop.
+

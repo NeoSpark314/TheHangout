@@ -13,6 +13,18 @@ Use this guide when you want to:
 
 For object replication details, also read [OBJECT_REPLICATION_POLICY.md](OBJECT_REPLICATION_POLICY.md).
 
+## Design Principle
+
+The Hangout prioritizes local interaction feel first, while still requiring replication strong enough to preserve a solid shared-world illusion.
+
+For object design, that means:
+
+- the acting player should usually see and hear the result immediately
+- friendly social objects do not need strict host-authoritative gating by default
+- replication should preserve visible outcomes, stable state, and believable shared causality
+- semantic events are often better than trying to synchronize every transient detail
+
+This is especially important for VR objects like throwables, tools, musical objects, and playful gadgets: they should feel good in the hand first, while still reading as part of one connected world.
 ## Current Model
 
 An object module is the content-facing unit for reusable world objects.
@@ -310,3 +322,4 @@ A useful split is:
 - objects own reusable world things with clear identity and reuse value
 
 That distinction is already working well in the current codebase and is worth preserving.
+

@@ -160,14 +160,16 @@ export class SessionRuntime implements IUpdatable {
                 ` (reason=reload, seed=${this.context.sessionConfig.seed}, entities_before=${previousEntityCount})`
             );
             if (this.isInitialized) {
+                this.scenarioReplicationHost.detach();
                 this.activeScenario.unload(this.context);
                 this.clearScenarioOwnedState();
+                this.activeScenario = this.instantiateScenario(this.activeScenarioPlugin);
+                this.refreshActiveObjectModules();
                 this.activeScenario.load(this.context, {
                     isHost: this.context.isHost,
                     seed: this.context.sessionConfig.seed,
                     reason: 'reload'
                 });
-                this.refreshActiveObjectModules();
                 this.attachScenarioReplicationIfNeeded();
             }
             console.info(
@@ -210,10 +212,21 @@ export class SessionRuntime implements IUpdatable {
         return this.objectModuleRegistry.get(moduleId);
     }
 
+    public registerObjectModule(module: import('../../content/contracts/IObjectModule').IObjectModule): void {
+        this.objectModuleRegistry.register(module);
+    }
+
     public spawnObjectInstance(id: string, config: IObjectSpawnConfig = {}): ISpawnedObjectInstance | null {
-        const instance = this.objectModuleRegistry.spawn(id, this.context, config);
+        let instance = this.objectModuleRegistry.spawn(id, this.context, config);
         if (!instance) {
-            console.warn(`[SessionRuntime] Failed to spawn object module: ${id}`);
+            this.refreshActiveObjectModules();
+            instance = this.objectModuleRegistry.spawn(id, this.context, config);
+        }
+        if (!instance) {
+            console.warn(
+                `[SessionRuntime] Failed to spawn object module: ${id}`,
+                { availableModules: this.objectModuleRegistry.listIds(), activeScenario: this.activeScenario.id }
+            );
             return null;
         }
 
@@ -417,3 +430,6 @@ function isReplicatedScenarioModule(value: IScenarioModule): value is IReplicate
     return typeof candidate.replicationKey === 'string'
         && typeof candidate.onScenarioReplicationEvent === 'function';
 }
+
+
+

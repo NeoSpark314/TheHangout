@@ -2,6 +2,7 @@ import type { AppContext, ISessionConfig } from '../../../app/AppContext';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import { EnvironmentBuilder } from '../../../assets/procedural/EnvironmentBuilder';
 import { PropBuilder } from '../../../assets/procedural/PropBuilder';
+import { PewPewGunObject } from '../../objects/PewPewGunObject';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 
 export class DefaultHangoutWorld {
@@ -9,6 +10,7 @@ export class DefaultHangoutWorld {
     private props: PropBuilder | null = null;
     private readonly drawingSurfaceId = 'default-drawing-surface';
     private readonly defaultPenId = 'default-pen';
+    private readonly defaultGunId = 'default-pew-pew-gun';
     private readonly drumPadArcId = 'default-drum-pad-arc';
     private readonly defaultChairId = 'default-chair';
     private readonly defaultCubeColors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
@@ -26,6 +28,16 @@ export class DefaultHangoutWorld {
             this.session.spawnObjectModule('pen-tool', {
                 id: this.defaultPenId,
                 position: { x: 0.5, y: 1.15, z: 0.5 }
+            });
+        }
+        if (!this.session.getObjectModuleDefinition('pew-pew-gun')) {
+            this.session.registerObjectModule(new PewPewGunObject());
+        }
+        if (!this.session.getObjectInstance(this.defaultGunId)) {
+            this.session.spawnObjectModule('pew-pew-gun', {
+                id: this.defaultGunId,
+                position: { x: 0.0, y: 1.12, z: -0.82 },
+                rotationY: 0
             });
         }
         if (!this.session.getObjectInstance(this.drumPadArcId)) {
@@ -114,3 +126,6 @@ export class DefaultHangoutWorld {
         }
     }
 }
+
+
+
