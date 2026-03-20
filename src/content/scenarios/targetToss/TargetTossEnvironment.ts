@@ -41,12 +41,13 @@ export function buildTargetTossEnvironment(
         new THREE.MeshStandardMaterial({
             color: 0x1b7fd1,
             emissive: 0x0f4f8a,
-            emissiveIntensity: 0.18,
+            emissiveIntensity: 0.05,
             metalness: 0.18,
             roughness: 0.48
         })
     );
     lane.position.set(0, 0.015, -1.0);
+    lane.receiveShadow = true;
     root.add(lane);
 
     const throwLine = new THREE.Mesh(
@@ -54,12 +55,13 @@ export function buildTargetTossEnvironment(
         new THREE.MeshStandardMaterial({
             color: 0xffffff,
             emissive: 0xffffff,
-            emissiveIntensity: 0.3,
+            emissiveIntensity: 0.08,
             metalness: 0.12,
             roughness: 0.3
         })
     );
     throwLine.position.set(0, 0.028, 1.95);
+    throwLine.receiveShadow = true;
     root.add(throwLine);
 
     const rack = new THREE.Mesh(
@@ -67,12 +69,14 @@ export function buildTargetTossEnvironment(
         new THREE.MeshStandardMaterial({
             color: 0x0d4370,
             emissive: 0x082f50,
-            emissiveIntensity: 0.18,
+            emissiveIntensity: 0.05,
             metalness: 0.26,
             roughness: 0.55
         })
     );
     rack.position.set(0, 0.76, 2.6);
+    rack.castShadow = true;
+    rack.receiveShadow = true;
     root.add(rack);
 
     const meadowRing = new THREE.Mesh(
@@ -88,6 +92,7 @@ export function buildTargetTossEnvironment(
     );
     meadowRing.rotation.x = -Math.PI / 2;
     meadowRing.position.y = 0.007;
+    meadowRing.receiveShadow = true;
     root.add(meadowRing);
 
     for (const target of targets) {
@@ -106,6 +111,7 @@ export function buildTargetTossEnvironment(
         );
         baseDisc.rotation.x = -Math.PI / 2;
         baseDisc.position.set(target.position.x, 0.032, target.position.z);
+        baseDisc.receiveShadow = true;
         root.add(baseDisc);
 
         for (let i = target.rings.length - 1; i >= 0; i -= 1) {
@@ -119,7 +125,7 @@ export function buildTargetTossEnvironment(
                 new THREE.MeshStandardMaterial({
                     color: ringDef.color,
                     emissive: ringDef.color,
-                    emissiveIntensity: 0.16,
+                    emissiveIntensity: 0.04,
                     metalness: 0.08,
                     roughness: 0.72,
                     side: THREE.DoubleSide
@@ -127,6 +133,7 @@ export function buildTargetTossEnvironment(
             );
             ring.rotation.x = -Math.PI / 2;
             ring.position.set(target.position.x, 0.036 + (target.rings.length - i) * 0.004, target.position.z);
+            ring.receiveShadow = true;
             root.add(ring);
         }
     }
@@ -166,12 +173,14 @@ function addForestBackdrop(root: THREE.Group): void {
             new THREE.MeshStandardMaterial({
                 color: 0x3d8b41,
                 emissive: 0x1f4b22,
-                emissiveIntensity: 0.11,
+                emissiveIntensity: 0.03,
                 metalness: 0.03,
                 roughness: 0.92
             })
         );
         foliageBottom.position.y = 1.7;
+        foliageBottom.castShadow = true;
+        foliageBottom.receiveShadow = true;
         treeRoot.add(foliageBottom);
 
         const foliageTop = new THREE.Mesh(
@@ -179,14 +188,19 @@ function addForestBackdrop(root: THREE.Group): void {
             new THREE.MeshStandardMaterial({
                 color: 0x4da34f,
                 emissive: 0x28592b,
-                emissiveIntensity: 0.1,
+                emissiveIntensity: 0.03,
                 metalness: 0.03,
                 roughness: 0.9
             })
         );
         foliageTop.position.y = 2.35;
+        foliageTop.castShadow = true;
+        foliageTop.receiveShadow = true;
         treeRoot.add(foliageTop);
 
         root.add(treeRoot);
     }
 }
+
+
+

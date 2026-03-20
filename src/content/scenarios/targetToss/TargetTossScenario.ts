@@ -54,6 +54,10 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     private lastScoreAtMs: number | null = null;
     private scoreboard: TargetTossScoreboardVisual | null = null;
     private readonly scorePopups: TargetTossScorePopup[] = [];
+    private sunLight: THREE.DirectionalLight | null = null;
+    private hemiLight: THREE.HemisphereLight | null = null;
+    private previousShadowMapEnabled: boolean | null = null;
+    private previousShadowMapType: THREE.ShadowMapType | null = null;
     private previousBackground: THREE.Color | THREE.Texture | null = null;
     private previousFog: THREE.Fog | THREE.FogExp2 | null = null;
     private state: ITargetTossState = {
@@ -129,8 +133,30 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             scene.fog = this.previousFog;
         }
 
+        if (this.sunLight?.parent) {
+            this.sunLight.removeFromParent();
+        }
+        if (this.sunLight?.target.parent) {
+            this.sunLight.target.removeFromParent();
+        }
+        if (this.hemiLight?.parent) {
+            this.hemiLight.removeFromParent();
+        }
+        this.sunLight = null;
+        this.hemiLight = null;
+
+        const renderer = this.context.runtime.render?.renderer;
+        if (renderer && this.previousShadowMapEnabled !== null) {
+            renderer.shadowMap.enabled = this.previousShadowMapEnabled;
+        }
+        if (renderer && this.previousShadowMapType !== null) {
+            renderer.shadowMap.type = this.previousShadowMapType;
+        }
+
         this.previousBackground = null;
         this.previousFog = null;
+        this.previousShadowMapEnabled = null;
+        this.previousShadowMapType = null;
         this.countedBallIds.clear();
         this.scoredBallIds.clear();
         this.resetQueuedAtMs = null;
@@ -260,7 +286,8 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private createVisuals(): void {
-        const scene = this.context.runtime.render?.scene;
+        const render = this.context.runtime.render;
+        const scene = render?.scene;
         if (!scene) return;
 
         this.previousBackground = scene.background as THREE.Color | THREE.Texture | null;
@@ -272,7 +299,40 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             scene.add(this.root);
         }
 
+        const renderer = render?.renderer;
+        if (renderer) {
+            this.previousShadowMapEnabled = renderer.shadowMap.enabled;
+            this.previousShadowMapType = renderer.shadowMap.type;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
+
+        this.hemiLight = new THREE.HemisphereLight(0xdff5ff, 0x7ca35a, 1.1);
+        scene.add(this.hemiLight);
+
+        this.sunLight = new THREE.DirectionalLight(0xfff1cf, 1.75);
+        this.sunLight.position.set(10, 18, 8);
+        this.sunLight.target.position.set(0, 0, -2);
+        this.sunLight.castShadow = true;
+        this.sunLight.shadow.mapSize.set(1024, 1024);
+        this.sunLight.shadow.bias = -0.0002;
+        this.sunLight.shadow.normalBias = 0.025;
+        this.sunLight.shadow.camera.near = 1;
+        this.sunLight.shadow.camera.far = 48;
+        this.sunLight.shadow.camera.left = -14;
+        this.sunLight.shadow.camera.right = 14;
+        this.sunLight.shadow.camera.top = 14;
+        this.sunLight.shadow.camera.bottom = -14;
+        scene.add(this.sunLight);
+        scene.add(this.sunLight.target);
+
         this.scoreboard = buildTargetTossEnvironment(this.root, this.targets, this.scoreboard);
+        this.scoreboard.root.traverse((object) => {
+            const mesh = object as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+        });
     }
 
     private updateSettledScores(): void {
@@ -568,5 +628,8 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
         return new TargetTossScenario(session, app);
     }
 };
+
+
+
 
 
