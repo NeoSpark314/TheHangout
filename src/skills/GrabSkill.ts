@@ -47,6 +47,7 @@ type IDualGrabScalable = IHoldable & {
 export class GrabSkill extends Skill {
     private grabRadius: number = 0.05;
     private fixedHoldReleaseDistance = 0.22;
+    private vrThrowVelocityMultiplier = 2.0;
 
     private heldObjects: Map<HandId, IHeldHandState> = new Map();
     private objectHolds: Map<string, IObjectHoldState> = new Map();
@@ -166,7 +167,7 @@ export class GrabSkill extends Skill {
 
             const objectHold = this.objectHolds.get(held.objectKey);
             if (!objectHold) {
-                const velocity = held.movable ? this._computeThrowVelocity(hand) : undefined;
+                const velocity = held.movable ? this._computeThrowVelocity(hand).multiplyScalar(this._getThrowVelocityMultiplier(player.appContext.runtime)) : undefined;
                 held.entity.onRelease(velocity);
                 this.heldObjects.delete(hand);
                 this.history.delete(hand);
@@ -201,7 +202,7 @@ export class GrabSkill extends Skill {
                 return;
             }
 
-            const velocity = held.movable ? this._computeThrowVelocity(hand) : undefined;
+            const velocity = held.movable ? this._computeThrowVelocity(hand).multiplyScalar(this._getThrowVelocityMultiplier(player.appContext.runtime)) : undefined;
             objectHold.entity.onRelease(velocity);
             this.objectHolds.delete(held.objectKey);
             this.heldObjects.delete(hand);
@@ -561,6 +562,10 @@ export class GrabSkill extends Skill {
         if (h.length > 10) h.shift();
     }
 
+    private _getThrowVelocityMultiplier(runtime: IRuntimeRegistry): number {
+        return runtime.render?.isXRPresenting() ? this.vrThrowVelocityMultiplier : 1;
+    }
+
     private _computeThrowVelocity(id: HandId): THREE.Vector3 {
         const h = this.history.get(id);
         if (!h || h.length < 2) return new THREE.Vector3(0, 0, 0);
@@ -596,5 +601,6 @@ export class GrabSkill extends Skill {
         return velocity;
     }
 }
+
 
 

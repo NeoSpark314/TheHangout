@@ -194,7 +194,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         const spawn = offsets[index % offsets.length];
         return {
             position: { x: spawn.x, y: 0.2, z: spawn.z },
-            yaw: Math.PI
+            yaw: 0
         };
     }
 
@@ -634,6 +634,7 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
         return new TargetTossScenario(session, app);
     }
 };
+
 
 
 
