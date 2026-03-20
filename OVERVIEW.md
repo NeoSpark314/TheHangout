@@ -180,3 +180,4 @@ These names are part of the architecture. New modules should follow them instead
 - [SCENARIO_REPLICATION_POLICY.md](SCENARIO_REPLICATION_POLICY.md) for scenario-scoped semantic sync and late-join snapshot patterns
 - [src/content/runtime/BuiltInScenarioPlugins.ts](src/content/runtime/BuiltInScenarioPlugins.ts) for the current built-in scenario composition point
 
+
