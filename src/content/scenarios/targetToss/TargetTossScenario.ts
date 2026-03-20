@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import type { AppContext } from '../../../app/AppContext';
-import eventBus from '../../../app/events/EventBus';
-import { EVENTS } from '../../../shared/constants/Constants';
 import { EntityType } from '../../../shared/contracts/IEntityState';
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type {
@@ -12,344 +10,22 @@ import type {
 } from '../../contracts/IReplicatedScenarioModule';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import type { IScenarioLoadOptions, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
-import type {
-    IScenarioActionDefinition,
-    IScenarioActionExecutionContext,
-    IScenarioActionExecutionResult,
-    IScenarioActionProvider,
-    IScenarioActionQueryContext
-} from '../../contracts/IScenarioAction';
+import type { IScenarioActionProvider } from '../../contracts/IScenarioAction';
 import { ThrowableBallObject } from '../../objects/ThrowableBallObject';
 import type { SessionRuntime } from '../../../world/session/SessionRuntime';
 import type { PhysicsPropEntity } from '../../../world/entities/PhysicsPropEntity';
 import type { IPhysicsColliderHandle } from '../../contracts/IObjectRuntimeContext';
 import type { PlayerAvatarEntity } from '../../../world/entities/PlayerAvatarEntity';
-
-interface ITargetRingDefinition {
-    radius: number;
-    points: number;
-    color: number;
-}
-
-interface ITargetDefinition {
-    id: string;
-    position: { x: number; y: number; z: number };
-    size: { x: number; y: number; z: number };
-    rings: ITargetRingDefinition[];
-}
-
-interface ITargetRuntime extends ITargetDefinition {
-    collider: IPhysicsColliderHandle | null;
-}
-
-interface ITargetTossState {
-    playerOrder: string[];
-    currentTurnIndex: number;
-    throwsTaken: number;
-    scores: Record<string, number>;
-    resetPending: boolean;
-}
-
-interface ITargetTossStateSyncPayload {
-    state: ITargetTossState;
-}
-
-interface IScoreFeedbackPayload {
-    points: number;
-    color: number;
-    position: { x: number; y: number; z: number };
-}
-
-class TargetTossActionProvider implements IScenarioActionProvider {
-    private static readonly ACTION_RESET_GAME = 'reset-game';
-
-    constructor(private readonly scenario: TargetTossScenario) { }
-
-    public getActions(_context: IScenarioActionQueryContext): IScenarioActionDefinition[] {
-        return [
-            {
-                id: TargetTossActionProvider.ACTION_RESET_GAME,
-                label: 'Reset Game',
-                description: 'Reset scores, reset balls, and start over from the first player.',
-                requiredRole: 'moderator',
-                dangerous: true,
-                replicateToGuests: false
-            }
-        ];
-    }
-
-    public executeAction(
-        actionId: string,
-        _payload: unknown,
-        context: IScenarioActionExecutionContext
-    ): IScenarioActionExecutionResult {
-        if (actionId !== TargetTossActionProvider.ACTION_RESET_GAME) {
-            return { ok: false, reason: `Unsupported action: ${actionId}` };
-        }
-
-        if (context.source === 'replicated') {
-            return { ok: true };
-        }
-
-        this.scenario.resetGame();
-        return { ok: true, message: 'Target Toss reset.' };
-    }
-}
-
-class TargetTossScorePopup {
-    public readonly root = new THREE.Group();
-    private readonly mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-    private readonly texture: THREE.CanvasTexture;
-    private readonly lifetimeSec = 0.95;
-    private readonly riseSpeed = 0.8;
-    private elapsedSec = 0;
-    private readonly tmpWorld = new THREE.Vector3();
-    private readonly tmpLookTarget = new THREE.Vector3();
-
-    constructor(points: number, color: number, position: { x: number; y: number; z: number }) {
-        this.root.name = 'target-toss-score-popup';
-        this.root.position.set(position.x, position.y + 0.22, position.z);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 384;
-        canvas.height = 192;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            throw new Error('Unable to create score popup canvas context.');
-        }
-
-        const label = '+' + points.toString();
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.lineJoin = 'round';
-        ctx.lineWidth = 26;
-        ctx.strokeStyle = 'rgba(10, 24, 40, 0.82)';
-        ctx.font = '700 118px "Segoe UI", Arial, sans-serif';
-        ctx.strokeText(label, canvas.width * 0.5, canvas.height * 0.52);
-        ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
-        ctx.fillText(label, canvas.width * 0.5, canvas.height * 0.52);
-
-        this.texture = new THREE.CanvasTexture(canvas);
-        this.texture.generateMipmaps = false;
-        this.texture.minFilter = THREE.LinearFilter;
-        this.texture.magFilter = THREE.LinearFilter;
-
-        this.mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(0.72, 0.36),
-            new THREE.MeshBasicMaterial({
-                map: this.texture,
-                transparent: true,
-                depthWrite: false
-            })
-        );
-        this.root.add(this.mesh);
-    }
-
-    public update(deltaSec: number, camera: THREE.Camera | null | undefined): boolean {
-        this.elapsedSec += deltaSec;
-        if (this.elapsedSec >= this.lifetimeSec) {
-            return false;
-        }
-
-        const t = this.elapsedSec / this.lifetimeSec;
-        this.root.position.y += deltaSec * this.riseSpeed;
-        this.root.scale.setScalar(1 + t * 0.18);
-        this.mesh.material.opacity = 1 - t;
-
-        if (camera) {
-            this.root.getWorldPosition(this.tmpWorld);
-            this.tmpLookTarget.set(camera.position.x, this.tmpWorld.y, camera.position.z);
-            this.root.lookAt(this.tmpLookTarget);
-        }
-
-        return true;
-    }
-
-    public dispose(): void {
-        this.texture.dispose();
-        this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
-        this.root.removeFromParent();
-    }
-}
-
-class TargetTossScoreboardVisual {
-    public readonly root = new THREE.Group();
-    private readonly screen: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-    private readonly canvas: HTMLCanvasElement;
-    private readonly texture: THREE.CanvasTexture;
-    private lastText = '';
-    private readonly tmpRootWorld = new THREE.Vector3();
-    private readonly tmpLookTarget = new THREE.Vector3();
-
-    constructor(position: THREE.Vector3) {
-        this.root.name = 'target-toss-scoreboard';
-        this.root.position.copy(position);
-
-        const postMaterial = new THREE.MeshStandardMaterial({
-            color: 0x0b315f,
-            emissive: 0x082348,
-            emissiveIntensity: 0.22,
-            metalness: 0.35,
-            roughness: 0.58
-        });
-        const postLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.1, 0.08), postMaterial);
-        const postRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.1, 0.08), postMaterial);
-        postLeft.position.set(-0.95, 1.05, 0);
-        postRight.position.set(0.95, 1.05, 0);
-
-        const header = new THREE.Mesh(
-            new THREE.BoxGeometry(2.15, 1.5, 0.08),
-            new THREE.MeshStandardMaterial({
-                color: 0x144d8f,
-                emissive: 0x0d3564,
-                emissiveIntensity: 0.25,
-                metalness: 0.2,
-                roughness: 0.45
-            })
-        );
-        header.position.set(0, 2.0, -0.03);
-
-        this.canvas = document.createElement('canvas');
-        this.canvas.width = 1024;
-        this.canvas.height = 768;
-        this.texture = new THREE.CanvasTexture(this.canvas);
-        this.texture.generateMipmaps = false;
-        this.texture.minFilter = THREE.LinearFilter;
-        this.texture.magFilter = THREE.LinearFilter;
-
-        this.screen = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.95, 1.38),
-            new THREE.MeshBasicMaterial({
-                map: this.texture,
-                transparent: false
-            })
-        );
-        this.screen.position.set(0, 2.0, 0.02);
-
-        const base = new THREE.Mesh(
-            new THREE.BoxGeometry(2.6, 0.16, 0.75),
-            new THREE.MeshStandardMaterial({
-                color: 0x184b7a,
-                emissive: 0x0b2944,
-                emissiveIntensity: 0.16,
-                metalness: 0.16,
-                roughness: 0.68
-            })
-        );
-        base.position.set(0, 0.08, 0);
-
-        this.root.add(postLeft, postRight, header, this.screen, base);
-    }
-
-    public update(state: ITargetTossState, getPlayerLabel: (playerId: string) => string): void {
-        const currentPlayerId = state.playerOrder[state.currentTurnIndex] || null;
-        const currentPlayerLabel = currentPlayerId ? getPlayerLabel(currentPlayerId) : 'Waiting For Players';
-        const lines = state.playerOrder.length === 0
-            ? ['No active players yet.']
-            : state.playerOrder.map((playerId, index) => {
-                const prefix = index === state.currentTurnIndex ? '> ' : '  ';
-                const score = state.scores[playerId] ?? 0;
-                return `${prefix}${getPlayerLabel(playerId)}  ${score} pts`;
-            });
-
-        const text = [
-            'TARGET TOSS',
-            `Turn: ${currentPlayerLabel}`,
-            `Throws: ${state.throwsTaken}/3${state.resetPending ? '  |  Resetting...' : ''}`,
-            '',
-            ...lines
-        ].join('\n');
-
-        if (text === this.lastText) {
-            return;
-        }
-        this.lastText = text;
-
-        const ctx = this.canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        const gradient = ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        gradient.addColorStop(0, '#0d2d54');
-        gradient.addColorStop(1, '#08182e');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        ctx.strokeStyle = '#7be7ff';
-        ctx.lineWidth = 10;
-        ctx.strokeRect(12, 12, this.canvas.width - 24, this.canvas.height - 24);
-
-        ctx.fillStyle = '#e8fbff';
-        ctx.font = '700 76px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('TARGET TOSS', 56, 110);
-
-        ctx.fillStyle = '#9fe8ff';
-        ctx.font = '600 46px "Segoe UI", Arial, sans-serif';
-        ctx.fillText(`Turn: ${currentPlayerLabel}`, 56, 190);
-        ctx.fillText(`Throws: ${state.throwsTaken}/3`, 56, 250);
-        if (state.resetPending) {
-            ctx.fillStyle = '#ffd166';
-            ctx.fillText('Resetting...', 540, 250);
-        }
-
-        ctx.fillStyle = '#d9f8ff';
-        ctx.font = '600 42px "Segoe UI", Arial, sans-serif';
-        let y = 340;
-        if (state.playerOrder.length === 0) {
-            ctx.fillText('No active players yet.', 56, y);
-        } else {
-            for (const line of lines) {
-                ctx.fillText(line, 56, y);
-                y += 64;
-            }
-        }
-
-        this.texture.needsUpdate = true;
-    }
-
-    public faceCamera(camera: THREE.Camera | null | undefined): void {
-        if (!camera) return;
-        this.root.getWorldPosition(this.tmpRootWorld);
-        this.tmpLookTarget.set(camera.position.x, this.tmpRootWorld.y, camera.position.z);
-        this.root.lookAt(this.tmpLookTarget);
-    }
-
-    public dispose(): void {
-        this.root.traverse((object) => {
-            const mesh = object as THREE.Mesh;
-            if (!mesh.isMesh) return;
-            mesh.geometry.dispose();
-            if (Array.isArray(mesh.material)) {
-                mesh.material.forEach((material) => material.dispose());
-            } else {
-                mesh.material.dispose();
-            }
-        });
-        this.texture.dispose();
-        this.root.removeFromParent();
-    }
-}
-
-const BALL_DEFINITIONS = [
-    { id: 'target-toss-ball-a', position: { x: -0.45, y: 1.05, z: 2.6 }, color: 0xff8b3d },
-    { id: 'target-toss-ball-b', position: { x: 0.0, y: 1.05, z: 2.6 }, color: 0xffc145 },
-    { id: 'target-toss-ball-c', position: { x: 0.45, y: 1.05, z: 2.6 }, color: 0xff5f6d }
-] as const;
-
-const TARGET_DEFINITIONS: ITargetDefinition[] = [
-    {
-        id: 'main-target-zone',
-        position: { x: 0.0, y: 0.04, z: -5.9 },
-        size: { x: 2.95, y: 0.05, z: 2.95 },
-        rings: [
-            { radius: 0.42, points: 30, color: 0xffcf57 },
-            { radius: 0.86, points: 20, color: 0x7cf2a1 },
-            { radius: 1.35, points: 10, color: 0x59d7ff }
-        ]
-    }
-];
+import { BALL_DEFINITIONS, TARGET_DEFINITIONS, TARGET_TOSS_RESET_DELAY_MS } from './TargetTossConfig';
+import { TargetTossActionProvider } from './TargetTossActionProvider';
+import { TargetTossScorePopup } from './TargetTossScorePopup';
+import { TargetTossScoreboardVisual } from './TargetTossScoreboardVisual';
+import type {
+    IScoreFeedbackPayload,
+    ITargetRuntime,
+    ITargetTossState,
+    ITargetTossStateSyncPayload
+} from './TargetTossTypes';
 
 export class TargetTossScenario implements IReplicatedScenarioModule {
     public readonly id = 'target-toss';
@@ -375,7 +51,6 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     private resetQueuedAtMs: number | null = null;
     private scoreboard: TargetTossScoreboardVisual | null = null;
     private readonly scorePopups: TargetTossScorePopup[] = [];
-    private collisionStartedHandler: ((data: { handleA: number; handleB: number; entityAId: string | null; entityBId: string | null }) => void) | null = null;
     private previousBackground: THREE.Color | THREE.Texture | null = null;
     private previousFog: THREE.Fog | THREE.FogExp2 | null = null;
     private state: ITargetTossState = {
@@ -410,15 +85,10 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             this.state.throwsTaken = 0;
         }
 
-        this.registerCollisionListener();
         this.refreshScoreboardVisual();
     }
 
     public unload(_context: AppContext): void {
-        if (this.collisionStartedHandler) {
-            eventBus.off(EVENTS.PHYSICS_COLLISION_STARTED, this.collisionStartedHandler);
-            this.collisionStartedHandler = null;
-        }
 
         this.scoreboard?.dispose();
         this.scoreboard = null;
@@ -467,6 +137,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (this.context.isHost) {
             this.reconcilePlayers();
             this.updateThrowProgress();
+            this.updateSettledScores();
             this.updatePendingReset();
         }
 
@@ -568,13 +239,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (this.targets.length > 0) return;
 
         for (const definition of TARGET_DEFINITIONS) {
-            const collider = this.context.runtime.physics.createStaticCuboidSensor(
-                definition.size.x * 0.5,
-                definition.size.y * 0.5,
-                definition.size.z * 0.5,
-                definition.position
-            );
-            this.targets.push({ ...definition, collider });
+            this.targets.push({ ...definition, collider: null });
         }
     }
 
@@ -784,42 +449,41 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         }
     }
 
-    private registerCollisionListener(): void {
-        if (this.collisionStartedHandler) return;
+    private updateSettledScores(): void {
+        if (this.state.resetPending) return;
 
-        this.collisionStartedHandler = (data) => {
-            if (!this.context.isHost || this.state.resetPending) return;
+        for (const ballId of this.ballIds) {
+            if (this.scoredBallIds.has(ballId)) continue;
 
-            const target = this.targets.find((entry) =>
-                entry.collider?.id === data.handleA || entry.collider?.id === data.handleB
-            );
-            if (!target) return;
+            const feedback = this.resolveSettledScoreFeedback(ballId);
+            if (!feedback) continue;
 
-            const entityId = this.resolveBallEntityIdFromCollision(data);
-            if (!entityId || this.scoredBallIds.has(entityId)) return;
-
-            const feedback = this.resolveScoreFeedback(entityId, target);
-            if (!feedback) return;
-
-            this.scoredBallIds.add(entityId);
-            this.countBallThrow(entityId);
+            this.scoredBallIds.add(ballId);
+            this.countBallThrow(ballId);
             this.awardPoints(feedback.points);
             this.emitScoreFeedback(feedback);
-        };
-
-        eventBus.on(EVENTS.PHYSICS_COLLISION_STARTED, this.collisionStartedHandler);
+        }
     }
 
-    private resolveBallEntityIdFromCollision(data: { entityAId: string | null; entityBId: string | null }): string | null {
-        if (data.entityAId && (this.ballIds as readonly string[]).includes(data.entityAId)) {
-            return data.entityAId;
+    private resolveSettledScoreFeedback(ballId: string): IScoreFeedbackPayload | null {
+        const entity = this.getBallEntity(ballId);
+        if (!entity) return null;
+
+        const translation = entity.rigidBody.translation();
+        const velocity = entity.rigidBody.linvel();
+        const planarSpeed = Math.hypot(velocity.x, velocity.z);
+        const verticalSpeed = Math.abs(velocity.y);
+        const isSettled = entity.rigidBody.isSleeping() || (planarSpeed <= 0.42 && verticalSpeed <= 0.2);
+        if (!isSettled) return null;
+        if (translation.y > 0.42) return null;
+
+        for (const target of this.targets) {
+            const feedback = this.resolveScoreFeedback(ballId, target);
+            if (feedback) return feedback;
         }
-        if (data.entityBId && (this.ballIds as readonly string[]).includes(data.entityBId)) {
-            return data.entityBId;
-        }
+
         return null;
     }
-
     private resolveScoreFeedback(ballId: string, target: ITargetRuntime): IScoreFeedbackPayload | null {
         const entity = this.getBallEntity(ballId);
         if (!entity) return null;
@@ -948,7 +612,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     private queueTurnReset(): void {
         if (this.state.resetPending) return;
         this.state.resetPending = true;
-        this.resetQueuedAtMs = this.nowMs() + 3600;
+        this.resetQueuedAtMs = this.nowMs() + TARGET_TOSS_RESET_DELAY_MS;
     }
 
     private advanceTurnAndResetBalls(): void {
