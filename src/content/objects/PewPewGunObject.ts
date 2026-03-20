@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import type { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
-import type { IPose, IQuaternion, IVector3 } from '../../shared/contracts/IMath';
+import type { IPose, IQuaternion } from '../../shared/contracts/IMath';
 import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IInteractable } from '../../shared/contracts/IInteractable';
 import type { IMovableHoldable } from '../../shared/contracts/IMovableHoldable';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
+import { EntityType } from '../../shared/contracts/IEntityState';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 import { EntityFactory } from '../../world/spawning/EntityFactory';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
@@ -42,7 +43,6 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
     };
 
     private readonly gunEntity: (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
-    private readonly meshRoot: THREE.Group | null;
     private readonly slideMesh: THREE.Mesh | null;
     private readonly muzzleMarker: THREE.Object3D | null;
     private readonly barrelRearMarker: THREE.Object3D | null;
@@ -57,7 +57,6 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
 
         const position = config.position ?? { x: 0, y: 1.1, z: 0 };
         const built = createGunVisual();
-        this.meshRoot = built.root;
         this.slideMesh = built.slide;
         this.muzzleMarker = built.muzzle;
         this.barrelRearMarker = built.barrelRear;
@@ -165,28 +164,24 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         if (direction.lengthSq() < 0.000001) return null;
         end.copy(origin).addScaledVector(direction, GUN_MAX_RANGE);
 
-        const render = this.context.app.runtime.render;
         let hit = false;
-        if (render) {
-            const hits = render.raycast(origin, direction, GUN_MAX_RANGE);
-            for (const intersection of hits) {
-                if (intersection.distance < 0.12) {
-                    continue;
+        const physicsHit = this.context.app.runtime.physics?.raycast(
+            { x: origin.x, y: origin.y, z: origin.z },
+            { x: direction.x, y: direction.y, z: direction.z },
+            GUN_MAX_RANGE
+        );
+        if (physicsHit && physicsHit.distance >= 0.12) {
+            if (physicsHit.entityId !== this.id && physicsHit.entityId !== this.gunEntity?.id) {
+                if (physicsHit.entityId) {
+                    const entity = this.context.app.runtime.entity.getEntity(physicsHit.entityId);
+                    if (entity?.type !== EntityType.PLAYER_AVATAR) {
+                        end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);
+                        hit = true;
+                    }
+                } else {
+                    end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);
+                    hit = true;
                 }
-
-                const entityId = intersection.object.userData?.entityId as string | undefined;
-                if (entityId && entityId === this.id) {
-                    continue;
-                }
-                if (entityId && this.gunEntity && entityId === this.gunEntity.id) {
-                    continue;
-                }
-                if (entityId && this.gunEntity?.heldBy && entityId === this.gunEntity.heldBy) {
-                    continue;
-                }
-                end.copy(intersection.point);
-                hit = true;
-                break;
             }
         }
 
@@ -199,6 +194,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
 
     private presentShot(payload: IGunFirePayload): void {
         this.slideRecoil = 1;
+        this.spawnMuzzleFlash(payload);
         this.spawnTracer(payload);
         if (payload.hit) {
             this.spawnImpact(payload);
@@ -206,28 +202,28 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         this.playShotSound(payload);
     }
 
-
     private spawnMuzzleFlash(payload: IGunFirePayload): void {
         if (!this.fxRoot) return;
 
         const material = new THREE.MeshStandardMaterial({
-            color: 0xfff0a0,
-            emissive: 0xffcc66,
-            emissiveIntensity: 1.1,
+            color: 0xfff1a8,
+            emissive: 0xffb347,
+            emissiveIntensity: 1.7,
             transparent: true,
-            opacity: 0.95,
-            metalness: 0.05,
-            roughness: 0.35,
+            opacity: 0.98,
+            metalness: 0.02,
+            roughness: 0.28,
             depthWrite: false
         });
-        const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.028, 0), material);
+        const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.075, 0), material);
         mesh.position.set(payload.origin[0], payload.origin[1], payload.origin[2]);
-        mesh.scale.set(1.4, 0.7, 0.7);
+        mesh.scale.set(2.6, 1.1, 1.1);
         mesh.castShadow = false;
         mesh.receiveShadow = false;
         this.fxRoot.add(mesh);
-        this.impactFx.push({ mesh, material, life: 0.45 });
+        this.impactFx.push({ mesh, material, life: 0.22 });
     }
+
     private spawnTracer(payload: IGunFirePayload): void {
         if (!this.fxRoot) return;
 
@@ -266,10 +262,11 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
     }
 
     private playShotSound(payload: IGunFirePayload): void {
-        this.context.audio.playFxSweep({ intensity: 0.42, position: { x: payload.origin[0], y: payload.origin[1], z: payload.origin[2] } });
-        this.context.audio.playMelodyNote({ frequency: 1960, intensity: 0.22, position: { x: payload.origin[0], y: payload.origin[1], z: payload.origin[2] } });
+        this.context.audio.playFxSweep({ down: true, intensity: 0.5, position: { x: payload.origin[0], y: payload.origin[1], z: payload.origin[2] } });
+        this.context.audio.playMelodyNote({ frequency: 420, intensity: 0.34, position: { x: payload.origin[0], y: payload.origin[1], z: payload.origin[2] } });
+        this.context.audio.playArpNote({ frequency: 280, intensity: 0.24, brightness: 0.65, position: { x: payload.origin[0], y: payload.origin[1], z: payload.origin[2] } });
         if (payload.hit) {
-            this.context.audio.playArpNote({ frequency: 880, intensity: 0.28, brightness: 1.2, position: { x: payload.end[0], y: payload.end[1], z: payload.end[2] } });
+            this.context.audio.playArpNote({ frequency: 460, intensity: 0.2, brightness: 0.85, position: { x: payload.end[0], y: payload.end[1], z: payload.end[2] } });
         }
     }
 
@@ -285,25 +282,25 @@ function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THRE
     root.name = 'pew-pew-gun';
 
     const frameMaterial = new THREE.MeshStandardMaterial({
-        color: 0x24354b,
-        emissive: 0x0b1f35,
-        emissiveIntensity: 0.14,
-        metalness: 0.78,
-        roughness: 0.28
+        color: 0xff5f3a,
+        emissive: 0x5a1408,
+        emissiveIntensity: 0.08,
+        metalness: 0.18,
+        roughness: 0.56
     });
     const accentMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8ff3ff,
-        emissive: 0x5fdfff,
-        emissiveIntensity: 0.42,
-        metalness: 0.22,
-        roughness: 0.24
+        color: 0x49b9ff,
+        emissive: 0x1260c8,
+        emissiveIntensity: 0.22,
+        metalness: 0.08,
+        roughness: 0.34
     });
     const gripMaterial = new THREE.MeshStandardMaterial({
-        color: 0x15161c,
-        emissive: 0x090a0d,
-        emissiveIntensity: 0.05,
-        metalness: 0.08,
-        roughness: 0.92
+        color: 0xffeb66,
+        emissive: 0x4a4308,
+        emissiveIntensity: 0.06,
+        metalness: 0.04,
+        roughness: 0.88
     });
 
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.28), frameMaterial);
@@ -313,11 +310,11 @@ function createGunVisual(): { root: THREE.Group; slide: THREE.Mesh; muzzle: THRE
     root.add(body);
 
     const slide = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.05, 0.24), new THREE.MeshStandardMaterial({
-        color: 0x5c748d,
-        emissive: 0x23374f,
-        emissiveIntensity: 0.18,
-        metalness: 0.92,
-        roughness: 0.18
+        color: 0x2f6dff,
+        emissive: 0x17348a,
+        emissiveIntensity: 0.12,
+        metalness: 0.16,
+        roughness: 0.32
     }));
     slide.position.set(0, 0.044, 0.018);
     slide.castShadow = true;
@@ -413,9 +410,4 @@ export class PewPewGunObject implements IObjectModule {
         return new PewPewGunInstance(context, config);
     }
 }
-
-
-
-
-
 

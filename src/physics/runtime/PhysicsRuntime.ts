@@ -29,6 +29,13 @@ export interface IPhysicsDebugBody {
     touchQueryHits: number;
 }
 
+export interface IPhysicsRayHit {
+    point: IVector3;
+    normal: IVector3;
+    distance: number;
+    entityId: string | null;
+    colliderId: number;
+}
 interface IPhysicsDebugBodyEntry {
     id: string;
     rigidBody: RAPIER.RigidBody;
@@ -437,6 +444,28 @@ export class PhysicsRuntime {
         return this.touchQueryAvgHitsPerFrame;
     }
 
+
+    public raycast(origin: IVector3, direction: IVector3, maxDist: number): IPhysicsRayHit | null {
+        if (!this.world) return null;
+
+        const length = Math.hypot(direction.x, direction.y, direction.z);
+        if (length < 0.000001) return null;
+
+        const dir = { x: direction.x / length, y: direction.y / length, z: direction.z / length };
+        const ray = new RAPIER.Ray(origin, dir);
+        const hit = this.world.castRayAndGetNormal(ray, maxDist, true);
+        if (!hit) return null;
+
+        const point = ray.pointAt(hit.timeOfImpact);
+        const entity = this.colliderToEntity.get(hit.collider.handle) ?? null;
+        return {
+            point: { x: point.x, y: point.y, z: point.z },
+            normal: { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z },
+            distance: hit.timeOfImpact,
+            entityId: entity?.id ?? null,
+            colliderId: hit.collider.handle
+        };
+    }
     public queryNearestInteractionCollider(
         point: IVector3,
         gripRadius: number
@@ -823,5 +852,6 @@ export class PhysicsRuntime {
     }
 
 }
+
 
 
