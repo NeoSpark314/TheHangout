@@ -2,6 +2,8 @@
 
 A playful space for small groups of people to hang out. 
 
+Try it here: [https://neospark314.github.io/TheHangout/](https://neospark314.github.io/TheHangout/)
+
 | | |
 |---|---|
 | ![Desktop screenshot](docs/images/screenshots/desktop_screenshot01.jpg) | ![VR screenshot 1](docs/images/screenshots/vr_screenshot01.jpg) |
