@@ -184,7 +184,6 @@ const SEGMENT_SOURCE: Array<{ joint: AvatarHumanoidJointName; child: AvatarSkele
 ];
 
 const TMP_ROOT_QUAT = new THREE.Quaternion();
-const TMP_PARENT_WORLD_QUAT = new THREE.Quaternion();
 const TMP_PARENT_INV_QUAT = new THREE.Quaternion();
 const TMP_WORLD_DIR = new THREE.Vector3();
 const TMP_LOCAL_DIR = new THREE.Vector3();
@@ -192,6 +191,16 @@ const TMP_FORWARD = new THREE.Vector3();
 const TMP_ACROSS = new THREE.Vector3();
 const TMP_REST_FORWARD = new THREE.Vector3();
 const TMP_REST_ACROSS = new THREE.Vector3();
+const TMP_UPPER_DIR = new THREE.Vector3();
+const TMP_LOWER_DIR = new THREE.Vector3();
+const TMP_BEND = new THREE.Vector3();
+const TMP_HINT = new THREE.Vector3();
+const LEFT_ARM_REST_BEND = new THREE.Vector3(0, -1, -0.35).normalize();
+const RIGHT_ARM_REST_BEND = new THREE.Vector3(0, -1, 0.35).normalize();
+const LEFT_LEG_REST_BEND = new THREE.Vector3(-0.55, 0, 0.1).normalize();
+const RIGHT_LEG_REST_BEND = new THREE.Vector3(0.55, 0, 0.1).normalize();
+const TMP_REST_NORMAL = new THREE.Vector3();
+const TMP_DESIRED_NORMAL = new THREE.Vector3();
 
 export function createAvatarHumanoidPoseFromSkeleton(skeleton: IAvatarSkeletonPose): IAvatarHumanoidPose {
     const joints: IAvatarHumanoidPose['joints'] = {};
@@ -221,6 +230,11 @@ export function createAvatarHumanoidPoseFromSkeleton(skeleton: IAvatarSkeletonPo
             tracked: !!skeleton.tracked[segment.joint]
         };
     }
+
+    applyArmLimbFrame('left', skeleton, world, joints);
+    applyArmLimbFrame('right', skeleton, world, joints);
+    applyLegLimbFrame('left', skeleton, world, joints);
+    applyLegLimbFrame('right', skeleton, world, joints);
 
     const headPose = skeleton.joints.head;
     if (headPose) {
@@ -325,6 +339,120 @@ function applyHandFrame(
     };
 }
 
+function applyArmLimbFrame(
+    side: 'left' | 'right',
+    skeleton: IAvatarSkeletonPose,
+    world: ReturnType<typeof composeAvatarWorldPoses>,
+    joints: IAvatarHumanoidPose['joints']
+): void {
+    const upperName = side === 'left' ? 'leftUpperArm' : 'rightUpperArm';
+    const lowerName = side === 'left' ? 'leftLowerArm' : 'rightLowerArm';
+    const handName = side === 'left' ? 'leftHand' : 'rightHand';
+
+    const shoulderWorld = world[upperName];
+    const elbowWorld = world[lowerName];
+    const handWorld = world[handName];
+    if (!shoulderWorld || !elbowWorld || !handWorld) {
+        return;
+    }
+
+    const upperParentQuat = getParentWorldQuaternion(world, skeleton, upperName);
+    TMP_UPPER_DIR.copy(elbowWorld.position).sub(shoulderWorld.position).normalize();
+    TMP_LOWER_DIR.copy(handWorld.position).sub(elbowWorld.position).normalize();
+    TMP_BEND.copy(TMP_LOWER_DIR).projectOnPlane(TMP_UPPER_DIR).normalize();
+    if (TMP_BEND.lengthSq() < 1e-6) {
+        TMP_HINT.set(0, -1, side === 'left' ? -1 : 1).normalize();
+        TMP_BEND.copy(TMP_HINT).projectOnPlane(TMP_UPPER_DIR).normalize();
+    }
+
+    const upperRotation = buildFrameRotation(
+        upperParentQuat,
+        side === 'left' ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(1, 0, 0),
+        buildPlaneNormal(side === 'left' ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(1, 0, 0), side === 'left' ? LEFT_ARM_REST_BEND : RIGHT_ARM_REST_BEND, TMP_REST_NORMAL),
+        TMP_UPPER_DIR,
+        buildPlaneNormal(TMP_UPPER_DIR, TMP_BEND, TMP_DESIRED_NORMAL)
+    );
+    joints[upperName] = {
+        rotation: quaternionToObject(upperRotation),
+        tracked: !!skeleton.tracked[upperName]
+    };
+
+    const lowerParentQuat = upperParentQuat.clone().multiply(upperRotation);
+    TMP_BEND.copy(TMP_UPPER_DIR).negate().projectOnPlane(TMP_LOWER_DIR).normalize();
+    if (TMP_BEND.lengthSq() < 1e-6) {
+        TMP_HINT.set(0, -1, side === 'left' ? -1 : 1).normalize();
+        TMP_BEND.copy(TMP_HINT).projectOnPlane(TMP_LOWER_DIR).normalize();
+    }
+
+    const lowerRotation = buildFrameRotation(
+        lowerParentQuat,
+        side === 'left' ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(1, 0, 0),
+        buildPlaneNormal(side === 'left' ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(1, 0, 0), side === 'left' ? LEFT_ARM_REST_BEND : RIGHT_ARM_REST_BEND, TMP_REST_NORMAL),
+        TMP_LOWER_DIR,
+        buildPlaneNormal(TMP_LOWER_DIR, TMP_BEND, TMP_DESIRED_NORMAL)
+    );
+    joints[lowerName] = {
+        rotation: quaternionToObject(lowerRotation),
+        tracked: !!skeleton.tracked[lowerName]
+    };
+}
+
+function applyLegLimbFrame(
+    side: 'left' | 'right',
+    skeleton: IAvatarSkeletonPose,
+    world: ReturnType<typeof composeAvatarWorldPoses>,
+    joints: IAvatarHumanoidPose['joints']
+): void {
+    const upperName = side === 'left' ? 'leftUpperLeg' : 'rightUpperLeg';
+    const lowerName = side === 'left' ? 'leftLowerLeg' : 'rightLowerLeg';
+    const footName = side === 'left' ? 'leftFoot' : 'rightFoot';
+
+    const hipWorld = world[upperName];
+    const kneeWorld = world[lowerName];
+    const footWorld = world[footName];
+    if (!hipWorld || !kneeWorld || !footWorld) {
+        return;
+    }
+
+    const upperParentQuat = getParentWorldQuaternion(world, skeleton, upperName);
+    TMP_UPPER_DIR.copy(kneeWorld.position).sub(hipWorld.position).normalize();
+    TMP_LOWER_DIR.copy(footWorld.position).sub(kneeWorld.position).normalize();
+    TMP_BEND.copy(TMP_LOWER_DIR).projectOnPlane(TMP_UPPER_DIR).normalize();
+    if (TMP_BEND.lengthSq() < 1e-6) {
+        TMP_BEND.set(0, 0, 1).projectOnPlane(TMP_UPPER_DIR).normalize();
+    }
+
+    const upperRotation = buildFrameRotation(
+        upperParentQuat,
+        new THREE.Vector3(0, -1, 0),
+        buildPlaneNormal(new THREE.Vector3(0, -1, 0), side === 'left' ? LEFT_LEG_REST_BEND : RIGHT_LEG_REST_BEND, TMP_REST_NORMAL),
+        TMP_UPPER_DIR,
+        buildPlaneNormal(TMP_UPPER_DIR, TMP_BEND, TMP_DESIRED_NORMAL)
+    );
+    joints[upperName] = {
+        rotation: quaternionToObject(upperRotation),
+        tracked: !!skeleton.tracked[upperName]
+    };
+
+    const lowerParentQuat = upperParentQuat.clone().multiply(upperRotation);
+    TMP_BEND.copy(TMP_UPPER_DIR).negate().projectOnPlane(TMP_LOWER_DIR).normalize();
+    if (TMP_BEND.lengthSq() < 1e-6) {
+        TMP_BEND.set(0, 0, 1).projectOnPlane(TMP_LOWER_DIR).normalize();
+    }
+
+    const lowerRotation = buildFrameRotation(
+        lowerParentQuat,
+        new THREE.Vector3(0, -1, 0),
+        buildPlaneNormal(new THREE.Vector3(0, -1, 0), side === 'left' ? LEFT_LEG_REST_BEND : RIGHT_LEG_REST_BEND, TMP_REST_NORMAL),
+        TMP_LOWER_DIR,
+        buildPlaneNormal(TMP_LOWER_DIR, TMP_BEND, TMP_DESIRED_NORMAL)
+    );
+    joints[lowerName] = {
+        rotation: quaternionToObject(lowerRotation),
+        tracked: !!skeleton.tracked[lowerName]
+    };
+}
+
 function getParentWorldQuaternion(
     world: ReturnType<typeof composeAvatarWorldPoses>,
     skeleton: IAvatarSkeletonPose,
@@ -347,6 +475,31 @@ function rotationFromBasis(
     const restBasis = makeBasis(restForward, restAcross);
     const desiredBasis = makeBasis(desiredForward, desiredAcross);
     return desiredBasis.multiply(restBasis.invert());
+}
+
+function buildFrameRotation(
+    parentWorldQuat: THREE.Quaternion,
+    restForward: THREE.Vector3,
+    restNormal: THREE.Vector3,
+    desiredWorldForward: THREE.Vector3,
+    desiredWorldNormal: THREE.Vector3
+): THREE.Quaternion {
+    TMP_PARENT_INV_QUAT.copy(parentWorldQuat).invert();
+    TMP_FORWARD.copy(desiredWorldForward).normalize().applyQuaternion(TMP_PARENT_INV_QUAT);
+    TMP_ACROSS.copy(desiredWorldNormal).normalize().applyQuaternion(TMP_PARENT_INV_QUAT);
+    return rotationFromBasis(restForward, restNormal, TMP_FORWARD, TMP_ACROSS);
+}
+
+function buildPlaneNormal(
+    forward: THREE.Vector3,
+    bend: THREE.Vector3,
+    target: THREE.Vector3
+): THREE.Vector3 {
+    target.copy(bend).cross(forward);
+    if (target.lengthSq() < 1e-6) {
+        target.set(0, 0, 1).cross(forward);
+    }
+    return target.normalize();
 }
 
 function makeBasis(forward: THREE.Vector3, across: THREE.Vector3): THREE.Quaternion {

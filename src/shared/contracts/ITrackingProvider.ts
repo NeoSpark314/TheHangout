@@ -23,7 +23,6 @@ export interface ITrackingState {
         right: IHandState;
     };
     avatarTrackingFrame?: IAvatarTrackingFrame;
-    humanoidDelta?: import('../types/HumanoidState').NetworkHumanoidDelta;
 }
 
 /**

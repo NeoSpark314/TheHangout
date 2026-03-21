@@ -4,7 +4,6 @@ import { AppContext } from '../../app/AppContext';
 import { IPose, IVector3 } from '../../shared/contracts/IMath';
 import { IView } from '../../shared/contracts/IView';
 import { IPlayerEntityState } from '../../shared/contracts/IEntityState';
-import { HumanoidState } from '../../shared/types/HumanoidState';
 import type { Skill } from '../../skills/Skill';
 import type { IPlayerAvatarControlStrategy } from './strategies/IPlayerAvatarControlStrategy';
 import type { IPlayerAvatarRenderState } from '../../render/avatar/IPlayerAvatarRenderState';
@@ -26,7 +25,6 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
     public audioLevel: number = 0;
     public isMuted: boolean = false;
     public view: IView<IPlayerAvatarRenderState>;
-    public humanoid = new HumanoidState();
     public avatarSkeleton = new AvatarSkeletonState();
     public readonly controlMode: 'local' | 'remote';
     public readonly spawnPosition: IVector3;
@@ -243,16 +241,5 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
             this.headHeight = Math.max(0.4, headWorld.position.y - snapshot.rootWorldPosition.y);
         }
 
-        this.humanoid.clearAll();
-        for (const jointName of AVATAR_SKELETON_JOINTS) {
-            const jointWorld = world[jointName];
-            if (!jointWorld) continue;
-            this.humanoid.setJointPose(
-                jointName,
-                { x: jointWorld.position.x, y: jointWorld.position.y, z: jointWorld.position.z },
-                { x: jointWorld.quaternion.x, y: jointWorld.quaternion.y, z: jointWorld.quaternion.z, w: jointWorld.quaternion.w }
-            );
-        }
-        this.humanoid.consumeNetworkDelta();
     }
 }

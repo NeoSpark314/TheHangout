@@ -1,4 +1,3 @@
-import { NetworkHumanoidDelta } from '../types/HumanoidState';
 import { AvatarRenderMode } from './IAvatar';
 import { IAvatarSkeletonDelta } from '../avatar/AvatarSkeleton';
 
@@ -35,8 +34,6 @@ export interface IPlayerEntityState extends IBaseEntityState {
     h?: number; // legacy head height
     hq?: QuatArr; // legacy local head quaternion
     sk?: IAvatarSkeletonDelta; // canonical avatar skeleton delta
-    hmd?: NetworkHumanoidDelta; // humanoid delta payload
-    hm?: [number, number]; // hand mode flags [leftHasJoints, rightHasJoints]
     conf: {
         color: string | number;
         renderMode?: AvatarRenderMode;

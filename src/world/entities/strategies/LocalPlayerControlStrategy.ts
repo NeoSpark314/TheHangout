@@ -81,7 +81,6 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         const providerId = runtime.tracking.getActiveProviderId();
         if (this.lastProviderId !== providerId) {
             this.lastProviderId = providerId;
-            player.humanoid.clearAll();
             player.avatarSkeleton.clear();
             const rootYaw = new THREE.Euler().setFromQuaternion(
                 new THREE.Quaternion(
@@ -157,7 +156,6 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
                 ? [headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w]
                 : [player.headState.quaternion.x, player.headState.quaternion.y, player.headState.quaternion.z, player.headState.quaternion.w],
             sk: player.avatarSkeleton.consumeNetworkDelta(fullSync) || undefined,
-            hm: [trackingState.hands.left.hasJoints ? 1 : 0, trackingState.hands.right.hasJoints ? 1 : 0],
             conf: {
                 color: player.avatarConfigSnapshot.color,
                 renderMode: player.avatarConfigSnapshot.renderMode,

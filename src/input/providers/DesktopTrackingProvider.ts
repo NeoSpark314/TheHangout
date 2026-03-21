@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { AppContext } from '../../app/AppContext';
 import { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrackingProvider';
 import { HandState } from '../../shared/types/HandState';
-import { HumanoidState } from '../../shared/types/HumanoidState';
 import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
@@ -18,7 +17,6 @@ const HAND_X_SPACING = 0.2;
 export class DesktopTrackingProvider implements ITrackingProvider {
     public id = 'desktop';
     private state: ITrackingState;
-    private humanoid: HumanoidState;
 
     // Arm stretching state
     private leftStretch = new THREE.Vector3(0, 0, 0);
@@ -43,7 +41,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     };
 
     constructor(private context: AppContext) {
-        this.humanoid = new HumanoidState();
         this.state = this.createInitialState();
     }
 
@@ -194,10 +191,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
             j.pose.quaternion = { ...this.state.hands.right.pose.quaternion };
         });
 
-        // Map base hand targets directly to the Humanoid sync state
-        // Desktop hands are always 'active' effectively for networking
-        this.humanoid.setJointPose('leftHand', leftTargetWorld, worldHeadQuat);
-        this.humanoid.setJointPose('rightHand', rightTargetWorld, worldHeadQuat);
         trackingFrame.effectors.leftHand = {
             position: { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z },
             quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
@@ -209,7 +202,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         trackingFrame.tracked.leftHand = true;
         trackingFrame.tracked.rightHand = true;
 
-        this.state.humanoidDelta = this.humanoid.consumeNetworkDelta() || undefined;
         this.state.avatarTrackingFrame = trackingFrame;
     }
 

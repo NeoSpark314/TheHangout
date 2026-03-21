@@ -1,4 +1,3 @@
-import { HumanoidJointName } from '../../../shared/contracts/IHumanoid';
 import type { IPlayerEntityState } from '../../../shared/contracts/IEntityState';
 import type { IAudioChunkPayload, IVoiceStreamReceivedEvent, IVoiceStreamReceiver } from '../../../shared/contracts/IVoice';
 import eventBus from '../../../app/events/EventBus';
@@ -10,23 +9,6 @@ import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/Ava
 
 export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStrategy {
     public readonly mode = 'remote';
-    private static readonly HAND_FINGER_JOINTS: Record<'left' | 'right', HumanoidJointName[]> = {
-        left: [
-            'leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip',
-            'leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip',
-            'leftMiddleMetacarpal', 'leftMiddleProximal', 'leftMiddleIntermediate', 'leftMiddleDistal', 'leftMiddleTip',
-            'leftRingMetacarpal', 'leftRingProximal', 'leftRingIntermediate', 'leftRingDistal', 'leftRingTip',
-            'leftLittleMetacarpal', 'leftLittleProximal', 'leftLittleIntermediate', 'leftLittleDistal', 'leftLittleTip'
-        ],
-        right: [
-            'rightThumbMetacarpal', 'rightThumbProximal', 'rightThumbDistal', 'rightThumbTip',
-            'rightIndexMetacarpal', 'rightIndexProximal', 'rightIndexIntermediate', 'rightIndexDistal', 'rightIndexTip',
-            'rightMiddleMetacarpal', 'rightMiddleProximal', 'rightMiddleIntermediate', 'rightMiddleDistal', 'rightMiddleTip',
-            'rightRingMetacarpal', 'rightRingProximal', 'rightRingIntermediate', 'rightRingDistal', 'rightRingTip',
-            'rightLittleMetacarpal', 'rightLittleProximal', 'rightLittleIntermediate', 'rightLittleDistal', 'rightLittleTip'
-        ]
-    };
-
     private lastNetworkUpdateTime = performance.now();
     private onVoiceStream: (data?: IVoiceStreamReceivedEvent) => void = () => { };
 
@@ -113,14 +95,6 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
         if (data.hq) {
             player.headState.quaternion = { x: data.hq[0], y: data.hq[1], z: data.hq[2], w: data.hq[3] };
         }
-        if (data.hm) {
-            if (data.hm[0] === 0) this.clearFingerJoints(player, 'left');
-            if (data.hm[1] === 0) this.clearFingerJoints(player, 'right');
-        }
-
-        if (data.hmd !== undefined) {
-            player.humanoid.applyNetworkDelta(data.hmd);
-        }
     }
 
     public update(player: PlayerAvatarEntity, delta: number): void {
@@ -160,12 +134,5 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
 
     public destroy(player: PlayerAvatarEntity): void {
         this.detach(player);
-    }
-
-    private clearFingerJoints(player: PlayerAvatarEntity, hand: 'left' | 'right'): void {
-        const joints = RemotePlayerReplicationStrategy.HAND_FINGER_JOINTS[hand];
-        for (let index = 0; index < joints.length; index += 1) {
-            player.humanoid.clearJoint(joints[index]);
-        }
     }
 }
