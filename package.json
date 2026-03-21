@@ -1,7 +1,8 @@
 {
   "name": "thehangout",
   "private": true,
-  "version": "1.0.0alpha",
+  "version": "1.0.0-alpha",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
