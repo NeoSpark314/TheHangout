@@ -1,5 +1,6 @@
 import type { EntityRegistry } from '../world/entities/EntityRegistry';
 import type { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import type { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRuntime';
 import type { NetworkRuntime } from '../network/transport/NetworkRuntime';
 import type { InputRuntime } from '../input/controllers/InputRuntime';
 import type { RenderRuntime } from '../render/runtime/RenderRuntime';
@@ -48,6 +49,7 @@ export interface IRuntimeRegistry {
     media: VoiceRuntime;
     render: RenderRuntime;
     physics: PhysicsRuntime;
+    physicsAuthority: PhysicsAuthorityRuntime;
     player: PlayerPresenceService;
     input: InputRuntime;
     hud: HudRuntime;

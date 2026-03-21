@@ -3,6 +3,7 @@ import { Engine } from './Engine';
 import { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
 import { NetworkRuntime } from '../network/transport/NetworkRuntime';
 import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRuntime';
 import { RenderRuntime } from '../render/runtime/RenderRuntime';
 import { PlayerPresenceService } from '../world/session/PlayerPresenceService';
 import { EntityRegistry } from '../world/entities/EntityRegistry';
@@ -132,6 +133,7 @@ export class App {
         this.context.setRuntime('network', new NetworkRuntime(this.context));
         this.context.setRuntime('media', new VoiceRuntime(this.context));
         this.context.setRuntime('render', new RenderRuntime(this.context));
+        this.context.setRuntime('physicsAuthority', new PhysicsAuthorityRuntime(this.context));
         this.context.setRuntime('physics', new PhysicsRuntime(this.context));
         this.context.setRuntime('player', new PlayerPresenceService(this.context));
         this.context.setRuntime('input', new InputRuntime(this.context));

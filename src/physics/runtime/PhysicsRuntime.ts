@@ -68,13 +68,6 @@ export class PhysicsRuntime {
     private interactionColliders: Map<number, PhysicsInteractionTarget> = new Map();
     private entityToPrimaryCollider: Map<string, RAPIER.Collider> = new Map();
     private activePropContacts: Map<string, { a: number; b: number }> = new Map();
-    private lastTouchClaimAtMsByEntity: Map<string, number> = new Map();
-    // Soft multiplayer UX lease: while holding an authoritative prop, touching another prop
-    // periodically requests ownership of the touched prop for local low-latency interaction.
-    private touchLeaseClaimIntervalMs: number = 250;
-    private touchLeaseProximityDistance: number = 0.55;
-    private pendingReleaseMinHoldMs: number = 220;
-    private pendingReleaseMaxHoldMs: number = 900;
     private touchQueryShape: RAPIER.Ball = new RAPIER.Ball(0.55);
     private grabQueryShape: RAPIER.Ball = new RAPIER.Ball(0.05);
     private readonly identityRotation = { x: 0, y: 0, z: 0, w: 1 };
@@ -97,6 +90,7 @@ export class PhysicsRuntime {
         const gravity = { x: 0.0, y: -9.81, z: 0.0 };
         this.world = new RAPIER.World(gravity);
         this.eventQueue = new RAPIER.EventQueue(true);
+        this.touchQueryShape = new RAPIER.Ball(this.context.runtime.physicsAuthority.getTouchLeaseProximityDistance());
         console.log('[PhysicsRuntime] Rapier3D initialized');
         eventBus.emit(EVENTS.PHYSICS_READY);
     }
@@ -236,7 +230,6 @@ export class PhysicsRuntime {
             initialScale: scale,
             dualGrabScalable
         });
-        physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
         const entityRegistry = this.context.runtime.entity;
@@ -286,7 +279,6 @@ export class PhysicsRuntime {
             moduleId,
             ownerId
         });
-        physicsEntity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
         const entityRegistry = this.context.runtime.entity;
@@ -370,7 +362,6 @@ export class PhysicsRuntime {
     }
 
     public registerPhysicsEntity(entity: PhysicsPropEntity, rigidBody: RAPIER.RigidBody, collider: RAPIER.Collider): void {
-        entity.setPendingReleaseHoldWindow(this.pendingReleaseMinHoldMs, this.pendingReleaseMaxHoldMs);
         this.registerDebugBody(entity.id, rigidBody, collider, entity);
     }
 
@@ -410,43 +401,32 @@ export class PhysicsRuntime {
     }
 
     public getTouchLeaseClaimIntervalMs(): number {
-        return this.touchLeaseClaimIntervalMs;
+        return this.context.runtime.physicsAuthority.getTouchLeaseClaimIntervalMs();
     }
 
     public setTouchLeaseClaimIntervalMs(ms: number): void {
-        this.touchLeaseClaimIntervalMs = Math.max(50, Math.floor(ms));
+        this.context.runtime.physicsAuthority.setTouchLeaseClaimIntervalMs(ms);
     }
 
     public getTouchLeaseProximityDistance(): number {
-        return this.touchLeaseProximityDistance;
+        return this.context.runtime.physicsAuthority.getTouchLeaseProximityDistance();
     }
 
     public setTouchLeaseProximityDistance(distance: number): void {
-        this.touchLeaseProximityDistance = Math.max(0.1, Math.min(2.0, distance));
-        this.touchQueryShape = new RAPIER.Ball(this.touchLeaseProximityDistance);
+        this.context.runtime.physicsAuthority.setTouchLeaseProximityDistance(distance);
+        this.touchQueryShape = new RAPIER.Ball(this.context.runtime.physicsAuthority.getTouchLeaseProximityDistance());
     }
 
     public getPendingReleaseMinHoldMs(): number {
-        return this.pendingReleaseMinHoldMs;
+        return this.context.runtime.physicsAuthority.getPendingReleaseMinHoldMs();
     }
 
     public getPendingReleaseMaxHoldMs(): number {
-        return this.pendingReleaseMaxHoldMs;
+        return this.context.runtime.physicsAuthority.getPendingReleaseMaxHoldMs();
     }
 
     public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
-        const clampedMin = Math.max(0, Math.floor(minMs));
-        const clampedMax = Math.max(clampedMin + 50, Math.floor(maxMs));
-        this.pendingReleaseMinHoldMs = clampedMin;
-        this.pendingReleaseMaxHoldMs = clampedMax;
-
-        const entities = new Set<PhysicsPropEntity>();
-        for (const entity of this.colliderToEntity.values()) {
-            entities.add(entity);
-        }
-        for (const entity of entities) {
-            entity.setPendingReleaseHoldWindow(clampedMin, clampedMax);
-        }
+        this.context.runtime.physicsAuthority.setPendingReleaseHoldWindow(minMs, maxMs);
     }
 
     public getTouchQueryAverageHitsPerFrame(): number {
@@ -794,10 +774,10 @@ export class PhysicsRuntime {
             }
 
             if (entityA.heldBy === localId && entityA.isAuthority) {
-                this.tryClaimTouchLease(entityB, nowMs, localId);
+                this.context.runtime.physicsAuthority.tryClaimTouchLease(entityB, nowMs, localId);
             }
             if (entityB.heldBy === localId && entityB.isAuthority) {
-                this.tryClaimTouchLease(entityA, nowMs, localId);
+                this.context.runtime.physicsAuthority.tryClaimTouchLease(entityA, nowMs, localId);
             }
         }
     }
@@ -834,7 +814,7 @@ export class PhysicsRuntime {
                     if (!target || target === source) return true;
                     this.touchQueryHitsThisFrame++;
                     this.touchQueryHitsByEntityAccum.set(target.id, (this.touchQueryHitsByEntityAccum.get(target.id) ?? 0) + 1);
-                    this.tryClaimTouchLease(target, nowMs, localId);
+                    this.context.runtime.physicsAuthority.tryClaimTouchLease(target, nowMs, localId);
                     return true;
                 },
                 undefined,
@@ -842,18 +822,6 @@ export class PhysicsRuntime {
                 sourceCollider
             );
         }
-    }
-
-    private tryClaimTouchLease(target: PhysicsPropEntity, nowMs: number, localId: string): void {
-        if (target.isDestroyed) return;
-        if (target.heldBy && target.heldBy !== localId) return;
-        if (target.ownerId === localId || target.isAuthority) return;
-
-        const lastClaimAt = this.lastTouchClaimAtMsByEntity.get(target.id) ?? 0;
-        if ((nowMs - lastClaimAt) < this.touchLeaseClaimIntervalMs) return;
-
-        this.lastTouchClaimAtMsByEntity.set(target.id, nowMs);
-        target.requestOwnership();
     }
 
     private contactKey(a: number, b: number): string {

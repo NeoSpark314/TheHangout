@@ -66,11 +66,6 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private maxExtrapolationMs: number = 80;
     private maxSnapshotAgeMs: number = 1500;
     private maxSnapshots: number = 64;
-    private lastOwnershipTransferSeq: number = 0;
-    private pendingReleaseArmed: boolean = false;
-    private pendingReleaseStartedAtMs: number = 0;
-    private pendingReleaseMinHoldMs: number = 220;
-    private pendingReleaseMaxHoldMs: number = 900;
 
     private lastSyncPos: IVector3 = { x: 0, y: 0, z: 0 };
     private lastSyncRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
@@ -123,7 +118,6 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.applyScaledCollider();
 
         this.syncAuthority();
-        this.refreshSimMode();
     }
 
     private setVec3(out: IVector3, x: number, y: number, z: number): void {
@@ -161,56 +155,27 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     public getLastOwnershipTransferSeq(): number {
-        return this.lastOwnershipTransferSeq;
+        return this.context.runtime.physicsAuthority.getLastOwnershipTransferSeq(this.id);
     }
 
     public getPendingReleaseMinHoldMs(): number {
-        return this.pendingReleaseMinHoldMs;
+        return this.context.runtime.physicsAuthority.getPendingReleaseMinHoldMs();
     }
 
     public getPendingReleaseMaxHoldMs(): number {
-        return this.pendingReleaseMaxHoldMs;
+        return this.context.runtime.physicsAuthority.getPendingReleaseMaxHoldMs();
     }
 
     public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
-        const clampedMin = Math.max(0, Math.floor(minMs));
-        const clampedMax = Math.max(clampedMin + 50, Math.floor(maxMs));
-        this.pendingReleaseMinHoldMs = clampedMin;
-        this.pendingReleaseMaxHoldMs = clampedMax;
+        this.context.runtime.physicsAuthority.setPendingReleaseHoldWindow(minMs, maxMs);
     }
 
     public syncAuthority(): void {
-        const localId = this.context.localPlayer?.id || 'local';
-        const shouldBeAuthority = (this.ownerId === localId) || (this.ownerId === null && this.context.isHost);
-
-        if (this.isAuthority !== shouldBeAuthority) {
-            this.onAuthorityChanged(shouldBeAuthority);
-        }
+        this.context.runtime.physicsAuthority.syncEntityAuthority(this);
     }
 
     public releasePhysicsOwnership(velocity?: IVector3): void {
-        if (!this.isAuthority) return;
-
-        this.rigidBody.wakeUp();
-        this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-        if (velocity && (Math.abs(velocity.x) > 0.1 || Math.abs(velocity.y) > 0.1 || Math.abs(velocity.z) > 0.1)) {
-            this.rigidBody.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
-        }
-
-        const localId = this.context.localPlayer?.id || 'local';
-        if (this.context.isHost) {
-            this.ownerId = null;
-            this.syncAuthority();
-            this.refreshSimMode();
-            this.emitOwnershipReleaseNow();
-        } else {
-            // Keep local simulation alive briefly after release to avoid throw-start freeze.
-            this.ownerId = localId;
-            this.isAuthority = true;
-            this.setSimMode(PhysicsSimMode.PendingReleaseDynamic);
-            this.pendingReleaseArmed = true;
-            this.pendingReleaseStartedAtMs = this.nowMs();
-        }
+        this.context.runtime.physicsAuthority.releaseEntityOwnership(this, velocity);
     }
 
     // --- IInteractable ---
@@ -234,9 +199,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         const hasAuthority = this.requestImmediatePhysicsAuthority();
         if (!hasAuthority) return;
 
-        this.pendingReleaseArmed = false;
         this.heldBy = playerId;
-        this.refreshSimMode();
+        this.syncAuthority();
         this.context.runtime.network?.syncEntityNow(this.id);
     }
 
@@ -294,66 +258,15 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     public requestImmediatePhysicsAuthority(options?: { allowSpeculativeHostClaim?: boolean }): boolean {
-        if (!this.rigidBody) return false;
-        const hasAuthority = this.requestOwnership();
-        if (!hasAuthority || !this.isAuthority) {
-            const localId = this.context.localPlayer?.id || 'local';
-            const hostId = this.context.sessionId;
-            const allowSpeculativeHostClaim = options?.allowSpeculativeHostClaim === true;
-            const canSpeculativelyClaimHostAuthority =
-                allowSpeculativeHostClaim &&
-                !this.context.isHost &&
-                !this.heldBy &&
-                !!hostId &&
-                this.ownerId === hostId;
-
-            if (!canSpeculativelyClaimHostAuthority) return false;
-
-            this.ownerId = localId;
-            this.isAuthority = true;
-        }
-
-        this.pendingReleaseArmed = false;
-        this.refreshSimMode();
-        this.rigidBody.wakeUp();
-        return true;
+        return this.context.runtime.physicsAuthority.requestImmediateAuthority(this, options);
     }
 
     public onNetworkEvent(type: string, payload: any): void {
-        if (type === 'OWNERSHIP_RELEASE') {
-            this.heldBy = null;
-            this.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-
-            if (payload.position) this.rigidBody.setTranslation({ x: payload.position[0], y: payload.position[1], z: payload.position[2] }, false);
-            if (payload.quaternion) this.rigidBody.setRotation({ x: payload.quaternion[0], y: payload.quaternion[1], z: payload.quaternion[2], w: payload.quaternion[3] }, false);
-            if (payload.velocity) {
-                this.rigidBody.setLinvel({ x: payload.velocity[0], y: payload.velocity[1], z: payload.velocity[2] }, true);
-            }
-
-            this.rigidBody.wakeUp();
-            this.refreshSimMode();
-            return;
-        }
-
-        if (type === 'OWNERSHIP_TRANSFER') {
-            const newOwnerId = payload?.newOwnerId ?? null;
-            const localId = this.context.localPlayer?.id || 'local';
-            const seq = typeof payload?.seq === 'number' ? payload.seq : 0;
-
-            if (seq > 0 && seq <= this.lastOwnershipTransferSeq) return;
-            if (seq > 0) this.lastOwnershipTransferSeq = seq;
-
-            // Host ACK ended pending release.
-            if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && newOwnerId !== localId) {
-                this.pendingReleaseArmed = false;
-                this.refreshSimMode();
-            }
-        }
+        this.context.runtime.physicsAuthority.handleNetworkEvent(this, type, payload);
     }
 
     public update(delta: number, _frame?: XRFrame): void {
-        this.syncAuthority();
-        this.refreshSimMode();
+        this.context.runtime.physicsAuthority.prepareEntityForUpdate(this);
 
         switch (this.simMode) {
             case PhysicsSimMode.HeldKinematic: {
@@ -371,26 +284,6 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
                 const rotation = this.rigidBody.rotation();
                 this.setVec3(this.presentPos, position.x, position.y, position.z);
                 this.setQuat(this.presentRot, rotation.x, rotation.y, rotation.z, rotation.w);
-
-                if (this.simMode === PhysicsSimMode.PendingReleaseDynamic && this.pendingReleaseArmed) {
-                    const now = this.nowMs();
-                    const dt = now - this.pendingReleaseStartedAtMs;
-                    const reachedMin = dt >= this.pendingReleaseMinHoldMs;
-                    const reachedMax = dt >= this.pendingReleaseMaxHoldMs;
-                    if (reachedMin && (this.rigidBody.isSleeping() || reachedMax)) {
-                        this.pendingReleaseArmed = false;
-                        this.emitOwnershipReleaseNow();
-                    }
-                }
-
-                if (
-                    this.simMode === PhysicsSimMode.AuthoritativeDynamic &&
-                    this.ownerId !== null &&
-                    !this.context.isHost &&
-                    this.rigidBody.isSleeping()
-                ) {
-                    this.releasePhysicsOwnership();
-                }
 
                 if (this.isGrabbable && !this.heldBy && this.spawnPosition && position.y < -10) {
                     this.rigidBody.setTranslation(
@@ -552,23 +445,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         }
     }
 
-    private refreshSimMode(): void {
-        if (!this.isAuthority) {
-            this.setSimMode(PhysicsSimMode.ProxyKinematic);
-            return;
-        }
-
-        if (this.heldBy) {
-            this.setSimMode(PhysicsSimMode.HeldKinematic);
-            return;
-        }
-
-        if (!this.context.isHost && this.simMode === PhysicsSimMode.PendingReleaseDynamic) {
-            this.setSimMode(PhysicsSimMode.PendingReleaseDynamic);
-            return;
-        }
-
-        this.setSimMode(PhysicsSimMode.AuthoritativeDynamic);
+    public applyAuthoritySimMode(nextMode: PhysicsSimMode): void {
+        this.setSimMode(nextMode);
     }
 
     private setSimMode(nextMode: PhysicsSimMode): void {
@@ -741,7 +619,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         return Math.abs(a.x - b.x) > eps || Math.abs(a.y - b.y) > eps || Math.abs(a.z - b.z) > eps;
     }
 
-    private emitOwnershipReleaseNow(): void {
+    public emitOwnershipRelease(): void {
         const state = this.getNetworkState(true) as Partial<IPhysicsEntityState>;
         if (state) {
             eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
@@ -776,6 +654,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     public destroy(): void {
+        this.context.runtime.physicsAuthority.forgetEntity(this.id);
         super.destroy();
         const render = this.context.runtime.render;
         if (render && this.view) {

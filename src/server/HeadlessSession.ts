@@ -2,6 +2,7 @@ import { AppContext } from '../app/AppContext';
 import { Engine } from '../app/Engine';
 import { EntityRegistry } from '../world/entities/EntityRegistry';
 import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRuntime';
 import { SessionRuntime } from '../world/session/SessionRuntime';
 import { DedicatedSessionTransport } from './DedicatedSessionTransport';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
@@ -39,6 +40,7 @@ export class HeadlessSession {
         this.context.setRuntime('entity', entityMgr);
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
 
+        this.context.setRuntime('physicsAuthority', new PhysicsAuthorityRuntime(this.context));
         const physicsMgr = new PhysicsRuntime(this.context);
         this.context.setRuntime('physics', physicsMgr);
 
