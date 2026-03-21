@@ -140,6 +140,39 @@ describe('AvatarMotionSolver', () => {
         expectChildAxisAlignment(pose, 'rightUpperLeg', 'rightLowerLeg');
     });
 
+    it('derives tracked hand pose from joint positions instead of raw XR joint quaternions', () => {
+        const solver = new AvatarMotionSolver();
+        const seedPose = solver.solve(createTrackingFrame(false), createMotionContext('xr-standing'), 0, 1 / 60);
+        const world = composeAvatarWorldPoses(seedPose);
+        const flippedQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, Math.PI / 2, 'YXZ'));
+        const frame = createTrackingFrame(false);
+        const trackedJoints: AvatarSkeletonJointName[] = [
+            'leftHand',
+            'leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip',
+            'leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip',
+            'leftMiddleMetacarpal', 'leftMiddleProximal', 'leftMiddleIntermediate', 'leftMiddleDistal', 'leftMiddleTip',
+            'leftRingMetacarpal', 'leftRingProximal', 'leftRingIntermediate', 'leftRingDistal', 'leftRingTip',
+            'leftLittleMetacarpal', 'leftLittleProximal', 'leftLittleIntermediate', 'leftLittleDistal', 'leftLittleTip'
+        ];
+
+        for (const jointName of trackedJoints) {
+            const joint = world[jointName]!;
+            frame.effectors[jointName] = {
+                position: { x: joint.position.x, y: joint.position.y, z: joint.position.z },
+                quaternion: { x: flippedQuat.x, y: flippedQuat.y, z: flippedQuat.z, w: flippedQuat.w }
+            };
+            frame.tracked[jointName] = true;
+        }
+
+        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        const solvedWorld = composeAvatarWorldPoses(pose);
+
+        expect(solvedWorld.leftIndexDistal?.position.distanceTo(world.leftIndexDistal!.position)).toBeLessThan(1e-4);
+        expectChildAxisAlignment(pose, 'leftIndexMetacarpal', 'leftIndexProximal');
+        expectChildAxisAlignment(pose, 'leftIndexProximal', 'leftIndexIntermediate');
+        expectChildAxisAlignment(pose, 'leftIndexIntermediate', 'leftIndexDistal');
+    });
+
     it('does not use controller-style wrist orientation as a direct hand-bone rotation without tracked fingers', () => {
         const solver = new AvatarMotionSolver();
         const frame = createTrackingFrame(false);

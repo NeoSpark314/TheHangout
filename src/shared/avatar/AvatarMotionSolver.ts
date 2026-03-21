@@ -20,6 +20,34 @@ const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
 const CHEST_TWIST_WEIGHT = 0.25;
 const UPPER_CHEST_TWIST_WEIGHT = 0.35;
 const NECK_TWIST_WEIGHT = 0.4;
+const LEFT_HAND_BASE_JOINTS: readonly AvatarSkeletonJointName[] = [
+    'leftThumbMetacarpal',
+    'leftIndexMetacarpal',
+    'leftMiddleMetacarpal',
+    'leftRingMetacarpal',
+    'leftLittleMetacarpal'
+] as const;
+const RIGHT_HAND_BASE_JOINTS: readonly AvatarSkeletonJointName[] = [
+    'rightThumbMetacarpal',
+    'rightIndexMetacarpal',
+    'rightMiddleMetacarpal',
+    'rightRingMetacarpal',
+    'rightLittleMetacarpal'
+] as const;
+const LEFT_FINGER_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
+    ['leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip'],
+    ['leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip'],
+    ['leftMiddleMetacarpal', 'leftMiddleProximal', 'leftMiddleIntermediate', 'leftMiddleDistal', 'leftMiddleTip'],
+    ['leftRingMetacarpal', 'leftRingProximal', 'leftRingIntermediate', 'leftRingDistal', 'leftRingTip'],
+    ['leftLittleMetacarpal', 'leftLittleProximal', 'leftLittleIntermediate', 'leftLittleDistal', 'leftLittleTip']
+] as const;
+const RIGHT_FINGER_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
+    ['rightThumbMetacarpal', 'rightThumbProximal', 'rightThumbDistal', 'rightThumbTip'],
+    ['rightIndexMetacarpal', 'rightIndexProximal', 'rightIndexIntermediate', 'rightIndexDistal', 'rightIndexTip'],
+    ['rightMiddleMetacarpal', 'rightMiddleProximal', 'rightMiddleIntermediate', 'rightMiddleDistal', 'rightMiddleTip'],
+    ['rightRingMetacarpal', 'rightRingProximal', 'rightRingIntermediate', 'rightRingDistal', 'rightRingTip'],
+    ['rightLittleMetacarpal', 'rightLittleProximal', 'rightLittleIntermediate', 'rightLittleDistal', 'rightLittleTip']
+] as const;
 
 interface ITwoBoneSolveResult {
     upperQuaternion: THREE.Quaternion;
@@ -211,14 +239,19 @@ export class AvatarMotionSolver {
 
         this.setJointLocal(upperName, upperLocalPos, ik.upperQuaternion, tracked);
         this.setJointLocal(lowerName, upperBase.clone().multiplyScalar(ik.upperLength), ik.lowerQuaternion, tracked);
-        this.setJointLocal(
-            handName,
-            lowerBase.clone().multiplyScalar(ik.lowerLength),
-            hasTrackedHandSkeleton
-                ? this.computeLocalQuaternionFromWorld(handName, this.tmpTargetOrientation)
-                : new THREE.Quaternion(),
-            tracked
-        );
+        const handLocalPosition = lowerBase.clone().multiplyScalar(ik.lowerLength);
+        this.setJointLocal(handName, handLocalPosition, new THREE.Quaternion(), tracked);
+        if (hasTrackedHandSkeleton) {
+            const trackedHandWorldQuaternion = this.deriveTrackedHandWorldQuaternion(side, frame);
+            if (trackedHandWorldQuaternion) {
+                this.setJointLocal(
+                    handName,
+                    handLocalPosition,
+                    this.computeLocalQuaternionFromWorld(handName, trackedHandWorldQuaternion),
+                    tracked
+                );
+            }
+        }
     }
 
     private solveLeg(
@@ -285,27 +318,18 @@ export class AvatarMotionSolver {
 
     private solveFingers(side: 'left' | 'right', frame: IAvatarTrackingFrame): void {
         const handName = side === 'left' ? 'leftHand' : 'rightHand';
-        const joints = side === 'left' ? LEFT_HAND_FINGER_JOINTS : RIGHT_HAND_FINGER_JOINTS;
+        const chains = side === 'left' ? LEFT_FINGER_CHAINS : RIGHT_FINGER_CHAINS;
 
-        for (const jointName of joints) {
-            const effector = frame.effectors[jointName];
-            if (effector) {
-                this.setJointFromWorld(
-                    jointName,
-                    new THREE.Vector3(effector.position.x, effector.position.y, effector.position.z),
-                    new THREE.Quaternion(
-                        effector.quaternion.x,
-                        effector.quaternion.y,
-                        effector.quaternion.z,
-                        effector.quaternion.w
-                    ),
-                    !!frame.tracked[jointName]
-                );
+        for (const chain of chains) {
+            if (chain.some((jointName) => !!frame.effectors[jointName])) {
+                this.solveTrackedFingerChain(chain, frame);
                 continue;
             }
 
-            const restPosition = this.getRest(jointName);
-            this.setJointLocal(jointName, restPosition, new THREE.Quaternion(), false);
+            for (const jointName of chain) {
+                const restPosition = this.getRest(jointName);
+                this.setJointLocal(jointName, restPosition, new THREE.Quaternion(), false);
+            }
         }
 
         this.pose.tracked[handName] = this.pose.tracked[handName] ?? false;
@@ -317,6 +341,181 @@ export class AvatarMotionSolver {
             : RIGHT_HAND_FINGER_JOINTS;
 
         return joints.some((jointName) => !!frame.tracked[jointName]);
+    }
+
+    private deriveTrackedHandWorldQuaternion(
+        side: 'left' | 'right',
+        frame: IAvatarTrackingFrame
+    ): THREE.Quaternion | null {
+        const baseJoints = side === 'left' ? LEFT_HAND_BASE_JOINTS : RIGHT_HAND_BASE_JOINTS;
+        const wristName = side === 'left' ? 'leftHand' : 'rightHand';
+        const wristWorldPos = this.jointWorldPositions[wristName];
+        const parentName = AVATAR_SKELETON_PARENT[wristName];
+        const parentWorldQuat = parentName ? this.jointWorldQuaternions[parentName] : this.tmpRootWorldQuat;
+        if (!wristWorldPos || !parentWorldQuat) {
+            return null;
+        }
+
+        const restForward = new THREE.Vector3();
+        const restAcross = new THREE.Vector3();
+        const targetForward = new THREE.Vector3();
+        const targetAcross = new THREE.Vector3();
+        let forwardCount = 0;
+
+        for (const jointName of baseJoints) {
+            const effector = frame.effectors[jointName];
+            if (!effector) continue;
+
+            restForward.add(this.getRest(jointName));
+            targetForward.add(
+                new THREE.Vector3(effector.position.x, effector.position.y, effector.position.z)
+                    .sub(wristWorldPos)
+                    .applyQuaternion(parentWorldQuat.clone().invert())
+            );
+            forwardCount += 1;
+        }
+
+        const indexJoint = side === 'left' ? 'leftIndexMetacarpal' : 'rightIndexMetacarpal';
+        const littleJoint = side === 'left' ? 'leftLittleMetacarpal' : 'rightLittleMetacarpal';
+        const indexEffector = frame.effectors[indexJoint];
+        const littleEffector = frame.effectors[littleJoint];
+        if (forwardCount < 3 || !indexEffector || !littleEffector) {
+            return null;
+        }
+
+        restAcross.copy(this.getRest(indexJoint)).sub(this.getRest(littleJoint));
+        targetAcross
+            .set(
+                indexEffector.position.x - littleEffector.position.x,
+                indexEffector.position.y - littleEffector.position.y,
+                indexEffector.position.z - littleEffector.position.z
+            )
+            .applyQuaternion(parentWorldQuat.clone().invert());
+
+        const handLocalQuaternion = this.solveBasisRotation(restForward, restAcross, targetForward, targetAcross);
+        return parentWorldQuat.clone().multiply(handLocalQuaternion);
+    }
+
+    private solveTrackedFingerChain(
+        chain: readonly AvatarSkeletonJointName[],
+        frame: IAvatarTrackingFrame
+    ): void {
+        for (let i = 0; i < chain.length; i += 1) {
+            const jointName = chain[i];
+            const effector = frame.effectors[jointName];
+            if (!effector) {
+                for (let j = i; j < chain.length; j += 1) {
+                    const fallbackJointName = chain[j];
+                    const restPosition = this.getRest(fallbackJointName);
+                    this.setJointLocal(
+                        fallbackJointName,
+                        restPosition,
+                        new THREE.Quaternion(),
+                        !!frame.tracked[fallbackJointName]
+                    );
+                }
+                return;
+            }
+
+            const worldPosition = new THREE.Vector3(
+                effector.position.x,
+                effector.position.y,
+                effector.position.z
+            );
+            const nextJointName = chain[i + 1];
+            const nextEffector = nextJointName ? frame.effectors[nextJointName] : null;
+            let localQuaternion = new THREE.Quaternion();
+
+            if (nextJointName && nextEffector) {
+                const parentName = AVATAR_SKELETON_PARENT[jointName];
+                const parentWorldQuat = parentName
+                    ? this.jointWorldQuaternions[parentName]!
+                    : this.tmpRootWorldQuat;
+                const targetDirection = new THREE.Vector3(
+                    nextEffector.position.x - effector.position.x,
+                    nextEffector.position.y - effector.position.y,
+                    nextEffector.position.z - effector.position.z
+                );
+                if (targetDirection.lengthSq() > 1e-8) {
+                    targetDirection.normalize().applyQuaternion(parentWorldQuat.clone().invert());
+                    localQuaternion = new THREE.Quaternion().setFromUnitVectors(
+                        this.getRest(nextJointName).normalize(),
+                        targetDirection
+                    );
+                }
+            }
+
+            this.setJointFromWorldWithLocalQuaternion(
+                jointName,
+                worldPosition,
+                localQuaternion,
+                !!frame.tracked[jointName]
+            );
+        }
+    }
+
+    private setJointFromWorldWithLocalQuaternion(
+        jointName: AvatarSkeletonJointName,
+        worldPosition: THREE.Vector3,
+        localQuaternion: THREE.Quaternion,
+        tracked: boolean
+    ): void {
+        const parentName = AVATAR_SKELETON_PARENT[jointName];
+        const parentWorldPos = parentName
+            ? this.jointWorldPositions[parentName]!
+            : this.tmpParentWorldPos.set(
+                this.pose.rootWorldPosition.x,
+                this.pose.rootWorldPosition.y,
+                this.pose.rootWorldPosition.z
+            );
+        const parentWorldQuat = parentName
+            ? this.jointWorldQuaternions[parentName]!
+            : this.tmpRootWorldQuat;
+        const localPosition = worldPosition.clone()
+            .sub(parentWorldPos)
+            .applyQuaternion(parentWorldQuat.clone().invert());
+        this.setJointLocal(jointName, localPosition, localQuaternion, tracked);
+    }
+
+    private solveBasisRotation(
+        restPrimary: THREE.Vector3,
+        restSecondary: THREE.Vector3,
+        targetPrimary: THREE.Vector3,
+        targetSecondary: THREE.Vector3
+    ): THREE.Quaternion {
+        const restBasis = this.buildOrthonormalBasis(restPrimary, restSecondary);
+        const targetBasis = this.buildOrthonormalBasis(targetPrimary, targetSecondary);
+        const rotation = new THREE.Matrix4()
+            .copy(targetBasis)
+            .multiply(new THREE.Matrix4().copy(restBasis).invert());
+        return new THREE.Quaternion().setFromRotationMatrix(rotation);
+    }
+
+    private buildOrthonormalBasis(primary: THREE.Vector3, secondary: THREE.Vector3): THREE.Matrix4 {
+        const xAxis = primary.clone().normalize();
+        let zAxis = secondary.clone().sub(xAxis.clone().multiplyScalar(secondary.dot(xAxis)));
+        if (zAxis.lengthSq() < 1e-8) {
+            zAxis = this.getFallbackPerpendicular(xAxis);
+        } else {
+            zAxis.normalize();
+        }
+
+        let yAxis = zAxis.clone().cross(xAxis);
+        if (yAxis.lengthSq() < 1e-8) {
+            yAxis = this.getFallbackPerpendicular(xAxis).cross(xAxis).normalize();
+        } else {
+            yAxis.normalize();
+        }
+
+        zAxis = xAxis.clone().cross(yAxis).normalize();
+        return new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+    }
+
+    private getFallbackPerpendicular(axis: THREE.Vector3): THREE.Vector3 {
+        const candidate = Math.abs(axis.y) < 0.9
+            ? new THREE.Vector3(0, 1, 0)
+            : new THREE.Vector3(1, 0, 0);
+        return candidate.sub(axis.clone().multiplyScalar(candidate.dot(axis))).normalize();
     }
 
     private setJointLocal(
