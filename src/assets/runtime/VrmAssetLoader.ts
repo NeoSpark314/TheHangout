@@ -64,22 +64,28 @@ const VRM_BONE_NAMES: VRMHumanBoneName[] = [
 ];
 
 class VrmTemplate implements IVrmTemplate {
-    private readonly normalizedBoneNames = new Map<VRMHumanBoneName, string>();
+    private readonly rawBoneNames = new Map<VRMHumanBoneName, string>();
+    private readonly normalizedRigRootName: string | null;
 
     constructor(private readonly vrm: VRM) {
+        this.normalizedRigRootName = this.vrm.humanoid.normalizedHumanBonesRoot.name || null;
         for (const boneName of VRM_BONE_NAMES) {
-            const node = this.vrm.humanoid.getNormalizedBoneNode(boneName);
+            const node = this.vrm.humanoid.getRawBoneNode(boneName);
             if (node?.name) {
-                this.normalizedBoneNames.set(boneName, node.name);
+                this.rawBoneNames.set(boneName, node.name);
             }
         }
     }
 
     public createInstance(): IVrmInstance {
         const clonedScene = cloneSkeleton(this.vrm.scene) as THREE.Group;
+        if (this.normalizedRigRootName) {
+            clonedScene.getObjectByName(this.normalizedRigRootName)?.removeFromParent();
+        }
         clonedScene.updateMatrixWorld(true);
 
         const humanoid = this.buildHumanoidForClone(clonedScene);
+        clonedScene.add(humanoid.normalizedHumanBonesRoot);
         const firstPerson = this.vrm.firstPerson ?? null;
         const metaVersion = this.vrm.meta?.metaVersion ?? null;
 
@@ -100,7 +106,7 @@ class VrmTemplate implements IVrmTemplate {
     private buildHumanoidForClone(scene: THREE.Group): VRMHumanoid {
         const humanBones: Partial<Record<VRMHumanBoneName, { node: THREE.Object3D }>> = {};
         for (const boneName of VRM_BONE_NAMES) {
-            const originalName = this.normalizedBoneNames.get(boneName);
+            const originalName = this.rawBoneNames.get(boneName);
             if (!originalName) continue;
             const cloneBone = scene.getObjectByName(originalName);
             if (cloneBone) {

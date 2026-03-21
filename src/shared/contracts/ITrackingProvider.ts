@@ -1,4 +1,5 @@
 import { IVector3, IQuaternion, IPose } from './IMath';
+import type { IAvatarTrackingFrame } from '../avatar/AvatarSkeleton';
 
 export interface IHandJointState {
     pose: IPose;
@@ -21,6 +22,7 @@ export interface ITrackingState {
         left: IHandState;
         right: IHandState;
     };
+    avatarTrackingFrame?: IAvatarTrackingFrame;
     humanoidDelta?: import('../types/HumanoidState').NetworkHumanoidDelta;
 }
 

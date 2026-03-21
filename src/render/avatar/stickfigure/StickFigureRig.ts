@@ -1,17 +1,22 @@
 import * as THREE from 'three';
 import { ITwoBoneIkResult, TwoBoneIkSolver } from '../shared/TwoBoneIkSolver';
+import { IAvatarSkeletonPose } from '../../../shared/avatar/AvatarSkeleton';
 
 export interface StickFigureBones {
     hips: THREE.Bone;
     spine: THREE.Bone;
     chest: THREE.Bone;
+    upperChest: THREE.Bone;
     neck: THREE.Bone;
+    head: THREE.Bone;
     leftShoulder: THREE.Bone;
     leftUpperArm: THREE.Bone;
     leftLowerArm: THREE.Bone;
+    leftHand: THREE.Bone;
     rightShoulder: THREE.Bone;
     rightUpperArm: THREE.Bone;
     rightLowerArm: THREE.Bone;
+    rightHand: THREE.Bone;
     leftUpperLeg: THREE.Bone;
     leftLowerLeg: THREE.Bone;
     leftFoot: THREE.Bone;
@@ -59,6 +64,43 @@ export class StickFigureRig {
         private visuals: StickFigureRigVisuals,
         private onPostureUpdated?: () => void
     ) { }
+
+    public applySkeletonPose(pose: IAvatarSkeletonPose): void {
+        const directBones: Array<keyof StickFigureBones> = [
+            'hips', 'spine', 'chest', 'upperChest', 'neck',
+            'leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand',
+            'rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand',
+            'leftUpperLeg', 'leftLowerLeg', 'leftFoot',
+            'rightUpperLeg', 'rightLowerLeg', 'rightFoot'
+        ];
+
+        for (const boneName of directBones) {
+            const jointPose = pose.joints[boneName];
+            const bone = this.bones[boneName];
+            if (!jointPose || !bone) continue;
+            bone.position.set(jointPose.position.x, jointPose.position.y, jointPose.position.z);
+            bone.quaternion.set(
+                jointPose.quaternion.x,
+                jointPose.quaternion.y,
+                jointPose.quaternion.z,
+                jointPose.quaternion.w
+            );
+        }
+
+        const headPose = pose.joints.head;
+        if (headPose) {
+            this.bones.head.position.set(headPose.position.x, headPose.position.y, headPose.position.z);
+            this.bones.head.quaternion.set(
+                headPose.quaternion.x,
+                headPose.quaternion.y,
+                headPose.quaternion.z,
+                headPose.quaternion.w
+            );
+        }
+
+        this.updateVisualsFromBones();
+        if (this.onPostureUpdated) this.onPostureUpdated();
+    }
 
     public updatePosture(headHeight: number): void {
         const neckHeight = Math.max(0.4, headHeight - 0.2);
@@ -157,5 +199,47 @@ export class StickFigureRig {
         } else {
             mesh.scale.set(1, length, 1);
         }
+    }
+
+    private updateVisualsFromBones(): void {
+        const spineLength = this.bones.chest.position.length() + this.bones.upperChest.position.length();
+        this.setupLocalCylinder(this.visuals.torso, spineLength);
+        this.visuals.torso.position.set(0, spineLength * 0.5, 0);
+
+        const shoulderWidth = this.bones.leftShoulder.position.distanceTo(this.bones.rightShoulder.position);
+        this.setupLocalCylinder(this.visuals.shoulders, shoulderWidth);
+        this.visuals.shoulders.rotation.z = Math.PI / 2;
+
+        const pelvisWidth = this.bones.leftUpperLeg.position.distanceTo(this.bones.rightUpperLeg.position);
+        this.setupLocalCylinder(this.visuals.pelvis, pelvisWidth);
+        this.visuals.pelvis.rotation.z = Math.PI / 2;
+
+        const leftUpperLegLength = this.bones.leftLowerLeg.position.length();
+        const leftLowerLegLength = this.bones.leftFoot.position.length();
+        this.setupLocalCylinder(this.visuals.leftLeg, leftUpperLegLength);
+        this.visuals.leftLeg.position.set(0, -leftUpperLegLength * 0.5, 0);
+        this.setupLocalCylinder(this.visuals.leftLowerLegMesh, leftLowerLegLength);
+        this.visuals.leftLowerLegMesh.position.set(0, -leftLowerLegLength * 0.5, 0);
+
+        const rightUpperLegLength = this.bones.rightLowerLeg.position.length();
+        const rightLowerLegLength = this.bones.rightFoot.position.length();
+        this.setupLocalCylinder(this.visuals.rightLeg, rightUpperLegLength);
+        this.visuals.rightLeg.position.set(0, -rightUpperLegLength * 0.5, 0);
+        this.setupLocalCylinder(this.visuals.rightLowerLegMesh, rightLowerLegLength);
+        this.visuals.rightLowerLegMesh.position.set(0, -rightLowerLegLength * 0.5, 0);
+
+        const leftUpperArmLength = this.bones.leftLowerArm.position.length();
+        const leftLowerArmLength = this.bones.leftHand.position.length();
+        this.setupLocalCylinder(this.visuals.leftUpperArm, leftUpperArmLength);
+        this.visuals.leftUpperArm.position.copy(this.bones.leftLowerArm.position).multiplyScalar(0.5);
+        this.setupLocalCylinder(this.visuals.leftForearm, leftLowerArmLength);
+        this.visuals.leftForearm.position.copy(this.bones.leftHand.position).multiplyScalar(0.5);
+
+        const rightUpperArmLength = this.bones.rightLowerArm.position.length();
+        const rightLowerArmLength = this.bones.rightHand.position.length();
+        this.setupLocalCylinder(this.visuals.rightUpperArm, rightUpperArmLength);
+        this.visuals.rightUpperArm.position.copy(this.bones.rightLowerArm.position).multiplyScalar(0.5);
+        this.setupLocalCylinder(this.visuals.rightForearm, rightLowerArmLength);
+        this.visuals.rightForearm.position.copy(this.bones.rightHand.position).multiplyScalar(0.5);
     }
 }

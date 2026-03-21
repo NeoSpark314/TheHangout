@@ -7,6 +7,7 @@ import { InputRuntime } from '../../input/controllers/InputRuntime';
 import { TrackingRuntime } from '../../input/providers/TrackingRuntime';
 import type { ITrackingProvider, ITrackingState } from '../../shared/contracts/ITrackingProvider';
 import { HandState } from '../../shared/types/HandState';
+import { IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
 import { EntityRegistry } from '../../world/entities/EntityRegistry';
 import { PhysicsRuntime } from '../../physics/runtime/PhysicsRuntime';
 import { PhysicsAuthorityRuntime } from '../../physics/runtime/PhysicsAuthorityRuntime';
@@ -154,6 +155,19 @@ class HeadlessTrackingProvider implements ITrackingProvider {
         right.pose.position = { x: origin.x + 0.25, y: origin.y + 1.2, z: origin.z + 0.2 };
         left.pointerPose.position = { ...left.pose.position };
         right.pointerPose.position = { ...right.pose.position };
+        const trackingFrame: IAvatarTrackingFrame = {
+            rootWorldPosition: { ...origin },
+            rootWorldQuaternion: { ...originQuat },
+            headWorldPose: {
+                position: { x: origin.x, y: origin.y + 1.7, z: origin.z },
+                quaternion: { ...originQuat }
+            },
+            effectors: {},
+            tracked: {
+                head: true
+            },
+            seated: false
+        };
 
         return {
             head: {
@@ -166,7 +180,8 @@ class HeadlessTrackingProvider implements ITrackingProvider {
             hands: {
                 left,
                 right
-            }
+            },
+            avatarTrackingFrame: trackingFrame
         };
     }
 }

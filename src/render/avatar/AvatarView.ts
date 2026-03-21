@@ -3,8 +3,9 @@ import { AppContext } from '../../app/AppContext';
 import { IAvatarConfig, normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
 import { validateVrmUrl } from '../../shared/avatar/AvatarUrlUtils';
 import { EntityView } from '../views/EntityView';
-import { StickFigureView, IPlayerViewState } from './stickfigure/StickFigureView';
+import { StickFigureView } from './stickfigure/StickFigureView';
 import { VrmAvatarView } from './vrm/VrmAvatarView';
+import { IPlayerAvatarRenderState } from './IPlayerAvatarRenderState';
 
 class AvatarRenderBudget {
     private static readonly MAX_ACTIVE_VRMS = 6;
@@ -58,12 +59,12 @@ class AvatarRenderBudget {
     }
 }
 
-export class AvatarView extends EntityView<IPlayerViewState> {
+export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     private readonly stickView: StickFigureView;
     private vrmView: VrmAvatarView | null = null;
-    private activeView: EntityView<IPlayerViewState>;
+    private activeView: EntityView<IPlayerAvatarRenderState>;
     private avatarConfig: IAvatarConfig;
-    private lastState: IPlayerViewState | null = null;
+    private lastState: IPlayerAvatarRenderState | null = null;
     private pendingVoiceStream: MediaStream | null = null;
     private muted = false;
     private loadingVrmUrl: string | null = null;
@@ -100,7 +101,7 @@ export class AvatarView extends EntityView<IPlayerViewState> {
         this.syncViewMode();
     }
 
-    public applyState(state: IPlayerViewState, delta: number): void {
+    public applyState(state: IPlayerAvatarRenderState, delta: number): void {
         this.lastState = state;
         this.activeView.applyState(state, delta);
         AvatarRenderBudget.recalculate();
@@ -171,13 +172,13 @@ export class AvatarView extends EntityView<IPlayerViewState> {
     }
 
     public distanceToCamera(camera: THREE.Camera): number {
-        const position = this.lastState?.position;
+        const position = this.lastState?.skeleton.rootWorldPosition;
         if (!position) return Number.POSITIVE_INFINITY;
         return camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
     }
 
     public isVisibleTo(camera: THREE.Camera): boolean {
-        const position = this.lastState?.position;
+        const position = this.lastState?.skeleton.rootWorldPosition;
         if (!position) return false;
 
         const projected = new THREE.Vector3(position.x, position.y + 1.4, position.z).project(camera);
@@ -253,7 +254,7 @@ export class AvatarView extends EntityView<IPlayerViewState> {
         }
     }
 
-    private switchTo(nextView: EntityView<IPlayerViewState>): void {
+    private switchTo(nextView: EntityView<IPlayerAvatarRenderState>): void {
         if (this.activeView === nextView) return;
 
         (this.activeView as unknown as { setMuted?: (next: boolean) => void }).setMuted?.(true);

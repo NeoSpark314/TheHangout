@@ -1,5 +1,13 @@
 import * as THREE from 'three';
-import { AvatarHandSide, AVATAR_HAND_JOINTS, IAvatarSolvedHandPose } from '../shared/AvatarPoseSolver';
+import { AvatarSkeletonJointName, IAvatarSkeletonPose } from '../../../shared/avatar/AvatarSkeleton';
+import { AvatarSkeletonWorldPoseMap, LEFT_HAND_FINGER_JOINTS, RIGHT_HAND_FINGER_JOINTS } from '../../../shared/avatar/AvatarSkeletonUtils';
+
+type AvatarHandSide = 'left' | 'right';
+
+const AVATAR_HAND_JOINTS: Record<AvatarHandSide, readonly AvatarSkeletonJointName[]> = {
+    left: ['leftHand', ...LEFT_HAND_FINGER_JOINTS],
+    right: ['rightHand', ...RIGHT_HAND_FINGER_JOINTS]
+};
 
 export class StickFigureHands {
     public static readonly HAND_INDICES = [
@@ -16,28 +24,39 @@ export class StickFigureHands {
         private handCylinders: { left: THREE.Mesh[]; right: THREE.Mesh[] }
     ) { }
 
-    public updateSolvedHand(hand: AvatarHandSide, solvedHand: IAvatarSolvedHandPose, lerpFactor: number): void {
-        if (!solvedHand.wrist.present || solvedHand.hasFingerData) {
+    public updateFromSkeleton(
+        hand: AvatarHandSide,
+        skeleton: IAvatarSkeletonPose,
+        world: AvatarSkeletonWorldPoseMap,
+        root: THREE.Object3D,
+        lerpFactor: number
+    ): void {
+        const jointNames = AVATAR_HAND_JOINTS[hand];
+        const wristWorld = world[jointNames[0]];
+        const hasFingerData = jointNames.slice(1).some((jointName) => skeleton.tracked[jointName]);
+
+        if (!wristWorld || hasFingerData) {
             this.wristMeshes[hand].visible = false;
         } else {
             this.wristMeshes[hand].visible = true;
-            this.wristMeshes[hand].position.lerp(solvedHand.wrist.localPosition, lerpFactor);
-            this.wristMeshes[hand].quaternion.slerp(solvedHand.wrist.localQuaternion, lerpFactor);
+            const wristPosition = wristWorld.position.clone();
+            root.worldToLocal(wristPosition);
+            this.wristMeshes[hand].position.lerp(wristPosition, lerpFactor);
         }
 
-        const jointNames = AVATAR_HAND_JOINTS[hand];
         for (let i = 0; i < jointNames.length; i += 1) {
-            const jointPose = solvedHand.joints[jointNames[i]];
-            if (solvedHand.hasFingerData && jointPose?.present) {
+            const jointPose = world[jointNames[i]];
+            if (hasFingerData && jointPose) {
+                const localPosition = jointPose.position.clone();
+                root.worldToLocal(localPosition);
                 this.handMeshes[hand][i].visible = true;
-                this.handMeshes[hand][i].position.lerp(jointPose.localPosition, lerpFactor);
-                this.handMeshes[hand][i].quaternion.slerp(jointPose.localQuaternion, lerpFactor);
+                this.handMeshes[hand][i].position.lerp(localPosition, lerpFactor);
             } else {
                 this.handMeshes[hand][i].visible = false;
             }
         }
 
-        this.updateHandSkeleton(hand, solvedHand.hasFingerData);
+        this.updateHandSkeleton(hand, hasFingerData);
     }
 
     public getWristMarkerPosition(hand: AvatarHandSide): THREE.Vector3 {

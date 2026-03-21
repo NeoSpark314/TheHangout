@@ -7,6 +7,7 @@ import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { ILookIntentPayload } from '../../shared/contracts/IIntents';
+import { IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
 
 const LERP_SPEED = 15;
 const MAX_REACH = 4.0;
@@ -37,7 +38,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // We only care about Y (pitch) here. 
         // Horizontal look (yaw) is handled by MovementSkill rotating the origin.
         if (this.context.runtime.render.isXRPresenting()) return;
-        this.pitch -= payload.pitchDeltaRad;
+        this.pitch += payload.pitchDeltaRad;
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
 
@@ -120,6 +121,19 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // Combine to World Space
         const worldHeadPos = localHeadPos.clone().applyQuaternion(originQuat).add(originPos);
         const worldHeadQuat = originQuat.clone().multiply(localHeadQuat);
+        const trackingFrame: IAvatarTrackingFrame = {
+            rootWorldPosition: { x: originPos.x, y: originPos.y, z: originPos.z },
+            rootWorldQuaternion: { x: originQuat.x, y: originQuat.y, z: originQuat.z, w: originQuat.w },
+            headWorldPose: {
+                position: { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z },
+                quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
+            },
+            effectors: {},
+            tracked: {
+                head: true
+            },
+            seated: false
+        };
 
         this.state.head = {
             pose: {
@@ -184,8 +198,19 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // Desktop hands are always 'active' effectively for networking
         this.humanoid.setJointPose('leftHand', leftTargetWorld, worldHeadQuat);
         this.humanoid.setJointPose('rightHand', rightTargetWorld, worldHeadQuat);
+        trackingFrame.effectors.leftHand = {
+            position: { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z },
+            quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
+        };
+        trackingFrame.effectors.rightHand = {
+            position: { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z },
+            quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
+        };
+        trackingFrame.tracked.leftHand = true;
+        trackingFrame.tracked.rightHand = true;
 
         this.state.humanoidDelta = this.humanoid.consumeNetworkDelta() || undefined;
+        this.state.avatarTrackingFrame = trackingFrame;
     }
 
     public getState(): ITrackingState {

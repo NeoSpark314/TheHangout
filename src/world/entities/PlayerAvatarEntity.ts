@@ -7,12 +7,15 @@ import { IPlayerEntityState } from '../../shared/contracts/IEntityState';
 import { HumanoidState } from '../../shared/types/HumanoidState';
 import type { Skill } from '../../skills/Skill';
 import type { IPlayerAvatarControlStrategy } from './strategies/IPlayerAvatarControlStrategy';
-import type { IPlayerViewState } from '../../render/avatar/stickfigure/StickFigureView';
+import type { IPlayerAvatarRenderState } from '../../render/avatar/IPlayerAvatarRenderState';
 import type { ILocalPlayerTeleportOptions } from './strategies/LocalPlayerControlStrategy';
 import type { IAudioChunkPayload } from '../../shared/contracts/IVoice';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IAvatarConfig, normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
+import { AvatarSkeletonState } from '../../shared/avatar/AvatarSkeletonState';
+import { AVATAR_SKELETON_JOINTS } from '../../shared/avatar/AvatarSkeleton';
+import { composeAvatarWorldPoses } from '../../shared/avatar/AvatarSkeletonUtils';
 
 export class PlayerAvatarEntity extends ReplicatedEntity {
     public static readonly DEFAULT_HEAD_HEIGHT = 1.7;
@@ -22,8 +25,9 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
     public micEnabled: boolean = true;
     public audioLevel: number = 0;
     public isMuted: boolean = false;
-    public view: IView<IPlayerViewState>;
+    public view: IView<IPlayerAvatarRenderState>;
     public humanoid = new HumanoidState();
+    public avatarSkeleton = new AvatarSkeletonState();
     public readonly controlMode: 'local' | 'remote';
     public readonly spawnPosition: IVector3;
     public readonly spawnYaw: number;
@@ -43,7 +47,7 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
         id: string,
         type: string,
         isAuthority: boolean,
-        view: IView<IPlayerViewState>,
+        view: IView<IPlayerAvatarRenderState>,
         options: {
             controlMode: 'local' | 'remote';
             spawnPos?: IVector3;
@@ -160,5 +164,47 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
             this.view.removeFromScene(render.scene);
             this.view.destroy();
         }
+    }
+
+    public syncLegacyPoseFromSkeleton(): void {
+        const snapshot = this.avatarSkeleton.pose;
+        const world = composeAvatarWorldPoses(snapshot);
+
+        this.targetPosition = { x: snapshot.rootWorldPosition.x, y: snapshot.rootWorldPosition.y, z: snapshot.rootWorldPosition.z };
+        const rootQuat = new THREE.Quaternion(
+            snapshot.rootWorldQuaternion.x,
+            snapshot.rootWorldQuaternion.y,
+            snapshot.rootWorldQuaternion.z,
+            snapshot.rootWorldQuaternion.w
+        );
+        this.targetYaw = new THREE.Euler().setFromQuaternion(rootQuat, 'YXZ').y;
+
+        const headWorld = world.head;
+        if (headWorld) {
+            this.headState.position = {
+                x: headWorld.position.x,
+                y: headWorld.position.y,
+                z: headWorld.position.z
+            };
+            this.headState.quaternion = {
+                x: headWorld.quaternion.x,
+                y: headWorld.quaternion.y,
+                z: headWorld.quaternion.z,
+                w: headWorld.quaternion.w
+            };
+            this.headHeight = Math.max(0.4, headWorld.position.y - snapshot.rootWorldPosition.y);
+        }
+
+        this.humanoid.clearAll();
+        for (const jointName of AVATAR_SKELETON_JOINTS) {
+            const jointWorld = world[jointName];
+            if (!jointWorld) continue;
+            this.humanoid.setJointPose(
+                jointName,
+                { x: jointWorld.position.x, y: jointWorld.position.y, z: jointWorld.position.z },
+                { x: jointWorld.quaternion.x, y: jointWorld.quaternion.y, z: jointWorld.quaternion.z, w: jointWorld.quaternion.w }
+            );
+        }
+        this.humanoid.consumeNetworkDelta();
     }
 }

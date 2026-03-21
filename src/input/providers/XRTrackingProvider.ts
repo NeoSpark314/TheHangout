@@ -6,6 +6,7 @@ import { HumanoidState } from '../../shared/types/HumanoidState';
 import { HumanoidJointName } from '../../shared/contracts/IHumanoid';
 import { IVector3, IQuaternion } from '../../shared/contracts/IMath';
 import { RenderRuntime } from '../../render/runtime/RenderRuntime';
+import { IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
 
 const JOINT_NAMES: XRHandJoint[] = [
     "wrist",
@@ -107,6 +108,22 @@ export class XRTrackingProvider implements ITrackingProvider {
 
         // 1. Head Tracking (Viewer Pose) - polling directly from RenderRuntime.camera
         const viewerPose = this.getViewerWorldPose(render, xrFrame, referenceSpace);
+        const localPlayer = this.context.localPlayer;
+        const rootPosition = localPlayer?.xrOrigin.position ?? viewerPose.position;
+        const rootQuaternion = localPlayer?.xrOrigin.quaternion ?? viewerPose.quaternion;
+        const trackingFrame: IAvatarTrackingFrame = {
+            rootWorldPosition: { ...rootPosition },
+            rootWorldQuaternion: { ...rootQuaternion },
+            headWorldPose: {
+                position: viewerPose.position,
+                quaternion: viewerPose.quaternion
+            },
+            effectors: {},
+            tracked: {
+                head: true
+            },
+            seated: false
+        };
         this.state.head = {
             pose: {
                 position: viewerPose.position,
@@ -170,6 +187,11 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                         // Feed into dirty-sync Humanoid map
                         this.humanoid.setJointPose(humanoidJointName, worldPose.position, worldPose.quaternion);
+                        trackingFrame.effectors[humanoidJointName] = {
+                            position: worldPose.position,
+                            quaternion: worldPose.quaternion
+                        };
+                        trackingFrame.tracked[humanoidJointName] = true;
                         // Keep per-hand joint array in sync for gesture detection (pinch/fist).
                         handState.joints[j].pose.position = worldPose.position;
                         handState.joints[j].pose.quaternion = worldPose.quaternion;
@@ -216,6 +238,11 @@ export class XRTrackingProvider implements ITrackingProvider {
                     // Fallback: If no finger tracking, at least put the wrist at the controller so arms stay attached
                     const wristName = HUMAN_JOINT_MAP[handedness]['wrist'];
                     this.humanoid.setJointPose(wristName, worldPose.position, worldPose.quaternion);
+                    trackingFrame.effectors[wristName] = {
+                        position: worldPose.position,
+                        quaternion: worldPose.quaternion
+                    };
+                    trackingFrame.tracked[wristName] = true;
 
                     // Drop fingers since we are holding controllers
                     this.clearFingers(handedness);
@@ -253,6 +280,7 @@ export class XRTrackingProvider implements ITrackingProvider {
 
         // Emit the aggregated delta chunk for this frame to State and LocalPlayer
         this.state.humanoidDelta = this.humanoid.consumeNetworkDelta() || undefined;
+        this.state.avatarTrackingFrame = trackingFrame;
     }
 
     public getState(): ITrackingState {

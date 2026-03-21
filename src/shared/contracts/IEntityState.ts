@@ -1,5 +1,6 @@
 import { NetworkHumanoidDelta } from '../types/HumanoidState';
 import { AvatarRenderMode } from './IAvatar';
+import { IAvatarSkeletonDelta } from '../avatar/AvatarSkeleton';
 
 /**
  * High-performance spatial types using flat arrays to minimize 
@@ -29,10 +30,11 @@ export interface IBaseEntityState {
 export interface IPlayerEntityState extends IBaseEntityState {
     type: EntityType.PLAYER_AVATAR;
     n: string; // name
-    p: Vec3Arr; // body position
-    y: number; // body yaw
-    h: number; // head height
-    hq: QuatArr; // local head quaternion
+    p?: Vec3Arr; // legacy body position
+    y?: number; // legacy body yaw
+    h?: number; // legacy head height
+    hq?: QuatArr; // legacy local head quaternion
+    sk?: IAvatarSkeletonDelta; // canonical avatar skeleton delta
     hmd?: NetworkHumanoidDelta; // humanoid delta payload
     hm?: [number, number]; // hand mode flags [leftHasJoints, rightHasJoints]
     conf: {

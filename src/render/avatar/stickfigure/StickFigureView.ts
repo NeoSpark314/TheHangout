@@ -1,28 +1,16 @@
 import * as THREE from 'three';
 import { EntityView } from '../../views/EntityView';
-import { IVector3, IPose } from '../../../shared/contracts/IMath';
 import { AppContext } from '../../../app/AppContext';
-import { HumanoidState } from '../../../shared/types/HumanoidState';
 import { NameTagComponent } from '../components/NameTagComponent';
 import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
 import { StickFigureRig, StickFigureBones, StickFigureRigVisuals } from './StickFigureRig';
 import { StickFigureHands } from './StickFigureHands';
-import { AvatarPoseSolver } from '../shared/AvatarPoseSolver';
+import { IPlayerAvatarRenderState } from '../IPlayerAvatarRenderState';
+import { composeAvatarWorldPoses, LEFT_HAND_FINGER_JOINTS, RIGHT_HAND_FINGER_JOINTS } from '../../../shared/avatar/AvatarSkeletonUtils';
 
-export interface IPlayerViewState {
-    position: IVector3;
-    yaw: number;
-    headHeight: number;
-    headQuaternion: IPose['quaternion'];
-    humanoid?: HumanoidState;
-    name: string;
-    color?: string | number;
-    isLocal?: boolean;
-    audioLevel?: number;
-    lerpFactor?: number;
-}
+export type IPlayerViewState = IPlayerAvatarRenderState;
 
-export class StickFigureView extends EntityView<IPlayerViewState> {
+export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
     public color: string | number;
     public isLocal: boolean;
     public headMesh!: THREE.Mesh;
@@ -68,23 +56,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private voiceAudio!: VoiceAudioComponent;
     private rig!: StickFigureRig;
     private hands!: StickFigureHands;
-    private readonly defaultLeftTrackedTarget = new THREE.Vector3(-0.35, 0.95, 0.1);
-    private readonly defaultRightTrackedTarget = new THREE.Vector3(0.35, 0.95, 0.1);
-    private readonly defaultLeftRestTarget = new THREE.Vector3(-0.3, 0.9, 0);
-    private readonly defaultRightRestTarget = new THREE.Vector3(0.3, 0.9, 0);
-    private readonly poseSolver = new AvatarPoseSolver({
-        trackedTargets: {
-            left: this.defaultLeftTrackedTarget,
-            right: this.defaultRightTrackedTarget
-        },
-        restTargets: {
-            left: this.defaultLeftRestTarget,
-            right: this.defaultRightRestTarget
-        }
-    });
     private readonly tmpTargetPos = new THREE.Vector3();
-    private readonly tmpYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-    private readonly tmpYawQuat = new THREE.Quaternion();
+    private readonly tmpTargetQuat = new THREE.Quaternion();
 
     constructor(private context: AppContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -190,6 +163,8 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         spine.name = 'spine';
         const chest = new THREE.Bone();
         chest.name = 'chest';
+        const upperChest = new THREE.Bone();
+        upperChest.name = 'upperChest';
         const neck = new THREE.Bone();
         neck.name = 'neck';
         const headBone = new THREE.Bone(); // We'll attach headMesh here
@@ -233,15 +208,16 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         hips.add(rightUpperLeg);
 
         spine.add(chest);
-        chest.add(neck);
+        chest.add(upperChest);
+        upperChest.add(neck);
         neck.add(headBone);
 
-        chest.add(leftShoulder);
+        upperChest.add(leftShoulder);
         leftShoulder.add(leftUpperArm);
         leftUpperArm.add(leftLowerArm);
         leftLowerArm.add(leftHand);
 
-        chest.add(rightShoulder);
+        upperChest.add(rightShoulder);
         rightShoulder.add(rightUpperArm);
         rightUpperArm.add(rightLowerArm);
         rightLowerArm.add(rightHand);
@@ -255,7 +231,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         this.mesh.add(hips);
 
         this.bones = {
-            hips, spine, chest, neck, head: headBone,
+            hips, spine, chest, upperChest, neck, head: headBone,
             leftShoulder, leftUpperArm, leftLowerArm, leftHand,
             rightShoulder, rightUpperArm, rightLowerArm, rightHand,
             leftUpperLeg, leftLowerLeg, leftFoot,
@@ -307,7 +283,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
         rightLowerLeg.add(this.rightLowerLegMesh);
 
         this.shoulders = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
-        chest.add(this.shoulders);
+        upperChest.add(this.shoulders);
 
         this.pelvis = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         hips.add(this.pelvis);
@@ -370,50 +346,40 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
 
     public applyState(state: IPlayerViewState, delta: number): void {
         const lerpFactor = state.lerpFactor ?? 1.0;
-
-        if (state.position) {
-            this.tmpTargetPos.set(state.position.x, state.position.y, state.position.z);
-            if (lerpFactor < 1.0) {
-                this.mesh.position.lerp(this.tmpTargetPos, lerpFactor);
-            } else {
-                this.mesh.position.copy(this.tmpTargetPos);
-            }
-        }
-
-        if (state.yaw !== undefined) {
-            if (lerpFactor < 1.0) {
-                this.tmpYawEuler.set(0, state.yaw, 0, 'YXZ');
-                this.tmpYawQuat.setFromEuler(this.tmpYawEuler);
-                this.mesh.quaternion.slerp(this.tmpYawQuat, lerpFactor);
-            } else {
-                this.mesh.rotation.y = state.yaw;
-            }
-        }
-
-        if (state.headHeight !== undefined) {
-            const height = lerpFactor < 1.0
-                ? THREE.MathUtils.lerp(this.currentHeadHeight, state.headHeight, lerpFactor)
-                : state.headHeight;
-            this.currentHeadHeight = height;
-            this.rig.updatePosture(height);
-        }
-
-        const solvedPose = this.poseSolver.solve(this.mesh, state);
-
-        if (solvedPose.head.present) {
-            if (lerpFactor < 1.0) {
-                this.headMesh.quaternion.slerp(solvedPose.head.localQuaternion, lerpFactor);
-            } else {
-                this.headMesh.quaternion.copy(solvedPose.head.localQuaternion);
-            }
-        }
-
-        this.rig.updateArms(
-            solvedPose.hands.left.armTargetLocalPosition,
-            solvedPose.hands.right.armTargetLocalPosition
+        const skeleton = state.skeleton;
+        this.tmpTargetPos.set(
+            skeleton.rootWorldPosition.x,
+            skeleton.rootWorldPosition.y,
+            skeleton.rootWorldPosition.z
         );
-        this.hands.updateSolvedHand('left', solvedPose.hands.left, lerpFactor);
-        this.hands.updateSolvedHand('right', solvedPose.hands.right, lerpFactor);
+        this.tmpTargetQuat.set(
+            skeleton.rootWorldQuaternion.x,
+            skeleton.rootWorldQuaternion.y,
+            skeleton.rootWorldQuaternion.z,
+            skeleton.rootWorldQuaternion.w
+        );
+        if (lerpFactor < 1.0) {
+            this.mesh.position.lerp(this.tmpTargetPos, lerpFactor);
+            this.mesh.quaternion.slerp(this.tmpTargetQuat, lerpFactor);
+        } else {
+            this.mesh.position.copy(this.tmpTargetPos);
+            this.mesh.quaternion.copy(this.tmpTargetQuat);
+        }
+
+        this.rig.applySkeletonPose(skeleton);
+        const world = composeAvatarWorldPoses(skeleton);
+        const headWorld = world.head;
+        if (headWorld) {
+            const headLocal = headWorld.position.clone();
+            this.mesh.worldToLocal(headLocal);
+            const headHeight = Math.max(0.4, headWorld.position.y - skeleton.rootWorldPosition.y);
+            this.currentHeadHeight = headHeight;
+            this.headMesh.position.set(headLocal.x, headLocal.y, headLocal.z);
+            this.headMesh.quaternion.copy(this.mesh.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(headWorld.quaternion.clone()));
+        }
+
+        this.hands.updateFromSkeleton('left', skeleton, world, this.mesh, lerpFactor);
+        this.hands.updateFromSkeleton('right', skeleton, world, this.mesh, lerpFactor);
 
         if (state.audioLevel !== undefined) {
             const targetMouthScale = 1.0 + (state.audioLevel * 10.0);

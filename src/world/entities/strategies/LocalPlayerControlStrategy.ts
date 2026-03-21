@@ -8,6 +8,8 @@ import { GrabSkill } from '../../../skills/GrabSkill';
 import { UIPointerSkill } from '../../../skills/UIPointerSkill';
 import type { PlayerAvatarEntity } from '../PlayerAvatarEntity';
 import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrategy';
+import { AvatarMotionSolver } from '../../../shared/avatar/AvatarMotionSolver';
+import { IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
 
 export interface ILocalPlayerTeleportOptions {
     // `player` places the user's floor anchor at the target while keeping the current origin Y.
@@ -19,6 +21,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     public readonly mode = 'local';
 
     public xrOrigin!: IPose;
+    private readonly motionSolver = new AvatarMotionSolver();
     private skills: Skill[] = [];
     private activeSkill: Skill | null = null;
     private lastProviderId: string | null = null;
@@ -70,23 +73,17 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         if (this.lastProviderId !== providerId) {
             this.lastProviderId = providerId;
             player.humanoid.clearAll();
+            player.avatarSkeleton.clear();
         }
 
         runtime.tracking.update(delta, frame);
         runtime.input?.processInteractions();
 
         const trackingState = runtime.tracking.getState();
-        const worldHeadPos = trackingState.head.pose.position;
-        const worldHeadQuat = trackingState.head.pose.quaternion;
-        const bodyYaw = trackingState.head.yaw;
-
-        if (trackingState.humanoidDelta) {
-            player.humanoid.applyNetworkDelta(trackingState.humanoidDelta);
-        }
-
-        player.headState.position = { ...worldHeadPos };
-        player.headState.quaternion = { ...worldHeadQuat };
-        player.headHeight = trackingState.head.pose.position.y;
+        const trackingFrame = this.resolveTrackingFrame(player, trackingState.avatarTrackingFrame);
+        const solvedPose = this.motionSolver.solve(trackingFrame, delta);
+        player.avatarSkeleton.setPose(solvedPose);
+        player.syncLegacyPoseFromSkeleton();
 
         if (runtime.animation) {
             runtime.animation.update(delta);
@@ -103,11 +100,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         player.micEnabled = player.appContext.voiceEnabled;
 
         player.view.applyState({
-            position: { x: player.headState.position.x, y: 0, z: player.headState.position.z },
-            yaw: bodyYaw,
-            headHeight: player.headState.position.y,
-            headQuaternion: player.headState.quaternion,
-            humanoid: player.humanoid,
+            skeleton: player.avatarSkeleton.getSnapshot(),
             name: player.name || 'You',
             color: player.avatarConfigSnapshot.color,
             isLocal: true,
@@ -119,22 +112,16 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     public getNetworkState(player: PlayerAvatarEntity, fullSync: boolean = false): IPlayerEntityState {
         const runtime = player.appContext.runtime;
         const trackingState = runtime.tracking.getState();
-        const bodyYaw = trackingState.head.yaw;
 
         return {
             id: player.id,
             type: EntityType.PLAYER_AVATAR,
             n: player.name,
             p: [player.headState.position.x, 0, player.headState.position.z],
-            y: bodyYaw,
-            h: player.headState.position.y,
-            hq: [
-                player.headState.quaternion.x,
-                player.headState.quaternion.y,
-                player.headState.quaternion.z,
-                player.headState.quaternion.w
-            ],
-            hmd: player.humanoid.consumeNetworkDelta(fullSync) || undefined,
+            y: player.targetYaw,
+            h: player.headHeight,
+            hq: [player.headState.quaternion.x, player.headState.quaternion.y, player.headState.quaternion.z, player.headState.quaternion.w],
+            sk: player.avatarSkeleton.consumeNetworkDelta(fullSync) || undefined,
             hm: [trackingState.hands.left.hasJoints ? 1 : 0, trackingState.hands.right.hasJoints ? 1 : 0],
             conf: {
                 color: player.avatarConfigSnapshot.color,
@@ -226,5 +213,31 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         const uiPointer = new UIPointerSkill();
         this.addSkill(player, uiPointer);
+    }
+
+    private resolveTrackingFrame(player: PlayerAvatarEntity, frame?: IAvatarTrackingFrame): IAvatarTrackingFrame {
+        if (frame) {
+            return {
+                ...frame,
+                effectors: { ...frame.effectors },
+                tracked: {
+                    ...frame.tracked,
+                    head: true
+                },
+                seated: player.appContext.runtime.mount.isMountedLocal()
+            };
+        }
+
+        return {
+            rootWorldPosition: { ...this.xrOrigin.position },
+            rootWorldQuaternion: { ...this.xrOrigin.quaternion },
+            headWorldPose: {
+                position: { ...player.headState.position },
+                quaternion: { ...player.headState.quaternion }
+            },
+            effectors: {},
+            tracked: { head: true },
+            seated: player.appContext.runtime.mount.isMountedLocal()
+        };
     }
 }

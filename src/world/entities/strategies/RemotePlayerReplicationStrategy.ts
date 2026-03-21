@@ -98,16 +98,20 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
             eventBus.emit(EVENTS.PEER_STATE_UPDATED, player.peerId);
         }
 
+        this.lastNetworkUpdateTime = performance.now();
+
+        if (data.sk) {
+            player.avatarSkeleton.applyNetworkDelta(data.sk);
+            player.syncLegacyPoseFromSkeleton();
+            return;
+        }
+
         if (data.p) player.targetPosition = { x: data.p[0], y: data.p[1], z: data.p[2] };
         if (data.y !== undefined) player.targetYaw = data.y;
         if (data.h !== undefined) player.headHeight = data.h;
-
-        this.lastNetworkUpdateTime = performance.now();
-
         if (data.hq) {
             player.headState.quaternion = { x: data.hq[0], y: data.hq[1], z: data.hq[2], w: data.hq[3] };
         }
-
         if (data.hm) {
             if (data.hm[0] === 0) this.clearFingerJoints(player, 'left');
             if (data.hm[1] === 0) this.clearFingerJoints(player, 'right');
@@ -130,11 +134,7 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
         player.audioLevel = player.view.getAudioLevel();
 
         player.view.applyState({
-            position: player.targetPosition,
-            yaw: player.targetYaw,
-            headHeight: player.headHeight,
-            headQuaternion: player.headState.quaternion,
-            humanoid: player.humanoid,
+            skeleton: player.avatarSkeleton.getSnapshot(),
             name: formatPlayerDisplayName(
                 {
                     name: player.name || 'Player',
