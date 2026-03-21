@@ -2,6 +2,12 @@
 
 Use this checklist when adding a new object module under `src/content/objects`.
 
+Primary references:
+
+- [docs/GAMEPLAY_API.md](../../docs/GAMEPLAY_API.md)
+- [docs/REPLICATION.md](../../docs/REPLICATION.md)
+- [docs/SCENARIO_API.md](../../docs/SCENARIO_API.md)
+
 ## Supported gameplay blocks
 
 - Shared props via `context.props.spawnShared(...)`

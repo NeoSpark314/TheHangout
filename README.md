@@ -1,13 +1,23 @@
 # The Hangout
 
-A playful space for small groups of people to hang out. 
+A playful shared space for small groups, designed VR-first but usable from desktop and mobile.
 
-Main objectives:
-- No setup, no accounts, quick to join
-- Fun
-- VR first design but usable from desktop and mobile
-- Simple static version hostable on any static web server with PeerJS for signaling (no backend required)
-- Server version for hosting on internal networks (works without internet connection or in more secure environments)
+## Main objectives
+
+- quick to join
+- fun
+- VR-first design with desktop and mobile support
+- static-hostable client version with PeerJS signaling
+- dedicated server mode for internal or offline networks
+
+## Docs
+
+Current contributor docs live under `docs/`:
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/GAMEPLAY_API.md](docs/GAMEPLAY_API.md)
+- [docs/SCENARIO_API.md](docs/SCENARIO_API.md)
+- [docs/REPLICATION.md](docs/REPLICATION.md)
 
 ## Quick Start
 
@@ -15,22 +25,26 @@ Main objectives:
 
 ```bash
 npm install
-npm run dev          # Development (Vite + PeerJS)
+npm run dev
 ```
 
-### Static site version (deploy on any static web server)
-First user will be the host. It will use PeerJS for signaling.
+### Static site build
+
+The first user becomes host. Signaling uses PeerJS.
+
 ```bash
-npm run build        # Build the client
+npm run build
 ```
-Web page will be in `dist/` directory.
+
+The built client is written to `dist/`.
 
 ### Dedicated Server
-Default starts on port 443 (uses your `--cert/--key` if provided, otherwise falls back to `@vitejs/plugin-basic-ssl` certificate generation); no PeerJS used (local WebSocket relay used instead)
+
+Default starts on port `443`. If `--cert/--key` are not provided, the local SSL fallback is used.
 
 ```bash
-npm run build        # Build the client
-npm run serve        # Start
+npm run build
+npm run serve
 ```
 
 ### Desktop Sharing Page (`/share`)
@@ -42,6 +56,7 @@ https://<server-address>/share
 ```
 
 Steps:
-- Enter your global share key (for example `MyDesktopPC`)
-- Click **Connect** and then **Share**
-- Keep the page open (it will start/stop capture when summoned from VR Session tab)
+
+- enter your global share key
+- click **Connect** and then **Share**
+- keep the page open so the session can summon and stop the stream from VR

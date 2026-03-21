@@ -2,6 +2,12 @@
 
 This is the official content authoring surface for multiplayer gameplay objects.
 
+Related docs:
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [SCENARIO_API.md](./SCENARIO_API.md)
+- [REPLICATION.md](./REPLICATION.md)
+
 ## Supported Building Blocks
 
 - Shared props: `context.props.spawnShared(...)`
