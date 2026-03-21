@@ -1,0 +1,24 @@
+import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
+import { convertRawWorldQuaternionToAvatarWorldQuaternion } from './AvatarTrackingSpace';
+
+function toThreeQuaternion(quaternion: { x: number; y: number; z: number; w: number }): THREE.Quaternion {
+    return new THREE.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+}
+
+describe('AvatarTrackingSpace', () => {
+    it('maps raw engine forward (-Z) to avatar forward (+Z)', () => {
+        const rawQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, -0.65, 0.1, 'YXZ'));
+        const avatarQuaternion = toThreeQuaternion(convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawQuaternion.x,
+            y: rawQuaternion.y,
+            z: rawQuaternion.z,
+            w: rawQuaternion.w
+        }));
+
+        const rawForward = new THREE.Vector3(0, 0, -1).applyQuaternion(rawQuaternion);
+        const avatarForward = new THREE.Vector3(0, 0, 1).applyQuaternion(avatarQuaternion);
+
+        expect(avatarForward.distanceTo(rawForward)).toBeLessThan(1e-6);
+    });
+});

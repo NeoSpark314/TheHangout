@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { AppContext } from '../../app/AppContext';
-import { IAvatarConfig, normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
+import { AvatarRenderMode, IAvatarConfig, normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
 import { validateVrmUrl } from '../../shared/avatar/AvatarUrlUtils';
 import { EntityView } from '../views/EntityView';
 import { StickFigureView } from './stickfigure/StickFigureView';
 import { VrmAvatarView } from './vrm/VrmAvatarView';
 import { IPlayerAvatarRenderState } from './IPlayerAvatarRenderState';
+import { CoordinateAvatarView } from './coordinates/CoordinateAvatarView';
 
 class AvatarRenderBudget {
     private static readonly MAX_ACTIVE_VRMS = 6;
@@ -61,6 +62,7 @@ class AvatarRenderBudget {
 
 export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     private readonly stickView: StickFigureView;
+    private readonly coordinateView: CoordinateAvatarView;
     private vrmView: VrmAvatarView | null = null;
     private activeView: EntityView<IPlayerAvatarRenderState>;
     private avatarConfig: IAvatarConfig;
@@ -94,6 +96,10 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
             color: this.avatarConfig.color,
             isLocal
         });
+        this.coordinateView = new CoordinateAvatarView(this.context, {
+            color: this.avatarConfig.color,
+            isLocal
+        });
         this.activeView = this.stickView;
         this.mesh.add(this.stickView.mesh);
         this.mesh.userData.isLocalAvatar = isLocal;
@@ -103,6 +109,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
 
     public applyState(state: IPlayerAvatarRenderState, delta: number): void {
         this.lastState = state;
+        this.syncViewMode();
         this.activeView.applyState(state, delta);
         AvatarRenderBudget.recalculate();
     }
@@ -113,6 +120,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
             color
         });
         this.stickView.setColor(color);
+        this.coordinateView.setColor(color);
         this.activeView.setColor(color);
         if (this.vrmView && this.activeView !== this.vrmView) {
             this.vrmView.setColor(color);
@@ -147,6 +155,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
             ...config
         });
         this.stickView.setColor(this.avatarConfig.color);
+        this.coordinateView.setColor(this.avatarConfig.color);
         AvatarRenderBudget.recalculate();
         this.syncViewMode();
     }
@@ -156,6 +165,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
         AvatarRenderBudget.unregister(this);
         this._cleanupMesh();
         this.vrmView?.destroy();
+        this.coordinateView.destroy();
         this.stickView.destroy();
     }
 
@@ -194,7 +204,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     }
 
     private hasValidVrmConfig(): boolean {
-        if (this.avatarConfig.renderMode !== 'vrm-auto' || !this.avatarConfig.vrmUrl) {
+        if (this.getRequestedRenderMode() !== 'vrm-auto' || !this.avatarConfig.vrmUrl) {
             return false;
         }
 
@@ -207,12 +217,22 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     }
 
     private syncViewMode(): void {
+        const requestedMode = this.getRequestedRenderMode();
+        if (requestedMode === 'coordinates') {
+            this.switchTo(this.coordinateView);
+            return;
+        }
+
         if (!this.budgetAllowed || !this.hasValidVrmConfig()) {
             this.switchTo(this.stickView);
             return;
         }
 
         this.ensureVrmView();
+    }
+
+    private getRequestedRenderMode(): AvatarRenderMode {
+        return this.context.avatarRenderOverride ?? this.avatarConfig.renderMode;
     }
 
     private async ensureVrmView(): Promise<void> {
@@ -242,7 +262,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
                 isLocal: this.isLocalAvatar()
             });
             this.activeVrmUrl = url;
-            this.switchTo(this.vrmView);
+            this.syncViewMode();
         } catch (error) {
             console.warn('[AvatarView] Falling back to stick avatar after VRM load failure:', error);
             this.activeVrmUrl = null;

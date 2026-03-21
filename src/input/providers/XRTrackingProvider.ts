@@ -5,6 +5,7 @@ import { HandState } from '../../shared/types/HandState';
 import { IVector3, IQuaternion } from '../../shared/contracts/IMath';
 import { RenderRuntime } from '../../render/runtime/RenderRuntime';
 import { AvatarSkeletonJointName, IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
+import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../shared/avatar/AvatarTrackingSpace';
 
 const JOINT_NAMES: XRHandJoint[] = [
     "wrist",
@@ -91,12 +92,14 @@ export class XRTrackingProvider implements ITrackingProvider {
         const localPlayer = this.context.localPlayer;
         const rootPosition = localPlayer?.xrOrigin.position ?? viewerPose.position;
         const rootQuaternion = localPlayer?.xrOrigin.quaternion ?? viewerPose.quaternion;
+        const avatarRootQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion(rootQuaternion);
+        const avatarHeadQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion(viewerPose.quaternion);
         const trackingFrame: IAvatarTrackingFrame = {
             rootWorldPosition: { ...rootPosition },
-            rootWorldQuaternion: { ...rootQuaternion },
+            rootWorldQuaternion: avatarRootQuaternion,
             headWorldPose: {
                 position: viewerPose.position,
-                quaternion: viewerPose.quaternion
+                quaternion: avatarHeadQuaternion
             },
             effectors: {},
             tracked: {
@@ -162,10 +165,11 @@ export class XRTrackingProvider implements ITrackingProvider {
 
                     if (pose) {
                         const worldPose = this.rawPoseToWorldPose(pose, render.cameraGroup);
+                        const avatarQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion(worldPose.quaternion);
 
                         trackingFrame.effectors[humanoidJointName] = {
                             position: worldPose.position,
-                            quaternion: worldPose.quaternion
+                            quaternion: avatarQuaternion
                         };
                         trackingFrame.tracked[humanoidJointName] = true;
                         // Keep per-hand joint array in sync for gesture detection (pinch/fist).
@@ -203,6 +207,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                 if (pose) {
                     // Valid pose found in frame
                     const worldPose = this.rawPoseToWorldPose(pose, render.cameraGroup);
+                    const avatarQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion(worldPose.quaternion);
                     handState.active = true;
                     handState.pose.position = worldPose.position;
                     handState.pose.quaternion = worldPose.quaternion;
@@ -210,7 +215,7 @@ export class XRTrackingProvider implements ITrackingProvider {
                     const wristName = handedness === 'left' ? 'leftHand' : 'rightHand';
                     trackingFrame.effectors[wristName] = {
                         position: worldPose.position,
-                        quaternion: worldPose.quaternion
+                        quaternion: avatarQuaternion
                     };
                     trackingFrame.tracked[wristName] = true;
 

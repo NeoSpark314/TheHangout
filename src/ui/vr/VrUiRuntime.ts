@@ -1414,6 +1414,19 @@ export class VrUiRuntime implements IUpdatable {
         );
         debugContainer.addChild(overlayToggle);
 
+        const avatarDebugToggle = new UIToggle(
+            "Coordinate Avatar Debug",
+            this.context.avatarRenderOverride === 'coordinates',
+            90, 138, 620, 52,
+            (checked) => {
+                this.context.avatarRenderOverride = checked ? 'coordinates' : null;
+                const active = this.context.avatarRenderOverride ?? 'none';
+                this.context.runtime.diagnostics.record('info', 'system', `Avatar render override=${active}`);
+                this.tablet?.ui.markDirty();
+            }
+        );
+        debugContainer.addChild(avatarDebugToggle);
+
         const showFpsToggle = new UIToggle(
             "Show FPS",
             this.context.runtime.hud.getShowPerformanceStats(),

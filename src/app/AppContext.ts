@@ -28,7 +28,7 @@ import type { ReplicationDebugRuntime } from '../network/replication/Replication
 import type { NotificationRuntime } from './notifications/NotificationRuntime';
 import type { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 import type { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
-import { DEFAULT_AVATAR_COLOR, IAvatarConfig } from '../shared/contracts/IAvatar';
+import { AvatarRenderMode, DEFAULT_AVATAR_COLOR, IAvatarConfig } from '../shared/contracts/IAvatar';
 
 export interface ISessionConfig {
     activeScenarioId: string;
@@ -89,6 +89,7 @@ export class AppContext {
         renderMode: 'stick',
         vrmUrl: null
     };
+    public avatarRenderOverride: AvatarRenderMode | null = null;
     public avatarPoseOverride: AvatarPoseOverride = 'vrm-tpose';
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;

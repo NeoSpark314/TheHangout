@@ -1,4 +1,4 @@
-export type AvatarRenderMode = 'stick' | 'vrm-auto';
+export type AvatarRenderMode = 'stick' | 'vrm-auto' | 'coordinates';
 
 export interface IAvatarConfig {
     color: string | number;
@@ -13,9 +13,12 @@ export function normalizeAvatarConfig(config?: Partial<IAvatarConfig> | null): I
     const vrmUrl = typeof config?.vrmUrl === 'string'
         ? config.vrmUrl.trim() || null
         : null;
-    const renderMode: AvatarRenderMode = config?.renderMode === 'vrm-auto' && vrmUrl
-        ? 'vrm-auto'
-        : 'stick';
+    let renderMode: AvatarRenderMode = 'stick';
+    if (config?.renderMode === 'coordinates') {
+        renderMode = 'coordinates';
+    } else if (config?.renderMode === 'vrm-auto' && vrmUrl) {
+        renderMode = 'vrm-auto';
+    }
 
     return {
         color,

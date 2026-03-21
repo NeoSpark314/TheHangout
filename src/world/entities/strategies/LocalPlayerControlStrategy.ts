@@ -13,6 +13,7 @@ import { AvatarFacingResolver } from '../../../shared/avatar/AvatarFacingResolve
 import { IAvatarMotionContext, IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
 import { createAvatarVrmTPoseAtRoot } from '../../../shared/avatar/AvatarCanonicalRig';
 import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/AvatarHumanoidPose';
+import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../../shared/avatar/AvatarTrackingSpace';
 
 export interface ILocalPlayerTeleportOptions {
     // `player` places the user's floor anchor at the target while keeping the current origin Y.
@@ -103,7 +104,10 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         const trackingState = runtime.tracking.getState();
         const poseOverride = player.appContext.avatarPoseOverride;
         const solvedPose = poseOverride === 'vrm-tpose'
-            ? createAvatarVrmTPoseAtRoot(this.xrOrigin.position, this.xrOrigin.quaternion)
+            ? createAvatarVrmTPoseAtRoot(
+                this.xrOrigin.position,
+                convertRawWorldQuaternionToAvatarWorldQuaternion(this.xrOrigin.quaternion)
+            )
             : this.solveTrackedPose(player, trackingState.avatarTrackingFrame, delta);
         player.avatarSkeleton.setPose(solvedPose);
         player.syncLegacyPoseFromSkeleton();
@@ -300,12 +304,16 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             };
         }
 
+        const rawHeadPose = player.appContext.runtime.tracking.getState().head.pose;
+
         return {
             rootWorldPosition: { ...this.xrOrigin.position },
-            rootWorldQuaternion: { ...this.xrOrigin.quaternion },
+            rootWorldQuaternion: convertRawWorldQuaternionToAvatarWorldQuaternion(this.xrOrigin.quaternion),
             headWorldPose: {
-                position: player.getAvatarHeadWorldPose()?.position || { ...player.headState.position },
-                quaternion: player.getAvatarHeadWorldPose()?.quaternion || { ...player.headState.quaternion }
+                position: rawHeadPose?.position || player.getAvatarHeadWorldPose()?.position || { ...player.headState.position },
+                quaternion: convertRawWorldQuaternionToAvatarWorldQuaternion(
+                    rawHeadPose?.quaternion || this.xrOrigin.quaternion
+                )
             },
             effectors: {},
             tracked: { head: true },

@@ -39,6 +39,8 @@ import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime'
 import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../content/runtime/BuiltInScenarioPlugins';
 import { ConfigRegistry } from '../shared/config/ConfigRegistry';
 import type { AvatarPoseOverride } from './AppContext';
+import type { AvatarRenderMode } from '../shared/contracts/IAvatar';
+import { normalizeAvatarConfig } from '../shared/contracts/IAvatar';
 
 /**
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
@@ -239,6 +241,21 @@ export class App {
                 context.runtime.diagnostics.record('info', 'system', `Avatar pose override=${mode}`);
             },
             getAvatarPoseOverride: () => context.avatarPoseOverride,
+            setAvatarRenderOverride: (mode: AvatarRenderMode | 'none' | null) => {
+                context.avatarRenderOverride = mode === 'none' || mode == null ? null : mode;
+                const active = context.avatarRenderOverride ?? 'none';
+                context.runtime.diagnostics.record('info', 'system', `Avatar render override=${active}`);
+            },
+            getAvatarRenderOverride: () => context.avatarRenderOverride,
+            setAvatarRenderMode: (mode: AvatarRenderMode) => {
+                context.avatarConfig = normalizeAvatarConfig({
+                    ...context.avatarConfig,
+                    renderMode: mode
+                });
+                context.localPlayer?.setAvatarConfig(context.avatarConfig);
+                context.runtime.diagnostics.record('info', 'system', `Avatar render mode=${context.avatarConfig.renderMode}`);
+            },
+            getAvatarRenderMode: () => context.avatarConfig.renderMode,
             setReplicationDebugMode: (mode: 'off' | 'stats' | 'trace') => {
                 context.runtime.replicationDebug.setMode(mode);
                 context.runtime.diagnostics.record('info', 'replication', `Replication debug mode=${mode}`);

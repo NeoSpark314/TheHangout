@@ -3,23 +3,11 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { AppContext } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IPhysicsDebugBody } from '../../physics/runtime/PhysicsRuntime';
-import { EntityType } from '../../shared/contracts/IEntityState';
-import { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
-import { AVATAR_SKELETON_JOINTS, AVATAR_SKELETON_PARENT, AvatarSkeletonJointName } from '../../shared/avatar/AvatarSkeleton';
-import { composeAvatarWorldPoses } from '../../shared/avatar/AvatarSkeletonUtils';
 
 interface IDebugVisual {
     root: THREE.Group;
     colliderLines: THREE.LineSegments[];
     axes?: THREE.AxesHelper;
-    label?: THREE.Sprite;
-    labelText?: string;
-}
-
-interface IDebugAvatarVisual {
-    root: THREE.Group;
-    bones: THREE.LineSegments;
-    joints: THREE.Points;
     label?: THREE.Sprite;
     labelText?: string;
 }
@@ -41,12 +29,8 @@ const BODY_COLOR = {
 export class DebugRenderRuntime implements IUpdatable {
     private readonly root = new THREE.Group();
     private readonly visuals: Map<string, IDebugVisual> = new Map();
-    private readonly avatarVisuals: Map<string, IDebugAvatarVisual> = new Map();
     private syncTimer = 0;
     private readonly syncInterval = 0.5;
-    private readonly avatarBonePairs: Array<[AvatarSkeletonJointName, AvatarSkeletonJointName]> = AVATAR_SKELETON_JOINTS
-        .filter((jointName) => !!AVATAR_SKELETON_PARENT[jointName])
-        .map((jointName) => [AVATAR_SKELETON_PARENT[jointName]!, jointName]);
 
     private settings: IDebugRenderSettings = {
         enabled: false,
@@ -106,13 +90,6 @@ export class DebugRenderRuntime implements IUpdatable {
             if (!visual) continue;
             this.updateVisual(body, visual);
         }
-
-        const players = this.getDebugPlayers();
-        for (const player of players) {
-            const visual = this.avatarVisuals.get(player.id);
-            if (!visual) continue;
-            this.updateAvatarVisual(player, visual);
-        }
     }
 
     public destroy(): void {
@@ -120,16 +97,11 @@ export class DebugRenderRuntime implements IUpdatable {
             this.disposeVisual(visual);
         }
         this.visuals.clear();
-        for (const visual of this.avatarVisuals.values()) {
-            this.disposeAvatarVisual(visual);
-        }
-        this.avatarVisuals.clear();
         this.root.parent?.remove(this.root);
     }
 
     private syncVisuals(): void {
         this.syncPhysicsVisuals();
-        this.syncAvatarVisuals();
     }
 
     private syncPhysicsVisuals(): void {
@@ -146,24 +118,6 @@ export class DebugRenderRuntime implements IUpdatable {
             if (!incomingIds.has(id)) {
                 this.disposeVisual(visual);
                 this.visuals.delete(id);
-            }
-        }
-    }
-
-    private syncAvatarVisuals(): void {
-        const players = this.getDebugPlayers();
-        const incomingIds = new Set<string>(players.map((player) => player.id));
-
-        for (const player of players) {
-            if (!this.avatarVisuals.has(player.id)) {
-                this.avatarVisuals.set(player.id, this.createAvatarVisual(player));
-            }
-        }
-
-        for (const [id, visual] of this.avatarVisuals.entries()) {
-            if (!incomingIds.has(id)) {
-                this.disposeAvatarVisual(visual);
-                this.avatarVisuals.delete(id);
             }
         }
     }
@@ -250,110 +204,6 @@ export class DebugRenderRuntime implements IUpdatable {
 
             const t = body.rigidBody.translation();
             visual.label.position.set(t.x, t.y + 0.35, t.z);
-
-            const camera = this.context.runtime.render?.camera;
-            if (camera) {
-                visual.label.quaternion.copy(camera.quaternion);
-            }
-        }
-    }
-
-    private createAvatarVisual(player: PlayerAvatarEntity): IDebugAvatarVisual {
-        const root = new THREE.Group();
-        root.name = `DebugAvatar:${player.id}`;
-        this.root.add(root);
-
-        const boneGeometry = new THREE.BufferGeometry();
-        boneGeometry.setAttribute(
-            'position',
-            new THREE.Float32BufferAttribute(new Float32Array(this.avatarBonePairs.length * 2 * 3), 3)
-        );
-        const bones = new THREE.LineSegments(
-            boneGeometry,
-            new THREE.LineBasicMaterial({
-                color: player.controlMode === 'local' ? 0x00ffff : 0xffb000,
-                transparent: true,
-                opacity: 0.9,
-                depthWrite: false
-            })
-        );
-        bones.name = 'AvatarBones';
-        root.add(bones);
-
-        const jointGeometry = new THREE.BufferGeometry();
-        jointGeometry.setAttribute(
-            'position',
-            new THREE.Float32BufferAttribute(new Float32Array(AVATAR_SKELETON_JOINTS.length * 3), 3)
-        );
-        const joints = new THREE.Points(
-            jointGeometry,
-            new THREE.PointsMaterial({
-                color: player.controlMode === 'local' ? 0xffffff : 0xff7a00,
-                size: 0.04,
-                sizeAttenuation: true,
-                depthWrite: false
-            })
-        );
-        joints.name = 'AvatarJoints';
-        root.add(joints);
-
-        const visual: IDebugAvatarVisual = { root, bones, joints };
-        const label = this.createLabelSprite('');
-        label.name = 'AvatarLabel';
-        root.add(label);
-        visual.label = label;
-        visual.labelText = '';
-
-        return visual;
-    }
-
-    private updateAvatarVisual(player: PlayerAvatarEntity, visual: IDebugAvatarVisual): void {
-        const pose = player.avatarSkeleton.pose;
-        const world = composeAvatarWorldPoses(pose);
-        const jointPositions = visual.joints.geometry.getAttribute('position') as THREE.BufferAttribute;
-        const bonePositions = visual.bones.geometry.getAttribute('position') as THREE.BufferAttribute;
-
-        for (let i = 0; i < AVATAR_SKELETON_JOINTS.length; i += 1) {
-            const jointName = AVATAR_SKELETON_JOINTS[i];
-            const joint = world[jointName];
-            if (joint) {
-                jointPositions.setXYZ(i, joint.position.x, joint.position.y, joint.position.z);
-            } else {
-                jointPositions.setXYZ(i, pose.rootWorldPosition.x, pose.rootWorldPosition.y, pose.rootWorldPosition.z);
-            }
-        }
-        jointPositions.needsUpdate = true;
-        visual.joints.visible = true;
-
-        for (let i = 0; i < this.avatarBonePairs.length; i += 1) {
-            const [parentName, childName] = this.avatarBonePairs[i];
-            const parent = world[parentName];
-            const child = world[childName];
-            const offset = i * 2;
-            if (parent && child) {
-                bonePositions.setXYZ(offset, parent.position.x, parent.position.y, parent.position.z);
-                bonePositions.setXYZ(offset + 1, child.position.x, child.position.y, child.position.z);
-            } else {
-                bonePositions.setXYZ(offset, pose.rootWorldPosition.x, pose.rootWorldPosition.y, pose.rootWorldPosition.z);
-                bonePositions.setXYZ(offset + 1, pose.rootWorldPosition.x, pose.rootWorldPosition.y, pose.rootWorldPosition.z);
-            }
-        }
-        bonePositions.needsUpdate = true;
-        visual.bones.visible = true;
-
-        if (visual.label) {
-            const head = world.head;
-            const labelText = `${player.name || player.id}\n${player.controlMode} ${pose.poseState}`;
-            visual.label.visible = this.settings.showAuthorityLabels;
-            if (labelText !== visual.labelText) {
-                this.updateLabelSprite(visual.label, labelText);
-                visual.labelText = labelText;
-            }
-            if (head) {
-                visual.label.position.set(head.position.x, head.position.y + 0.18, head.position.z);
-            } else {
-                visual.label.position.set(pose.rootWorldPosition.x, pose.rootWorldPosition.y + 1.7, pose.rootWorldPosition.z);
-            }
 
             const camera = this.context.runtime.render?.camera;
             if (camera) {
@@ -495,34 +345,5 @@ export class DebugRenderRuntime implements IUpdatable {
 
         visual.axes?.removeFromParent();
         visual.root.removeFromParent();
-    }
-
-    private disposeAvatarVisual(visual: IDebugAvatarVisual): void {
-        visual.bones.geometry.dispose();
-        (visual.bones.material as THREE.Material).dispose();
-        visual.bones.removeFromParent();
-
-        visual.joints.geometry.dispose();
-        (visual.joints.material as THREE.Material).dispose();
-        visual.joints.removeFromParent();
-
-        if (visual.label) {
-            const material = visual.label.material as THREE.SpriteMaterial;
-            material.map?.dispose();
-            material.dispose();
-            visual.label.removeFromParent();
-        }
-
-        visual.root.removeFromParent();
-    }
-
-    private getDebugPlayers(): PlayerAvatarEntity[] {
-        const out: PlayerAvatarEntity[] = [];
-        for (const entity of this.context.runtime.entity?.entities.values() || []) {
-            if (entity.type === EntityType.PLAYER_AVATAR) {
-                out.push(entity as PlayerAvatarEntity);
-            }
-        }
-        return out;
     }
 }

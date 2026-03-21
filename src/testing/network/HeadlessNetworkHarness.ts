@@ -21,6 +21,7 @@ import { DrawingRuntime } from '../../content/runtime/DrawingRuntime';
 import { AnimationSystem } from '../../render/systems/AnimationSystem';
 import { InteractionSystem } from '../../world/systems/InteractionSystem';
 import { NetworkRuntime } from '../../network/transport/NetworkRuntime';
+import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../shared/avatar/AvatarTrackingSpace';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
 import type { IScenarioContext } from '../../content/contracts/IScenarioContext';
@@ -146,6 +147,7 @@ class HeadlessTrackingProvider implements ITrackingProvider {
         const localPlayer = this.context.localPlayer;
         const origin = localPlayer?.xrOrigin.position ?? { x: 0, y: 0, z: 0 };
         const originQuat = localPlayer?.xrOrigin.quaternion ?? { x: 0, y: 0, z: 0, w: 1 };
+        const avatarOriginQuat = convertRawWorldQuaternionToAvatarWorldQuaternion(originQuat);
         const left = new HandState(-0.35);
         const right = new HandState(0.35);
 
@@ -157,10 +159,10 @@ class HeadlessTrackingProvider implements ITrackingProvider {
         right.pointerPose.position = { ...right.pose.position };
         const trackingFrame: IAvatarTrackingFrame = {
             rootWorldPosition: { ...origin },
-            rootWorldQuaternion: { ...originQuat },
+            rootWorldQuaternion: avatarOriginQuat,
             headWorldPose: {
                 position: { x: origin.x, y: origin.y + 1.7, z: origin.z },
-                quaternion: { ...originQuat }
+                quaternion: avatarOriginQuat
             },
             effectors: {},
             tracked: {

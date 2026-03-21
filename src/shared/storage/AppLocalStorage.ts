@@ -1,3 +1,5 @@
+import type { AvatarRenderMode } from '../contracts/IAvatar';
+
 export interface IStoredScreenConfig {
     name: string;
     key: string;
@@ -6,7 +8,7 @@ export interface IStoredScreenConfig {
 interface IAppStorageProfileV1 {
     playerName?: string;
     avatarColor?: string;
-    avatarRenderMode?: 'stick' | 'vrm-auto';
+    avatarRenderMode?: AvatarRenderMode;
     avatarVrmUrl?: string;
 }
 
@@ -68,7 +70,13 @@ function sanitizeDataV1(value: unknown): IAppStorageDataV1 {
         ? {
             playerName: asNonEmptyTrimmedString(value.profile.playerName),
             avatarColor: asNonEmptyTrimmedString(value.profile.avatarColor),
-            avatarRenderMode: (value.profile.avatarRenderMode === 'vrm-auto' ? 'vrm-auto' : 'stick') as 'stick' | 'vrm-auto',
+            avatarRenderMode: (
+                value.profile.avatarRenderMode === 'coordinates'
+                    ? 'coordinates'
+                    : value.profile.avatarRenderMode === 'vrm-auto'
+                        ? 'vrm-auto'
+                        : 'stick'
+            ) as AvatarRenderMode,
             avatarVrmUrl: asNonEmptyTrimmedString(value.profile.avatarVrmUrl)
         }
         : undefined;
@@ -195,11 +203,11 @@ export class AppLocalStorage {
         });
     }
 
-    public static getAvatarRenderMode(): 'stick' | 'vrm-auto' | undefined {
+    public static getAvatarRenderMode(): AvatarRenderMode | undefined {
         return readEnvelope().data.profile?.avatarRenderMode;
     }
 
-    public static setAvatarRenderMode(renderMode: 'stick' | 'vrm-auto'): void {
+    public static setAvatarRenderMode(renderMode: AvatarRenderMode): void {
         this.update((data) => {
             data.profile = data.profile || {};
             data.profile.avatarRenderMode = renderMode;

@@ -7,6 +7,7 @@ import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { ILookIntentPayload } from '../../shared/contracts/IIntents';
 import { IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
+import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../shared/avatar/AvatarTrackingSpace';
 
 const LERP_SPEED = 15;
 const MAX_REACH = 4.0;
@@ -33,10 +34,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private assistedCameraQuat = new THREE.Quaternion();
 
     private _lookHandler = (payload: ILookIntentPayload) => {
-        // We only care about Y (pitch) here. 
+        // We only care about Y (pitch) here.
         // Horizontal look (yaw) is handled by MovementSkill rotating the origin.
         if (this.context.runtime.render.isXRPresenting()) return;
-        this.pitch += payload.pitchDeltaRad;
+        this.pitch -= payload.pitchDeltaRad;
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
     };
 
@@ -118,12 +119,19 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // Combine to World Space
         const worldHeadPos = localHeadPos.clone().applyQuaternion(originQuat).add(originPos);
         const worldHeadQuat = originQuat.clone().multiply(localHeadQuat);
+        const avatarRootQuat = convertRawWorldQuaternionToAvatarWorldQuaternion(lp.xrOrigin.quaternion);
+        const avatarHeadQuat = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: worldHeadQuat.x,
+            y: worldHeadQuat.y,
+            z: worldHeadQuat.z,
+            w: worldHeadQuat.w
+        });
         const trackingFrame: IAvatarTrackingFrame = {
             rootWorldPosition: { x: originPos.x, y: originPos.y, z: originPos.z },
-            rootWorldQuaternion: { x: originQuat.x, y: originQuat.y, z: originQuat.z, w: originQuat.w },
+            rootWorldQuaternion: avatarRootQuat,
             headWorldPose: {
                 position: { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z },
-                quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
+                quaternion: avatarHeadQuat
             },
             effectors: {},
             tracked: {
@@ -193,11 +201,11 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         trackingFrame.effectors.leftHand = {
             position: { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z },
-            quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
+            quaternion: avatarHeadQuat
         };
         trackingFrame.effectors.rightHand = {
             position: { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z },
-            quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w }
+            quaternion: avatarHeadQuat
         };
         trackingFrame.tracked.leftHand = true;
         trackingFrame.tracked.rightHand = true;
