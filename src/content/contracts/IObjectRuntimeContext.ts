@@ -23,6 +23,7 @@ export interface ISharedPropHandle {
     isAuthority(): boolean;
     getOwnerId(): string | null;
     getHeldBy(): string | null;
+    isSleeping(): boolean;
     getPosition(): IVector3 | null;
     getLinearVelocity(): IVector3 | null;
     setBaseHalfExtents(halfExtents: IVector3): void;
@@ -117,6 +118,31 @@ export interface ITriggerZoneHandle {
     onExit(callback: (participant: ITriggerParticipant) => void): () => void;
 }
 
+export interface IAudioApi {
+    playDrumPadHit(options: { frequency: number; intensity: number; position?: { x: number; y: number; z: number } }): void;
+    playSequencerBeat(options: {
+        beat: 'kick' | 'snare' | 'hat' | 'bass';
+        intensity?: number;
+        position?: { x: number; y: number; z: number };
+    }): void;
+    playMelodyNote(options: {
+        frequency: number;
+        intensity?: number;
+        position?: { x: number; y: number; z: number };
+    }): void;
+    playArpNote(options: {
+        frequency: number;
+        intensity?: number;
+        brightness?: number;
+        position?: { x: number; y: number; z: number };
+    }): void;
+    playFxSweep(options: {
+        down?: boolean;
+        intensity?: number;
+        position?: { x: number; y: number; z: number };
+    }): void;
+}
+
 export interface IObjectRuntimeContext {
     instanceId: string;
 
@@ -131,30 +157,7 @@ export interface IObjectRuntimeContext {
         loadTexture(url: string): Promise<THREE.Texture>;
     };
 
-    audio: {
-        playDrumPadHit(options: { frequency: number; intensity: number; position?: { x: number; y: number; z: number } }): void;
-        playSequencerBeat(options: {
-            beat: 'kick' | 'snare' | 'hat' | 'bass';
-            intensity?: number;
-            position?: { x: number; y: number; z: number };
-        }): void;
-        playMelodyNote(options: {
-            frequency: number;
-            intensity?: number;
-            position?: { x: number; y: number; z: number };
-        }): void;
-        playArpNote(options: {
-            frequency: number;
-            intensity?: number;
-            brightness?: number;
-            position?: { x: number; y: number; z: number };
-        }): void;
-        playFxSweep(options: {
-            down?: boolean;
-            intensity?: number;
-            position?: { x: number; y: number; z: number };
-        }): void;
-    };
+    audio: IAudioApi;
 
     tracking: {
         getState(): ITrackingState;

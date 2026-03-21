@@ -1,7 +1,6 @@
-import type { AppContext } from '../../../app/AppContext';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
-import type { SessionRuntime } from '../../../world/session/SessionRuntime';
+import type { IScenarioContext } from '../../contracts/IScenarioContext';
 import { WideCircleVisuals } from './WideCircleVisuals';
 
 export class WideCircleScenario implements IScenarioModule {
@@ -10,25 +9,22 @@ export class WideCircleScenario implements IScenarioModule {
     public readonly kind = 'social' as const;
     public readonly maxPlayers = 16;
 
-    constructor(private session: SessionRuntime) { }
     private visuals: WideCircleVisuals | null = null;
 
-    public load(context: AppContext, options: IScenarioLoadOptions): void {
-        this.session.ensureGroundPhysics();
-        const seed = options.seed ?? context.sessionConfig.seed;
-        if (context.sessionConfig.seed !== seed) {
-            context.sessionConfig = { ...context.sessionConfig, seed };
-        }
+    public load(context: IScenarioContext, options: IScenarioLoadOptions): void {
+        context.physics.ensureGround();
+        const seed = options.seed ?? 1;
         if (this.visuals) {
             this.visuals.destroy();
             this.visuals = null;
         }
-        if (this.session.scene) {
-            this.visuals = new WideCircleVisuals(this.session.scene, seed);
+        const scene = context.scene.getRoot();
+        if (scene) {
+            this.visuals = new WideCircleVisuals(scene, seed);
         }
     }
 
-    public unload(_context: AppContext): void {
+    public unload(_context: IScenarioContext): void {
         if (this.visuals) {
             this.visuals.destroy();
             this.visuals = null;
@@ -64,7 +60,7 @@ export const WideCircleScenarioPlugin: IScenarioPlugin = {
         hasActions: false,
         hasPortableObjects: false
     },
-    create({ session }) {
-        return new WideCircleScenario(session);
+    create() {
+        return new WideCircleScenario();
     }
 };

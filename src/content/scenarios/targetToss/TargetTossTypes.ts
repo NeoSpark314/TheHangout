@@ -1,4 +1,4 @@
-import type { IPhysicsColliderHandle } from '../../contracts/IObjectRuntimeContext';
+import type { IScenarioStaticBodyHandle } from '../../contracts/IScenarioContext';
 
 export interface ITargetRingDefinition {
     radius: number;
@@ -14,7 +14,7 @@ export interface ITargetDefinition {
 }
 
 export interface ITargetRuntime extends ITargetDefinition {
-    collider: IPhysicsColliderHandle | null;
+    collider: IScenarioStaticBodyHandle | null;
 }
 
 export interface ITargetTossState {

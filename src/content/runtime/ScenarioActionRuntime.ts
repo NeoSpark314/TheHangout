@@ -186,8 +186,7 @@ export class ScenarioActionRuntime {
 
     private createQueryContext(callerPeerId: string | null = this.getLocalPeerId()): IScenarioActionQueryContext {
         return {
-            app: this.context,
-            session: this.context.runtime.session,
+            scenario: this.context.runtime.session.getActiveScenarioContext(),
             isHost: this.context.isHost,
             localPeerId: this.getLocalPeerId(),
             callerRole: this.resolveCallerRole(callerPeerId)

@@ -1,10 +1,9 @@
-import type { AppContext } from '../../app/AppContext';
 import type { ISessionConfig } from '../../app/AppContext';
 import type { IUpdatable } from '../../shared/contracts/IUpdatable';
 import type { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectModule } from './IObjectModule';
 import type { IScenarioActionProvider } from './IScenarioAction';
-import type { IScenarioReplicationEmitOptions } from './IReplicatedScenarioModule';
+import type { IScenarioContext } from './IScenarioContext';
 
 export interface IScenarioLoadOptions {
     isHost: boolean;
@@ -26,16 +25,15 @@ export interface IScenarioModule extends IUpdatable {
     // Scenario transitions are intentionally synchronous and atomic for now.
     // If async loading is needed later, it should use a dedicated transition flow
     // with explicit locking/failure handling rather than implicit Promise returns.
-    load(context: AppContext, options: IScenarioLoadOptions): void;
-    unload(context: AppContext): void;
+    load(context: IScenarioContext, options: IScenarioLoadOptions): void;
+    unload(context: IScenarioContext): void;
     getSpawnPoint(index: number): IScenarioSpawnPoint;
 
-    applyConfig?(context: AppContext, config: ISessionConfig): void;
+    applyConfig?(context: IScenarioContext, config: ISessionConfig): void;
     getDesktopLayout?(index: number, total: number): IDesktopScreenLayout;
     setHologramVisible?(visible: boolean): void;
     getObjectModules?(): IObjectModule[];
     getActionProvider?(): IScenarioActionProvider;
-    onPlayerJoined?(playerId: string): void;
-    onPlayerLeft?(playerId: string): void;
-    emitReplicationEvent?(eventType: string, data: unknown, options?: IScenarioReplicationEmitOptions): void;
+    onPlayerJoined?(context: IScenarioContext, playerId: string): void;
+    onPlayerLeft?(context: IScenarioContext, playerId: string): void;
 }

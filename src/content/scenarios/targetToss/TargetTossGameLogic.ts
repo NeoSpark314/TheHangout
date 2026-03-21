@@ -1,4 +1,4 @@
-import type { PhysicsPropEntity } from '../../../world/entities/PhysicsPropEntity';
+import type { ISharedPropHandle } from '../../contracts/IObjectRuntimeContext';
 import {
     BALL_DEFINITIONS,
     TARGET_TOSS_RESET_REST_PLANAR_SPEED_MAX,
@@ -15,27 +15,26 @@ export function evaluateSettledScores(params: {
     ballIds: readonly string[];
     scoredBallIds: ReadonlySet<string>;
     targets: readonly ITargetRuntime[];
-    getBallEntity: (ballId: string) => PhysicsPropEntity | null;
+    getBall: (ballId: string) => ISharedPropHandle | null;
 }): Array<{ ballId: string; feedback: IScoreFeedbackPayload }> {
     const results: Array<{ ballId: string; feedback: IScoreFeedbackPayload }> = [];
 
     for (const ballId of params.ballIds) {
         if (params.scoredBallIds.has(ballId)) continue;
 
-        const entity = params.getBallEntity(ballId);
-        if (!entity) continue;
-
-        const translation = entity.rigidBody.translation();
-        const velocity = entity.rigidBody.linvel();
+        const ball = params.getBall(ballId);
+        const translation = ball?.getPosition();
+        const velocity = ball?.getLinearVelocity();
+        if (!ball || !translation || !velocity) continue;
         const planarSpeed = Math.hypot(velocity.x, velocity.z);
         const verticalSpeed = Math.abs(velocity.y);
-        const isSettled = entity.rigidBody.isSleeping()
+        const isSettled = ball.isSleeping()
             || (planarSpeed <= TARGET_TOSS_SCORE_SETTLED_PLANAR_SPEED_MAX
                 && verticalSpeed <= TARGET_TOSS_SCORE_SETTLED_VERTICAL_SPEED_MAX);
         if (!isSettled) continue;
         if (translation.y > TARGET_TOSS_SCORE_SETTLED_MAX_HEIGHT) continue;
 
-        const feedback = resolveScoreFeedback(entity, params.targets);
+        const feedback = resolveScoreFeedback(ball, params.targets);
         if (!feedback) continue;
 
         results.push({ ballId, feedback });
@@ -46,17 +45,16 @@ export function evaluateSettledScores(params: {
 
 export function evaluateThrowProgress(params: {
     countedBallIds: Set<string>;
-    getBallEntity: (ballId: string) => PhysicsPropEntity | null;
+    getBall: (ballId: string) => ISharedPropHandle | null;
 }): { changed: boolean; throwsTaken: number } {
     let changed = false;
 
     for (const ball of BALL_DEFINITIONS) {
         if (params.countedBallIds.has(ball.id)) continue;
 
-        const entity = params.getBallEntity(ball.id);
-        if (!entity) continue;
-
-        const translation = entity.rigidBody.translation();
+        const ballHandle = params.getBall(ball.id);
+        const translation = ballHandle?.getPosition();
+        if (!translation) continue;
         const movedDistance = Math.hypot(
             translation.x - ball.position.x,
             translation.y - ball.position.y,
@@ -77,18 +75,17 @@ export function evaluateThrowProgress(params: {
 
 export function areAllCountedBallsAtRest(params: {
     countedBallIds: ReadonlySet<string>;
-    getBallEntity: (ballId: string) => PhysicsPropEntity | null;
+    getBall: (ballId: string) => ISharedPropHandle | null;
 }): boolean {
     if (params.countedBallIds.size === 0) return false;
 
     for (const ballId of params.countedBallIds) {
-        const entity = params.getBallEntity(ballId);
-        if (!entity) return false;
-
-        const velocity = entity.rigidBody.linvel();
+        const ball = params.getBall(ballId);
+        const velocity = ball?.getLinearVelocity();
+        if (!ball || !velocity) return false;
         const planarSpeed = Math.hypot(velocity.x, velocity.z);
         const verticalSpeed = Math.abs(velocity.y);
-        if (!entity.rigidBody.isSleeping()
+        if (!ball.isSleeping()
             && (planarSpeed > TARGET_TOSS_RESET_REST_PLANAR_SPEED_MAX
                 || verticalSpeed > TARGET_TOSS_RESET_REST_VERTICAL_SPEED_MAX)) {
             return false;
@@ -99,10 +96,11 @@ export function areAllCountedBallsAtRest(params: {
 }
 
 function resolveScoreFeedback(
-    entity: PhysicsPropEntity,
+    ball: ISharedPropHandle,
     targets: readonly ITargetRuntime[]
 ): IScoreFeedbackPayload | null {
-    const translation = entity.rigidBody.translation();
+    const translation = ball.getPosition();
+    if (!translation) return null;
 
     for (const target of targets) {
         const dx = translation.x - target.position.x;

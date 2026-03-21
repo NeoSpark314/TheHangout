@@ -1,21 +1,15 @@
 import * as THREE from 'three';
-import type { AppContext } from '../../../app/AppContext';
-import { EntityType } from '../../../shared/contracts/IEntityState';
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type {
     IReplicatedScenarioModule,
-    IScenarioReplicationEmitOptions,
     IScenarioReplicationMeta,
     IScenarioReplicationPolicy
 } from '../../contracts/IReplicatedScenarioModule';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import type { IScenarioLoadOptions, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { IScenarioActionProvider } from '../../contracts/IScenarioAction';
+import type { IScenarioContext, IScenarioStaticBodyHandle } from '../../contracts/IScenarioContext';
 import { ThrowableBallObject } from '../../objects/ThrowableBallObject';
-import type { SessionRuntime } from '../../../world/session/SessionRuntime';
-import type { PhysicsPropEntity } from '../../../world/entities/PhysicsPropEntity';
-import type { IPhysicsColliderHandle } from '../../contracts/IObjectRuntimeContext';
-import type { PlayerAvatarEntity } from '../../../world/entities/PlayerAvatarEntity';
 import { BALL_DEFINITIONS, TARGET_DEFINITIONS, TARGET_TOSS_MIN_SCORE_VIEW_MS, TARGET_TOSS_RESET_DELAY_MS } from './TargetTossConfig';
 import { TargetTossActionProvider } from './TargetTossActionProvider';
 import { TargetTossScorePopup } from './TargetTossScorePopup';
@@ -40,14 +34,13 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         includeInSnapshot: true,
         defaultLocalEcho: true
     };
-    public emitReplicationEvent?: (eventType: string, data: unknown, options?: IScenarioReplicationEmitOptions) => void;
 
     private readonly objectModules: IObjectModule[] = [new ThrowableBallObject()];
     private readonly actionProvider = new TargetTossActionProvider(this);
     private readonly root = new THREE.Group();
     private readonly targets: ITargetRuntime[] = [];
     private readonly ballIds = BALL_DEFINITIONS.map((ball) => ball.id);
-    private rackCollider: IPhysicsColliderHandle | null = null;
+    private rackCollider: IScenarioStaticBodyHandle | null = null;
     private countedBallIds = new Set<string>();
     private scoredBallIds = new Set<string>();
     private resetQueuedAtMs: number | null = null;
@@ -67,27 +60,21 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         scores: {},
         resetPending: false
     };
+    private context: IScenarioContext | null = null;
 
-    constructor(
-        private readonly session: SessionRuntime,
-        private readonly context: AppContext
-    ) {
+    constructor() {
         this.root.name = 'target-toss-scenario';
     }
 
-    public load(context: AppContext, options: IScenarioLoadOptions): void {
-        const seed = options.seed ?? context.sessionConfig.seed;
-        if (context.sessionConfig.seed !== seed) {
-            context.sessionConfig = { ...context.sessionConfig, seed };
-        }
-
-        this.session.ensureGroundPhysics();
+    public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.context = context;
+        context.physics.ensureGround();
         this.createTargets();
         this.createRackCollider();
         this.spawnSharedBalls();
         this.createVisuals();
 
-        if (context.isHost) {
+        if (context.actions.isHost()) {
             this.reconcilePlayers();
             this.state.throwsTaken = 0;
         }
@@ -95,21 +82,17 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.refreshScoreboardVisual();
     }
 
-    public unload(_context: AppContext): void {
+    public unload(_context: IScenarioContext): void {
 
         this.scoreboard?.dispose();
         this.scoreboard = null;
         this.disposeScorePopups();
 
         this.targets.forEach((target) => {
-            if (target.collider?.body) {
-                this.context.runtime.physics.removeRigidBody(target.collider.body);
-            }
+            target.collider?.destroy();
         });
         this.targets.length = 0;
-        if (this.rackCollider?.body) {
-            this.context.runtime.physics.removeRigidBody(this.rackCollider.body);
-        }
+        this.rackCollider?.destroy();
         this.rackCollider = null;
 
         if (this.root.parent) {
@@ -127,7 +110,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         });
         this.root.clear();
 
-        const scene = this.context.runtime.render?.scene;
+        const scene = this.context?.scene.getRoot() ?? null;
         if (scene) {
             scene.background = this.previousBackground;
             scene.fog = this.previousFog;
@@ -145,7 +128,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.sunLight = null;
         this.hemiLight = null;
 
-        const renderer = this.context.runtime.render?.renderer;
+        const renderer = this.context?.scene.getRenderer() ?? null;
         if (renderer && this.previousShadowMapEnabled !== null) {
             renderer.shadowMap.enabled = this.previousShadowMapEnabled;
         }
@@ -164,7 +147,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     public update(_delta: number): void {
-        if (this.context.isHost) {
+        if (this.context?.actions.isHost()) {
             this.reconcilePlayers();
             this.updateThrowProgress();
             this.updateSettledScores();
@@ -172,7 +155,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             this.updatePendingReset();
         }
 
-        const camera = this.context.runtime.render?.camera;
+        const camera = this.context?.scene.getCamera();
         if (this.scoreboard) {
             this.scoreboard.faceCamera(camera);
             this.refreshScoreboardVisual();
@@ -231,7 +214,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     public resetGame(): void {
-        if (!this.context.isHost) return;
+        if (!this.context?.actions.isHost()) return;
 
         const nextScores: Record<string, number> = {};
         for (const playerId of this.collectPlayerOrder()) {
@@ -256,9 +239,11 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private spawnSharedBalls(): void {
+        const context = this.context;
+        if (!context) return;
         for (const ball of BALL_DEFINITIONS) {
-            if (this.session.getObjectInstance(ball.id)) continue;
-            this.session.spawnObjectModule('throwable-ball', {
+            if (context.objects.get(ball.id)) continue;
+            context.objects.spawn('throwable-ball', {
                 id: ball.id,
                 position: ball.position,
                 color: ball.color,
@@ -277,17 +262,18 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
 
     private createRackCollider(): void {
         if (this.rackCollider) return;
-        this.rackCollider = this.context.runtime.physics.createStaticCuboidCollider(
-            1.45 * 0.5,
-            0.22 * 0.5,
-            0.55 * 0.5,
-            { x: 0, y: 0.76, z: 2.6 }
-        );
+        this.rackCollider = this.context?.physics.createStaticBox({
+            position: { x: 0, y: 0.76, z: 2.6 },
+            halfExtents: {
+                x: 1.45 * 0.5,
+                y: 0.22 * 0.5,
+                z: 0.55 * 0.5
+            }
+        }) ?? null;
     }
 
     private createVisuals(): void {
-        const render = this.context.runtime.render;
-        const scene = render?.scene;
+        const scene = this.context?.scene.getRoot() ?? null;
         if (!scene) return;
 
         this.previousBackground = scene.background as THREE.Color | THREE.Texture | null;
@@ -299,7 +285,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             scene.add(this.root);
         }
 
-        const renderer = render?.renderer;
+        const renderer = this.context?.scene.getRenderer() ?? null;
         if (renderer) {
             this.previousShadowMapEnabled = renderer.shadowMap.enabled;
             this.previousShadowMapType = renderer.shadowMap.type;
@@ -340,7 +326,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             ballIds: this.ballIds,
             scoredBallIds: this.scoredBallIds,
             targets: this.targets,
-            getBallEntity: (ballId) => this.getBallEntity(ballId)
+            getBall: (ballId) => this.getBall(ballId)
         });
 
         for (const entry of scored) {
@@ -357,7 +343,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
 
         const progress = evaluateThrowProgress({
             countedBallIds: this.countedBallIds,
-            getBallEntity: (ballId) => this.getBallEntity(ballId)
+            getBall: (ballId) => this.getBall(ballId)
         });
         if (!progress.changed) return;
 
@@ -369,7 +355,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         if (this.state.throwsTaken < this.ballIds.length) return;
         if (!areAllCountedBallsAtRest({
             countedBallIds: this.countedBallIds,
-            getBallEntity: (ballId) => this.getBallEntity(ballId)
+            getBall: (ballId) => this.getBall(ballId)
         })) {
             return;
         }
@@ -399,13 +385,13 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private emitScoreFeedback(payload: IScoreFeedbackPayload): void {
-        this.emitReplicationEvent?.('score-feedback', payload);
+        this.context?.events.emitScenario('score-feedback', payload);
     }
 
     private presentScoreFeedback(payload: IScoreFeedbackPayload): void {
         this.playScoreFeedbackSound(payload);
 
-        const scene = this.context.runtime.render?.scene;
+        const scene = this.context?.scene.getRoot() ?? null;
         if (!scene || typeof document === 'undefined') return;
 
         const popup = new TargetTossScorePopup(payload.points, payload.color, payload.position);
@@ -414,16 +400,13 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private playScoreFeedbackSound(payload: IScoreFeedbackPayload): void {
-        const audio = this.context.runtime.audio;
-        if (!audio) return;
-
         const frequency = payload.points >= 30
             ? 1046.5
             : payload.points >= 20
                 ? 880
                 : 698.46;
         const intensity = payload.points >= 30 ? 0.92 : payload.points >= 20 ? 0.8 : 0.68;
-        audio.playMelodyNote({
+        this.context?.audio.playMelodyNote({
             frequency,
             intensity,
             position: payload.position
@@ -476,16 +459,13 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private resetBallsToRack(): void {
+        const context = this.context;
+        if (!context) return;
         for (const ball of BALL_DEFINITIONS) {
-            const entity = this.getBallEntity(ball.id);
-            if (!entity) continue;
-            entity.rigidBody.setTranslation(ball.position, true);
-            entity.rigidBody.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
-            entity.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-            entity.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-            entity.rigidBody.wakeUp();
-            entity.ownerId = null;
-            entity.syncAuthority();
+            context.props.reset(ball.id, {
+                position: ball.position,
+                quaternion: { x: 0, y: 0, z: 0, w: 1 }
+            });
         }
     }
 
@@ -517,16 +497,12 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private collectPlayerOrder(): string[] {
-        const players = Array.from(this.context.runtime.entity.entities.values())
-            .filter((entity) => entity.type === EntityType.PLAYER_AVATAR)
-            .map((entity) => entity.id);
+        const players = this.context?.players.getAll().map((player) => player.id) ?? [];
         return players.sort((a, b) => a.localeCompare(b));
     }
 
-    private getBallEntity(ballId: string): PhysicsPropEntity | null {
-        const instance = this.session.getObjectInstance(ballId);
-        const primary = instance?.getPrimaryEntity?.() ?? this.context.runtime.entity.getEntity(ballId);
-        return (primary as PhysicsPropEntity | undefined) ?? null;
+    private getBall(ballId: string) {
+        return this.context?.props.get(ballId) ?? null;
     }
 
     private applyState(state: ITargetTossState): void {
@@ -552,7 +528,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
 
     private broadcastState(): void {
         this.refreshScoreboardVisual();
-        this.emitReplicationEvent?.('state-sync', { state: this.cloneState() } satisfies ITargetTossStateSyncPayload);
+        this.context?.events.emitScenario('state-sync', { state: this.cloneState() } satisfies ITargetTossStateSyncPayload);
     }
 
     private refreshScoreboardVisual(): void {
@@ -561,16 +537,15 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
     }
 
     private resolvePlayerLabel(playerId: string): string {
-        const entity = this.context.runtime.entity.getEntity(playerId) as PlayerAvatarEntity | undefined;
-        const name = entity?.name?.trim();
-        if (name) return name;
-        return compactPlayerId(playerId);
+        return this.context?.players.getDisplayName(playerId) ?? compactPlayerId(playerId);
     }
 
     private nowMs(): number {
-        return (typeof performance !== 'undefined' && typeof performance.now === 'function')
-            ? performance.now()
-            : Date.now();
+        return this.context?.timers.nowMs() ?? (
+            (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now()
+        );
     }
 }
 
@@ -624,7 +599,7 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
         hasActions: true,
         hasPortableObjects: true
     },
-    create({ app, session }) {
-        return new TargetTossScenario(session, app);
+    create() {
+        return new TargetTossScenario();
     }
 };

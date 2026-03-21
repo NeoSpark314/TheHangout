@@ -1,12 +1,10 @@
-import type { AppContext } from '../../app/AppContext';
-import type { SessionRuntime } from '../../world/session/SessionRuntime';
+import type { IScenarioContext } from './IScenarioContext';
 
 export type TScenarioActionExecutionSource = 'local_request' | 'remote_request' | 'replicated';
 export type TScenarioActionRole = 'guest' | 'moderator' | 'admin';
 
 export interface IScenarioActionQueryContext {
-    app: AppContext;
-    session: SessionRuntime;
+    scenario: IScenarioContext;
     isHost: boolean;
     localPeerId: string | null;
     callerRole: TScenarioActionRole;

@@ -1,9 +1,33 @@
 import * as THREE from 'three';
-import { EntityFactory } from '../../world/spawning/EntityFactory';
-import { AppContext, ISessionConfig } from '../../app/AppContext';
+import { ISessionConfig } from '../../app/AppContext';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { applyBoxEdgeGlow } from '../../render/materials/BoxEdgeGlow';
 import { createSynthBlockMaterial } from '../../render/materials/SynthBlockMaterial';
+import type { IScenarioStaticBodyHandle } from '../../content/contracts/IScenarioContext';
+
+interface IPropBuilderRuntime {
+    assets: {
+        getNormalizedModel(url: string, targetSize?: number): Promise<THREE.Group>;
+    };
+    physics: {
+        createStaticBox(options: {
+            position: { x: number; y: number; z: number };
+            halfExtents: { x: number; y: number; z: number };
+            rotation?: { x: number; y: number; z: number; w: number };
+        }): IScenarioStaticBodyHandle | null;
+        removeBody(body: IScenarioStaticBodyHandle | null | undefined): void;
+    };
+    entities: {
+        removeEntity(entityId: string): void;
+    };
+    spawnGrabbable?: (
+        id: string,
+        size: number,
+        position: { x: number; y: number; z: number },
+        mesh: THREE.Object3D | undefined,
+        halfExtents?: { x: number; y: number; z: number }
+    ) => unknown;
+}
 
 export class PropBuilder {
     private scene: THREE.Scene;
@@ -18,9 +42,9 @@ export class PropBuilder {
     private decorations: THREE.Group | null = null;
     private hasSpawnedDominoes: boolean = false;
     private readonly spawnedEntityIds: string[] = [];
-    private readonly staticPhysicsBodies: unknown[] = [];
+    private readonly staticPhysicsBodies: IScenarioStaticBodyHandle[] = [];
 
-    constructor(scene: THREE.Scene, randomFunc: () => number, private context: AppContext) {
+    constructor(scene: THREE.Scene, randomFunc: () => number, private runtime: IPropBuilderRuntime) {
         this.scene = scene;
         this.random = randomFunc;
     }
@@ -84,41 +108,37 @@ export class PropBuilder {
             this.scene.add(tableGroup);
         }
 
-        if (this.context.runtime.physics) {
-            // Exact regular-hex tabletop from 3 rotated strips:
-            // For a regular hexagon built from CylinderGeometry radius R, side length s = R.
-            // The strip half-width is the apothem: a = s * sqrt(3) / 2.
-            const tableRadius = 2.0;
-            const sideLength = tableRadius;
-            const apothem = sideLength * Math.sqrt(3) * 0.5;
-            const stripHalfNormal = apothem;   // distance from center to each matched hex side
-            // Keep strips just inside the visual hex edge length to avoid tiny overhangs.
-            const stripHalfTangent = sideLength * 0.5;
-            const topHalfThickness = 0.05;
-            const topY = 1.0;
+        // Exact regular-hex tabletop from 3 rotated strips:
+        // For a regular hexagon built from CylinderGeometry radius R, side length s = R.
+        // The strip half-width is the apothem: a = s * sqrt(3) / 2.
+        const tableRadius = 2.0;
+        const sideLength = tableRadius;
+        const apothem = sideLength * Math.sqrt(3) * 0.5;
+        const stripHalfNormal = apothem;
+        const stripHalfTangent = sideLength * 0.5;
+        const topHalfThickness = 0.05;
+        const topY = 1.0;
 
-            const topBodies: Array<THREE.Quaternion> = [
-                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0),
-                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 3),
-                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (2 * Math.PI) / 3)
-            ];
+        const topBodies: Array<THREE.Quaternion> = [
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 3),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (2 * Math.PI) / 3)
+        ];
 
-            for (const q of topBodies) {
-                const body = this.context.runtime.physics.createCuboid(
-                    stripHalfNormal,
-                    topHalfThickness,
-                    stripHalfTangent,
-                    { x: 0, y: topY, z: 0 },
-                    null,
-                    true,
-                    { x: q.x, y: q.y, z: q.z, w: q.w }
-                );
-                if (body) this.staticPhysicsBodies.push(body);
-            }
-
-            const baseBody = this.context.runtime.physics.createCuboid(0.4, 0.45, 0.4, { x: 0, y: 0.45, z: 0 }, null, true);
-            if (baseBody) this.staticPhysicsBodies.push(baseBody);
+        for (const q of topBodies) {
+            const body = this.runtime.physics.createStaticBox({
+                position: { x: 0, y: topY, z: 0 },
+                halfExtents: { x: stripHalfNormal, y: topHalfThickness, z: stripHalfTangent },
+                rotation: { x: q.x, y: q.y, z: q.z, w: q.w }
+            });
+            if (body) this.staticPhysicsBodies.push(body);
         }
+
+        const baseBody = this.runtime.physics.createStaticBox({
+            position: { x: 0, y: 0.45, z: 0 },
+            halfExtents: { x: 0.4, y: 0.45, z: 0.4 }
+        });
+        if (baseBody) this.staticPhysicsBodies.push(baseBody);
     }
 
     private createHologram(): void {
@@ -134,7 +154,7 @@ export class PropBuilder {
         this.hologram.position.y = 0.5;
         this.table.add(this.hologram);
 
-        this.context.runtime.assets.getNormalizedModel('models/duck.glb', 0.25).then(duck => {
+        this.runtime.assets.getNormalizedModel('models/duck.glb', 0.25).then(duck => {
             if (this.hologram) {
                 this.duckModel = duck;
                 this.duckModel.visible = this.desiredHologramVisible;
@@ -161,10 +181,11 @@ export class PropBuilder {
         this.podest.add(podestMesh);
         if (this.scene) this.scene.add(this.podest);
 
-        if (this.context.runtime.physics) {
-            const body = this.context.runtime.physics.createCuboid(4.0, 0.11, 4.0, { x: 0, y: 0.11, z: 0 }, null, true);
-            if (body) this.staticPhysicsBodies.push(body);
-        }
+        const body = this.runtime.physics.createStaticBox({
+            position: { x: 0, y: 0.11, z: 0 },
+            halfExtents: { x: 4.0, y: 0.11, z: 4.0 }
+        });
+        if (body) this.staticPhysicsBodies.push(body);
     }
 
     private createDecorations(): void {
@@ -201,10 +222,11 @@ export class PropBuilder {
             instanceIndex++;
 
             // Add static physics collider
-            if (this.context.runtime.physics) {
-                const colliderBody = this.context.runtime.physics.createCuboid(w / 2, h / 2, w / 2, { x: posX, y: h / 2, z: posZ }, null, true);
-                if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
-            }
+            const colliderBody = this.runtime.physics.createStaticBox({
+                position: { x: posX, y: h / 2, z: posZ },
+                halfExtents: { x: w / 2, y: h / 2, z: w / 2 }
+            });
+            if (colliderBody) this.staticPhysicsBodies.push(colliderBody);
         }
         pillarMesh.instanceMatrix.needsUpdate = true;
         this.decorations.add(pillarMesh);
@@ -243,8 +265,7 @@ export class PropBuilder {
             mesh.rotation.y = yaw;
 
             const id = `domino-${i}`;
-            EntityFactory.createGrabbable(
-                this.context,
+            this.runtime.spawnGrabbable?.(
                 id,
                 0.12,
                 { x, y: base.y, z },
@@ -271,12 +292,12 @@ export class PropBuilder {
             });
         };
         for (const entityId of this.spawnedEntityIds) {
-            this.context.runtime.entity.removeEntity(entityId);
+            this.runtime.entities.removeEntity(entityId);
         }
         this.spawnedEntityIds.length = 0;
 
         for (const body of this.staticPhysicsBodies) {
-            this.context.runtime.physics.removeRigidBody(body as any);
+            this.runtime.physics.removeBody(body);
         }
         this.staticPhysicsBodies.length = 0;
 
@@ -318,7 +339,7 @@ export class PropBuilder {
         }
 
         const entityId = `admin-spawn-${Date.now()}`;
-        const entity = EntityFactory.createGrabbable(this.context, entityId, 0.12, pos, mesh as any);
+        const entity = this.runtime.spawnGrabbable?.(entityId, 0.12, pos, mesh as any);
         if (entity) {
             this.spawnedEntityIds.push(entityId);
         }

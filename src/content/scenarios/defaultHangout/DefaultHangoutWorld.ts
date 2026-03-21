@@ -1,9 +1,8 @@
-import type { AppContext, ISessionConfig } from '../../../app/AppContext';
+import type { ISessionConfig } from '../../../app/AppContext';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import { EnvironmentBuilder } from '../../../assets/procedural/EnvironmentBuilder';
 import { PropBuilder } from '../../../assets/procedural/PropBuilder';
-import { PewPewGunObject } from '../../objects/PewPewGunObject';
-import type { SessionRuntime } from '../../../world/session/SessionRuntime';
+import type { IScenarioContext } from '../../contracts/IScenarioContext';
 
 export class DefaultHangoutWorld {
     private environment: EnvironmentBuilder | null = null;
@@ -15,69 +14,70 @@ export class DefaultHangoutWorld {
     private readonly defaultChairId = 'default-chair';
     private readonly defaultCubeColors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
 
-    constructor(
-        private session: SessionRuntime,
-        private context: AppContext
-    ) { }
-
-    public load(config: ISessionConfig): void {
-        if (!this.session.getObjectInstance(this.drawingSurfaceId)) {
-            this.session.spawnObjectModule('drawing-surface', { id: this.drawingSurfaceId });
+    public load(context: IScenarioContext): void {
+        if (!context.objects.get(this.drawingSurfaceId)) {
+            context.objects.spawn('drawing-surface', { id: this.drawingSurfaceId });
         }
-        if (!this.session.getObjectInstance(this.defaultPenId)) {
-            this.session.spawnObjectModule('pen-tool', {
+        if (!context.objects.get(this.defaultPenId)) {
+            context.objects.spawn('pen-tool', {
                 id: this.defaultPenId,
                 position: { x: 0.5, y: 1.15, z: 0.5 }
             });
         }
-        if (!this.session.getObjectModuleDefinition('pew-pew-gun')) {
-            this.session.registerObjectModule(new PewPewGunObject());
-        }
-        if (!this.session.getObjectInstance(this.defaultGunId)) {
-            this.session.spawnObjectModule('pew-pew-gun', {
+        if (!context.objects.get(this.defaultGunId)) {
+            context.objects.spawn('pew-pew-gun', {
                 id: this.defaultGunId,
                 position: { x: 0.0, y: 1.12, z: -0.82 },
                 rotationY: 0
             });
         }
-        if (!this.session.getObjectInstance(this.drumPadArcId)) {
-            this.session.spawnObjectModule('drum-pad-arc', { id: this.drumPadArcId });
+        if (!context.objects.get(this.drumPadArcId)) {
+            context.objects.spawn('drum-pad-arc', { id: this.drumPadArcId });
         }
-        if (!this.session.getObjectInstance(this.defaultChairId)) {
-            this.session.spawnObjectModule('chair', {
+        if (!context.objects.get(this.defaultChairId)) {
+            context.objects.spawn('chair', {
                 id: this.defaultChairId,
                 position: { x: -2.4, y: 0, z: 0.8 },
                 rotationY: Math.PI / 2
             });
         }
-        this.ensureDefaultCubes();
+        this.ensureDefaultCubes(context);
 
-        const scene = this.session.scene;
+        context.physics.ensureGround();
+        const scene = context.scene.getRoot();
+        if (!scene) return;
 
-        // Ensure we load the ground physics for headless network sync
-        this.session.ensureGroundPhysics();
-
-        // Headless dedicated sessions still need gameplay objects and static physics,
-        // but they do not own a Three.js scene and should skip visual-only builders.
-        if (scene && !this.environment) {
-            this.environment = new EnvironmentBuilder(scene as any, () => this.session.randomFloat());
+        if (!this.environment) {
+            this.environment = new EnvironmentBuilder(scene, () => context.random.float());
         }
 
         if (!this.props) {
-            this.props = new PropBuilder(scene as any, () => this.session.randomFloat(), this.context);
+            this.props = new PropBuilder(scene, () => context.random.float(), {
+                assets: {
+                    getNormalizedModel: (url, targetSize) => context.assets.getNormalizedModel(url, targetSize)
+                },
+                physics: {
+                    createStaticBox: (options) => context.physics.createStaticBox(options),
+                    removeBody: (body) => context.physics.removeBody(body)
+                },
+                entities: {
+                    removeEntity: () => { }
+                }
+            });
         }
 
-        this.environment?.applyConfig(config);
-        this.props?.applyConfig(config);
     }
 
-    public applyConfig(config: ISessionConfig): void {
-        if (!this.props) {
-            this.load(config);
+    public applyConfig(context: IScenarioContext, config: ISessionConfig): void {
+        if (!this.props || !this.environment) {
+            this.load(context);
+        }
+
+        if (!this.props || !this.environment) {
             return;
         }
 
-        this.environment?.applyConfig(config);
+        this.environment.applyConfig(config);
         this.props.applyConfig(config);
     }
 
@@ -109,15 +109,15 @@ export class DefaultHangoutWorld {
         this.props?.setHologramVisible(visible);
     }
 
-    private ensureDefaultCubes(): void {
+    private ensureDefaultCubes(context: IScenarioContext): void {
         for (let i = 0; i < this.defaultCubeColors.length; i++) {
             const cubeId = `default-cube-${i}`;
-            if (this.session.getObjectInstance(cubeId)) {
+            if (context.objects.get(cubeId)) {
                 continue;
             }
 
             const angle = (i / this.defaultCubeColors.length) * Math.PI * 2;
-            this.session.spawnObjectModule('grabbable-cube', {
+            context.objects.spawn('grabbable-cube', {
                 id: cubeId,
                 position: { x: Math.sin(angle), y: 1.15, z: Math.cos(angle) },
                 color: this.defaultCubeColors[i],
@@ -126,6 +126,3 @@ export class DefaultHangoutWorld {
         }
     }
 }
-
-
-

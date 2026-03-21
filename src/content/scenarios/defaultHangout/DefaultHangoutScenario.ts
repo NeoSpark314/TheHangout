@@ -1,4 +1,3 @@
-import type { AppContext } from '../../../app/AppContext';
 import { DebugBeaconObject } from '../../objects/DebugBeaconObject';
 import { ChairObject } from '../../objects/ChairObject';
 import { DrawingSurfaceObject } from '../../objects/DrawingSurfaceObject';
@@ -8,13 +7,12 @@ import { PenToolObject } from '../../objects/PenToolObject';
 import { PewPewGunObject } from '../../objects/PewPewGunObject';
 import { SimpleSharedObject } from '../../objects/SimpleSharedObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
+import type { ISessionConfig } from '../../../app/AppContext';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
-import type { SessionRuntime } from '../../../world/session/SessionRuntime';
+import type { IScenarioContext } from '../../contracts/IScenarioContext';
 import { DefaultHangoutWorld } from './DefaultHangoutWorld';
-import * as THREE from 'three';
-import { EntityType } from '../../../shared/contracts/IEntityState';
 import type {
     IScenarioActionDefinition,
     IScenarioActionExecutionContext,
@@ -72,9 +70,8 @@ class DefaultHangoutActionProvider implements IScenarioActionProvider {
             if (context.source === 'replicated') {
                 return { ok: true };
             }
-            const currentSeed = context.app.sessionConfig.seed;
-            const nextSeed = this.nextSeed(currentSeed);
-            context.app.runtime.network.requestSessionConfigUpdate({ seed: nextSeed });
+            const nextSeed = this.nextSeed(0);
+            context.scenario.actions.setSessionConfig({ seed: nextSeed });
             return { ok: true, message: 'Room reset triggered.' };
         }
 
@@ -82,9 +79,8 @@ class DefaultHangoutActionProvider implements IScenarioActionProvider {
     }
 
     private executeSeatAll(context: IScenarioActionExecutionContext): IScenarioActionExecutionResult {
-        const players = Array.from(context.app.runtime.entity.entities.values())
-            .filter((entity) => entity.type === EntityType.PLAYER_AVATAR)
-            .map((entity) => entity.id)
+        const players = context.scenario.players.getAll()
+            .map((player) => player.id)
             .sort((a, b) => a.localeCompare(b));
 
         if (players.length === 0) {
@@ -136,13 +132,17 @@ class DefaultHangoutActionProvider implements IScenarioActionProvider {
         seats: Record<string, ISeatAssignment>
     ): void {
         const localPeerId = context.localPeerId;
-        const localPlayer = context.app.localPlayer;
-        if (!localPeerId || !localPlayer) return;
+        if (!localPeerId) return;
 
         const seat = seats[localPeerId];
         if (!seat) return;
 
-        localPlayer.teleportTo(new THREE.Vector3(seat.p[0], seat.p[1], seat.p[2]), seat.y, { targetSpace: 'player' });
+        context.scenario.players.teleport(
+            localPeerId,
+            { x: seat.p[0], y: seat.p[1], z: seat.p[2] },
+            seat.y,
+            { targetSpace: 'player' }
+        );
     }
 }
 
@@ -176,22 +176,14 @@ export class DefaultHangoutScenario implements IScenarioModule {
         new SimpleSharedObject()
     ];
     private readonly actionProvider = new DefaultHangoutActionProvider();
-    private readonly world: DefaultHangoutWorld;
+    private readonly world = new DefaultHangoutWorld();
 
-    constructor(session: SessionRuntime, context: AppContext) {
-        this.world = new DefaultHangoutWorld(session, context);
-    }
-
-    public load(context: AppContext, options: IScenarioLoadOptions): void {
-        const seed = options.seed ?? context.sessionConfig.seed;
-        if (context.sessionConfig.seed !== seed) {
-            context.sessionConfig = { ...context.sessionConfig, seed };
-        }
-        this.world.load(context.sessionConfig);
+    public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.world.load(context);
         this.world.setHologramVisible(true);
     }
 
-    public unload(_context: AppContext): void {
+    public unload(_context: IScenarioContext): void {
         this.world.unload();
     }
 
@@ -219,8 +211,8 @@ export class DefaultHangoutScenario implements IScenarioModule {
         return this.actionProvider;
     }
 
-    public applyConfig(_context: AppContext, config: AppContext['sessionConfig']): void {
-        this.world.applyConfig(config);
+    public applyConfig(context: IScenarioContext, config: ISessionConfig): void {
+        this.world.applyConfig(context, config);
     }
 
     public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
@@ -244,8 +236,8 @@ export const DefaultHangoutScenarioPlugin: IScenarioPlugin = {
         hasActions: true,
         hasPortableObjects: true
     },
-    create({ app, session }) {
-        return new DefaultHangoutScenario(session, app);
+    create() {
+        return new DefaultHangoutScenario();
     }
 };
 

@@ -29,6 +29,10 @@ export class SharedPropHandle implements ISharedPropHandle {
         return this.getEntity()?.heldBy ?? null;
     }
 
+    public isSleeping(): boolean {
+        return this.getEntity()?.rigidBody?.isSleeping() ?? false;
+    }
+
     public getPosition(): IVector3 | null {
         const entity = this.getEntity();
         if (!entity?.rigidBody) return null;

@@ -1,4 +1,4 @@
-# Architecture
+﻿# Architecture
 
 This is the current high-level map of The Hangout.
 
@@ -24,7 +24,7 @@ This is the current high-level map of The Hangout.
 
 - `App.ts` is the composition root.
 - `AppContext` is the shared runtime registry and state container.
-- `SessionRuntime` owns the active scenario, spawned object instances, and trigger updates.
+- `SessionRuntime` owns the active scenario, `ScenarioRuntimeContext`, spawned object instances, and trigger updates.
 - `EntityRegistry` owns live world entities.
 - `PhysicsRuntime` owns Rapier bodies and queries.
 - `PhysicsAuthorityRuntime` owns ownership, handoff, and speculative local authority policy.
@@ -46,14 +46,15 @@ The physics model is:
 
 ## Content Model
 
-Content is built from four supported gameplay blocks:
+Content is built from five supported gameplay blocks:
 
 - Shared props via `context.props.spawnShared(...)`
 - Semantic object replication via `BaseReplicatedObjectInstance`
 - Trigger zones via `context.triggers.createBox(...)`
 - Scenario actions via `context.actions.request(...)`
+- Scenario-owned local visuals and static colliders via `ScenarioContext`
 
-Object code should stay on the gameplay-facing API. Low-level runtime, physics, and network details are engine-internal.
+Object code should stay on the gameplay-facing object API. Scenario code should stay on `ScenarioContext`. Low-level runtime, physics, and network details are engine-internal.
 
 ## Main Entry Points
 
@@ -68,6 +69,7 @@ Object code should stay on the gameplay-facing API. Low-level runtime, physics, 
 - [AppContext.ts](../src/app/AppContext.ts)
 - [SessionRuntime.ts](../src/world/session/SessionRuntime.ts)
 - [ObjectRuntimeContext.ts](../src/content/runtime/ObjectRuntimeContext.ts)
+- [ScenarioRuntimeContext.ts](../src/content/runtime/ScenarioRuntimeContext.ts)
 - [PhysicsRuntime.ts](../src/physics/runtime/PhysicsRuntime.ts)
 - [PhysicsAuthorityRuntime.ts](../src/physics/runtime/PhysicsAuthorityRuntime.ts)
 - [NetworkRuntime.ts](../src/network/transport/NetworkRuntime.ts)
