@@ -6,6 +6,7 @@ import type {
     IReplicatedObjectInstance
 } from '../contracts/IReplicatedObjectInstance';
 import { BaseObjectInstance } from './BaseObjectInstance';
+import { ObjectRuntimeContext } from './ObjectRuntimeContext';
 
 export abstract class BaseReplicatedObjectInstance extends BaseObjectInstance implements IReplicatedObjectInstance {
     public readonly replicationKey: string;
@@ -21,7 +22,8 @@ export abstract class BaseReplicatedObjectInstance extends BaseObjectInstance im
     }
 
     protected emitSyncEvent(eventType: string, data: Record<string, any>, options?: IObjectReplicationEmitOptions): void {
-        this.context.sync.emit(eventType, data, options);
+        if (!(this.context instanceof ObjectRuntimeContext)) return;
+        this.context.getSync().emit(eventType, data, options);
     }
 
     public abstract onReplicationEvent(eventType: string, data: unknown, meta: IObjectReplicationMeta): void;

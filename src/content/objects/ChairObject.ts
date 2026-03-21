@@ -13,6 +13,7 @@ import {
     AuthoritativeSingleMountReplicator,
     type IAuthoritativeSingleMountEventMap
 } from '../runtime/AuthoritativeSingleMountReplicator';
+import { ObjectRuntimeContext } from '../runtime/ObjectRuntimeContext';
 
 const CHAIR_EVENT_OCCUPANCY = 'occupancy';
 const CHAIR_EVENT_MOUNT_REQUEST = 'mount-request';
@@ -128,10 +129,12 @@ class ChairInstance extends BaseReplicatedObjectInstance {
     private readonly seatYaw: number;
     private readonly seatEntity: ChairSeatEntity;
     private readonly mountReplication: AuthoritativeSingleMountReplicator;
+    private readonly runtimeContext: ObjectRuntimeContext;
     private hovered = false;
 
     constructor(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
         super(context, 'chair');
+        this.runtimeContext = context as ObjectRuntimeContext;
         this.seatPosition = config.position
             ? new THREE.Vector3(config.position.x, config.position.y, config.position.z)
             : new THREE.Vector3(0, 0, 0);
@@ -148,10 +151,9 @@ class ChairInstance extends BaseReplicatedObjectInstance {
             });
         });
         this.ownSceneObject(this.seatEntity.mesh);
-        this.createPhysicsColliders();
         this.mountReplication = new AuthoritativeSingleMountReplicator(
             {
-                context: this.context,
+                context: this.runtimeContext,
                 ownerInstanceId: this.id,
                 mountPointId: ChairInstance.MOUNT_POINT_ID,
                 mountLabel: 'chair',
@@ -169,18 +171,18 @@ class ChairInstance extends BaseReplicatedObjectInstance {
     }
 
     public update(): void {
-        const localPlayerId = this.context.app.localPlayer?.id ?? null;
+        const localPlayerId = this.context.players.getLocal()?.id ?? null;
 
-        if (this.mountReplication.getOccupiedBy() === localPlayerId && !this.context.mount.isMountedLocal(this.id)) {
-            const mountStatus = this.context.mount.getLocalMountStatus();
+        if (this.mountReplication.getOccupiedBy() === localPlayerId && !this.runtimeContext.isMountedLocal(this.id)) {
+            const mountStatus = this.runtimeContext.getLocalMountStatus();
             if (mountStatus.state === 'idle' && mountStatus.reason === 'movement') {
                 this.mountReplication.requestAuthoritativeReleaseForLocal('movement');
             }
             return;
         }
 
-        if (this.mountReplication.getOccupiedBy() && this.context.mount.isMountedLocal(this.id) && this.mountReplication.getOccupiedBy() !== localPlayerId) {
-            this.context.mount.unmountLocal(this.id, 'external');
+        if (this.mountReplication.getOccupiedBy() && this.runtimeContext.isMountedLocal(this.id) && this.mountReplication.getOccupiedBy() !== localPlayerId) {
+            this.runtimeContext.unmountLocal(this.id, 'external');
         }
     }
 
@@ -269,48 +271,6 @@ class ChairInstance extends BaseReplicatedObjectInstance {
         if (backMat) {
             backMat.emissive.setHex(emissiveColor);
             backMat.emissiveIntensity = emissiveIntensity;
-        }
-    }
-
-    private createPhysicsColliders(): void {
-        const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.seatYaw);
-        const rotationPose = {
-            x: rotation.x,
-            y: rotation.y,
-            z: rotation.z,
-            w: rotation.w
-        };
-
-        const colliderSpecs = [
-            { half: new THREE.Vector3(0.23, 0.04, 0.23), local: new THREE.Vector3(0, 0.46, 0) },
-            { half: new THREE.Vector3(0.23, 0.28, 0.04), local: new THREE.Vector3(0, 0.78, -0.19) },
-            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(-0.18, 0.22, -0.18) },
-            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(0.18, 0.22, -0.18) },
-            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(-0.18, 0.22, 0.18) },
-            { half: new THREE.Vector3(0.025, 0.22, 0.025), local: new THREE.Vector3(0.18, 0.22, 0.18) }
-        ];
-
-        for (const spec of colliderSpecs) {
-            const worldOffset = spec.local.clone().applyQuaternion(rotation);
-            const worldPosition = this.seatPosition.clone().add(worldOffset);
-            const collider = this.context.physics.createStaticCuboidCollider(
-                spec.half.x,
-                spec.half.y,
-                spec.half.z,
-                { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z },
-                rotationPose
-            );
-            if (!collider) continue;
-
-            this.context.physics.registerInteractionCollider(collider, this.seatEntity);
-            this.addCleanup(() => {
-                this.context.physics.unregisterInteractionCollider(collider);
-            });
-
-            const body = collider.body;
-            if (body) {
-                this.ownPhysicsBody(body);
-            }
         }
     }
 }

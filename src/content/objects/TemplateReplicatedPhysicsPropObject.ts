@@ -26,7 +26,7 @@ class TemplateReplicatedPhysicsPropInstance extends BaseReplicatedPhysicsPropObj
             ? config.entityId
             : (typeof config.id === 'string' ? config.id : undefined);
 
-        const mesh = context.app.runtime.render
+        const mesh = context.scene.isRenderingAvailable()
             ? createTemplateMesh(size, tint)
             : null;
 

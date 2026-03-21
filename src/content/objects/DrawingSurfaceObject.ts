@@ -20,8 +20,7 @@ class DrawingSurfaceInstance extends BaseReplicatedObjectInstance implements IDr
         this.lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
         this.addCleanup(() => this.lineMaterial.dispose());
 
-        const scene = this.context.app.runtime.render?.scene || null;
-        if (scene) {
+        if (this.context.scene.isRenderingAvailable()) {
             this.lineGroup = this.ownSceneObject(new THREE.Group());
             this.lineGroup.name = `drawing-surface:${this.id}`;
         }

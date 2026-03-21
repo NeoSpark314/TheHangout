@@ -12,8 +12,10 @@ import { ObjectInstanceRegistry } from '../../content/runtime/ObjectInstanceRegi
 import { ObjectModuleRegistry } from '../../content/runtime/ObjectModuleRegistry';
 import { ScenarioPluginRegistry } from '../../content/runtime/ScenarioPluginRegistry';
 import { ScenarioReplicationHost } from '../../content/runtime/ScenarioReplicationHost';
+import { TriggerZoneRegistry } from '../../content/runtime/TriggerZoneRegistry';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
+import type { ITriggerBoxOptions, ITriggerZoneHandle } from '../../content/contracts/IObjectRuntimeContext';
 
 export class SessionRuntime implements IUpdatable {
     public scene: THREE.Scene | null = null;
@@ -24,6 +26,7 @@ export class SessionRuntime implements IUpdatable {
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
     private readonly scenarioRegistry = new ScenarioPluginRegistry();
     private readonly scenarioReplicationHost: ScenarioReplicationHost;
+    private readonly triggerZoneRegistry: TriggerZoneRegistry;
     private activeScenarioPlugin: IScenarioPlugin;
     private activeScenario: IScenarioModule;
     public assignedSpawnIndex?: number;
@@ -35,6 +38,7 @@ export class SessionRuntime implements IUpdatable {
     ) {
         this.objectInstanceRegistry = new ObjectInstanceRegistry(context);
         this.scenarioReplicationHost = new ScenarioReplicationHost(context);
+        this.triggerZoneRegistry = new TriggerZoneRegistry(context);
         if (scenarioPlugins.length === 0) {
             throw new Error('[SessionRuntime] At least one scenario plugin must be registered.');
         }
@@ -91,7 +95,12 @@ export class SessionRuntime implements IUpdatable {
 
     public update(delta: number): void {
         this.activeScenario.update(delta);
+        this.triggerZoneRegistry.update();
         this.objectInstanceRegistry.update(delta);
+    }
+
+    public createTriggerBox(options: ITriggerBoxOptions): ITriggerZoneHandle | null {
+        return this.triggerZoneRegistry.createBox(options);
     }
 
     public applySessionConfigUpdate(

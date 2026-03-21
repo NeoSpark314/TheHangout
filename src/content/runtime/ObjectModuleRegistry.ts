@@ -73,7 +73,7 @@ export class ObjectModuleRegistry {
         const instanceId = config.id || this.generateInstanceId(moduleId);
         let result: ReturnType<IObjectModule['spawn']> | null = null;
         try {
-            result = module.spawn(new ObjectRuntimeContext(app, instanceId), config);
+            result = module.spawn(new ObjectRuntimeContext(app, instanceId, moduleId), config);
         } catch (error) {
             console.error(`[ObjectModuleRegistry] Failed while spawning object module ${moduleId}:`, error);
             return null;

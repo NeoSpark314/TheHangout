@@ -1,5 +1,5 @@
-import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
-import { EntityFactory } from '../../world/spawning/EntityFactory';
+import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext, IObjectSpawnResult } from '../contracts/IObjectModule';
+import { ObjectRuntimeContext } from '../runtime/ObjectRuntimeContext';
 
 export class PenToolObject implements IObjectModule {
     public readonly id = 'pen-tool';
@@ -9,10 +9,14 @@ export class PenToolObject implements IObjectModule {
     public readonly portable = true;
 
     // Thin content wrapper over the engine-level PEN entity primitive.
-    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
-        return EntityFactory.spawn(context.app, 'PEN', context.instanceId, {
+    public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): IObjectSpawnResult {
+        if (!(context instanceof ObjectRuntimeContext)) {
+            return null;
+        }
+
+        return context.spawnInternalEntity('PEN', context.instanceId, {
             ...config,
             position: config.position ?? { x: 0.5, y: 1.15, z: 0.5 }
-        });
+        }) as IObjectSpawnResult;
     }
 }

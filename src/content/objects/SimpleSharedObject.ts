@@ -58,7 +58,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
         // Only show a loading placeholder if we have a url to load.
         // When spawned via EntityRegistry.discover() the url is absent from the
         // entity state packet, so we defer the placeholder to applyReplicationSnapshot.
-        if (config.url && context.app.runtime.render) {
+        if (config.url && context.scene.isRenderingAvailable()) {
             const { mesh, geo, mat } = createLoadingPlaceholder();
             this.group.add(mesh);
             this.addCleanup(() => { geo.dispose(); mat.dispose(); });
@@ -89,7 +89,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
         if (!this.url || this.loaded) return;
         this.loaded = true;
 
-        if (!this.context.app.runtime.render) return;
+        if (!this.context.scene.isRenderingAvailable()) return;
 
         if (isModel(this.url)) {
             this.loadAsModel(this.url);
@@ -99,7 +99,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
     }
 
     private loadAsModel(url: string): void {
-        this.context.app.runtime.assets.getNormalizedModel(url, 0.5)
+        this.context.assets.getNormalizedModel(url, 0.5)
             .then(model => {
                 const box = new THREE.Box3().setFromObject(model);
                 const size = box.getSize(new THREE.Vector3());
@@ -118,8 +118,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
     }
 
     private loadAsImage(url: string): void {
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load(url, (texture) => {
+        this.context.assets.loadTexture(url).then((texture) => {
             const image = texture.image as HTMLImageElement;
             const aspect = image.width / image.height;
             const height = 0.5;
@@ -146,7 +145,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
                 geometry.dispose();
                 material.dispose();
             });
-        }, undefined, (err) => {
+        }).catch((err) => {
             console.error('[SimpleSharedInstance] Failed to load image:', url, err);
         });
     }
@@ -186,7 +185,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
 
         // Only show loader and start the download if not already in progress.
         if (!this.loaded && payload.url) {
-            if (this.context.app.runtime.render) {
+            if (this.context.scene.isRenderingAvailable()) {
                 const { mesh, geo, mat } = createLoadingPlaceholder();
                 if (this.propEntity?.id) {
                     mesh.userData.entityId = this.propEntity.id;

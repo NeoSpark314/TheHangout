@@ -5,7 +5,8 @@ import type { IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
 import type { PhysicsReplicationProfileId } from '../../physics/runtime/PhysicsReplicationProfiles';
 import { BaseReplicatedObjectInstance } from './BaseReplicatedObjectInstance';
-import { spawnSharedPhysicsProp } from './SharedPhysicsPropSpawner';
+import { ObjectRuntimeContext } from './ObjectRuntimeContext';
+import { SharedPropHandle } from './SharedPropHandle';
 
 interface IReplicatedPhysicsPropBaseInit {
     position: IVector3;
@@ -34,6 +35,7 @@ type IReplicatedPhysicsPropInit =
     | IReplicatedSpherePhysicsPropInit;
 
 export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplicatedObjectInstance {
+    protected propHandle: SharedPropHandle | null = null;
     protected propEntity: PhysicsPropEntity | null = null;
 
     constructor(context: IObjectSpawnContext, moduleId: string, init: IReplicatedPhysicsPropInit) {
@@ -57,12 +59,17 @@ export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplic
                 entityId
             };
 
-        this.propEntity = spawnSharedPhysicsProp(context, moduleId, sharedPropInit);
+        const handle = this.context.props.spawnShared({
+            ...sharedPropInit,
+            profile: sharedPropInit.replicationProfileId
+        }) as SharedPropHandle | null;
+        this.propHandle = handle;
+        this.propEntity = handle?.getEntity() ?? null;
 
         if (this.propEntity) {
             this.addCleanup(() => {
-                if (this.propEntity) {
-                    this.context.app.runtime.entity?.removeEntity(this.propEntity.id);
+                if (this.propEntity && this.context instanceof ObjectRuntimeContext) {
+                    this.context.removeOwnedEntity(this.propEntity.id);
                 }
             });
         }

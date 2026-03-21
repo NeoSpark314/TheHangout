@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta, IReplicatedObjectInstance } from '../contracts/IReplicatedObjectInstance';
-import { EntityType } from '../../shared/contracts/IEntityState';
-import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 
 interface IDrumPadHitPayload {
@@ -71,7 +69,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly padMeshes: THREE.Mesh[] = [];
     private readonly padPositions: THREE.Vector3[] = [];
     private readonly padFlash: number[] = [];
-    private readonly padFreqByHandle = new Map<number, { padId: string; frequency: number }>();
     private readonly padById = new Map<string, { index: number; frequency: number; position: THREE.Vector3 }>();
     private readonly handLastPos: Record<'left' | 'right', THREE.Vector3 | null> = { left: null, right: null };
     private readonly lastHandPadHitAtMs = new Map<string, number>();
@@ -104,10 +101,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private readonly stationCenter = new THREE.Vector3(6.2, 1.25, -1.8);
     private readonly laneToggleMeshes = new Map<TBeatLane, THREE.Mesh>();
     private readonly laneTogglePositions = new Map<TBeatLane, THREE.Vector3>();
-    private readonly laneToggleByHandle = new Map<number, TBeatLane>();
     private readonly arpStripMeshes = new Map<TArpStripId, THREE.Mesh>();
     private readonly arpStripPositions = new Map<TArpStripId, THREE.Vector3>();
-    private readonly arpStripByHandle = new Map<number, TArpStripId>();
     private readonly arpStripActive: Record<TArpStripId, boolean> = { 'arp-0': false, 'arp-1': false, 'arp-2': false };
     private readonly arpTouchSourcesByStrip = new Map<TArpStripId, Set<string>>();
     private readonly controlCubeMeshes = new Map<TControlCubeId, THREE.Mesh>();
@@ -154,7 +149,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     constructor(context: IObjectSpawnContext, moduleId: string) {
         super(context, moduleId);
-        this.group = this.context.app.runtime.render ? this.ownSceneObject(new THREE.Group()) : null;
+        this.group = this.context.scene.isRenderingAvailable() ? this.ownSceneObject(new THREE.Group()) : null;
         this.sequencerAnchorMs = this.nowMs();
 
         if (this.group) {
@@ -165,7 +160,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.createLaneToggles();
         this.createArpStrips();
         this.createControlCubes();
-        this.bindCollisionListener();
     }
 
     public update(delta: number): void {
@@ -187,7 +181,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     public destroy(): void {
-        this.padFreqByHandle.clear();
         this.padById.clear();
         this.padPositions.length = 0;
         this.padFlash.length = 0;
@@ -206,10 +199,8 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         this.padMeshes.length = 0;
         this.laneToggleMeshes.clear();
         this.laneTogglePositions.clear();
-        this.laneToggleByHandle.clear();
         this.arpStripMeshes.clear();
         this.arpStripPositions.clear();
-        this.arpStripByHandle.clear();
         this.arpTouchSourcesByStrip.clear();
         this.controlCubeMeshes.clear();
         this.controlCubePositions.clear();
@@ -231,7 +222,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (eventType === 'phrase-request') {
             const req = data as IPadPhraseRequestPayload;
             if (!this.isValidPadPhraseRequest(req)) return;
-            if (!this.context.app.isHost) return;
+            if (!this.context.actions.isHost()) return;
             this.startPadPhrase(req.padId);
             return;
         }
@@ -247,7 +238,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (eventType === 'arp-touch-request') {
             const req = data as IArpTouchPayload;
             if (!this.isValidArpTouchPayload(req)) return;
-            if (!this.context.app.isHost) return;
+            if (!this.context.actions.isHost()) return;
             const changed = this.applyArpTouchSource(req.stripId, req.sourceId, req.active);
             if (changed) {
                 this.emitSyncEvent('arp-touch-state', {
@@ -269,7 +260,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (eventType === 'control-action') {
             const action = data as IControlActionPayload;
             if (!this.isValidControlActionPayload(action)) return;
-            if (!this.context.app.isHost) return;
+            if (!this.context.actions.isHost()) return;
             this.applyControlAction(action);
             this.broadcastSequencerSnapshot();
             return;
@@ -278,7 +269,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if (eventType === 'station-toggle') {
             const toggle = data as IStationTogglePayload;
             if (!this.isValidToggle(toggle)) return;
-            if (!this.context.app.isHost) return;
+            if (!this.context.actions.isHost()) return;
             this.toggleLane(toggle.lane);
             this.broadcastSequencerSnapshot();
             return;
@@ -341,17 +332,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.padFlash.push(0);
             this.padById.set(`pad-${i}`, { index: i, frequency: notes[i], position });
 
-            const collider = this.context.physics.createStaticCuboidCollider(
-                0.26, 0.04, 0.15,
-                { x: px, y: padY, z: pz }
-            );
-            if (collider) {
-                this.padFreqByHandle.set(collider.id, { padId: `pad-${i}`, frequency: notes[i] });
-                const body = collider.body;
-                if (body) {
-                    this.ownPhysicsBody(body);
-                }
-            }
+            this.bindPadTrigger(`pad-${i}` as TPadPhraseId, notes[i], position);
         }
     }
 
@@ -402,17 +383,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 this.laneToggleMeshes.set(lane, mesh);
             }
 
-            const collider = this.context.physics.createStaticCuboidCollider(
-                0.1, 0.1, 0.1,
-                { x: position.x, y: position.y, z: position.z }
-            );
-            if (collider) {
-                this.laneToggleByHandle.set(collider.id, lane);
-                const body = collider.body;
-                if (body) {
-                    this.ownPhysicsBody(body);
-                }
-            }
+            this.bindLaneToggleTrigger(lane, position);
         }
     }
 
@@ -462,17 +433,6 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
                 this.arpStripMeshes.set(stripId, mesh);
             }
 
-            const collider = this.context.physics.createStaticCuboidCollider(
-                0.25, 0.04, 0.07,
-                { x: position.x, y: position.y, z: position.z }
-            );
-            if (collider) {
-                this.arpStripByHandle.set(collider.id, stripId);
-                const body = collider.body;
-                if (body) {
-                    this.ownPhysicsBody(body);
-                }
-            }
         }
     }
 
@@ -521,49 +481,50 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
     }
 
-    private bindCollisionListener(): void {
-        this.context.onPhysicsCollisionStarted((data) => {
-            const laneA = this.laneToggleByHandle.get(data.handleA);
-            const laneB = this.laneToggleByHandle.get(data.handleB);
-            if (laneA || laneB) {
-                const lane = laneA || laneB!;
-                const entityId = laneA ? data.entityBId : data.entityAId;
-                if (!entityId) return;
+    private bindPadTrigger(padId: TPadPhraseId, frequency: number, position: THREE.Vector3): void {
+        const trigger = this.context.triggers.createBox({
+            id: `${this.id}:${padId}:prop-trigger`,
+            position: { x: position.x, y: position.y, z: position.z },
+            halfExtents: { x: 0.32, y: 0.14, z: 0.2 },
+            filter: 'shared-prop'
+        });
+        if (!trigger) return;
 
-                const entity = this.context.entity.get(entityId) as PhysicsPropEntity | undefined;
-                if (!entity || entity.type !== EntityType.PHYSICS_PROP) return;
-
-                const v = entity.rigidBody.linvel();
-                const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
-                if (speed < 0.35) return;
-
-                this.requestLaneToggle(lane);
-                return;
-            }
-
-            const padA = this.padFreqByHandle.get(data.handleA);
-            const padB = this.padFreqByHandle.get(data.handleB);
-            if (!padA && !padB) return;
-
-            const hit = padA || padB!;
-            const entityId = padA ? data.entityBId : data.entityAId;
-            if (!entityId) return;
-
-            const entity = this.context.entity.get(entityId) as PhysicsPropEntity | undefined;
-            if (!entity || entity.type !== EntityType.PHYSICS_PROP) return;
-
-            const v = entity.rigidBody.linvel();
-            const speed = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z));
-            const intensity = Math.max(0.08, Math.min(1.0, speed * 0.22));
-            const padInfo = this.padById.get(hit.padId);
+        const unsubscribe = trigger.onEnter((participant) => {
+            const velocity = participant.prop?.getLinearVelocity();
+            if (!velocity) return;
+            const speed = Math.sqrt((velocity.x * velocity.x) + (velocity.y * velocity.y) + (velocity.z * velocity.z));
+            if (speed < 0.18) return;
 
             this.applyDrumHit({
-                padId: hit.padId,
-                frequency: hit.frequency,
-                intensity,
-                position: padInfo ? { x: padInfo.position.x, y: padInfo.position.y, z: padInfo.position.z } : undefined
+                padId,
+                frequency,
+                intensity: Math.max(0.08, Math.min(1.0, speed * 0.22)),
+                position: { x: position.x, y: position.y, z: position.z }
             }, true);
         });
+        this.addCleanup(unsubscribe);
+        this.addCleanup(() => trigger.destroy());
+    }
+
+    private bindLaneToggleTrigger(lane: TBeatLane, position: THREE.Vector3): void {
+        const trigger = this.context.triggers.createBox({
+            id: `${this.id}:lane:${lane}:prop-trigger`,
+            position: { x: position.x, y: position.y, z: position.z },
+            halfExtents: { x: 0.16, y: 0.16, z: 0.16 },
+            filter: 'shared-prop'
+        });
+        if (!trigger) return;
+
+        const unsubscribe = trigger.onEnter((participant) => {
+            const velocity = participant.prop?.getLinearVelocity();
+            if (!velocity) return;
+            const speed = Math.sqrt((velocity.x * velocity.x) + (velocity.y * velocity.y) + (velocity.z * velocity.z));
+            if (speed < 0.35) return;
+            this.requestLaneToggle(lane);
+        });
+        this.addCleanup(unsubscribe);
+        this.addCleanup(() => trigger.destroy());
     }
 
     private updateHandPadTouches(_delta: number): void {
@@ -782,7 +743,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private requestControlAction(cubeId: TControlCubeId, sourceId: string, action: 'tap' | 'hold-start' | 'hold-end'): void {
         const payload: IControlActionPayload = { cubeId, sourceId, action };
-        if (this.context.app.isHost) {
+        if (this.context.actions.isHost()) {
             this.applyControlAction(payload);
             this.broadcastSequencerSnapshot();
             return;
@@ -872,7 +833,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private requestArpTouch(stripId: TArpStripId, sourceId: string, active: boolean): void {
         if (!this.isValidArpStripId(stripId) || !sourceId) return;
-        if (this.context.app.isHost) {
+        if (this.context.actions.isHost()) {
             const changed = this.applyArpTouchSource(stripId, sourceId, active);
             if (changed) {
                 this.emitSyncEvent(
@@ -910,7 +871,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     }
 
     private getHandTouchSourceId(hand: 'left' | 'right'): string {
-        const id = this.context.tracking.getLocalPlayer()?.id || this.context.app.localPlayer?.id || 'local';
+        const id = this.context.players.getLocal()?.id || this.context.tracking.getLocalPlayer()?.id || 'local';
         return `${id}:${hand}`;
     }
 
@@ -920,7 +881,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         if ((now - lastAt) < 140) return;
         this.padTouchCooldownAtMs.set(padId, now);
 
-        if (this.context.app.isHost) {
+        if (this.context.actions.isHost()) {
             this.startPadPhrase(padId);
             return;
         }
@@ -1109,7 +1070,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
     private requestLaneToggle(lane: TBeatLane): void {
         if (!this.isValidBeatLane(lane)) return;
 
-        if (this.context.app.isHost) {
+        if (this.context.actions.isHost()) {
             this.toggleLane(lane);
             this.broadcastSequencerSnapshot();
             return;
@@ -1144,7 +1105,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
             this.lastProcessedAbsoluteStep = absoluteStep;
         }
 
-        if (this.context.app.isHost && (now - this.lastSyncBroadcastAtMs) >= 2000) {
+        if (this.context.actions.isHost() && (now - this.lastSyncBroadcastAtMs) >= 2000) {
             this.broadcastSequencerSnapshot(absoluteStep % 16, phaseMs);
         }
     }

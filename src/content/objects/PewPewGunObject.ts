@@ -6,10 +6,9 @@ import type { IInteractable } from '../../shared/contracts/IInteractable';
 import type { IMovableHoldable } from '../../shared/contracts/IMovableHoldable';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
-import { EntityType } from '../../shared/contracts/IEntityState';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
-import { spawnSharedPhysicsProp } from '../runtime/SharedPhysicsPropSpawner';
+import { SharedPropHandle } from '../runtime/SharedPropHandle';
 
 interface IGunFirePayload {
     origin: [number, number, number];
@@ -44,6 +43,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
     };
 
     private readonly gunEntity: (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
+    private readonly gunHandle: SharedPropHandle | null;
     private readonly slideMesh: THREE.Mesh | null;
     private readonly muzzleMarker: THREE.Object3D | null;
     private readonly barrelRearMarker: THREE.Object3D | null;
@@ -61,20 +61,27 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         this.slideMesh = built.slide;
         this.muzzleMarker = built.muzzle;
         this.barrelRearMarker = built.barrelRear;
-        this.fxRoot = context.app.runtime.render ? this.ownSceneObject(new THREE.Group()) : null;
+        this.fxRoot = context.scene.isRenderingAvailable() ? this.ownSceneObject(new THREE.Group()) : null;
         if (this.fxRoot) {
             this.fxRoot.name = `pew-pew-gun-fx:${this.id}`;
         }
 
-        const entity = spawnSharedPhysicsProp(context, this.moduleId, {
+        const handle = context.props.spawnShared({
             shape: 'box',
             size: 0.42,
             position,
             mesh: built.root,
             halfExtents: { x: 0.08, y: 0.07, z: 0.22 },
             ownerId: (typeof config.ownerId === 'string' || config.ownerId === null) ? config.ownerId : undefined,
-            replicationProfileId: 'held-tool'
-        }) as (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
+            profile: 'held-tool',
+            interaction: {
+                onUse: (event) => this.handleInteraction(event),
+                getCanonicalGrabOffset: (hand) => canonicalGunGrip(hand),
+                getPreferredHeldQuaternionSpace: () => 'pointer'
+            }
+        }) as SharedPropHandle | null;
+        const entity = handle?.getEntity() as (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
+        this.gunHandle = handle;
         this.gunEntity = entity;
 
         if (entity && typeof config.rotationY === 'number') {
@@ -82,13 +89,6 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
             entity.rigidBody.setRotation(rotation as unknown as IQuaternion, true);
         }
 
-        if (entity) {
-            entity.onInteraction = (event: IInteractionEvent) => {
-                this.handleInteraction(event);
-            };
-            entity.getCanonicalGrabOffset = (hand: 'left' | 'right') => canonicalGunGrip(hand);
-            entity.getPreferredHeldQuaternionSpace = () => 'pointer';
-        }
     }
 
     public getPrimaryEntity(): IEntity | null {
@@ -165,7 +165,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         end.copy(origin).addScaledVector(direction, GUN_MAX_RANGE);
 
         let hit = false;
-        const physicsHit = this.context.app.runtime.physics?.raycast(
+        const physicsHit = this.context.props.raycast(
             { x: origin.x, y: origin.y, z: origin.z },
             { x: direction.x, y: direction.y, z: direction.z },
             GUN_MAX_RANGE
@@ -173,26 +173,23 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
         if (physicsHit && physicsHit.distance >= 0.12) {
             if (physicsHit.entityId !== this.id && physicsHit.entityId !== this.gunEntity?.id) {
                 if (physicsHit.entityId) {
-                    const entity = this.context.app.runtime.entity.getEntity(physicsHit.entityId);
-                    if (entity?.type !== EntityType.PLAYER_AVATAR) {
-                        end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);
-                        hit = true;
+                    end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);
+                    hit = true;
 
-                        if (entity?.type === EntityType.PHYSICS_PROP) {
-                            this.context.app.runtime.physics?.applyInteractionImpulse(
-                                physicsHit.entityId,
-                                {
-                                    x: direction.x * GUN_IMPULSE_STRENGTH,
-                                    y: direction.y * GUN_IMPULSE_STRENGTH,
-                                    z: direction.z * GUN_IMPULSE_STRENGTH
-                                },
-                                physicsHit.point,
-                                {
-                                    linearFactor: 1,
-                                    torqueFactor: 0.18
-                                }
-                            );
-                        }
+                    if (physicsHit.prop) {
+                        this.context.props.applyImpulse(
+                            physicsHit.prop,
+                            {
+                                x: direction.x * GUN_IMPULSE_STRENGTH,
+                                y: direction.y * GUN_IMPULSE_STRENGTH,
+                                z: direction.z * GUN_IMPULSE_STRENGTH
+                            },
+                            physicsHit.point,
+                            {
+                                linearFactor: 1,
+                                torqueFactor: 0.18
+                            }
+                        );
                     }
                 } else {
                     end.set(physicsHit.point.x, physicsHit.point.y, physicsHit.point.z);

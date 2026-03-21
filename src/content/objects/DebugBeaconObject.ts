@@ -46,7 +46,7 @@ export class DebugBeaconObject implements IObjectModule {
     public readonly portable = true;
 
     public spawn(context: IObjectSpawnContext, config: IObjectSpawnConfig): DebugBeaconInstance | null {
-        if (!context.app.runtime.render) {
+        if (!context.scene.isRenderingAvailable()) {
             return null;
         }
 

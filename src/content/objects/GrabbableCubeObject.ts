@@ -10,7 +10,7 @@ class GrabbableCubeInstance extends BaseReplicatedPhysicsPropObjectInstance {
         const hasCustomColor = typeof config.color === 'number';
         const color = hasCustomColor ? config.color as number : 0x00ffff;
         const styleSeed = hashToUnit(context.instanceId);
-        const mesh = context.app.runtime.render
+        const mesh = context.scene.isRenderingAvailable()
             ? createCubeMesh(size, color, styleSeed)
             : new THREE.Group();
         const ownerId = (typeof config.ownerId === 'string' || config.ownerId === null)

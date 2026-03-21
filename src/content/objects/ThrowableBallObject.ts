@@ -7,7 +7,7 @@ class ThrowableBallInstance extends BaseReplicatedPhysicsPropObjectInstance {
         const radius = typeof config.size === 'number' ? config.size * 0.5 : 0.09;
         const position = config.position ?? { x: 0, y: 1.05, z: 0 };
         const color = typeof config.color === 'number' ? config.color : 0xff7a1a;
-        const mesh = context.app.runtime.render
+        const mesh = context.scene.isRenderingAvailable()
             ? createBallMesh(radius, color)
             : new THREE.Group();
         const ownerId = (typeof config.ownerId === 'string' || config.ownerId === null)
