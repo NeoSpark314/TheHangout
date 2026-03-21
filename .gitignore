@@ -29,3 +29,6 @@ playwright-report/
 test-results/
 
 storage/
+
+# do not accidentally add test data in public
+public/

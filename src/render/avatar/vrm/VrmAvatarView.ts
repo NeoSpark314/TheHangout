@@ -7,6 +7,8 @@ import { NameTagComponent } from '../components/NameTagComponent';
 import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
 import type { IPlayerViewState } from '../stickfigure/StickFigureView';
 import type { IVrmInstance } from '../../../assets/runtime/IVrmAsset';
+import { AvatarPoseSolver, IAvatarSolvedPose } from '../shared/AvatarPoseSolver';
+import { ITwoBoneIkResult, TwoBoneIkSolver } from '../shared/TwoBoneIkSolver';
 
 interface IArmChain {
     upper: THREE.Object3D;
@@ -20,6 +22,7 @@ interface IArmChain {
     restUpperQuat: THREE.Quaternion;
     restLowerQuat: THREE.Quaternion;
     restHandQuat: THREE.Quaternion;
+    ik: ITwoBoneIkResult;
 }
 
 interface IProxyArmVisuals {
@@ -74,6 +77,21 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
     private readonly proxyMaterial: THREE.MeshBasicMaterial;
     private readonly leftProxy: IProxyArmVisuals;
     private readonly rightProxy: IProxyArmVisuals;
+    private readonly defaultLeftTrackedTarget = new THREE.Vector3(-0.35, 0.95, 0.1);
+    private readonly defaultRightTrackedTarget = new THREE.Vector3(0.35, 0.95, 0.1);
+    private readonly defaultLeftRestTarget = new THREE.Vector3(-0.3, 0.9, 0);
+    private readonly defaultRightRestTarget = new THREE.Vector3(0.3, 0.9, 0);
+    private readonly poseSolver = new AvatarPoseSolver({
+        trackedTargets: {
+            left: this.defaultLeftTrackedTarget,
+            right: this.defaultRightTrackedTarget
+        },
+        restTargets: {
+            left: this.defaultLeftRestTarget,
+            right: this.defaultRightRestTarget
+        }
+    });
+    private readonly twoBoneIk = new TwoBoneIkSolver();
     private readonly tmpTargetPos = new THREE.Vector3();
     private readonly tmpYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
     private readonly tmpYawQuat = new THREE.Quaternion();
@@ -82,20 +100,7 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
     private readonly tmpWorldPosA = new THREE.Vector3();
     private readonly tmpWorldPosB = new THREE.Vector3();
     private readonly tmpWorldPosC = new THREE.Vector3();
-    private readonly tmpWorldPosD = new THREE.Vector3();
     private readonly tmpLocalPos = new THREE.Vector3();
-    private readonly tmpInvParentQuat = new THREE.Quaternion();
-    private readonly tmpToTarget = new THREE.Vector3();
-    private readonly tmpDir = new THREE.Vector3();
-    private readonly tmpPlaneNormal = new THREE.Vector3();
-    private readonly tmpBendDir = new THREE.Vector3();
-    private readonly tmpElbow = new THREE.Vector3();
-    private readonly tmpUpperDir = new THREE.Vector3();
-    private readonly tmpLowerDir = new THREE.Vector3();
-    private readonly tmpLowerLocalDir = new THREE.Vector3();
-    private readonly tmpUpperQuat = new THREE.Quaternion();
-    private readonly tmpLowerQuat = new THREE.Quaternion();
-    private readonly tmpInvUpperQuat = new THREE.Quaternion();
     private readonly tmpCylinderStart = new THREE.Vector3();
     private readonly tmpCylinderEnd = new THREE.Vector3();
     private readonly tmpCylinderDir = new THREE.Vector3();
@@ -118,6 +123,7 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
         super(new THREE.Group());
         this.color = color;
         this.modelRoot = vrmInstance.scene;
+        this.modelRoot.rotation.y = Math.PI;
         this.mesh.add(this.modelRoot);
 
         this.proxyMaterial = new THREE.MeshBasicMaterial({ color: this.color });
@@ -192,52 +198,18 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
             this.currentHeadAnchorY = nextHeadHeight;
         }
 
-        if (state.headQuaternion) {
-            const headBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head);
-            if (headBone) {
-                this.tmpWorldQuat.set(
-                    state.headQuaternion.x,
-                    state.headQuaternion.y,
-                    state.headQuaternion.z,
-                    state.headQuaternion.w
-                );
-                (headBone.parent || this.mesh).getWorldQuaternion(this.tmpParentWorldQuat);
-                this.tmpParentWorldQuat.invert().multiply(this.tmpWorldQuat);
-                if (lerpFactor < 1.0) {
-                    headBone.quaternion.slerp(this.tmpParentWorldQuat, lerpFactor);
-                } else {
-                    headBone.quaternion.copy(this.tmpParentWorldQuat);
-                }
-            }
-        }
-
-        const leftWrist = state.humanoid?.joints['leftHand'];
-        const rightWrist = state.humanoid?.joints['rightHand'];
-
-        if (leftWrist && this.leftChain) {
-            this.solveArm(this.leftChain, leftWrist.position, true, lerpFactor);
-            this.applyWristOrientation(this.leftChain.hand, leftWrist.quaternion, lerpFactor);
-        } else if (this.leftChain) {
-            this.resetArm(this.leftChain, lerpFactor);
-        }
-
-        if (rightWrist && this.rightChain) {
-            this.solveArm(this.rightChain, rightWrist.position, false, lerpFactor);
-            this.applyWristOrientation(this.rightChain.hand, rightWrist.quaternion, lerpFactor);
-        } else if (this.rightChain) {
-            this.resetArm(this.rightChain, lerpFactor);
-        }
-
-        this.updateFingers(state, lerpFactor);
+        const solvedPose = this.poseSolver.solve(this.mesh, state);
+        this.applyHeadPose(solvedPose, lerpFactor);
+        this.applyArmPose(this.leftChain, solvedPose.hands.left, lerpFactor);
+        this.applyArmPose(this.rightChain, solvedPose.hands.right, lerpFactor);
+        this.updateFingers(solvedPose, lerpFactor);
         this.updateLocalSelfView();
 
         if (this.usingLocalProxy) {
             this.updateLocalProxyVisuals();
         }
 
-        if (state.audioLevel !== undefined) {
-            this.vrmInstance.update(delta);
-        }
+        this.vrmInstance.update(delta);
 
         this._billboardNameTag();
         if (state.name !== undefined) {
@@ -316,85 +288,73 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
             pole: new THREE.Vector3(hand === 'left' ? -1 : 1, 0, 0.35).normalize(),
             restUpperQuat: upper.quaternion.clone(),
             restLowerQuat: lower.quaternion.clone(),
-            restHandQuat: wrist.quaternion.clone()
+            restHandQuat: wrist.quaternion.clone(),
+            ik: {
+                upperQuaternion: new THREE.Quaternion(),
+                lowerQuaternion: new THREE.Quaternion(),
+                upperLength: Math.max(0.001, lower.position.length()),
+                lowerLength: Math.max(0.001, wrist.position.length())
+            }
         };
     }
 
-    private solveArm(chain: IArmChain, targetWorld: { x: number; y: number; z: number }, isLeft: boolean, lerpFactor: number): void {
-        this.tmpTargetPos.set(targetWorld.x, targetWorld.y, targetWorld.z);
-        const parentBone = chain.upper.parent;
-        if (!parentBone) return;
+    private applyHeadPose(solvedPose: IAvatarSolvedPose, lerpFactor: number): void {
+        if (!solvedPose.head.present) return;
 
-        this.tmpTargetPos.applyMatrix4(this.mesh.matrixWorld);
-        this.tmpInvParentQuat.identity();
-        this.tmpTargetPos.applyMatrix4(new THREE.Matrix4().copy(parentBone.matrixWorld).invert());
+        const headBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head);
+        if (!headBone) return;
 
-        this.tmpToTarget.subVectors(this.tmpTargetPos, chain.upper.position);
-        const rawDist = Math.max(0.0001, this.tmpToTarget.length());
-        const maxReach = chain.upperLength + chain.lowerLength - 0.0001;
-        const dist = Math.min(rawDist, maxReach);
-
-        this.tmpDir.copy(this.tmpToTarget).normalize();
-        this.tmpPlaneNormal.crossVectors(this.tmpDir, isLeft ? chain.pole : chain.pole);
-        if (this.tmpPlaneNormal.lengthSq() < 1e-6) {
-            this.tmpPlaneNormal.set(0, 0, 1);
-        }
-        this.tmpPlaneNormal.normalize();
-        this.tmpBendDir.crossVectors(this.tmpPlaneNormal, this.tmpDir).normalize();
-
-        const a = (chain.upperLength * chain.upperLength - chain.lowerLength * chain.lowerLength + dist * dist) / (2 * dist);
-        const hSq = Math.max(0, chain.upperLength * chain.upperLength - a * a);
-        const h = Math.sqrt(hSq);
-        this.tmpElbow.copy(chain.upper.position)
-            .addScaledVector(this.tmpDir, a)
-            .addScaledVector(this.tmpBendDir, h);
-
-        this.tmpUpperDir.subVectors(this.tmpElbow, chain.upper.position).normalize();
-        this.tmpLowerDir.subVectors(this.tmpTargetPos, this.tmpElbow).normalize();
-
-        this.tmpUpperQuat.setFromUnitVectors(chain.baseUpperDir, this.tmpUpperDir);
-        this.tmpInvUpperQuat.copy(this.tmpUpperQuat).invert();
-        this.tmpLowerLocalDir.copy(this.tmpLowerDir).applyQuaternion(this.tmpInvUpperQuat);
-        this.tmpLowerQuat.setFromUnitVectors(chain.baseLowerDir, this.tmpLowerLocalDir);
-
-        if (lerpFactor < 1.0) {
-            chain.upper.quaternion.slerp(this.tmpUpperQuat, lerpFactor);
-            chain.lower.quaternion.slerp(this.tmpLowerQuat, lerpFactor);
-        } else {
-            chain.upper.quaternion.copy(this.tmpUpperQuat);
-            chain.lower.quaternion.copy(this.tmpLowerQuat);
-        }
+        this.applyWorldOrientation(headBone, solvedPose.head.worldQuaternion, lerpFactor);
     }
 
-    private applyWristOrientation(handBone: THREE.Object3D, worldQuat: { x: number; y: number; z: number; w: number }, lerpFactor: number): void {
-        this.tmpWorldQuat.set(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w);
-        (handBone.parent || this.mesh).getWorldQuaternion(this.tmpParentWorldQuat);
-        this.tmpParentWorldQuat.invert().multiply(this.tmpWorldQuat);
-        if (lerpFactor < 1.0) {
-            handBone.quaternion.slerp(this.tmpParentWorldQuat, lerpFactor);
-        } else {
-            handBone.quaternion.copy(this.tmpParentWorldQuat);
-        }
-    }
+    private applyArmPose(chain: IArmChain | null, solvedHand: IAvatarSolvedPose['hands']['left'], lerpFactor: number): void {
+        if (!chain) return;
 
-    private resetArm(chain: IArmChain, lerpFactor: number): void {
+        this.twoBoneIk.solve({
+            rigRoot: this.mesh,
+            upper: chain.upper,
+            targetLocalPosition: solvedHand.armTargetLocalPosition,
+            baseUpperDirection: chain.baseUpperDir,
+            baseLowerDirection: chain.baseLowerDir,
+            upperLength: chain.upperLength,
+            lowerLength: chain.lowerLength,
+            pole: chain.pole
+        }, chain.ik);
+
         if (lerpFactor < 1.0) {
-            chain.upper.quaternion.slerp(chain.restUpperQuat, lerpFactor);
-            chain.lower.quaternion.slerp(chain.restLowerQuat, lerpFactor);
+            chain.upper.quaternion.slerp(chain.ik.upperQuaternion, lerpFactor);
+            chain.lower.quaternion.slerp(chain.ik.lowerQuaternion, lerpFactor);
+        } else {
+            chain.upper.quaternion.copy(chain.ik.upperQuaternion);
+            chain.lower.quaternion.copy(chain.ik.lowerQuaternion);
+        }
+
+        if (solvedHand.wrist.present) {
+            this.applyWorldOrientation(chain.hand, solvedHand.wrist.worldQuaternion, lerpFactor);
+        } else if (lerpFactor < 1.0) {
             chain.hand.quaternion.slerp(chain.restHandQuat, lerpFactor);
         } else {
-            chain.upper.quaternion.copy(chain.restUpperQuat);
-            chain.lower.quaternion.copy(chain.restLowerQuat);
             chain.hand.quaternion.copy(chain.restHandQuat);
         }
     }
 
-    private updateFingers(state: IPlayerViewState, lerpFactor: number): void {
-        const hasFingerData = !!state.humanoid?.joints.leftIndexTip || !!state.humanoid?.joints.rightIndexTip;
+    private applyWorldOrientation(node: THREE.Object3D, worldQuat: THREE.Quaternion, lerpFactor: number): void {
+        this.tmpWorldQuat.copy(worldQuat);
+        (node.parent || this.mesh).getWorldQuaternion(this.tmpParentWorldQuat);
+        this.tmpParentWorldQuat.invert().multiply(this.tmpWorldQuat);
+        if (lerpFactor < 1.0) {
+            node.quaternion.slerp(this.tmpParentWorldQuat, lerpFactor);
+        } else {
+            node.quaternion.copy(this.tmpParentWorldQuat);
+        }
+    }
 
+    private updateFingers(solvedPose: IAvatarSolvedPose, lerpFactor: number): void {
         for (const [humanoidName, bone] of this.fingerBones.entries()) {
-            const pose = state.humanoid?.joints[humanoidName];
-            if (!hasFingerData || !pose) {
+            const handPose = humanoidName.startsWith('left') ? solvedPose.hands.left : solvedPose.hands.right;
+            const pose = handPose.joints[humanoidName];
+
+            if (!handPose.hasFingerData || !pose?.present) {
                 const rest = bone.userData.vrmRestQuaternion as THREE.Quaternion | undefined;
                 if (rest) {
                     if (lerpFactor < 1.0) {
@@ -406,14 +366,7 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
                 continue;
             }
 
-            this.tmpWorldQuat.set(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w);
-            (bone.parent || this.mesh).getWorldQuaternion(this.tmpParentWorldQuat);
-            this.tmpParentWorldQuat.invert().multiply(this.tmpWorldQuat);
-            if (lerpFactor < 1.0) {
-                bone.quaternion.slerp(this.tmpParentWorldQuat, lerpFactor);
-            } else {
-                bone.quaternion.copy(this.tmpParentWorldQuat);
-            }
+            this.applyWorldOrientation(bone, pose.worldQuaternion, lerpFactor);
         }
     }
 
@@ -487,4 +440,5 @@ export class VrmAvatarView extends EntityView<IPlayerViewState> {
         this.nameTagComponent.updatePosition();
     }
 }
+
 

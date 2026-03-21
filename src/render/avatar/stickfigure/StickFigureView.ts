@@ -7,6 +7,7 @@ import { NameTagComponent } from '../components/NameTagComponent';
 import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
 import { StickFigureRig, StickFigureBones, StickFigureRigVisuals } from './StickFigureRig';
 import { StickFigureHands } from './StickFigureHands';
+import { AvatarPoseSolver } from '../shared/AvatarPoseSolver';
 
 export interface IPlayerViewState {
     position: IVector3;
@@ -67,17 +68,23 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
     private voiceAudio!: VoiceAudioComponent;
     private rig!: StickFigureRig;
     private hands!: StickFigureHands;
-    private readonly tmpTargetPos = new THREE.Vector3();
-    private readonly tmpYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-    private readonly tmpYawQuat = new THREE.Quaternion();
-    private readonly tmpWorldHeadQuat = new THREE.Quaternion();
-    private readonly tmpParentWorldQuat = new THREE.Quaternion();
-    private readonly tmpLeftHandLocal = new THREE.Vector3();
-    private readonly tmpRightHandLocal = new THREE.Vector3();
     private readonly defaultLeftTrackedTarget = new THREE.Vector3(-0.35, 0.95, 0.1);
     private readonly defaultRightTrackedTarget = new THREE.Vector3(0.35, 0.95, 0.1);
     private readonly defaultLeftRestTarget = new THREE.Vector3(-0.3, 0.9, 0);
     private readonly defaultRightRestTarget = new THREE.Vector3(0.3, 0.9, 0);
+    private readonly poseSolver = new AvatarPoseSolver({
+        trackedTargets: {
+            left: this.defaultLeftTrackedTarget,
+            right: this.defaultRightTrackedTarget
+        },
+        restTargets: {
+            left: this.defaultLeftRestTarget,
+            right: this.defaultRightRestTarget
+        }
+    });
+    private readonly tmpTargetPos = new THREE.Vector3();
+    private readonly tmpYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    private readonly tmpYawQuat = new THREE.Quaternion();
 
     constructor(private context: AppContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
         super(new THREE.Group());
@@ -115,7 +122,7 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             } as StickFigureRigVisuals,
             () => this._updateNameTagPosition()
         );
-        this.hands = new StickFigureHands(this.mesh, this.wristMeshes, this.handMeshes, this.handCylinders);
+        this.hands = new StickFigureHands(this.wristMeshes, this.handMeshes, this.handCylinders);
     }
 
     public attachVoiceStream(stream: MediaStream): void {
@@ -391,51 +398,23 @@ export class StickFigureView extends EntityView<IPlayerViewState> {
             this.rig.updatePosture(height);
         }
 
-        if (state.headQuaternion) {
-            // Incoming quaternion is world space. To make the mesh rotate correctly relative to parent:
-            this.tmpWorldHeadQuat.set(state.headQuaternion.x, state.headQuaternion.y, state.headQuaternion.z, state.headQuaternion.w);
-            this.mesh.getWorldQuaternion(this.tmpParentWorldQuat);
-            this.tmpParentWorldQuat.invert().multiply(this.tmpWorldHeadQuat);
+        const solvedPose = this.poseSolver.solve(this.mesh, state);
 
+        if (solvedPose.head.present) {
             if (lerpFactor < 1.0) {
-                this.headMesh.quaternion.slerp(this.tmpParentWorldQuat, lerpFactor);
+                this.headMesh.quaternion.slerp(solvedPose.head.localQuaternion, lerpFactor);
             } else {
-                this.headMesh.quaternion.copy(this.tmpParentWorldQuat);
+                this.headMesh.quaternion.copy(solvedPose.head.localQuaternion);
             }
         }
 
-        // Logic works in WORLD SPACE, but rendering needs LOCAL SPACE relative to this.mesh (the avatar origin)
-        // Ensure world matrix is up to date since we just potentially moved this.mesh
-        // --- Update Arms & Hands using the HumanoidState ---
-        if (state.humanoid && state.humanoid.joints) {
-            const leftWrist = state.humanoid.joints['leftHand'];
-            const rightWrist = state.humanoid.joints['rightHand'];
+        this.rig.updateArms(
+            solvedPose.hands.left.armTargetLocalPosition,
+            solvedPose.hands.right.armTargetLocalPosition
+        );
+        this.hands.updateSolvedHand('left', solvedPose.hands.left, lerpFactor);
+        this.hands.updateSolvedHand('right', solvedPose.hands.right, lerpFactor);
 
-            if (leftWrist) {
-                this.tmpLeftHandLocal.set(leftWrist.position.x, leftWrist.position.y, leftWrist.position.z);
-                this.mesh.worldToLocal(this.tmpLeftHandLocal);
-            } else {
-                this.tmpLeftHandLocal.copy(this.defaultLeftTrackedTarget);
-            }
-
-            if (rightWrist) {
-                this.tmpRightHandLocal.set(rightWrist.position.x, rightWrist.position.y, rightWrist.position.z);
-                this.mesh.worldToLocal(this.tmpRightHandLocal);
-            } else {
-                this.tmpRightHandLocal.copy(this.defaultRightTrackedTarget);
-            }
-
-            this.rig.updateArms(this.tmpLeftHandLocal, this.tmpRightHandLocal);
-
-            // Update Fingers & Wrist Markers
-            this.hands.updateHumanoidHand('left', state.humanoid, lerpFactor);
-            this.hands.updateHumanoidHand('right', state.humanoid, lerpFactor);
-        } else {
-            // Default rest pose
-            this.rig.updateArms(this.defaultLeftRestTarget, this.defaultRightRestTarget);
-            this.hands.updateHumanoidHand('left', undefined, lerpFactor);
-            this.hands.updateHumanoidHand('right', undefined, lerpFactor);
-        }
         if (state.audioLevel !== undefined) {
             const targetMouthScale = 1.0 + (state.audioLevel * 10.0);
             const animLerp = 0.5;
