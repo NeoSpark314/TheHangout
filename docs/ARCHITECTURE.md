@@ -56,6 +56,12 @@ Content is built from five supported gameplay blocks:
 
 Object code should stay on the gameplay-facing object API. Scenario code should stay on `ScenarioContext`. Low-level runtime, physics, and network details are engine-internal.
 
+Important headless rule:
+
+- dedicated/headless sessions still run authoritative gameplay physics
+- scenario world physics must not depend on render scene availability
+- only visual environment setup should be conditional on `context.scene.isRenderingAvailable()`
+
 ## Main Entry Points
 
 - [README.md](../README.md)

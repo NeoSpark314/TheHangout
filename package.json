@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "serve": "tsx dedicatedServer.ts",
     "test": "vitest",
+    "test:headless": "vitest run src/testing/headless/DefaultHangoutHeadless.test.ts",
     "test:network": "vitest run src/testing/network/NetworkRegression.test.ts"
   },
   "devDependencies": {

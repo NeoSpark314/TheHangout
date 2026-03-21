@@ -78,6 +78,40 @@ Do not use:
 - raw entity scans
 - direct physics prop mutation
 
+## Headless Rule
+
+Dedicated sessions run the same scenario logic without a render scene.
+
+That means:
+
+- gameplay physics must not depend on rendering availability
+- static colliders, trigger volumes, and shared object spawning must still happen when `context.scene.getRoot()` is `null`
+- only meshes, local visual decoration, and view-facing UI should be gated on `context.scene.isRenderingAvailable()`
+
+Good pattern:
+
+- always run gameplay setup first
+- branch only the visual setup
+
+Example shape:
+
+```ts
+public load(context: IScenarioContext): void {
+    this.setupGameplay(context);
+
+    if (context.scene.isRenderingAvailable()) {
+        this.setupVisuals(context);
+    }
+}
+```
+
+Avoid patterns like:
+
+- early-returning from `load(...)` because there is no scene
+- wrapping `createStaticBox(...)` or trigger creation inside a render-only branch
+
+If a dedicated server is authoritative, missing headless physics will cause props to behave correctly while locally owned and then drift or fall through visible geometry when authority returns to the server.
+
 ## Scenario Actions
 
 Use scenario actions for explicit host-authoritative commands:
@@ -112,6 +146,15 @@ For those, use the existing entity and object systems.
 - If it is reusable and has clear world identity, make it an object module.
 - If it is one scenario’s rules or temporary shared state, keep it in the scenario.
 - If it is local environment setup for one scenario, use `ScenarioContext.scene` and `ScenarioContext.physics`.
+
+## Future Tightening
+
+The cleanest way to make the headless-safe pattern enforceable is a later API split between:
+
+- gameplay/world setup hooks that always run
+- visual setup hooks that run only when rendering is available
+
+Today this is a documented authoring rule. If more scenarios start to mix world physics and visuals, that split would be the right next API cleanup.
 
 ## Useful References
 
