@@ -459,6 +459,13 @@ export class PhysicsRuntime {
         const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
         if (!entity || entity.type !== EntityType.PHYSICS_PROP || !entity.rigidBody) return false;
         if (entity.heldBy) return false;
+
+        // The host already simulates unowned props authoritatively; transient hits
+        // should not stamp durable host ownership onto them.
+        if (this.context.isHost && entity.isAuthority && entity.ownerId === null) {
+            return this.applyInteractionImpulseNow(entity, impulse, point, options);
+        }
+
         if (!entity.requestImmediatePhysicsAuthority({ allowSpeculativeHostClaim: true })) {
             this.pendingImpulseByEntity.set(entityId, {
                 impulse: { x: impulse.x, y: impulse.y, z: impulse.z },

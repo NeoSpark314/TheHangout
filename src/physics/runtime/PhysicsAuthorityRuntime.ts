@@ -9,14 +9,21 @@ interface IPendingReleaseState {
     armed: boolean;
 }
 
+interface ILocalAuthorityState {
+    acquiredAtMs: number;
+    observedAwake: boolean;
+}
+
 export class PhysicsAuthorityRuntime {
     private readonly pendingReleaseByEntity = new Map<string, IPendingReleaseState>();
     private readonly lastOwnershipTransferSeqByEntity = new Map<string, number>();
     private readonly lastTouchClaimAtMsByEntity = new Map<string, number>();
+    private readonly localAuthorityByEntity = new Map<string, ILocalAuthorityState>();
     private touchLeaseClaimIntervalMs = 250;
     private touchLeaseProximityDistance = 0.55;
     private pendingReleaseMinHoldMs = 220;
     private pendingReleaseMaxHoldMs = 900;
+    private guestSleepReleaseGraceMs = 250;
 
     constructor(private readonly context: AppContext) { }
 
@@ -77,12 +84,34 @@ export class PhysicsAuthorityRuntime {
         }
 
         this.syncEntityAuthority(entity);
+        const localAuthorityState = this.refreshLocalAuthorityState(entity);
+
+        const localId = this.context.localPlayer?.id || 'local';
+        const isSettledLocalLease =
+            entity.getSimMode() === PhysicsSimMode.AuthoritativeDynamic &&
+            entity.ownerId === localId &&
+            !entity.heldBy &&
+            entity.rigidBody.isSleeping();
+
+        // Host-owned transient interactions should decay back to the unowned-host
+        // baseline once the prop settles so guests can claim it cleanly.
+        if (this.context.isHost && isSettledLocalLease) {
+            this.releaseEntityOwnership(entity);
+            return;
+        }
 
         if (
             entity.getSimMode() === PhysicsSimMode.AuthoritativeDynamic &&
             entity.ownerId !== null &&
             !this.context.isHost &&
-            entity.rigidBody.isSleeping()
+            entity.rigidBody.isSleeping() &&
+            (
+                localAuthorityState?.observedAwake === true ||
+                (
+                    localAuthorityState !== null &&
+                    (this.nowMs() - localAuthorityState.acquiredAtMs) >= this.guestSleepReleaseGraceMs
+                )
+            )
         ) {
             this.releaseEntityOwnership(entity);
         }
@@ -174,6 +203,7 @@ export class PhysicsAuthorityRuntime {
         this.pendingReleaseByEntity.delete(entityId);
         this.lastOwnershipTransferSeqByEntity.delete(entityId);
         this.lastTouchClaimAtMsByEntity.delete(entityId);
+        this.localAuthorityByEntity.delete(entityId);
     }
 
     private handleOwnershipRelease(entity: PhysicsPropEntity, payload: IOwnershipReleasePayload): void {
@@ -245,6 +275,36 @@ export class PhysicsAuthorityRuntime {
 
     private clearPendingRelease(entityId: string): void {
         this.pendingReleaseByEntity.delete(entityId);
+    }
+
+    private refreshLocalAuthorityState(entity: PhysicsPropEntity): ILocalAuthorityState | null {
+        const localId = this.context.localPlayer?.id || 'local';
+        const shouldTrack =
+            !this.context.isHost &&
+            entity.isAuthority &&
+            entity.ownerId === localId &&
+            entity.getSimMode() !== PhysicsSimMode.HeldKinematic;
+
+        if (!shouldTrack) {
+            this.localAuthorityByEntity.delete(entity.id);
+            return null;
+        }
+
+        let state = this.localAuthorityByEntity.get(entity.id) ?? null;
+        if (!state) {
+            state = {
+                acquiredAtMs: this.nowMs(),
+                observedAwake: !entity.rigidBody.isSleeping()
+            };
+            this.localAuthorityByEntity.set(entity.id, state);
+            return state;
+        }
+
+        if (!entity.rigidBody.isSleeping()) {
+            state.observedAwake = true;
+        }
+
+        return state;
     }
 
     private nowMs(): number {

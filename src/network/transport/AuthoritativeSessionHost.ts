@@ -223,10 +223,18 @@ export class AuthoritativeSessionHost {
 
         const logicEntity = entity as {
             ownerId?: string | null;
+            heldBy?: string | null;
+            rigidBody?: { isSleeping?: () => boolean };
             onNetworkEvent?: (type: string, data: unknown) => void;
         };
+        const hostId = this.context.localPlayer?.id || this.context.sessionId || 'local';
+        const hostSleepingPhysicsLease =
+            logicEntity.ownerId === hostId &&
+            !logicEntity.heldBy &&
+            typeof logicEntity.rigidBody?.isSleeping === 'function' &&
+            logicEntity.rigidBody.isSleeping();
 
-        if (logicEntity.ownerId && logicEntity.ownerId !== senderId) return;
+        if (logicEntity.ownerId && logicEntity.ownerId !== senderId && !hostSleepingPhysicsLease) return;
 
         logicEntity.ownerId = senderId;
         entity.isAuthority = false;

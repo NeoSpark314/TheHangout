@@ -183,7 +183,7 @@ export class DebugRenderRuntime implements IUpdatable {
         }
 
         if (visual.label) {
-            const owner = body.ownerId || 'host';
+            const owner = body.ownerId ?? 'unowned';
             const authority = body.isAuthority ? 'local' : 'remote';
             const sim = this.compactSimMode(body.simMode, body.isAuthority);
             const shortId = this.compactId(body.id, 14);
