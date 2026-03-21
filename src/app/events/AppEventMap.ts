@@ -1,4 +1,4 @@
-import type { IAvatarConfig } from '../AppContext';
+import type { IAvatarConfig } from '../../shared/contracts/IAvatar';
 import type { IOwnershipReleasePayload, IOwnershipRequestPayload } from '../../shared/contracts/INetworkPacket';
 import type { IHandIntentPayload, ILookIntentPayload, IMoveIntentPayload, IVRSnapTurnPayload } from '../../shared/contracts/IIntents';
 import type { IVector3 } from '../../shared/contracts/IMath';

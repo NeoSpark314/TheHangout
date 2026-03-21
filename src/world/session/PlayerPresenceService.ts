@@ -33,7 +33,8 @@ export class PlayerPresenceService {
             isLocal: true,
             spawnPos: spawn.position || { x: 0, y: 0, z: 0 },
             spawnYaw: spawn.yaw || 0,
-            color: this.context.avatarConfig.color || 0x00ffff
+            color: this.context.avatarConfig.color || 0x00ffff,
+            avatarConfig: this.context.avatarConfig
         });
 
         if (this.context.localPlayer) {

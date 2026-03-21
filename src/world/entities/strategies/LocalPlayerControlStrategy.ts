@@ -109,7 +109,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             headQuaternion: player.headState.quaternion,
             humanoid: player.humanoid,
             name: player.name || 'You',
-            color: player.appContext.avatarConfig.color,
+            color: player.avatarConfigSnapshot.color,
             isLocal: true,
             audioLevel: player.audioLevel,
             lerpFactor: 1.0
@@ -137,7 +137,9 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             hmd: player.humanoid.consumeNetworkDelta(fullSync) || undefined,
             hm: [trackingState.hands.left.hasJoints ? 1 : 0, trackingState.hands.right.hasJoints ? 1 : 0],
             conf: {
-                color: player.appContext.avatarConfig.color
+                color: player.avatarConfigSnapshot.color,
+                renderMode: player.avatarConfigSnapshot.renderMode,
+                vrmUrl: player.avatarConfigSnapshot.vrmUrl
             },
             mic: player.appContext.voiceEnabled,
             ownerId: player.ownerId

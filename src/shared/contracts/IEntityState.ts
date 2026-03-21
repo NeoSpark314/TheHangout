@@ -1,4 +1,5 @@
 import { NetworkHumanoidDelta } from '../types/HumanoidState';
+import { AvatarRenderMode } from './IAvatar';
 
 /**
  * High-performance spatial types using flat arrays to minimize 
@@ -36,6 +37,8 @@ export interface IPlayerEntityState extends IBaseEntityState {
     hm?: [number, number]; // hand mode flags [leftHasJoints, rightHasJoints]
     conf: {
         color: string | number;
+        renderMode?: AvatarRenderMode;
+        vrmUrl?: string | null;
     };
     mic?: boolean; // self-mute state
 }

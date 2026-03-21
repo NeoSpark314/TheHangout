@@ -6,6 +6,8 @@ import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { ControllerPointer } from '../shared/ControllerPointer';
 import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 import { ConfigRegistry, IConfigSchema } from '../../shared/config/ConfigRegistry';
+import { validateVrmUrl } from '../../shared/avatar/AvatarUrlUtils';
+import { normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
 
 export class FlatUiRuntime implements IUpdatable {
     private static readonly KEYBOARD_MOUSE_HELP_HTML = [
@@ -36,6 +38,9 @@ export class FlatUiRuntime implements IUpdatable {
     private avatarDialog: HTMLElement;
     private closeAvatarBtn: HTMLButtonElement;
     private avatarColorInput: HTMLInputElement;
+    private avatarVrmUrlInput: HTMLInputElement | null;
+    private clearAvatarVrmBtn: HTMLButtonElement | null;
+    private avatarVrmStatus: HTMLElement | null;
     private extensionsBtn: HTMLButtonElement | null;
     private extensionsDialog: HTMLElement | null;
     private closeExtensionsBtn: HTMLButtonElement | null;
@@ -72,6 +77,9 @@ export class FlatUiRuntime implements IUpdatable {
         this.avatarDialog = document.getElementById('avatar-dialog')!;
         this.closeAvatarBtn = document.getElementById('close-avatar-btn') as HTMLButtonElement;
         this.avatarColorInput = document.getElementById('avatar-color') as HTMLInputElement;
+        this.avatarVrmUrlInput = document.getElementById('avatar-vrm-url') as HTMLInputElement | null;
+        this.clearAvatarVrmBtn = document.getElementById('clear-avatar-vrm-btn') as HTMLButtonElement | null;
+        this.avatarVrmStatus = document.getElementById('avatar-vrm-status');
 
         this.extensionsBtn = document.getElementById('extensions-btn') as HTMLButtonElement | null;
         this.extensionsDialog = document.getElementById('extensions-dialog');
@@ -139,12 +147,14 @@ export class FlatUiRuntime implements IUpdatable {
 
         if (this.avatarBtn) {
             this.avatarBtn.addEventListener('click', () => {
+                this.refreshAvatarDialog();
                 this.showElement(this.avatarDialog);
             });
         }
 
         if (this.closeAvatarBtn) {
             this.closeAvatarBtn.addEventListener('click', () => {
+                this.refreshAvatarDialog();
                 this.hideElement(this.avatarDialog);
             });
         }
@@ -168,6 +178,29 @@ export class FlatUiRuntime implements IUpdatable {
                 this.saveToStorage();
                 eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, this.context.avatarConfig);
                 this.updateAvatarButtonColor(this.context.avatarConfig.color as string);
+                this.updateAvatarUrlStatus();
+            });
+        }
+
+        if (this.avatarVrmUrlInput) {
+            this.avatarVrmUrlInput.addEventListener('input', () => {
+                this.applyAvatarUrlInput();
+            });
+        }
+
+        if (this.clearAvatarVrmBtn) {
+            this.clearAvatarVrmBtn.addEventListener('click', () => {
+                if (this.avatarVrmUrlInput) {
+                    this.avatarVrmUrlInput.value = '';
+                }
+                this.context.avatarConfig = normalizeAvatarConfig({
+                    ...this.context.avatarConfig,
+                    renderMode: 'stick',
+                    vrmUrl: null
+                });
+                this.saveToStorage();
+                eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, this.context.avatarConfig);
+                this.updateAvatarUrlStatus();
             });
         }
 
@@ -339,16 +372,24 @@ export class FlatUiRuntime implements IUpdatable {
         this.updateVoiceButton(this.context.voiceAutoEnable);
 
         const storedColor = AppLocalStorage.getAvatarColor();
-        if (storedColor) {
-            this.context.avatarConfig.color = storedColor;
-        } else {
+        let avatarColor = storedColor;
+        if (!avatarColor) {
             const randomColor = this.generateRandomAvatarColor();
-            this.context.avatarConfig.color = randomColor;
+            avatarColor = randomColor;
             AppLocalStorage.setAvatarColor(randomColor);
         }
+        const storedRenderMode = AppLocalStorage.getAvatarRenderMode();
+        const storedVrmUrl = AppLocalStorage.getAvatarVrmUrl();
+        this.context.avatarConfig = normalizeAvatarConfig({
+            color: avatarColor,
+            renderMode: storedRenderMode,
+            vrmUrl: storedVrmUrl
+        });
 
         if (this.avatarColorInput) this.avatarColorInput.value = this.context.avatarConfig.color as string;
+        if (this.avatarVrmUrlInput) this.avatarVrmUrlInput.value = this.context.avatarConfig.vrmUrl || '';
         this.updateAvatarButtonColor(this.context.avatarConfig.color as string);
+        this.updateAvatarUrlStatus();
 
         this.context.playerName = this.nameInput.value.trim();
 
@@ -372,6 +413,8 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.context.avatarConfig.color) {
             AppLocalStorage.setAvatarColor(this.context.avatarConfig.color as string);
         }
+        AppLocalStorage.setAvatarRenderMode(this.context.avatarConfig.renderMode);
+        AppLocalStorage.setAvatarVrmUrl(this.context.avatarConfig.vrmUrl || null);
         AppLocalStorage.setVoiceAutoEnable(this.context.voiceAutoEnable);
         if (session) {
             AppLocalStorage.setLastSessionId(session);
@@ -823,6 +866,56 @@ export class FlatUiRuntime implements IUpdatable {
             this.voiceBtn.textContent = 'Auto Mic: Off';
             this.voiceBtn.classList.remove('ready');
         }
+    }
+
+    private refreshAvatarDialog(): void {
+        if (this.avatarColorInput) {
+            this.avatarColorInput.value = this.context.avatarConfig.color as string;
+        }
+        if (this.avatarVrmUrlInput) {
+            this.avatarVrmUrlInput.value = this.context.avatarConfig.vrmUrl || '';
+        }
+        this.updateAvatarUrlStatus();
+    }
+
+    private applyAvatarUrlInput(): void {
+        if (!this.avatarVrmUrlInput) return;
+
+        const rawValue = this.avatarVrmUrlInput.value.trim();
+        const validation = validateVrmUrl(rawValue, window.location.href, window.location.origin);
+        if (!validation.valid) {
+            this.updateAvatarUrlStatus(validation.error);
+            return;
+        }
+
+        this.context.avatarConfig = normalizeAvatarConfig({
+            ...this.context.avatarConfig,
+            renderMode: rawValue ? 'vrm-auto' : 'stick',
+            vrmUrl: rawValue || null
+        });
+        this.saveToStorage();
+        eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, this.context.avatarConfig);
+        this.updateAvatarUrlStatus();
+    }
+
+    private updateAvatarUrlStatus(overrideError?: string | null): void {
+        if (!this.avatarVrmStatus) return;
+
+        const rawValue = this.avatarVrmUrlInput?.value.trim() || '';
+        if (overrideError) {
+            this.avatarVrmStatus.textContent = overrideError;
+            return;
+        }
+
+        if (!rawValue) {
+            this.avatarVrmStatus.textContent = 'Stick figure fallback is active.';
+            return;
+        }
+
+        const validation = validateVrmUrl(rawValue, window.location.href, window.location.origin);
+        this.avatarVrmStatus.textContent = validation.valid
+            ? 'VRM will be used when supported. Stick figure stays as fallback.'
+            : (validation.error || 'Avatar URL is invalid.');
     }
 
     private updateAvatarButtonColor(color: string): void {

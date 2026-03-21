@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PlayerAvatarEntity } from '../entities/PlayerAvatarEntity';
-import { StickFigureView } from '../../render/avatar/stickfigure/StickFigureView';
+import { AvatarView } from '../../render/avatar/AvatarView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
 import { PhysicsPropEntity } from '../entities/PhysicsPropEntity';
 import { PenToolEntity } from '../entities/PenToolEntity';
@@ -13,6 +13,7 @@ import { IEntity } from '../../shared/contracts/IEntity';
 import { LocalPlayerControlStrategy } from '../entities/strategies/LocalPlayerControlStrategy';
 import { RemotePlayerReplicationStrategy } from '../entities/strategies/RemotePlayerReplicationStrategy';
 import type { PhysicsReplicationProfileId } from '../../physics/runtime/PhysicsReplicationProfiles';
+import type { IAvatarConfig } from '../../shared/contracts/IAvatar';
 
 export class EntityFactory {
     private static registry: Map<string, (context: AppContext, id: string, config: Record<string, any>) => IEntity | null> = new Map();
@@ -21,7 +22,8 @@ export class EntityFactory {
         // Register default types
         this.register('PLAYER_AVATAR', (context, id, config) => this.createPlayer(context, id, {
             ...config,
-            isLocal: config.controlMode ? config.controlMode === 'local' : !!config.isLocal
+            isLocal: config.controlMode ? config.controlMode === 'local' : !!config.isLocal,
+            avatarConfig: config.conf
         }));
         this.register('PHYSICS_PROP', (context, id, config) => {
             // For remote discovery, we might not have the mesh yet
@@ -57,12 +59,29 @@ export class EntityFactory {
         return creator(context, id, config);
     }
 
-    public static createPlayer(context: AppContext, id: string, { isLocal, spawnPos = { x: 0, y: 0, z: 0 }, spawnYaw = 0, color }: { isLocal: boolean, spawnPos?: IVector3, spawnYaw?: number, color?: string | number }): PlayerAvatarEntity {
+    public static createPlayer(
+        context: AppContext,
+        id: string,
+        {
+            isLocal,
+            spawnPos = { x: 0, y: 0, z: 0 },
+            spawnYaw = 0,
+            color,
+            avatarConfig
+        }: {
+            isLocal: boolean,
+            spawnPos?: IVector3,
+            spawnYaw?: number,
+            color?: string | number,
+            avatarConfig?: Partial<IAvatarConfig>
+        }
+    ): PlayerAvatarEntity {
         const render = context.runtime.render;
         const view = render
-            ? new StickFigureView(context, {
+            ? new AvatarView(context, {
                 color: color || (isLocal ? context.avatarConfig.color : 0xff00ff),
-                isLocal: isLocal
+                isLocal,
+                avatarConfig: avatarConfig || (isLocal ? context.avatarConfig : undefined)
             })
             : new NullView(id);
 
@@ -75,7 +94,8 @@ export class EntityFactory {
             {
                 controlMode: isLocal ? 'local' : 'remote',
                 spawnPos,
-                spawnYaw
+                spawnYaw,
+                avatarConfig
             }
         );
         entity.attachControlStrategy(
@@ -84,7 +104,7 @@ export class EntityFactory {
                 : new RemotePlayerReplicationStrategy()
         );
 
-        if (render && view instanceof StickFigureView) {
+        if (render) {
             view.addToScene(render.scene);
             view.addToInteractionGroup(render.interactionGroup);
         }

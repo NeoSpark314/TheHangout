@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { HeadlessNetworkHarness } from './HeadlessNetworkHarness';
+import type { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 
 let activeHarness: HeadlessNetworkHarness | null = null;
 
@@ -231,11 +232,35 @@ describe.sequential('Headless Network Regression', () => {
 
         expect(distance3(hostCube.rigidBody.translation(), syncedGuestCube.rigidBody.translation())).toBeLessThan(0.2);
     });
+
+    it('replicates avatar vrm config through the player state conf payload', async () => {
+        const harness = await HeadlessNetworkHarness.create();
+        activeHarness = harness;
+        const guest = harness.requireGuest();
+
+        guest.context.avatarConfig = {
+            color: '#22ccff',
+            renderMode: 'vrm-auto',
+            vrmUrl: 'https://cdn.example.com/guest-avatar.vrm'
+        };
+        guest.context.localPlayer?.setAvatarConfig(guest.context.avatarConfig);
+
+        harness.stepFrames(20);
+
+        const remoteGuestOnHost = harness.host.context.runtime.entity.getEntity(harness.guestId as string) as PlayerAvatarEntity;
+        expect(remoteGuestOnHost).toBeTruthy();
+        expect(remoteGuestOnHost.avatarConfigSnapshot.color).toBe('#22ccff');
+        expect(remoteGuestOnHost.avatarConfigSnapshot.renderMode).toBe('vrm-auto');
+        expect(remoteGuestOnHost.avatarConfigSnapshot.vrmUrl).toBe('https://cdn.example.com/guest-avatar.vrm');
+    });
 });
 
 function distance3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
     return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
+
+
+
 
 
 

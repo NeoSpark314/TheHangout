@@ -28,10 +28,7 @@ import type { ReplicationDebugRuntime } from '../network/replication/Replication
 import type { NotificationRuntime } from './notifications/NotificationRuntime';
 import type { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 import type { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
-
-export interface IAvatarConfig {
-    color: string | number;
-}
+import { DEFAULT_AVATAR_COLOR, IAvatarConfig } from '../shared/contracts/IAvatar';
 
 export interface ISessionConfig {
     activeScenarioId: string;
@@ -86,7 +83,9 @@ export class AppContext {
     public sessionId: string | null = null;
     public playerName: string = 'Player';
     public avatarConfig: IAvatarConfig = {
-        color: '#00ffff'
+        color: DEFAULT_AVATAR_COLOR,
+        renderMode: 'stick',
+        vrmUrl: null
     };
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;

@@ -897,7 +897,7 @@ export class VrUiRuntime implements IUpdatable {
                     allPeers.push({
                         id: rp.id,
                         name: rp.name || 'Unknown',
-                        avatarColor: rp.avatarColor as string | number,
+                        avatarColor: rp.avatarConfigSnapshot.color as string | number,
                         isLocal: false,
                         audioLevel: rp.audioLevel,
                         isMuted: rp.isMuted,

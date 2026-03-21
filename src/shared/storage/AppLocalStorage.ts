@@ -6,6 +6,8 @@ export interface IStoredScreenConfig {
 interface IAppStorageProfileV1 {
     playerName?: string;
     avatarColor?: string;
+    avatarRenderMode?: 'stick' | 'vrm-auto';
+    avatarVrmUrl?: string;
 }
 
 interface IAppStorageSessionV1 {
@@ -65,7 +67,9 @@ function sanitizeDataV1(value: unknown): IAppStorageDataV1 {
     const profile = isRecord(value.profile)
         ? {
             playerName: asNonEmptyTrimmedString(value.profile.playerName),
-            avatarColor: asNonEmptyTrimmedString(value.profile.avatarColor)
+            avatarColor: asNonEmptyTrimmedString(value.profile.avatarColor),
+            avatarRenderMode: (value.profile.avatarRenderMode === 'vrm-auto' ? 'vrm-auto' : 'stick') as 'stick' | 'vrm-auto',
+            avatarVrmUrl: asNonEmptyTrimmedString(value.profile.avatarVrmUrl)
         }
         : undefined;
 
@@ -115,7 +119,6 @@ function readEnvelope(): IAppStorageEnvelope {
             version: STORAGE_VERSION,
             data: sanitizeDataV1(parsed.data)
         };
-        // Normalize potentially dirty state back to storage.
         writeEnvelope(envelope);
         return envelope;
     } catch {
@@ -192,6 +195,28 @@ export class AppLocalStorage {
         });
     }
 
+    public static getAvatarRenderMode(): 'stick' | 'vrm-auto' | undefined {
+        return readEnvelope().data.profile?.avatarRenderMode;
+    }
+
+    public static setAvatarRenderMode(renderMode: 'stick' | 'vrm-auto'): void {
+        this.update((data) => {
+            data.profile = data.profile || {};
+            data.profile.avatarRenderMode = renderMode;
+        });
+    }
+
+    public static getAvatarVrmUrl(): string | undefined {
+        return readEnvelope().data.profile?.avatarVrmUrl;
+    }
+
+    public static setAvatarVrmUrl(url: string | null | undefined): void {
+        this.update((data) => {
+            data.profile = data.profile || {};
+            data.profile.avatarVrmUrl = asNonEmptyTrimmedString(url);
+        });
+    }
+
     public static getRemoteDesktopScreens(): IStoredScreenConfig[] {
         return readEnvelope().data.remoteDesktop?.screens || [];
     }
@@ -213,3 +238,4 @@ export class AppLocalStorage {
         });
     }
 }
+

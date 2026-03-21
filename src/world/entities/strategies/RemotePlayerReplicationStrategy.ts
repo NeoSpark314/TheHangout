@@ -72,9 +72,21 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
             stateChanged = true;
         }
 
-        if (data.conf && data.conf.color !== player.avatarColor) {
-            player.avatarColor = data.conf.color;
-            stateChanged = true;
+        if (data.conf) {
+            const incomingRenderMode = data.conf.renderMode ?? 'stick';
+            const incomingUrl = data.conf.vrmUrl ?? null;
+            const changed = data.conf.color !== player.avatarConfigSnapshot.color
+                || incomingRenderMode !== player.avatarConfigSnapshot.renderMode
+                || incomingUrl !== (player.avatarConfigSnapshot.vrmUrl ?? null);
+
+            if (changed) {
+                player.setAvatarConfig({
+                    color: data.conf.color,
+                    renderMode: incomingRenderMode,
+                    vrmUrl: incomingUrl
+                });
+                stateChanged = true;
+            }
         }
 
         if (data.mic !== undefined && player.micEnabled !== !!data.mic) {
@@ -134,7 +146,7 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
                     includeTalking: false
                 }
             ),
-            color: player.avatarColor,
+            color: player.avatarConfigSnapshot.color,
             audioLevel: player.audioLevel,
             lerpFactor
         }, delta);
