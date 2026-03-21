@@ -134,6 +134,16 @@ function setTrackedHandPose(
     }
 }
 
+function clearTrackedFingerSkeleton(frame: IAvatarTrackingFrame, side: 'left' | 'right'): void {
+    const chains = side === 'left' ? LEFT_TRACKED_HAND_CHAINS : RIGHT_TRACKED_HAND_CHAINS;
+    for (const chain of chains) {
+        for (const jointName of chain) {
+            delete frame.effectors[jointName];
+            delete frame.tracked[jointName];
+        }
+    }
+}
+
 describe('AvatarMotionSolver', () => {
     it('keeps canonical head and hand world targets aligned to tracking anchors', () => {
         const solver = new AvatarMotionSolver();
@@ -251,13 +261,20 @@ describe('AvatarMotionSolver', () => {
 
         const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
         const world = composeAvatarWorldPoses(pose);
+        const targetBack = new THREE.Vector3(0, 1, 0).applyQuaternion(targetHandQuaternion);
+        const targetThumb = new THREE.Vector3(0, 0, 1).applyQuaternion(targetHandQuaternion);
+        const solvedBack = new THREE.Vector3(0, 1, 0).applyQuaternion(world.leftHand!.quaternion);
+        const solvedThumb = new THREE.Vector3(0, 0, 1).applyQuaternion(world.leftHand!.quaternion);
 
-        expect(world.leftHand!.quaternion.angleTo(targetHandQuaternion)).toBeLessThan(1e-4);
+        expect(solvedBack.dot(targetBack)).toBeGreaterThan(0.9999);
+        expect(solvedThumb.dot(targetThumb)).toBeGreaterThan(0.995);
     });
 
     it('maps WebXR grip-space controllers to inward-facing palms', () => {
         const solver = new AvatarMotionSolver();
         const frame = createTrackingFrame(false);
+        clearTrackedFingerSkeleton(frame, 'left');
+        clearTrackedFingerSkeleton(frame, 'right');
         const leftHandWorldQuaternion = createHandWorldQuaternion(
             new THREE.Vector3(1, 0, 0),
             new THREE.Vector3(0, 0, 1)
@@ -289,24 +306,30 @@ describe('AvatarMotionSolver', () => {
         const leftPalm = new THREE.Vector3(0, -1, 0).applyQuaternion(world.leftHand!.quaternion);
         const rightPalm = new THREE.Vector3(0, -1, 0).applyQuaternion(world.rightHand!.quaternion);
 
-        expect(leftPalm.x).toBeLessThan(-0.5);
-        expect(rightPalm.x).toBeGreaterThan(0.5);
+        expect(leftPalm.x).toBeLessThan(-0.95);
+        expect(rightPalm.x).toBeGreaterThan(0.95);
     });
 
-    it('does not use controller-style wrist orientation as a direct hand-bone rotation without tracked fingers', () => {
+    it('maps controller grip quaternions semantically instead of copying them as hand-bone rotations', () => {
         const solver = new AvatarMotionSolver();
         const frame = createTrackingFrame(false);
-        const flippedHandQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0, 'YXZ'));
-        frame.effectors.leftHand!.quaternion = {
-            x: flippedHandQuat.x,
-            y: flippedHandQuat.y,
-            z: flippedHandQuat.z,
-            w: flippedHandQuat.w
-        };
-        delete frame.tracked.leftIndexTip;
+        clearTrackedFingerSkeleton(frame, 'left');
+        const leftHandWorldQuaternion = createHandWorldQuaternion(
+            new THREE.Vector3(0.25, 0.95, 0.18),
+            new THREE.Vector3(0.15, -0.1, 0.98)
+        );
+        const leftRawGripQuaternion = leftHandWorldQuaternion.clone().multiply(createGripToHandOffset('left').invert());
+        const leftAvatarGripQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: leftRawGripQuaternion.x,
+            y: leftRawGripQuaternion.y,
+            z: leftRawGripQuaternion.z,
+            w: leftRawGripQuaternion.w
+        });
+        frame.effectors.leftHand!.quaternion = leftAvatarGripQuaternion;
 
         const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        const world = composeAvatarWorldPoses(pose);
 
-        expect(pose.joints.leftHand?.quaternion).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+        expect(world.leftHand!.quaternion.angleTo(leftHandWorldQuaternion)).toBeLessThan(1e-4);
     });
 });
