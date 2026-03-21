@@ -14,11 +14,31 @@ interface ILocalAuthorityState {
     observedAwake: boolean;
 }
 
+export type PhysicsAuthorityReason =
+    | 'grab-claim'
+    | 'impulse-claim'
+    | 'touch-lease'
+    | 'throw-release'
+    | 'settled-release'
+    | 'host-decay'
+    | 'disconnect-reclaim'
+    | 'ownership-transfer'
+    | 'ownership-release'
+    | 'scenario-reset';
+
+interface IAuthorityDiagnosticState {
+    reason: PhysicsAuthorityReason;
+    atMs: number;
+    fromOwnerId: string | null;
+    toOwnerId: string | null;
+}
+
 export class PhysicsAuthorityRuntime {
     private readonly pendingReleaseByEntity = new Map<string, IPendingReleaseState>();
     private readonly lastOwnershipTransferSeqByEntity = new Map<string, number>();
     private readonly lastTouchClaimAtMsByEntity = new Map<string, number>();
     private readonly localAuthorityByEntity = new Map<string, ILocalAuthorityState>();
+    private readonly lastAuthorityDiagnosticByEntity = new Map<string, IAuthorityDiagnosticState>();
     private touchLeaseClaimIntervalMs = 250;
     private touchLeaseProximityDistance = 0.55;
     private pendingReleaseMinHoldMs = 220;
@@ -29,6 +49,24 @@ export class PhysicsAuthorityRuntime {
 
     public getLastOwnershipTransferSeq(entityId: string): number {
         return this.lastOwnershipTransferSeqByEntity.get(entityId) ?? 0;
+    }
+
+    public getLastAuthorityReason(entityId: string): string | null {
+        return this.lastAuthorityDiagnosticByEntity.get(entityId)?.reason ?? null;
+    }
+
+    public noteAuthorityReason(
+        entityId: string,
+        reason: PhysicsAuthorityReason,
+        fromOwnerId: string | null,
+        toOwnerId: string | null
+    ): void {
+        this.lastAuthorityDiagnosticByEntity.set(entityId, {
+            reason,
+            atMs: this.nowMs(),
+            fromOwnerId,
+            toOwnerId
+        });
     }
 
     public getTouchLeaseClaimIntervalMs(): number {
@@ -87,6 +125,7 @@ export class PhysicsAuthorityRuntime {
 
             if (reachedMin && (entity.rigidBody.isSleeping() || isSettledEnough || reachedMax)) {
                 pendingRelease.armed = false;
+                this.noteAuthorityReason(entity.id, 'throw-release', entity.ownerId, null);
                 entity.emitOwnershipRelease();
             }
         }
@@ -104,7 +143,7 @@ export class PhysicsAuthorityRuntime {
         // Host-owned transient interactions should decay back to the unowned-host
         // baseline once the prop settles so guests can claim it cleanly.
         if (this.context.isHost && isSettledLocalLease) {
-            this.releaseEntityOwnership(entity);
+            this.releaseEntityOwnership(entity, undefined, 'host-decay');
             return;
         }
 
@@ -121,15 +160,16 @@ export class PhysicsAuthorityRuntime {
                 )
             )
         ) {
-            this.releaseEntityOwnership(entity);
+            this.releaseEntityOwnership(entity, undefined, 'settled-release');
         }
     }
 
     public requestImmediateAuthority(
         entity: PhysicsPropEntity,
-        options?: { allowSpeculativeHostClaim?: boolean }
+        options?: { allowSpeculativeHostClaim?: boolean; reason?: PhysicsAuthorityReason }
     ): boolean {
         if (!entity.rigidBody) return false;
+        const previousOwnerId = entity.ownerId;
 
         const hasAuthority = entity.requestOwnership();
         if (!hasAuthority || !entity.isAuthority) {
@@ -153,11 +193,22 @@ export class PhysicsAuthorityRuntime {
         this.clearPendingRelease(entity.id);
         this.applyResolvedSimMode(entity);
         entity.rigidBody.wakeUp();
+        this.noteAuthorityReason(
+            entity.id,
+            options?.reason ?? 'grab-claim',
+            previousOwnerId,
+            entity.ownerId
+        );
         return true;
     }
 
-    public releaseEntityOwnership(entity: PhysicsPropEntity, velocity?: IVector3): void {
+    public releaseEntityOwnership(
+        entity: PhysicsPropEntity,
+        velocity?: IVector3,
+        reason: PhysicsAuthorityReason = 'ownership-release'
+    ): void {
         if (!entity.isAuthority) return;
+        const previousOwnerId = entity.ownerId;
 
         entity.rigidBody.wakeUp();
         entity.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
@@ -170,6 +221,7 @@ export class PhysicsAuthorityRuntime {
             entity.ownerId = null;
             this.clearPendingRelease(entity.id);
             this.syncEntityAuthority(entity);
+            this.noteAuthorityReason(entity.id, reason, previousOwnerId, entity.ownerId);
             entity.emitOwnershipRelease();
             return;
         }
@@ -181,6 +233,7 @@ export class PhysicsAuthorityRuntime {
             armed: true
         });
         this.applyResolvedSimMode(entity);
+        this.noteAuthorityReason(entity.id, reason, previousOwnerId, entity.ownerId);
     }
 
     public handleNetworkEvent(entity: PhysicsPropEntity, type: string, payload: unknown): void {
@@ -204,7 +257,9 @@ export class PhysicsAuthorityRuntime {
         if ((nowMs - lastClaimAt) < this.touchLeaseClaimIntervalMs) return;
 
         this.lastTouchClaimAtMsByEntity.set(target.id, nowMs);
-        target.requestOwnership();
+        const previousOwnerId = target.ownerId;
+        if (!target.requestOwnership()) return;
+        this.noteAuthorityReason(target.id, 'touch-lease', previousOwnerId, target.ownerId);
     }
 
     public forgetEntity(entityId: string): void {
@@ -212,9 +267,11 @@ export class PhysicsAuthorityRuntime {
         this.lastOwnershipTransferSeqByEntity.delete(entityId);
         this.lastTouchClaimAtMsByEntity.delete(entityId);
         this.localAuthorityByEntity.delete(entityId);
+        this.lastAuthorityDiagnosticByEntity.delete(entityId);
     }
 
     private handleOwnershipRelease(entity: PhysicsPropEntity, payload: IOwnershipReleasePayload): void {
+        this.noteAuthorityReason(entity.id, 'ownership-release', entity.ownerId, null);
         entity.heldBy = null;
         entity.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
 
@@ -246,6 +303,7 @@ export class PhysicsAuthorityRuntime {
         const localId = this.context.localPlayer?.id || 'local';
         const seq = typeof payload?.seq === 'number' ? payload.seq : 0;
         const lastSeq = this.lastOwnershipTransferSeqByEntity.get(entity.id) ?? 0;
+        const previousOwnerId = entity.ownerId;
 
         if (seq > 0 && seq <= lastSeq) return;
         if (seq > 0) {
@@ -261,6 +319,9 @@ export class PhysicsAuthorityRuntime {
             entity.resetProxyFollowStateFromCurrentPose();
         }
 
+        if (previousOwnerId !== newOwnerId) {
+            this.noteAuthorityReason(entity.id, 'ownership-transfer', previousOwnerId, newOwnerId);
+        }
         this.applyResolvedSimMode(entity);
     }
 

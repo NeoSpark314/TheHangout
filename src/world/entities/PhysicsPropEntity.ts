@@ -15,6 +15,7 @@ import {
     type PhysicsPropShape,
     type PhysicsReplicationProfileId
 } from '../../physics/runtime/PhysicsReplicationProfiles';
+import type { PhysicsAuthorityReason } from '../../physics/runtime/PhysicsAuthorityRuntime';
 
 /**
  * Source of Truth: This entity owns the logic and physical state of a prop.
@@ -226,7 +227,9 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     public releasePhysicsOwnership(velocity?: IVector3): void {
-        this.context.runtime.physicsAuthority.releaseEntityOwnership(this, velocity);
+        const speed = velocity ? Math.hypot(velocity.x, velocity.y, velocity.z) : 0;
+        const reason: PhysicsAuthorityReason = speed > 0.1 ? 'throw-release' : 'ownership-release';
+        this.context.runtime.physicsAuthority.releaseEntityOwnership(this, velocity, reason);
     }
 
     // --- IInteractable ---
@@ -247,7 +250,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     // --- IGrabbable ---
     public onGrab(playerId: string, hand: 'left' | 'right'): void {
         if (!this.rigidBody) return;
-        const hasAuthority = this.requestImmediatePhysicsAuthority();
+        const hasAuthority = this.requestImmediatePhysicsAuthority({ reason: 'grab-claim' });
         if (!hasAuthority) return;
 
         this.heldBy = playerId;
@@ -308,7 +311,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.rigidBody.setNextKinematicRotation(pose.quaternion);
     }
 
-    public requestImmediatePhysicsAuthority(options?: { allowSpeculativeHostClaim?: boolean }): boolean {
+    public requestImmediatePhysicsAuthority(options?: { allowSpeculativeHostClaim?: boolean; reason?: PhysicsAuthorityReason }): boolean {
         return this.context.runtime.physicsAuthority.requestImmediateAuthority(this, options);
     }
 

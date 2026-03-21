@@ -186,10 +186,11 @@ export class DebugRenderRuntime implements IUpdatable {
             const owner = body.ownerId ?? 'unowned';
             const authority = body.isAuthority ? 'local' : 'remote';
             const sim = this.compactSimMode(body.simMode, body.isAuthority);
+            const reason = body.lastAuthorityReason ?? '-';
             const shortId = this.compactId(body.id, 14);
             const shortOwner = this.compactId(owner, 12);
             const sleep = isSleeping ? 'sleep' : 'awake';
-            const labelText = `${shortId}\nown:${shortOwner}  a:${authority}\nsim:${sim}  ${sleep}\nsb:${body.snapshotBufferSize}  seq:${body.lastTransferSeq}  qh:${body.touchQueryHits}`;
+            const labelText = `${shortId}\nown:${shortOwner}  a:${authority}\nsim:${sim}  ${sleep}\nwhy:${reason}\nsb:${body.snapshotBufferSize}  seq:${body.lastTransferSeq}  qh:${body.touchQueryHits}`;
             visual.label.visible = this.settings.showAuthorityLabels;
 
             if (labelText !== visual.labelText) {
@@ -218,7 +219,7 @@ export class DebugRenderRuntime implements IUpdatable {
             depthWrite: false
         });
         const sprite = new THREE.Sprite(material);
-        sprite.scale.set(0.5, 0.24, 1);
+        sprite.scale.set(0.5, 0.3, 1);
         return sprite;
     }
 
@@ -236,7 +237,7 @@ export class DebugRenderRuntime implements IUpdatable {
     private buildLabelCanvas(text: string): HTMLCanvasElement {
         const canvas = document.createElement('canvas');
         canvas.width = 384;
-        canvas.height = 190;
+        canvas.height = 230;
         const ctx = canvas.getContext('2d');
         if (!ctx) return canvas;
 

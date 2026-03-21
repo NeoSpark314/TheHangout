@@ -200,6 +200,12 @@ export class AuthoritativeSessionHost {
 
             if (logicEntity.ownerId !== peerId) continue;
 
+            this.context.runtime.physicsAuthority.noteAuthorityReason(
+                entity.id,
+                'disconnect-reclaim',
+                logicEntity.ownerId ?? null,
+                null
+            );
             logicEntity.ownerId = null;
             if (logicEntity.heldBy !== undefined) {
                 logicEntity.heldBy = null;
@@ -240,8 +246,15 @@ export class AuthoritativeSessionHost {
 
         if (logicEntity.ownerId && logicEntity.ownerId !== senderId && !hostSleepingPhysicsLease) return;
 
+        const previousOwnerId = logicEntity.ownerId ?? null;
         logicEntity.ownerId = senderId;
         entity.isAuthority = false;
+        this.context.runtime.physicsAuthority.noteAuthorityReason(
+            entity.id,
+            'ownership-transfer',
+            previousOwnerId,
+            senderId
+        );
 
         const seq = this.nextOwnershipSeq(entity.id);
         const transferPayload = {
@@ -276,6 +289,12 @@ export class AuthoritativeSessionHost {
 
         if (logicEntity.ownerId !== senderId) return;
 
+        this.context.runtime.physicsAuthority.noteAuthorityReason(
+            entity.id,
+            'ownership-release',
+            logicEntity.ownerId ?? null,
+            null
+        );
         logicEntity.ownerId = null;
         entity.isAuthority = true;
 

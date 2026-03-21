@@ -184,6 +184,12 @@ export class ScenarioRuntimeContext implements IScenarioContext {
                 entity.rigidBody.setLinvel(linearVelocity, true);
                 entity.rigidBody.setAngvel(angularVelocity, true);
 
+                this.app.runtime.physicsAuthority.noteAuthorityReason(
+                    entity.id,
+                    'scenario-reset',
+                    entity.ownerId,
+                    null
+                );
                 entity.ownerId = null;
                 entity.syncAuthority();
 

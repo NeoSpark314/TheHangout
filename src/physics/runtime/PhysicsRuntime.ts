@@ -25,6 +25,7 @@ export interface IPhysicsDebugBody {
     isAuthority: boolean;
     hasNetworkState: boolean;
     simMode: string | null;
+    lastAuthorityReason: string | null;
     snapshotBufferSize: number;
     lastTransferSeq: number;
     touchQueryHits: number;
@@ -50,6 +51,7 @@ interface IPhysicsDebugBodyEntry {
     getOwnerId?: () => string | null;
     getIsAuthority?: () => boolean;
     getSimMode?: () => string | null;
+    getLastAuthorityReason?: () => string | null;
     getSnapshotBufferSize?: () => number;
     getLastTransferSeq?: () => number;
 }
@@ -401,6 +403,7 @@ export class PhysicsRuntime {
                 isAuthority: entry.getIsAuthority ? entry.getIsAuthority() : false,
                 hasNetworkState: !!entry.getOwnerId,
                 simMode: entry.getSimMode ? entry.getSimMode() : null,
+                lastAuthorityReason: entry.getLastAuthorityReason ? entry.getLastAuthorityReason() : null,
                 snapshotBufferSize: entry.getSnapshotBufferSize ? entry.getSnapshotBufferSize() : 0,
                 lastTransferSeq: entry.getLastTransferSeq ? entry.getLastTransferSeq() : 0,
                 touchQueryHits: this.touchQueryHitsByEntityWindow.get(entry.id) ?? 0
@@ -467,7 +470,10 @@ export class PhysicsRuntime {
             return this.applyInteractionImpulseNow(entity, impulse, point, options);
         }
 
-        if (!entity.requestImmediatePhysicsAuthority({ allowSpeculativeHostClaim: true })) {
+        if (!entity.requestImmediatePhysicsAuthority({
+            allowSpeculativeHostClaim: true,
+            reason: 'impulse-claim'
+        })) {
             this.pendingImpulseByEntity.set(entityId, {
                 impulse: { x: impulse.x, y: impulse.y, z: impulse.z },
                 point: { x: point.x, y: point.y, z: point.z },
@@ -692,6 +698,7 @@ export class PhysicsRuntime {
             entry.getOwnerId = () => entity.ownerId;
             entry.getIsAuthority = () => entity.isAuthority;
             entry.getSimMode = () => entity.getSimMode?.() ?? null;
+            entry.getLastAuthorityReason = () => this.context.runtime.physicsAuthority.getLastAuthorityReason(entity.id);
             entry.getSnapshotBufferSize = () => entity.getSnapshotBufferSize?.() ?? 0;
             entry.getLastTransferSeq = () => entity.getLastOwnershipTransferSeq?.() ?? 0;
             this.colliderToEntity.set(collider.handle, entity);
