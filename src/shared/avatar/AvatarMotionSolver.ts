@@ -3,6 +3,7 @@ import {
     AVATAR_SKELETON_PARENT,
     AvatarSkeletonJointName,
     createAvatarSkeletonPose,
+    IAvatarMotionContext,
     IAvatarSkeletonPose,
     IAvatarTrackingFrame
 } from './AvatarSkeleton';
@@ -86,6 +87,11 @@ const REST_LOCAL_POSITIONS: Partial<Record<AvatarSkeletonJointName, THREE.Vector
     rightLittleTip: new THREE.Vector3(0.014, 0, 0)
 };
 
+const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
+const CHEST_TWIST_WEIGHT = 0.25;
+const UPPER_CHEST_TWIST_WEIGHT = 0.35;
+const NECK_TWIST_WEIGHT = 0.4;
+
 interface ITwoBoneSolveResult {
     upperQuaternion: THREE.Quaternion;
     lowerQuaternion: THREE.Quaternion;
@@ -98,6 +104,7 @@ export class AvatarMotionSolver {
     private readonly jointWorldPositions: Partial<Record<AvatarSkeletonJointName, THREE.Vector3>> = {};
     private readonly jointWorldQuaternions: Partial<Record<AvatarSkeletonJointName, THREE.Quaternion>> = {};
     private readonly headTargetEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    private readonly headResidualEuler = new THREE.Euler(0, 0, 0, 'YXZ');
     private readonly torsoEuler = new THREE.Euler(0, 0, 0, 'YXZ');
     private readonly tmpRootWorldQuat = new THREE.Quaternion();
     private readonly tmpInverseRootWorldQuat = new THREE.Quaternion();
@@ -113,6 +120,9 @@ export class AvatarMotionSolver {
     private readonly tmpParentWorldPos = new THREE.Vector3();
     private readonly tmpTargetOrientation = new THREE.Quaternion();
     private readonly tmpTargetPosition = new THREE.Vector3();
+    private readonly tmpChestQuat = new THREE.Quaternion();
+    private readonly tmpUpperChestQuat = new THREE.Quaternion();
+    private readonly tmpNeckQuat = new THREE.Quaternion();
     private readonly smoothedLeftHand = new THREE.Vector3(-0.38, 1.05, 0.12);
     private readonly smoothedRightHand = new THREE.Vector3(0.38, 1.05, 0.12);
 
@@ -125,16 +135,21 @@ export class AvatarMotionSolver {
         }
     }
 
-    public solve(frame: IAvatarTrackingFrame, delta: number): IAvatarSkeletonPose {
+    public solve(frame: IAvatarTrackingFrame, context: IAvatarMotionContext, bodyWorldYaw: number, delta: number): IAvatarSkeletonPose {
         this.pose.rootWorldPosition = { ...frame.rootWorldPosition };
-        this.pose.rootWorldQuaternion = { ...frame.rootWorldQuaternion };
+        this.pose.rootWorldQuaternion = {
+            x: 0,
+            y: Math.sin(bodyWorldYaw / 2),
+            z: 0,
+            w: Math.cos(bodyWorldYaw / 2)
+        };
         this.pose.poseState = frame.seated ? 'seated' : 'standing';
 
         this.tmpRootWorldQuat.set(
-            frame.rootWorldQuaternion.x,
-            frame.rootWorldQuaternion.y,
-            frame.rootWorldQuaternion.z,
-            frame.rootWorldQuaternion.w
+            this.pose.rootWorldQuaternion.x,
+            this.pose.rootWorldQuaternion.y,
+            this.pose.rootWorldQuaternion.z,
+            this.pose.rootWorldQuaternion.w
         );
         this.tmpInverseRootWorldQuat.copy(this.tmpRootWorldQuat).invert();
         this.tmpHeadWorldPos.set(
@@ -158,7 +173,7 @@ export class AvatarMotionSolver {
         this.tmpAvatarHeadLocalQuat.setFromEuler(this.headTargetEuler);
         this.tmpAvatarHeadWorldQuat.copy(this.tmpRootWorldQuat).multiply(this.tmpAvatarHeadLocalQuat);
 
-        this.solveTorso();
+        this.solveTorso(context);
         this.solveArm('left', frame.effectors.leftHand || null, delta, !!frame.tracked.leftHand);
         this.solveArm('right', frame.effectors.rightHand || null, delta, !!frame.tracked.rightHand);
         this.solveLeg('left', frame.effectors.leftFoot || null, !!frame.tracked.leftFoot, frame.seated);
@@ -169,7 +184,7 @@ export class AvatarMotionSolver {
         return this.pose;
     }
 
-    private solveTorso(): void {
+    private solveTorso(_context: IAvatarMotionContext): void {
         const standing = this.pose.poseState === 'standing';
         const hipsY = THREE.MathUtils.clamp(
             this.tmpHeadLocalPos.y - (standing ? 0.88 : 1.02),
@@ -181,14 +196,7 @@ export class AvatarMotionSolver {
             hipsY,
             THREE.MathUtils.clamp(this.tmpHeadLocalPos.z * (standing ? 0.1 : 0.22), -0.12, 0.18)
         );
-        const hipsQuat = new THREE.Quaternion().setFromEuler(
-            this.torsoEuler.set(
-                0,
-                this.headTargetEuler.y * 0.16,
-                0,
-                'YXZ'
-            )
-        );
+        const hipsQuat = new THREE.Quaternion();
         this.setJointLocal('hips', hipsPosition, hipsQuat, false);
 
         const torsoVector = this.tmpHeadLocalPos.clone().sub(hipsPosition);
@@ -202,12 +210,24 @@ export class AvatarMotionSolver {
         const scaledSegment = (jointName: AvatarSkeletonJointName) =>
             torsoDirection.clone().multiplyScalar(torsoDistance * (this.getRest(jointName).length() / totalRest));
 
-        this.setJointLocal('spine', scaledSegment('spine'), new THREE.Quaternion(), false);
-        this.setJointLocal('chest', scaledSegment('chest'), new THREE.Quaternion(), false);
-        this.setJointLocal('upperChest', scaledSegment('upperChest'), new THREE.Quaternion(), false);
-        this.setJointLocal('neck', scaledSegment('neck'), new THREE.Quaternion(), false);
+        const torsoYaw = THREE.MathUtils.clamp(this.headTargetEuler.y, -MAX_TORSO_TWIST_YAW, MAX_TORSO_TWIST_YAW);
+        this.tmpChestQuat.setFromEuler(this.torsoEuler.set(0, torsoYaw * CHEST_TWIST_WEIGHT, 0, 'YXZ'));
+        this.tmpUpperChestQuat.setFromEuler(this.torsoEuler.set(0, torsoYaw * UPPER_CHEST_TWIST_WEIGHT, 0, 'YXZ'));
+        this.tmpNeckQuat.setFromEuler(this.torsoEuler.set(0, torsoYaw * NECK_TWIST_WEIGHT, 0, 'YXZ'));
 
-        this.setJointLocal('head', scaledSegment('head'), this.computeLocalQuaternionFromWorld('head', this.tmpAvatarHeadWorldQuat), true);
+        this.setJointLocal('spine', scaledSegment('spine'), new THREE.Quaternion(), false);
+        this.setJointLocal('chest', scaledSegment('chest'), this.tmpChestQuat, false);
+        this.setJointLocal('upperChest', scaledSegment('upperChest'), this.tmpUpperChestQuat, false);
+        this.setJointLocal('neck', scaledSegment('neck'), this.tmpNeckQuat, false);
+
+        this.headResidualEuler.set(
+            this.headTargetEuler.x,
+            this.headTargetEuler.y - torsoYaw,
+            this.headTargetEuler.z,
+            'YXZ'
+        );
+        this.tmpAvatarHeadLocalQuat.setFromEuler(this.headResidualEuler);
+        this.setJointLocal('head', scaledSegment('head'), this.tmpAvatarHeadLocalQuat, true);
         this.setJointLocal('leftShoulder', this.getRest('leftShoulder'), new THREE.Quaternion(), false);
         this.setJointLocal('rightShoulder', this.getRest('rightShoulder'), new THREE.Quaternion(), false);
     }

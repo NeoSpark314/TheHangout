@@ -14,6 +14,7 @@ export class MovementSkill extends Skill {
     public yaw: number = 0;
     private _inputListenersAttached: boolean = false;
     private _wasSnapTurnPressed: boolean = false;
+    private _explicitTurnDeltaYaw = 0;
 
     // Current movement intent state
     private _currentMove: { x: number, y: number } = { x: 0, y: 0 };
@@ -36,6 +37,7 @@ export class MovementSkill extends Skill {
         const onLook = (payload: ILookIntentPayload) => {
             // Horizontal look turns the body (origin)
             this.yaw -= payload.yawDeltaRad;
+            this._explicitTurnDeltaYaw -= payload.yawDeltaRad;
         };
         const onVRSnapTurn = (payload: IVRSnapTurnPayload) => {
             this.applyVRTurn(player, payload.angle, player.appContext.runtime);
@@ -122,6 +124,12 @@ export class MovementSkill extends Skill {
         player._lastMoveVector = { x: moveVector.x, y: moveVector.y, z: moveVector.z };
     }
 
+    public consumeExplicitTurnDeltaYaw(): number {
+        const deltaYaw = this._explicitTurnDeltaYaw;
+        this._explicitTurnDeltaYaw = 0;
+        return deltaYaw;
+    }
+
     private applyVRTurn(player: PlayerAvatarEntity, deltaYaw: number, runtime: IRuntimeRegistry): void {
         const render = runtime.render;
 
@@ -138,6 +146,7 @@ export class MovementSkill extends Skill {
         player.xrOrigin.position = { x: currentPos.x, y: currentPos.y, z: currentPos.z };
 
         this.yaw += deltaYaw;
+        this._explicitTurnDeltaYaw += deltaYaw;
         player.xrOrigin.quaternion = {
             x: 0,
             y: Math.sin(this.yaw / 2),

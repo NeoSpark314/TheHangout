@@ -9,7 +9,8 @@ import { UIPointerSkill } from '../../../skills/UIPointerSkill';
 import type { PlayerAvatarEntity } from '../PlayerAvatarEntity';
 import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrategy';
 import { AvatarMotionSolver } from '../../../shared/avatar/AvatarMotionSolver';
-import { IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
+import { AvatarFacingResolver } from '../../../shared/avatar/AvatarFacingResolver';
+import { IAvatarMotionContext, IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
 
 export interface ILocalPlayerTeleportOptions {
     // `player` places the user's floor anchor at the target while keeping the current origin Y.
@@ -22,9 +23,12 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
     public xrOrigin!: IPose;
     private readonly motionSolver = new AvatarMotionSolver();
+    private readonly facingResolver = new AvatarFacingResolver();
+    private readonly lastOriginPosition = new THREE.Vector3();
     private skills: Skill[] = [];
     private activeSkill: Skill | null = null;
     private lastProviderId: string | null = null;
+    private suppressVelocityForFrame = true;
 
     public attach(player: PlayerAvatarEntity): void {
         this.xrOrigin = {
@@ -36,6 +40,9 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
                 w: Math.cos(player.spawnYaw / 2)
             }
         };
+        this.facingResolver.reset(player.spawnYaw);
+        this.lastOriginPosition.set(player.spawnPosition.x, player.spawnPosition.y, player.spawnPosition.z);
+        this.suppressVelocityForFrame = true;
 
         this.initializeSkills(player);
     }
@@ -47,6 +54,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         this.skills = [];
         this.activeSkill = null;
         this.lastProviderId = null;
+        this.suppressVelocityForFrame = true;
     }
 
     public update(player: PlayerAvatarEntity, delta: number, frame?: XRFrame): void {
@@ -74,6 +82,18 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             this.lastProviderId = providerId;
             player.humanoid.clearAll();
             player.avatarSkeleton.clear();
+            const rootYaw = new THREE.Euler().setFromQuaternion(
+                new THREE.Quaternion(
+                    this.xrOrigin.quaternion.x,
+                    this.xrOrigin.quaternion.y,
+                    this.xrOrigin.quaternion.z,
+                    this.xrOrigin.quaternion.w
+                ),
+                'YXZ'
+            ).y;
+            this.facingResolver.reset(rootYaw);
+            this.lastOriginPosition.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+            this.suppressVelocityForFrame = true;
         }
 
         runtime.tracking.update(delta, frame);
@@ -81,7 +101,9 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         const trackingState = runtime.tracking.getState();
         const trackingFrame = this.resolveTrackingFrame(player, trackingState.avatarTrackingFrame);
-        const solvedPose = this.motionSolver.solve(trackingFrame, delta);
+        const motionContext = this.buildMotionContext(player, delta);
+        const bodyWorldYaw = this.facingResolver.resolve(trackingFrame, motionContext, delta);
+        const solvedPose = this.motionSolver.solve(trackingFrame, motionContext, bodyWorldYaw, delta);
         player.avatarSkeleton.setPose(solvedPose);
         player.syncLegacyPoseFromSkeleton();
 
@@ -181,6 +203,9 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             z: 0,
             w: Math.cos(yaw / 2)
         };
+        this.facingResolver.reset(yaw);
+        this.lastOriginPosition.copy(position);
+        this.suppressVelocityForFrame = true;
     }
 
     public teleportTo(player: PlayerAvatarEntity, position: THREE.Vector3, yaw: number, options: ILocalPlayerTeleportOptions = {}): void {
@@ -208,6 +233,9 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             z: 0,
             w: Math.cos(targetOriginYaw / 2)
         };
+        this.facingResolver.reset(yaw);
+        this.lastOriginPosition.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+        this.suppressVelocityForFrame = true;
 
         const movement = this.getSkill('movement') as MovementSkill | undefined;
         movement?.setYaw(targetOriginYaw);
@@ -224,6 +252,38 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         const uiPointer = new UIPointerSkill();
         this.addSkill(player, uiPointer);
+    }
+
+    private buildMotionContext(player: PlayerAvatarEntity, delta: number): IAvatarMotionContext {
+        const render = player.appContext.runtime.render;
+        const isXR = render.isXRPresenting();
+        const seatPose = player.appContext.runtime.mount.getLocalSeatPose();
+        const movement = this.getSkill('movement') as MovementSkill | undefined;
+        const explicitTurnDeltaYaw = movement?.consumeExplicitTurnDeltaYaw() ?? 0;
+        const currentOriginPosition = new THREE.Vector3(
+            this.xrOrigin.position.x,
+            this.xrOrigin.position.y,
+            this.xrOrigin.position.z
+        );
+        const locomotionVelocity = new THREE.Vector3();
+        if (!this.suppressVelocityForFrame && delta > 0 && Math.abs(explicitTurnDeltaYaw) < 1e-5) {
+            locomotionVelocity.copy(currentOriginPosition).sub(this.lastOriginPosition).divideScalar(delta);
+        }
+        this.lastOriginPosition.copy(currentOriginPosition);
+        this.suppressVelocityForFrame = false;
+
+        return {
+            mode: isXR
+                ? (seatPose ? 'xr-seated' : 'xr-standing')
+                : 'desktop',
+            locomotionWorldVelocity: {
+                x: locomotionVelocity.x,
+                y: locomotionVelocity.y,
+                z: locomotionVelocity.z
+            },
+            explicitTurnDeltaYaw,
+            seatWorldYaw: seatPose?.yaw
+        };
     }
 
     private resolveTrackingFrame(player: PlayerAvatarEntity, frame?: IAvatarTrackingFrame): IAvatarTrackingFrame {

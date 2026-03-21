@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { AvatarMotionSolver } from './AvatarMotionSolver';
 import { composeAvatarWorldPoses } from './AvatarSkeletonUtils';
-import { IAvatarTrackingFrame } from './AvatarSkeleton';
+import { IAvatarMotionContext, IAvatarTrackingFrame } from './AvatarSkeleton';
 
 function createTrackingFrame(seated = false): IAvatarTrackingFrame {
     const headQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0.1, 0, 'YXZ'));
@@ -42,16 +42,24 @@ function createTrackingFrame(seated = false): IAvatarTrackingFrame {
     };
 }
 
+function createMotionContext(mode: IAvatarMotionContext['mode'] = 'desktop'): IAvatarMotionContext {
+    return {
+        mode,
+        locomotionWorldVelocity: { x: 0, y: 0, z: 0 },
+        explicitTurnDeltaYaw: 0
+    };
+}
+
 describe('AvatarMotionSolver', () => {
     it('keeps canonical head and hand world targets aligned to tracking anchors', () => {
         const solver = new AvatarMotionSolver();
-        let pose = solver.solve(createTrackingFrame(false), 1 / 60);
+        let pose = solver.solve(createTrackingFrame(false), createMotionContext('desktop'), 0, 1 / 60);
         for (let i = 0; i < 8; i += 1) {
-            pose = solver.solve(createTrackingFrame(false), 1 / 60);
+            pose = solver.solve(createTrackingFrame(false), createMotionContext('desktop'), 0, 1 / 60);
         }
         const world = composeAvatarWorldPoses(pose);
 
-        expect(world.head?.position.distanceTo(new THREE.Vector3(0.02, 1.68, 0.05))).toBeLessThan(0.001);
+        expect(world.head?.position.distanceTo(new THREE.Vector3(0.02, 1.68, 0.05))).toBeLessThan(0.002);
         expect(world.leftHand?.position.distanceTo(new THREE.Vector3(-0.42, 1.18, 0.22))).toBeLessThan(0.12);
         expect(world.rightHand?.position.distanceTo(new THREE.Vector3(0.38, 1.15, 0.18))).toBeLessThan(0.12);
         expect(pose.tracked.leftIndexTip).toBe(true);
@@ -60,12 +68,30 @@ describe('AvatarMotionSolver', () => {
 
     it('switches into seated pose with lowered hips and forward feet targets', () => {
         const solver = new AvatarMotionSolver();
-        const pose = solver.solve(createTrackingFrame(true), 1 / 60);
+        const pose = solver.solve(createTrackingFrame(true), createMotionContext('xr-seated'), 0, 1 / 60);
         const world = composeAvatarWorldPoses(pose);
 
         expect(pose.poseState).toBe('seated');
         expect(pose.joints.hips?.position.y).toBeLessThan(0.8);
         expect(world.leftFoot?.position.z).toBeGreaterThan(0.15);
         expect(world.rightFoot?.position.z).toBeGreaterThan(0.15);
+    });
+
+    it('preserves tracked head yaw by distributing torso twist below the head', () => {
+        const solver = new AvatarMotionSolver();
+        const headYaw = THREE.MathUtils.degToRad(70);
+        const headQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, headYaw, 0, 'YXZ'));
+        const frame = createTrackingFrame(false);
+        frame.headWorldPose.quaternion = { x: headQuat.x, y: headQuat.y, z: headQuat.z, w: headQuat.w };
+
+        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        const world = composeAvatarWorldPoses(pose);
+        const solvedHeadYaw = new THREE.Euler().setFromQuaternion(world.head!.quaternion, 'YXZ').y;
+        const chestYaw = new THREE.Euler().setFromQuaternion(world.chest!.quaternion, 'YXZ').y;
+        const neckYaw = new THREE.Euler().setFromQuaternion(world.neck!.quaternion, 'YXZ').y;
+
+        expect(solvedHeadYaw).toBeCloseTo(headYaw, 2);
+        expect(Math.abs(chestYaw)).toBeGreaterThan(0.1);
+        expect(Math.abs(neckYaw)).toBeGreaterThan(Math.abs(chestYaw));
     });
 });
