@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
+import { PhysicsPropEntity, PhysicsSimMode } from '../../world/entities/PhysicsPropEntity';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { IView } from '../../shared/contracts/IView';
 import { PhysicsPropView } from '../../render/views/PhysicsPropView';
@@ -459,6 +459,7 @@ export class PhysicsRuntime {
         const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
         if (!entity || entity.type !== EntityType.PHYSICS_PROP || !entity.rigidBody) return false;
         if (entity.heldBy) return false;
+        const wasProxyKinematic = entity.getSimMode() === PhysicsSimMode.ProxyKinematic;
 
         // The host already simulates unowned props authoritatively; transient hits
         // should not stamp durable host ownership onto them.
@@ -474,6 +475,19 @@ export class PhysicsRuntime {
                 options
             });
             return false;
+        }
+
+        if (!this.context.isHost && wasProxyKinematic) {
+            // Promote the proxy to local authority first, then land the impulse on the
+            // first authoritative physics step. This avoids the weak "wake only" feel
+            // that comes from hitting a body during the proxy->dynamic transition.
+            this.pendingImpulseByEntity.set(entityId, {
+                impulse: { x: impulse.x, y: impulse.y, z: impulse.z },
+                point: { x: point.x, y: point.y, z: point.z },
+                expiresAtMs: this.nowMs() + this.pendingImpulseLifetimeMs,
+                options
+            });
+            return true;
         }
 
         return this.applyInteractionImpulseNow(entity, impulse, point, options);
