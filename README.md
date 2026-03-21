@@ -16,6 +16,10 @@ Try it here: [https://neospark314.github.io/TheHangout/](https://neospark314.git
 - Simple static version hostable on any static web server with PeerJS for signaling (no backend required)
 - Dedicated Server version for hosting on internal networks (works without internet connection or in more secure environments)
 
+## Status
+
+Alpha playground: just for fun, exploration, and rapid iteration rather than stability, so APIs, features, and project direction may change any time.
+
 ## Quick Start
 
 ### Development
@@ -33,6 +37,12 @@ npm run build        # Build the client
 Web page will be in `dist/` directory.
 
 ### Dedicated Server
+
+| | |
+|---|---|
+| ![Server admin screenshot](docs/images/screenshots/server_admin_screenshot.jpg) | ![Server Screenshare waiting](docs/images/screenshots/server_sharescreen_waiting.jpg) |
+| ![Server screenshare setup](docs/images/screenshots/server_sharescreen_setup.jpg) | ![erver screenshare share](docs/images/screenshots/server_sharescreen_share.jpg) |
+
 Default starts on port 443 (uses your `--cert/--key` if provided, otherwise falls back to `@vitejs/plugin-basic-ssl` certificate generation); no PeerJS used (local WebSocket relay used instead)
 
 ```bash
@@ -40,7 +50,7 @@ npm run build        # Build the client
 npm run serve        # Start
 ```
 
-### Desktop Sharing Page (`/share`)
+**Desktop Sharing Page** (`/share`)
 
 When running the local server, open this URL on the desktop machine you want to stream:
 
