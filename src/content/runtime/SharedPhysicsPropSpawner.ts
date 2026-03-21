@@ -1,5 +1,4 @@
 import type * as THREE from 'three';
-import { EntityFactory } from '../../world/spawning/EntityFactory';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import type { IMovableHoldable } from '../../shared/contracts/IMovableHoldable';
 import type { IVector3 } from '../../shared/contracts/IMath';
@@ -23,8 +22,7 @@ export function spawnSharedPhysicsProp(
     let entity: PhysicsPropEntity | null = null;
 
     if (init.shape === 'sphere') {
-        entity = EntityFactory.createSphereGrabbable(
-            context.getAppContext(),
+        entity = context.createSharedSpherePropEntity(
             entityId,
             init.radius ?? 0.09,
             init.position,
@@ -34,8 +32,7 @@ export function spawnSharedPhysicsProp(
             init.replicationProfileId ?? init.profile
         );
     } else {
-        entity = EntityFactory.createGrabbable(
-            context.getAppContext(),
+        entity = context.createSharedBoxPropEntity(
             entityId,
             init.size ?? 0.12,
             init.position,

@@ -29,7 +29,7 @@ export class BaseObjectInstance implements ISpawnedObjectInstance {
         while (this.ownedPhysicsBodies.length > 0) {
             const body = this.ownedPhysicsBodies.pop();
             if (body && this.context instanceof ObjectRuntimeContext) {
-                this.context.removeOwnedPhysicsBody(body);
+                this.context.removePhysicsBody(body);
             }
         }
 

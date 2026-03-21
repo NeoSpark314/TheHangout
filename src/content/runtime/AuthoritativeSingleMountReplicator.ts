@@ -325,7 +325,7 @@ export class AuthoritativeSingleMountReplicator {
     }
 
     private getLocalPlayerId(): string | null {
-        return this.adapter.context.getLocalPlayerId();
+        return this.adapter.context.getLocalPlayerPeerId();
     }
 
     private getMountRejectedMessage(payload: IMountRejectedPayload): string {
@@ -347,14 +347,10 @@ export class AuthoritativeSingleMountReplicator {
     }
 
     private notify(payload: ISystemNotificationPayload): void {
-        this.adapter.context.pushNotification(payload);
+        this.adapter.context.notifySystem(payload);
     }
 
     private resolvePlayerName(peerId: string): string | undefined {
-        const entity = this.adapter.context.getEntityById(peerId) as { name?: unknown } | undefined;
-        if (entity && typeof entity.name === 'string' && entity.name.trim().length > 0) {
-            return entity.name;
-        }
-        return undefined;
+        return this.adapter.context.getPlayerDisplayName(peerId);
     }
 }

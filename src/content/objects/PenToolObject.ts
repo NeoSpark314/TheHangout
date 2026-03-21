@@ -14,7 +14,7 @@ export class PenToolObject implements IObjectModule {
             return null;
         }
 
-        return context.spawnInternalEntity('PEN', context.instanceId, {
+        return context.createPenEntity(context.instanceId, {
             ...config,
             position: config.position ?? { x: 0.5, y: 1.15, z: 0.5 }
         }) as IObjectSpawnResult;

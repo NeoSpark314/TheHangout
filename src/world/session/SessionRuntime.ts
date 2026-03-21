@@ -222,20 +222,8 @@ export class SessionRuntime implements IUpdatable {
         return this.activeScenarioContext;
     }
 
-    public getAvailableObjectModules() {
-        return this.objectModuleRegistry.list();
-    }
-
-    public getAvailableObjectModuleIds(): string[] {
-        return this.objectModuleRegistry.listIds();
-    }
-
     public getObjectModuleDefinition(moduleId: string) {
         return this.objectModuleRegistry.get(moduleId);
-    }
-
-    public registerObjectModule(module: import('../../content/contracts/IObjectModule').IObjectModule): void {
-        this.objectModuleRegistry.register(module);
     }
 
     public spawnObjectInstance(id: string, config: IObjectSpawnConfig = {}): ISpawnedObjectInstance | null {

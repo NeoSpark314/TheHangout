@@ -1,11 +1,11 @@
 import type { AppContext } from '../../app/AppContext';
 import type {
-    IObjectRuntimeContext,
     ISharedPropHandle
 } from '../contracts/IObjectRuntimeContext';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import type { IVector3 } from '../../shared/contracts/IMath';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
+import { ObjectRuntimeContext } from './ObjectRuntimeContext';
 
 export class SharedPropHandle implements ISharedPropHandle {
     public readonly id: string;
@@ -86,11 +86,8 @@ export function resolveSharedPropHandle(
 }
 
 export function createSharedPropHandle(
-    runtimeContext: IObjectRuntimeContext,
+    runtimeContext: ObjectRuntimeContext,
     entityId: string
 ): ISharedPropHandle | null {
-    const objectRuntimeContext = runtimeContext as unknown as { getAppContext(): AppContext };
-    const app = objectRuntimeContext.getAppContext?.();
-    if (!app) return null;
-    return resolveSharedPropHandle(app, entityId);
+    return runtimeContext.resolveSharedPropHandle(entityId);
 }

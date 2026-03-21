@@ -8,7 +8,6 @@ import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 import { ConfigRegistry, IConfigSchema } from '../../shared/config/ConfigRegistry';
 
 export class FlatUiRuntime implements IUpdatable {
-    private static readonly LEGACY_DEFAULT_SESSION_ID = 'DefaultMeetingSession';
     private static readonly KEYBOARD_MOUSE_HELP_HTML = [
         '<b>Controls</b>',
         'Menu: M',
@@ -314,7 +313,7 @@ export class FlatUiRuntime implements IUpdatable {
         }
 
         const storedSession = AppLocalStorage.getLastSessionId();
-        if (!storedSession || storedSession === FlatUiRuntime.LEGACY_DEFAULT_SESSION_ID) {
+        if (!storedSession) {
             const defaultSession = this.generateReadableSessionId();
             this.sessionIdInput.value = defaultSession;
             AppLocalStorage.setLastSessionId(defaultSession);

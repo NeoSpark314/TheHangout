@@ -20,6 +20,9 @@ import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance
 import { createSharedPropHandle, resolveSharedPropHandle, SharedPropHandle } from './SharedPropHandle';
 import { spawnSharedPhysicsProp } from './SharedPhysicsPropSpawner';
 import { EntityFactory } from '../../world/spawning/EntityFactory';
+import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
+import type { PenToolEntity } from '../../world/entities/PenToolEntity';
+import type { ISystemNotificationPayload } from '../../shared/contracts/INotification';
 
 export class ObjectRuntimeContext implements IObjectRuntimeContext {
     private readonly cleanupCallbacks: Array<() => void> = [];
@@ -151,32 +154,74 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
     }
 
-    public getAppContext(): AppContext {
-        return this.app;
-    }
-
     public getSync(): IInternalObjectSync {
         return this.sync;
     }
 
-    public getEntityById(entityId: string): unknown {
-        return this.app.runtime.entity?.getEntity(entityId);
+    public createSharedBoxPropEntity(
+        entityId: string,
+        size: number,
+        position: { x: number; y: number; z: number },
+        mesh: any,
+        halfExtents?: { x: number; y: number; z: number },
+        moduleId?: string,
+        ownerId?: string | null,
+        url?: string,
+        scale?: number,
+        dualGrabScalable?: boolean,
+        replicationProfileId?: string
+    ): PhysicsPropEntity | null {
+        return EntityFactory.createGrabbable(
+            this.app,
+            entityId,
+            size,
+            position,
+            mesh,
+            halfExtents,
+            moduleId,
+            ownerId,
+            url,
+            scale,
+            dualGrabScalable,
+            replicationProfileId as any
+        );
     }
 
-    public removeOwnedEntity(entityId: string): void {
+    public createSharedSpherePropEntity(
+        entityId: string,
+        radius: number,
+        position: { x: number; y: number; z: number },
+        mesh: any,
+        moduleId?: string,
+        ownerId?: string | null,
+        replicationProfileId?: string
+    ): PhysicsPropEntity | null {
+        return EntityFactory.createSphereGrabbable(
+            this.app,
+            entityId,
+            radius,
+            position,
+            mesh,
+            moduleId,
+            ownerId,
+            replicationProfileId as any
+        );
+    }
+
+    public createPenEntity(id: string, config: IObjectSpawnConfig): PenToolEntity | null {
+        return EntityFactory.createPen(this.app, id, config);
+    }
+
+    public resolveSharedPropHandle(entityId: string): SharedPropHandle | null {
+        return resolveSharedPropHandle(this.app, entityId);
+    }
+
+    public removeEntity(entityId: string): void {
         this.app.runtime.entity?.removeEntity(entityId);
     }
 
-    public removeOwnedPhysicsBody(body: IPhysicsBodyHandle | null | undefined): void {
+    public removePhysicsBody(body: IPhysicsBodyHandle | null | undefined): void {
         this.app.runtime.physics.removeRigidBody(body);
-    }
-
-    public spawnInternalEntity(kind: string, id: string, config: IObjectSpawnConfig): unknown {
-        return EntityFactory.spawn(this.app, kind, id, config);
-    }
-
-    public getMountApi() {
-        return this.app.runtime.mount;
     }
 
     public getLocalMountStatus(): ILocalMountStatus {
@@ -211,12 +256,20 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         return this.app.runtime.mount.isMountedLocal(ownerInstanceId);
     }
 
-    public pushNotification(payload: unknown): void {
-        this.app.runtime.notify.push(payload as any);
+    public notifySystem(payload: ISystemNotificationPayload): void {
+        this.app.runtime.notify.push(payload);
     }
 
-    public getLocalPlayerId(): string | null {
+    public getLocalPlayerPeerId(): string | null {
         return this.app.localPlayer?.id ?? null;
+    }
+
+    public getPlayerDisplayName(peerId: string): string | undefined {
+        const entity = this.app.runtime.entity?.getEntity(peerId) as { name?: unknown } | undefined;
+        if (entity && typeof entity.name === 'string' && entity.name.trim().length > 0) {
+            return entity.name;
+        }
+        return undefined;
     }
 
     public isHost(): boolean {

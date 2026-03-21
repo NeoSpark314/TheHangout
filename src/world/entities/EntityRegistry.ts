@@ -16,14 +16,6 @@ export class EntityRegistry implements IUpdatable {
 
     public defaultType: string = 'unknown';
 
-    private resolveObjectInstanceIdFromEntityId(moduleId: string, entityId: string): string {
-        // Backward compatibility for older simple-shared-object entity ids ("prop_<instanceId>").
-        if (moduleId === 'simple-shared-object' && entityId.startsWith('prop_')) {
-            return entityId.slice('prop_'.length);
-        }
-        return entityId;
-    }
-
     public discover(id: string, type: string, config: Record<string, any> = {}): IEntity | null {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
@@ -43,7 +35,7 @@ export class EntityRegistry implements IUpdatable {
                 console.warn(`[EntityRegistry] Ignoring non-networked object module from network state: ${moduleId}`);
                 return null;
             }
-            const instanceId = this.resolveObjectInstanceIdFromEntityId(moduleId, entityId);
+            const instanceId = entityId;
             // Check if it's already being handled by a spawned instance to avoid loops
             const existingInstance = this.context.runtime.session?.getObjectInstance(instanceId);
             if (existingInstance) {

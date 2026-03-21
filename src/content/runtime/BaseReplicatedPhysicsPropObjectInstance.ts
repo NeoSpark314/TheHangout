@@ -69,7 +69,7 @@ export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplic
         if (this.propEntity) {
             this.addCleanup(() => {
                 if (this.propEntity && this.context instanceof ObjectRuntimeContext) {
-                    this.context.removeOwnedEntity(this.propEntity.id);
+                    this.context.removeEntity(this.propEntity.id);
                 }
             });
         }

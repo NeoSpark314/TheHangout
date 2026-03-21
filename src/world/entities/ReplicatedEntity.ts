@@ -47,15 +47,6 @@ export abstract class ReplicatedEntity implements IEntity, INetworkable<any> {
     }
 
     /**
-     * Standardized way to release control.
-     */
-    public releaseOwnership(): void {
-        if (!this.isAuthority) return;
-        this.ownerId = null;
-        // Authority usually reverts to Host or stays true until reclaimed
-    }
-
-    /**
      * Helper for subclasses to sync common network properties.
      */
     protected syncNetworkState(state: any): void {

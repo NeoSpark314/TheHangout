@@ -76,7 +76,7 @@ export interface IRuntimeRegistry {
 
 /**
  * AppContext acts as the central dependency injection container and state holder.
- * It replaces the legacy global singleton approach, making dependencies explicit
+ * It makes dependencies explicit
  * and improving testability and modularity across the application.
  */
 export class AppContext {
