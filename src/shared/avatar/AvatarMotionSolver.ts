@@ -101,8 +101,8 @@ export class AvatarMotionSolver {
         this.tmpAvatarHeadWorldQuat.copy(this.tmpRootWorldQuat).multiply(this.tmpAvatarHeadLocalQuat);
 
         this.solveTorso(context);
-        this.solveArm('left', frame.effectors.leftHand || null, delta, !!frame.tracked.leftHand);
-        this.solveArm('right', frame.effectors.rightHand || null, delta, !!frame.tracked.rightHand);
+        this.solveArm('left', frame, delta);
+        this.solveArm('right', frame, delta);
         this.solveLeg('left', frame.effectors.leftFoot || null, !!frame.tracked.leftFoot, frame.seated);
         this.solveLeg('right', frame.effectors.rightFoot || null, !!frame.tracked.rightFoot, frame.seated);
         this.solveFingers('left', frame);
@@ -161,14 +161,16 @@ export class AvatarMotionSolver {
 
     private solveArm(
         side: 'left' | 'right',
-        effector: IAvatarTrackingFrame['effectors'][AvatarSkeletonJointName] | null,
-        delta: number,
-        tracked: boolean
+        frame: IAvatarTrackingFrame,
+        delta: number
     ): void {
         const upperName = side === 'left' ? 'leftUpperArm' : 'rightUpperArm';
         const lowerName = side === 'left' ? 'leftLowerArm' : 'rightLowerArm';
         const handName = side === 'left' ? 'leftHand' : 'rightHand';
         const shoulderName = side === 'left' ? 'leftShoulder' : 'rightShoulder';
+        const effector = frame.effectors[handName] || null;
+        const tracked = !!frame.tracked[handName];
+        const hasTrackedHandSkeleton = this.hasTrackedHandSkeleton(side, frame);
         const upperBase = side === 'left' ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(1, 0, 0);
         const lowerBase = upperBase.clone();
         const upperLength = this.getRest(lowerName).length();
@@ -210,7 +212,14 @@ export class AvatarMotionSolver {
 
         this.setJointLocal(upperName, upperLocalPos, ik.upperQuaternion, tracked);
         this.setJointLocal(lowerName, upperBase.clone().multiplyScalar(ik.upperLength), ik.lowerQuaternion, tracked);
-        this.setJointLocal(handName, lowerBase.clone().multiplyScalar(ik.lowerLength), this.computeLocalQuaternionFromWorld(handName, this.tmpTargetOrientation), tracked);
+        this.setJointLocal(
+            handName,
+            lowerBase.clone().multiplyScalar(ik.lowerLength),
+            hasTrackedHandSkeleton
+                ? this.computeLocalQuaternionFromWorld(handName, this.tmpTargetOrientation)
+                : new THREE.Quaternion(),
+            tracked
+        );
     }
 
     private solveLeg(
@@ -301,6 +310,14 @@ export class AvatarMotionSolver {
         }
 
         this.pose.tracked[handName] = this.pose.tracked[handName] ?? false;
+    }
+
+    private hasTrackedHandSkeleton(side: 'left' | 'right', frame: IAvatarTrackingFrame): boolean {
+        const joints = side === 'left'
+            ? LEFT_HAND_FINGER_JOINTS
+            : RIGHT_HAND_FINGER_JOINTS;
+
+        return joints.some((jointName) => !!frame.tracked[jointName]);
     }
 
     private setJointLocal(

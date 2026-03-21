@@ -94,4 +94,21 @@ describe('AvatarMotionSolver', () => {
         expect(Math.abs(chestYaw)).toBeGreaterThan(0.1);
         expect(Math.abs(neckYaw)).toBeGreaterThan(Math.abs(chestYaw));
     });
+
+    it('does not use controller-style wrist orientation as a direct hand-bone rotation without tracked fingers', () => {
+        const solver = new AvatarMotionSolver();
+        const frame = createTrackingFrame(false);
+        const flippedHandQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0, 'YXZ'));
+        frame.effectors.leftHand!.quaternion = {
+            x: flippedHandQuat.x,
+            y: flippedHandQuat.y,
+            z: flippedHandQuat.z,
+            w: flippedHandQuat.w
+        };
+        delete frame.tracked.leftIndexTip;
+
+        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+
+        expect(pose.joints.leftHand?.quaternion).toEqual({ x: 0, y: 0, z: 0, w: 1 });
+    });
 });
