@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { convertRawWorldQuaternionToAvatarWorldQuaternion, resolveAvatarRootWorldPosition } from './AvatarTrackingSpace';
+import {
+    convertAvatarWorldQuaternionToRawWorldQuaternion,
+    convertRawWorldQuaternionToAvatarWorldQuaternion,
+    resolveAvatarRootWorldPosition
+} from './AvatarTrackingSpace';
 
 function toThreeQuaternion(quaternion: { x: number; y: number; z: number; w: number }): THREE.Quaternion {
     return new THREE.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
@@ -20,6 +24,19 @@ describe('AvatarTrackingSpace', () => {
         const avatarForward = new THREE.Vector3(0, 0, 1).applyQuaternion(avatarQuaternion);
 
         expect(avatarForward.distanceTo(rawForward)).toBeLessThan(1e-6);
+    });
+
+    it('round-trips the avatar forward remap for non-yaw device poses', () => {
+        const rawQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0.35, 0.7, 'YXZ'));
+        const avatarQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawQuaternion.x,
+            y: rawQuaternion.y,
+            z: rawQuaternion.z,
+            w: rawQuaternion.w
+        });
+        const roundTripQuaternion = toThreeQuaternion(convertAvatarWorldQuaternionToRawWorldQuaternion(avatarQuaternion));
+
+        expect(roundTripQuaternion.angleTo(rawQuaternion)).toBeLessThan(1e-6);
     });
 
     it('projects standing avatar root translation onto the tracked head on the ground plane', () => {

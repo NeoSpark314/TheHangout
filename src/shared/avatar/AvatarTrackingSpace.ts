@@ -22,6 +22,22 @@ export function convertRawWorldQuaternionToAvatarWorldQuaternion(rawQuaternion: 
     };
 }
 
+export function convertAvatarWorldQuaternionToRawWorldQuaternion(avatarQuaternion: IQuaternion): IQuaternion {
+    const quaternion = new THREE.Quaternion(
+        avatarQuaternion.x,
+        avatarQuaternion.y,
+        avatarQuaternion.z,
+        avatarQuaternion.w
+    ).multiply(RAW_WORLD_TO_AVATAR_WORLD);
+
+    return {
+        x: quaternion.x,
+        y: quaternion.y,
+        z: quaternion.z,
+        w: quaternion.w
+    };
+}
+
 export function resolveAvatarRootWorldPosition(
     trackingOriginWorldPosition: IVector3,
     headWorldPosition: IVector3,

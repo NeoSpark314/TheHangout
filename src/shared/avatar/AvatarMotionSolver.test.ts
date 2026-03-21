@@ -4,6 +4,22 @@ import { AvatarMotionSolver } from './AvatarMotionSolver';
 import { composeAvatarWorldPoses } from './AvatarSkeletonUtils';
 import { AvatarSkeletonJointName, IAvatarMotionContext, IAvatarTrackingFrame } from './AvatarSkeleton';
 import { AVATAR_REST_LOCAL_POSITIONS } from './AvatarCanonicalRig';
+import { convertRawWorldQuaternionToAvatarWorldQuaternion } from './AvatarTrackingSpace';
+
+const LEFT_TRACKED_HAND_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
+    ['leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip'],
+    ['leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip'],
+    ['leftMiddleMetacarpal', 'leftMiddleProximal', 'leftMiddleIntermediate', 'leftMiddleDistal', 'leftMiddleTip'],
+    ['leftRingMetacarpal', 'leftRingProximal', 'leftRingIntermediate', 'leftRingDistal', 'leftRingTip'],
+    ['leftLittleMetacarpal', 'leftLittleProximal', 'leftLittleIntermediate', 'leftLittleDistal', 'leftLittleTip']
+] as const;
+const RIGHT_TRACKED_HAND_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
+    ['rightThumbMetacarpal', 'rightThumbProximal', 'rightThumbDistal', 'rightThumbTip'],
+    ['rightIndexMetacarpal', 'rightIndexProximal', 'rightIndexIntermediate', 'rightIndexDistal', 'rightIndexTip'],
+    ['rightMiddleMetacarpal', 'rightMiddleProximal', 'rightMiddleIntermediate', 'rightMiddleDistal', 'rightMiddleTip'],
+    ['rightRingMetacarpal', 'rightRingProximal', 'rightRingIntermediate', 'rightRingDistal', 'rightRingTip'],
+    ['rightLittleMetacarpal', 'rightLittleProximal', 'rightLittleIntermediate', 'rightLittleDistal', 'rightLittleTip']
+] as const;
 
 function createTrackingFrame(seated = false): IAvatarTrackingFrame {
     const headQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0.1, 0, 'YXZ'));
@@ -66,6 +82,56 @@ function expectChildAxisAlignment(
         .applyQuaternion(joint.quaternion);
 
     expect(actualDirection.distanceTo(expectedDirection)).toBeLessThan(1e-4);
+}
+
+function createHandWorldQuaternion(backOfHand: THREE.Vector3, thumbSide: THREE.Vector3): THREE.Quaternion {
+    const yAxis = backOfHand.clone().normalize();
+    const zAxis = thumbSide.clone()
+        .sub(yAxis.clone().multiplyScalar(thumbSide.dot(yAxis)))
+        .normalize();
+    const xAxis = yAxis.clone().cross(zAxis).normalize();
+    const fixedZ = xAxis.clone().cross(yAxis).normalize();
+    return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, fixedZ));
+}
+
+function createGripToHandOffset(side: 'left' | 'right'): THREE.Quaternion {
+    return createHandWorldQuaternion(
+        new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0),
+        new THREE.Vector3(0, 0, -1)
+    );
+}
+
+function setTrackedHandPose(
+    frame: IAvatarTrackingFrame,
+    side: 'left' | 'right',
+    handWorldPosition: THREE.Vector3,
+    handWorldQuaternion: THREE.Quaternion
+): void {
+    const handName = side === 'left' ? 'leftHand' : 'rightHand';
+    const chains = side === 'left' ? LEFT_TRACKED_HAND_CHAINS : RIGHT_TRACKED_HAND_CHAINS;
+    const bogusQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 3, -Math.PI / 4, Math.PI / 5, 'YXZ'));
+
+    frame.effectors[handName] = {
+        position: { x: handWorldPosition.x, y: handWorldPosition.y, z: handWorldPosition.z },
+        quaternion: { x: bogusQuaternion.x, y: bogusQuaternion.y, z: bogusQuaternion.z, w: bogusQuaternion.w }
+    };
+    frame.tracked[handName] = true;
+
+    for (const chain of chains) {
+        let parentWorldPosition = handWorldPosition.clone();
+        let parentWorldQuaternion = handWorldQuaternion.clone();
+
+        for (const jointName of chain) {
+            const localPosition = AVATAR_REST_LOCAL_POSITIONS[jointName];
+            const worldPosition = localPosition.clone().applyQuaternion(parentWorldQuaternion).add(parentWorldPosition);
+            frame.effectors[jointName] = {
+                position: { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z },
+                quaternion: { x: bogusQuaternion.x, y: bogusQuaternion.y, z: bogusQuaternion.z, w: bogusQuaternion.w }
+            };
+            frame.tracked[jointName] = true;
+            parentWorldPosition = worldPosition;
+        }
+    }
 }
 
 describe('AvatarMotionSolver', () => {
@@ -171,6 +237,60 @@ describe('AvatarMotionSolver', () => {
         expectChildAxisAlignment(pose, 'leftIndexMetacarpal', 'leftIndexProximal');
         expectChildAxisAlignment(pose, 'leftIndexProximal', 'leftIndexIntermediate');
         expectChildAxisAlignment(pose, 'leftIndexIntermediate', 'leftIndexDistal');
+    });
+
+    it('recovers tracked hand orientation from wrist and knuckle positions', () => {
+        const solver = new AvatarMotionSolver();
+        const frame = createTrackingFrame(false);
+        const targetHandQuaternion = createHandWorldQuaternion(
+            new THREE.Vector3(0.35, 0.92, 0.18),
+            new THREE.Vector3(0.15, -0.05, 0.98)
+        );
+        const targetHandPosition = new THREE.Vector3(-0.42, 1.18, 0.22);
+        setTrackedHandPose(frame, 'left', targetHandPosition, targetHandQuaternion);
+
+        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        const world = composeAvatarWorldPoses(pose);
+
+        expect(world.leftHand!.quaternion.angleTo(targetHandQuaternion)).toBeLessThan(1e-4);
+    });
+
+    it('maps WebXR grip-space controllers to inward-facing palms', () => {
+        const solver = new AvatarMotionSolver();
+        const frame = createTrackingFrame(false);
+        const leftHandWorldQuaternion = createHandWorldQuaternion(
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(0, 0, 1)
+        );
+        const rightHandWorldQuaternion = createHandWorldQuaternion(
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 0, 1)
+        );
+        const leftRawGripQuaternion = leftHandWorldQuaternion.clone().multiply(createGripToHandOffset('left').invert());
+        const rightRawGripQuaternion = rightHandWorldQuaternion.clone().multiply(createGripToHandOffset('right').invert());
+        const leftAvatarGripQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: leftRawGripQuaternion.x,
+            y: leftRawGripQuaternion.y,
+            z: leftRawGripQuaternion.z,
+            w: leftRawGripQuaternion.w
+        });
+        const rightAvatarGripQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rightRawGripQuaternion.x,
+            y: rightRawGripQuaternion.y,
+            z: rightRawGripQuaternion.z,
+            w: rightRawGripQuaternion.w
+        });
+
+        frame.effectors.leftHand!.quaternion = leftAvatarGripQuaternion;
+        frame.effectors.rightHand!.quaternion = rightAvatarGripQuaternion;
+
+        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        const world = composeAvatarWorldPoses(pose);
+        const leftPalm = new THREE.Vector3(0, -1, 0).applyQuaternion(world.leftHand!.quaternion);
+        const rightPalm = new THREE.Vector3(0, -1, 0).applyQuaternion(world.rightHand!.quaternion);
+
+        expect(leftPalm.x).toBeLessThan(-0.5);
+        expect(rightPalm.x).toBeGreaterThan(0.5);
     });
 
     it('does not use controller-style wrist orientation as a direct hand-bone rotation without tracked fingers', () => {

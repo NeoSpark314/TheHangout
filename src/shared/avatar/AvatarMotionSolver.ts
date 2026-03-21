@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
     AVATAR_SKELETON_JOINTS,
     AVATAR_SKELETON_PARENT,
+    IAvatarTrackingJoint,
     AvatarSkeletonJointName,
     createAvatarSkeletonPose,
     IAvatarMotionContext,
@@ -9,6 +10,7 @@ import {
     IAvatarTrackingFrame
 } from './AvatarSkeleton';
 import { AVATAR_REST_LOCAL_POSITIONS } from './AvatarCanonicalRig';
+import { convertAvatarWorldQuaternionToRawWorldQuaternion } from './AvatarTrackingSpace';
 import {
     copyThreeQuaternion,
     copyThreeVector3,
@@ -20,20 +22,6 @@ const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
 const CHEST_TWIST_WEIGHT = 0.25;
 const UPPER_CHEST_TWIST_WEIGHT = 0.35;
 const NECK_TWIST_WEIGHT = 0.4;
-const LEFT_HAND_BASE_JOINTS: readonly AvatarSkeletonJointName[] = [
-    'leftThumbMetacarpal',
-    'leftIndexMetacarpal',
-    'leftMiddleMetacarpal',
-    'leftRingMetacarpal',
-    'leftLittleMetacarpal'
-] as const;
-const RIGHT_HAND_BASE_JOINTS: readonly AvatarSkeletonJointName[] = [
-    'rightThumbMetacarpal',
-    'rightIndexMetacarpal',
-    'rightMiddleMetacarpal',
-    'rightRingMetacarpal',
-    'rightLittleMetacarpal'
-] as const;
 const LEFT_FINGER_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
     ['leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip'],
     ['leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip'],
@@ -128,8 +116,8 @@ export class AvatarMotionSolver {
         this.tmpAvatarHeadWorldQuat.copy(this.tmpRootWorldQuat).multiply(this.tmpAvatarHeadLocalQuat);
 
         this.solveTorso(context);
-        this.solveArm('left', frame, delta);
-        this.solveArm('right', frame, delta);
+        this.solveArm('left', frame, context, delta);
+        this.solveArm('right', frame, context, delta);
         this.solveLeg('left', frame.effectors.leftFoot || null, !!frame.tracked.leftFoot, frame.seated);
         this.solveLeg('right', frame.effectors.rightFoot || null, !!frame.tracked.rightFoot, frame.seated);
         this.solveFingers('left', frame);
@@ -189,6 +177,7 @@ export class AvatarMotionSolver {
     private solveArm(
         side: 'left' | 'right',
         frame: IAvatarTrackingFrame,
+        context: IAvatarMotionContext,
         delta: number
     ): void {
         const upperName = side === 'left' ? 'leftUpperArm' : 'rightUpperArm';
@@ -251,6 +240,14 @@ export class AvatarMotionSolver {
                     tracked
                 );
             }
+        } else if (effector && context.mode !== 'desktop') {
+            const controllerHandWorldQuaternion = this.deriveControllerHandWorldQuaternion(side, effector);
+            this.setJointLocal(
+                handName,
+                handLocalPosition,
+                this.computeLocalQuaternionFromWorld(handName, controllerHandWorldQuaternion),
+                tracked
+            );
         }
     }
 
@@ -347,53 +344,79 @@ export class AvatarMotionSolver {
         side: 'left' | 'right',
         frame: IAvatarTrackingFrame
     ): THREE.Quaternion | null {
-        const baseJoints = side === 'left' ? LEFT_HAND_BASE_JOINTS : RIGHT_HAND_BASE_JOINTS;
-        const wristName = side === 'left' ? 'leftHand' : 'rightHand';
-        const wristWorldPos = this.jointWorldPositions[wristName];
-        const parentName = AVATAR_SKELETON_PARENT[wristName];
-        const parentWorldQuat = parentName ? this.jointWorldQuaternions[parentName] : this.tmpRootWorldQuat;
-        if (!wristWorldPos || !parentWorldQuat) {
+        const handName = side === 'left' ? 'leftHand' : 'rightHand';
+        const indexMetacarpal = side === 'left' ? 'leftIndexMetacarpal' : 'rightIndexMetacarpal';
+        const middleMetacarpal = side === 'left' ? 'leftMiddleMetacarpal' : 'rightMiddleMetacarpal';
+        const ringMetacarpal = side === 'left' ? 'leftRingMetacarpal' : 'rightRingMetacarpal';
+        const littleMetacarpal = side === 'left' ? 'leftLittleMetacarpal' : 'rightLittleMetacarpal';
+        const wristPose = frame.effectors[handName];
+        const indexMetaPose = frame.effectors[indexMetacarpal];
+        const middleMetaPose = frame.effectors[middleMetacarpal];
+        const ringMetaPose = frame.effectors[ringMetacarpal];
+        const littleMetaPose = frame.effectors[littleMetacarpal];
+        if (
+            !wristPose
+            || !indexMetaPose || !middleMetaPose || !ringMetaPose || !littleMetaPose
+        ) {
             return null;
         }
 
-        const restForward = new THREE.Vector3();
-        const restAcross = new THREE.Vector3();
-        const targetForward = new THREE.Vector3();
-        const targetAcross = new THREE.Vector3();
-        let forwardCount = 0;
-
-        for (const jointName of baseJoints) {
-            const effector = frame.effectors[jointName];
-            if (!effector) continue;
-
-            restForward.add(this.getRest(jointName));
-            targetForward.add(
-                new THREE.Vector3(effector.position.x, effector.position.y, effector.position.z)
-                    .sub(wristWorldPos)
-                    .applyQuaternion(parentWorldQuat.clone().invert())
-            );
-            forwardCount += 1;
-        }
-
-        const indexJoint = side === 'left' ? 'leftIndexMetacarpal' : 'rightIndexMetacarpal';
-        const littleJoint = side === 'left' ? 'leftLittleMetacarpal' : 'rightLittleMetacarpal';
-        const indexEffector = frame.effectors[indexJoint];
-        const littleEffector = frame.effectors[littleJoint];
-        if (forwardCount < 3 || !indexEffector || !littleEffector) {
+        const wrist = new THREE.Vector3(wristPose.position.x, wristPose.position.y, wristPose.position.z);
+        const indexKnuckle = new THREE.Vector3(indexMetaPose.position.x, indexMetaPose.position.y, indexMetaPose.position.z);
+        const middleKnuckle = new THREE.Vector3(middleMetaPose.position.x, middleMetaPose.position.y, middleMetaPose.position.z);
+        const ringKnuckle = new THREE.Vector3(ringMetaPose.position.x, ringMetaPose.position.y, ringMetaPose.position.z);
+        const littleKnuckle = new THREE.Vector3(littleMetaPose.position.x, littleMetaPose.position.y, littleMetaPose.position.z);
+        const knuckleCenter = new THREE.Vector3()
+            .add(indexKnuckle)
+            .add(middleKnuckle)
+            .add(ringKnuckle)
+            .add(littleKnuckle)
+            .multiplyScalar(0.25);
+        const fingerBaseDirection = knuckleCenter.sub(wrist);
+        if (fingerBaseDirection.lengthSq() < 1e-8) {
             return null;
         }
+        fingerBaseDirection.normalize();
 
-        restAcross.copy(this.getRest(indexJoint)).sub(this.getRest(littleJoint));
-        targetAcross
-            .set(
-                indexEffector.position.x - littleEffector.position.x,
-                indexEffector.position.y - littleEffector.position.y,
-                indexEffector.position.z - littleEffector.position.z
-            )
-            .applyQuaternion(parentWorldQuat.clone().invert());
+        const across = new THREE.Vector3(
+            indexMetaPose.position.x - littleMetaPose.position.x,
+            indexMetaPose.position.y - littleMetaPose.position.y,
+            indexMetaPose.position.z - littleMetaPose.position.z
+        );
+        if (across.lengthSq() < 1e-8) {
+            return null;
+        }
+        across.normalize();
+        const backOfHand = across.clone().cross(fingerBaseDirection);
+        if (side === 'right') {
+            backOfHand.multiplyScalar(-1);
+        }
+        if (backOfHand.lengthSq() < 1e-8) {
+            return null;
+        }
+        backOfHand.normalize();
 
-        const handLocalQuaternion = this.solveBasisRotation(restForward, restAcross, targetForward, targetAcross);
-        return parentWorldQuat.clone().multiply(handLocalQuaternion);
+        const thumbSide = across.sub(
+            backOfHand.clone().multiplyScalar(across.dot(backOfHand))
+        );
+        if (thumbSide.lengthSq() < 1e-8) {
+            return null;
+        }
+        thumbSide.normalize();
+
+        return this.createHandWorldQuaternion(backOfHand, thumbSide);
+    }
+
+    private deriveControllerHandWorldQuaternion(
+        side: 'left' | 'right',
+        effector: IAvatarTrackingJoint
+    ): THREE.Quaternion {
+        const rawGripQuaternion = new THREE.Quaternion();
+        const rawGrip = convertAvatarWorldQuaternionToRawWorldQuaternion(effector.quaternion);
+        rawGripQuaternion.set(rawGrip.x, rawGrip.y, rawGrip.z, rawGrip.w);
+        const backOfHand = new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(rawGripQuaternion);
+        const thumbSide = new THREE.Vector3(0, 0, -1).applyQuaternion(rawGripQuaternion);
+        return this.createHandWorldQuaternion(backOfHand, thumbSide);
     }
 
     private solveTrackedFingerChain(
@@ -477,45 +500,21 @@ export class AvatarMotionSolver {
         this.setJointLocal(jointName, localPosition, localQuaternion, tracked);
     }
 
-    private solveBasisRotation(
-        restPrimary: THREE.Vector3,
-        restSecondary: THREE.Vector3,
-        targetPrimary: THREE.Vector3,
-        targetSecondary: THREE.Vector3
+    private createHandWorldQuaternion(
+        backOfHand: THREE.Vector3,
+        thumbSide: THREE.Vector3
     ): THREE.Quaternion {
-        const restBasis = this.buildOrthonormalBasis(restPrimary, restSecondary);
-        const targetBasis = this.buildOrthonormalBasis(targetPrimary, targetSecondary);
-        const rotation = new THREE.Matrix4()
-            .copy(targetBasis)
-            .multiply(new THREE.Matrix4().copy(restBasis).invert());
-        return new THREE.Quaternion().setFromRotationMatrix(rotation);
-    }
-
-    private buildOrthonormalBasis(primary: THREE.Vector3, secondary: THREE.Vector3): THREE.Matrix4 {
-        const xAxis = primary.clone().normalize();
-        let zAxis = secondary.clone().sub(xAxis.clone().multiplyScalar(secondary.dot(xAxis)));
+        const yAxis = backOfHand.clone().normalize();
+        const zAxis = thumbSide.clone()
+            .sub(yAxis.clone().multiplyScalar(thumbSide.dot(yAxis)));
         if (zAxis.lengthSq() < 1e-8) {
-            zAxis = this.getFallbackPerpendicular(xAxis);
-        } else {
-            zAxis.normalize();
+            return new THREE.Quaternion();
         }
-
-        let yAxis = zAxis.clone().cross(xAxis);
-        if (yAxis.lengthSq() < 1e-8) {
-            yAxis = this.getFallbackPerpendicular(xAxis).cross(xAxis).normalize();
-        } else {
-            yAxis.normalize();
-        }
-
-        zAxis = xAxis.clone().cross(yAxis).normalize();
-        return new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-    }
-
-    private getFallbackPerpendicular(axis: THREE.Vector3): THREE.Vector3 {
-        const candidate = Math.abs(axis.y) < 0.9
-            ? new THREE.Vector3(0, 1, 0)
-            : new THREE.Vector3(1, 0, 0);
-        return candidate.sub(axis.clone().multiplyScalar(candidate.dot(axis))).normalize();
+        zAxis.normalize();
+        const xAxis = yAxis.clone().cross(zAxis).normalize();
+        const fixedZ = xAxis.clone().cross(yAxis).normalize();
+        const basis = new THREE.Matrix4().makeBasis(xAxis, yAxis, fixedZ);
+        return new THREE.Quaternion().setFromRotationMatrix(basis);
     }
 
     private setJointLocal(
