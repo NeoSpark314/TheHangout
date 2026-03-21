@@ -25,6 +25,8 @@ export interface IPhysicsReplicationProfile {
     heldLerpFactor: number;
     pendingReleaseMinHoldMs: number;
     pendingReleaseMaxHoldMs: number;
+    pendingReleaseLinearSpeedThreshold: number;
+    pendingReleaseAngularSpeedThreshold: number;
     allowSpeculativeHostClaim: boolean;
     touchLeaseEligible: boolean;
     body?: Partial<IPhysicsBodyTuning>;
@@ -44,7 +46,9 @@ const DEFAULT_PROFILE: IPhysicsReplicationProfile = {
     lerpFactor: 0.2,
     heldLerpFactor: 0.5,
     pendingReleaseMinHoldMs: 220,
-    pendingReleaseMaxHoldMs: 900,
+    pendingReleaseMaxHoldMs: 1500,
+    pendingReleaseLinearSpeedThreshold: 0.4,
+    pendingReleaseAngularSpeedThreshold: 0.9,
     allowSpeculativeHostClaim: true,
     touchLeaseEligible: true
 };
@@ -80,7 +84,9 @@ const PROFILES: Record<PhysicsReplicationProfileId, IPhysicsReplicationProfile> 
         interpolationDelayMs: 105,
         maxExtrapolationMs: 95,
         pendingReleaseMinHoldMs: 180,
-        pendingReleaseMaxHoldMs: 700,
+        pendingReleaseMaxHoldMs: 1800,
+        pendingReleaseLinearSpeedThreshold: 0.55,
+        pendingReleaseAngularSpeedThreshold: 1.4,
         material: {
             friction: 0.95,
             restitution: 0.16
@@ -92,7 +98,9 @@ const PROFILES: Record<PhysicsReplicationProfileId, IPhysicsReplicationProfile> 
         interpolationDelayMs: 90,
         heldLerpFactor: 0.62,
         pendingReleaseMinHoldMs: 140,
-        pendingReleaseMaxHoldMs: 420,
+        pendingReleaseMaxHoldMs: 850,
+        pendingReleaseLinearSpeedThreshold: 0.25,
+        pendingReleaseAngularSpeedThreshold: 0.6,
         touchLeaseEligible: false,
         body: {
             linearDamping: 0.58,
@@ -107,7 +115,9 @@ const PROFILES: Record<PhysicsReplicationProfileId, IPhysicsReplicationProfile> 
         lerpFactor: 0.15,
         heldLerpFactor: 0.42,
         pendingReleaseMinHoldMs: 280,
-        pendingReleaseMaxHoldMs: 1100,
+        pendingReleaseMaxHoldMs: 2200,
+        pendingReleaseLinearSpeedThreshold: 0.28,
+        pendingReleaseAngularSpeedThreshold: 0.75,
         allowSpeculativeHostClaim: false,
         body: {
             linearDamping: 0.82,

@@ -77,7 +77,15 @@ export class PhysicsAuthorityRuntime {
             const dt = this.nowMs() - pendingRelease.startedAtMs;
             const reachedMin = dt >= entity.getPendingReleaseMinHoldMs();
             const reachedMax = dt >= entity.getPendingReleaseMaxHoldMs();
-            if (reachedMin && (entity.rigidBody.isSleeping() || reachedMax)) {
+            const linearVelocity = entity.rigidBody.linvel();
+            const angularVelocity = entity.rigidBody.angvel();
+            const linearSpeed = Math.hypot(linearVelocity.x, linearVelocity.y, linearVelocity.z);
+            const angularSpeed = Math.hypot(angularVelocity.x, angularVelocity.y, angularVelocity.z);
+            const isSettledEnough =
+                linearSpeed <= entity.getPendingReleaseLinearSpeedThreshold() &&
+                angularSpeed <= entity.getPendingReleaseAngularSpeedThreshold();
+
+            if (reachedMin && (entity.rigidBody.isSleeping() || isSettledEnough || reachedMax)) {
                 pendingRelease.armed = false;
                 entity.emitOwnershipRelease();
             }
@@ -223,6 +231,9 @@ export class PhysicsAuthorityRuntime {
         }
         if (payload.velocity) {
             entity.rigidBody.setLinvel({ x: payload.velocity[0], y: payload.velocity[1], z: payload.velocity[2] }, true);
+        }
+        if (payload.angularVelocity) {
+            entity.rigidBody.setAngvel({ x: payload.angularVelocity[0], y: payload.angularVelocity[1], z: payload.angularVelocity[2] }, true);
         }
 
         entity.rigidBody.wakeUp();

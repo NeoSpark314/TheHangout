@@ -76,6 +76,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private touchLeaseEligible = true;
     private pendingReleaseMinHoldMs = 220;
     private pendingReleaseMaxHoldMs = 900;
+    private pendingReleaseLinearSpeedThreshold = 0.4;
+    private pendingReleaseAngularSpeedThreshold = 0.9;
 
     private lastSyncPos: IVector3 = { x: 0, y: 0, z: 0 };
     private lastSyncRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
@@ -114,6 +116,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.heldLerpFactor = replicationProfile.heldLerpFactor;
         this.pendingReleaseMinHoldMs = replicationProfile.pendingReleaseMinHoldMs;
         this.pendingReleaseMaxHoldMs = replicationProfile.pendingReleaseMaxHoldMs;
+        this.pendingReleaseLinearSpeedThreshold = replicationProfile.pendingReleaseLinearSpeedThreshold;
+        this.pendingReleaseAngularSpeedThreshold = replicationProfile.pendingReleaseAngularSpeedThreshold;
         this.allowSpeculativeHostClaim = replicationProfile.allowSpeculativeHostClaim;
         this.touchLeaseEligible = replicationProfile.touchLeaseEligible;
         if (typeof options.minScale === 'number' && Number.isFinite(options.minScale)) {
@@ -192,6 +196,14 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
 
     public getPendingReleaseMaxHoldMs(): number {
         return this.pendingReleaseMaxHoldMs;
+    }
+
+    public getPendingReleaseLinearSpeedThreshold(): number {
+        return this.pendingReleaseLinearSpeedThreshold;
+    }
+
+    public getPendingReleaseAngularSpeedThreshold(): number {
+        return this.pendingReleaseAngularSpeedThreshold;
     }
 
     public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
@@ -661,9 +673,11 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     public emitOwnershipRelease(): void {
         const state = this.getNetworkState(true) as Partial<IPhysicsEntityState>;
         if (state) {
+            const angularVelocity = this.rigidBody.angvel();
             eventBus.emit(EVENTS.RELEASE_OWNERSHIP, {
                 entityId: this.id,
                 velocity: state.v,
+                angularVelocity: [angularVelocity.x, angularVelocity.y, angularVelocity.z],
                 position: state.p,
                 quaternion: state.q
             });

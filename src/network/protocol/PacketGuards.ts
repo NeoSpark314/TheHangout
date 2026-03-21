@@ -25,6 +25,10 @@ function isOwnershipRequestPayload(payload: unknown): boolean {
 function isOwnershipReleasePayload(payload: unknown): boolean {
     return isObject(payload) &&
         typeof payload.entityId === 'string' &&
+        (payload.velocity === undefined || (Array.isArray(payload.velocity) && payload.velocity.length === 3)) &&
+        (payload.angularVelocity === undefined || (Array.isArray(payload.angularVelocity) && payload.angularVelocity.length === 3)) &&
+        (payload.position === undefined || (Array.isArray(payload.position) && payload.position.length === 3)) &&
+        (payload.quaternion === undefined || (Array.isArray(payload.quaternion) && payload.quaternion.length === 4)) &&
         (payload.seq === undefined || typeof payload.seq === 'number') &&
         (payload.sentAt === undefined || typeof payload.sentAt === 'number');
 }
