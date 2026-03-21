@@ -47,10 +47,22 @@ export default defineConfig({
     build: {
         rollupOptions: {
             output: {
-                manualChunks: {
-                    three: ['three'],
-                    peerjs: ['peerjs'],
-                    rapier: ['@dimforge/rapier3d-compat']
+                manualChunks(id) {
+                    if (id.includes('/node_modules/@pixiv/')) {
+                        return 'vrm'
+                    }
+
+                    if (id.includes('/node_modules/three/')) {
+                        return 'three'
+                    }
+
+                    if (id.includes('/node_modules/peerjs/')) {
+                        return 'peerjs'
+                    }
+
+                    if (id.includes('/node_modules/@dimforge/rapier3d-compat/')) {
+                        return 'rapier'
+                    }
                 }
             }
         }

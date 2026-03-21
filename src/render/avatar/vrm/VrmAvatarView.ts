@@ -6,7 +6,7 @@ import { EntityView } from '../../views/EntityView';
 import { NameTagComponent } from '../components/NameTagComponent';
 import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
 import type { IPlayerViewState } from '../stickfigure/StickFigureView';
-import type { IVrmInstance } from '../../../assets/runtime/AssetRuntime';
+import type { IVrmInstance } from '../../../assets/runtime/IVrmAsset';
 
 interface IArmChain {
     upper: THREE.Object3D;
