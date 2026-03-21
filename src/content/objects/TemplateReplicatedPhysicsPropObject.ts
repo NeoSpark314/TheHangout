@@ -31,12 +31,14 @@ class TemplateReplicatedPhysicsPropInstance extends BaseReplicatedPhysicsPropObj
             : null;
 
         super(context, 'template-replicated-physics-prop', {
+            shape: 'box',
             size,
             position,
             mesh: (mesh ?? new THREE.Group()) as any,
             halfExtents: { x: size / 2, y: size / 2, z: size / 2 },
             ownerId,
-            entityId
+            entityId,
+            replicationProfileId: 'default-prop'
         });
 
         this.mesh = mesh;

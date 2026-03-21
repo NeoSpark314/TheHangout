@@ -7,6 +7,8 @@ Use this checklist when adding a new object module under `src/content/objects`.
 - Use `BaseObjectInstance` for local-only objects.
 - Use `BaseReplicatedObjectInstance` for replicated semantic/event objects.
 - Use `BaseReplicatedPhysicsPropObjectInstance` for replicated grabbable physics props.
+- Shared physics props should go through the shared prop spawn path and choose an explicit replication profile.
+- Replication profiles are the supported tuning surface for both network feel and physical body/material defaults. Do not add per-object ad hoc damping/friction constants unless the profile system is being extended deliberately.
 
 ## 2) Keep IDs stable
 

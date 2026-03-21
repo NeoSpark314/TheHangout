@@ -10,6 +10,11 @@ import { IPhysicsEntityState, IEntityState, EntityType } from '../../shared/cont
 import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
+import {
+    resolvePhysicsReplicationProfile,
+    type PhysicsPropShape,
+    type PhysicsReplicationProfileId
+} from '../../physics/runtime/PhysicsReplicationProfiles';
 
 /**
  * Source of Truth: This entity owns the logic and physical state of a prop.
@@ -66,6 +71,11 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     private maxExtrapolationMs: number = 80;
     private maxSnapshotAgeMs: number = 1500;
     private maxSnapshots: number = 64;
+    private replicationProfileId: PhysicsReplicationProfileId = 'default-prop';
+    private allowSpeculativeHostClaim = true;
+    private touchLeaseEligible = true;
+    private pendingReleaseMinHoldMs = 220;
+    private pendingReleaseMaxHoldMs = 900;
 
     private lastSyncPos: IVector3 = { x: 0, y: 0, z: 0 };
     private lastSyncRot: IQuaternion = { x: 0, y: 0, z: 0, w: 1 };
@@ -92,6 +102,20 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.moduleId = options.moduleId;
         this.ownerId = options.ownerId !== undefined ? options.ownerId : null;
         this.dualGrabScalable = options.dualGrabScalable === true;
+        const replicationProfile = resolvePhysicsReplicationProfile(
+            options.replicationProfileId,
+            (options.shape as PhysicsPropShape | undefined) ?? 'box'
+        );
+        this.replicationProfileId = replicationProfile.id;
+        this.interpolationDelayMs = replicationProfile.interpolationDelayMs;
+        this.maxExtrapolationMs = replicationProfile.maxExtrapolationMs;
+        this.maxSnapshotAgeMs = replicationProfile.maxSnapshotAgeMs;
+        this.lerpFactor = replicationProfile.lerpFactor;
+        this.heldLerpFactor = replicationProfile.heldLerpFactor;
+        this.pendingReleaseMinHoldMs = replicationProfile.pendingReleaseMinHoldMs;
+        this.pendingReleaseMaxHoldMs = replicationProfile.pendingReleaseMaxHoldMs;
+        this.allowSpeculativeHostClaim = replicationProfile.allowSpeculativeHostClaim;
+        this.touchLeaseEligible = replicationProfile.touchLeaseEligible;
         if (typeof options.minScale === 'number' && Number.isFinite(options.minScale)) {
             this.minScale = Math.max(0.05, options.minScale);
         }
@@ -158,16 +182,31 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         return this.context.runtime.physicsAuthority.getLastOwnershipTransferSeq(this.id);
     }
 
+    public getReplicationProfileId(): PhysicsReplicationProfileId {
+        return this.replicationProfileId;
+    }
+
     public getPendingReleaseMinHoldMs(): number {
-        return this.context.runtime.physicsAuthority.getPendingReleaseMinHoldMs();
+        return this.pendingReleaseMinHoldMs;
     }
 
     public getPendingReleaseMaxHoldMs(): number {
-        return this.context.runtime.physicsAuthority.getPendingReleaseMaxHoldMs();
+        return this.pendingReleaseMaxHoldMs;
     }
 
     public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
-        this.context.runtime.physicsAuthority.setPendingReleaseHoldWindow(minMs, maxMs);
+        const clampedMin = Math.max(0, Math.floor(minMs));
+        const clampedMax = Math.max(clampedMin + 50, Math.floor(maxMs));
+        this.pendingReleaseMinHoldMs = clampedMin;
+        this.pendingReleaseMaxHoldMs = clampedMax;
+    }
+
+    public allowsSpeculativeHostClaim(): boolean {
+        return this.allowSpeculativeHostClaim;
+    }
+
+    public allowsTouchOwnershipLease(): boolean {
+        return this.touchLeaseEligible;
     }
 
     public syncAuthority(): void {

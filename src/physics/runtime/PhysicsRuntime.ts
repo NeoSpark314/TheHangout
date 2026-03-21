@@ -15,6 +15,7 @@ import type {
     IPhysicsBodyHandle,
     IPhysicsColliderHandle
 } from '../../content/contracts/IObjectRuntimeContext';
+import { resolvePhysicsReplicationProfile, type PhysicsReplicationProfileId } from './PhysicsReplicationProfiles';
 
 export interface IPhysicsDebugBody {
     id: string;
@@ -178,11 +179,13 @@ export class PhysicsRuntime {
         ownerId?: string | null,
         url?: string,
         scale?: number,
-        dualGrabScalable?: boolean
+        dualGrabScalable?: boolean,
+        replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
 
         const entityId = id || `grabbable-${this.nextPhysicsId++}`;
+        const replicationProfile = resolvePhysicsReplicationProfile(replicationProfileId, 'box');
 
         // If no mesh or view was provided (remote discovery), create a default one
         let finalView = view;
@@ -206,15 +209,15 @@ export class PhysicsRuntime {
         const hz = halfExtents?.z ?? (size / 2);
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
-            .setLinearDamping(0.5)
-            .setAngularDamping(0.5)
+            .setLinearDamping(replicationProfile.body.linearDamping)
+            .setAngularDamping(replicationProfile.body.angularDamping)
             .setCanSleep(true)
             .setSleeping(true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
-            .setRestitution(0.2)
-            .setFriction(0.7)
+            .setRestitution(replicationProfile.material.restitution)
+            .setFriction(replicationProfile.material.friction)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
@@ -228,7 +231,9 @@ export class PhysicsRuntime {
             ownerId,
             url,
             initialScale: scale,
-            dualGrabScalable
+            dualGrabScalable,
+            replicationProfileId,
+            shape: 'box'
         });
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
@@ -249,24 +254,26 @@ export class PhysicsRuntime {
         mesh: any,
         view?: IView<any>,
         moduleId?: string,
-        ownerId?: string | null
+        ownerId?: string | null,
+        replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
 
         const entityId = id || `sphere-grabbable-${this.nextPhysicsId++}`;
         const finalView = view ?? new NullView(entityId);
+        const replicationProfile = resolvePhysicsReplicationProfile(replicationProfileId, 'sphere');
 
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
-            .setLinearDamping(0.72)
-            .setAngularDamping(1.6)
+            .setLinearDamping(replicationProfile.body.linearDamping)
+            .setAngularDamping(replicationProfile.body.angularDamping)
             .setCanSleep(true)
             .setSleeping(true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
         const colliderDesc = RAPIER.ColliderDesc.ball(radius)
-            .setRestitution(0.1)
-            .setFriction(1.15)
+            .setRestitution(replicationProfile.material.restitution)
+            .setFriction(replicationProfile.material.friction)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
@@ -277,7 +284,9 @@ export class PhysicsRuntime {
             grabRadius: radius,
             halfExtents: { x: radius, y: radius, z: radius },
             moduleId,
-            ownerId
+            ownerId,
+            replicationProfileId,
+            shape: 'sphere'
         });
         this.registerDebugBody(entityId, rigidBody, collider, physicsEntity);
 
@@ -427,6 +436,13 @@ export class PhysicsRuntime {
 
     public setPendingReleaseHoldWindow(minMs: number, maxMs: number): void {
         this.context.runtime.physicsAuthority.setPendingReleaseHoldWindow(minMs, maxMs);
+        const entities = new Set<PhysicsPropEntity>();
+        for (const entity of this.colliderToEntity.values()) {
+            entities.add(entity);
+        }
+        for (const entity of entities) {
+            entity.setPendingReleaseHoldWindow(minMs, maxMs);
+        }
     }
 
     public getTouchQueryAverageHitsPerFrame(): number {

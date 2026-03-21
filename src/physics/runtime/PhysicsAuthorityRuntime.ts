@@ -68,8 +68,8 @@ export class PhysicsAuthorityRuntime {
         const pendingRelease = this.pendingReleaseByEntity.get(entity.id);
         if (pendingRelease?.armed) {
             const dt = this.nowMs() - pendingRelease.startedAtMs;
-            const reachedMin = dt >= this.pendingReleaseMinHoldMs;
-            const reachedMax = dt >= this.pendingReleaseMaxHoldMs;
+            const reachedMin = dt >= entity.getPendingReleaseMinHoldMs();
+            const reachedMax = dt >= entity.getPendingReleaseMaxHoldMs();
             if (reachedMin && (entity.rigidBody.isSleeping() || reachedMax)) {
                 pendingRelease.armed = false;
                 entity.emitOwnershipRelease();
@@ -101,6 +101,7 @@ export class PhysicsAuthorityRuntime {
             const allowSpeculativeHostClaim = options?.allowSpeculativeHostClaim === true;
             const canSpeculativelyClaimHostAuthority =
                 allowSpeculativeHostClaim &&
+                entity.allowsSpeculativeHostClaim() &&
                 !this.context.isHost &&
                 !entity.heldBy &&
                 !!hostId &&
@@ -158,6 +159,7 @@ export class PhysicsAuthorityRuntime {
 
     public tryClaimTouchLease(target: PhysicsPropEntity, nowMs: number, localId: string): void {
         if (target.isDestroyed) return;
+        if (!target.allowsTouchOwnershipLease()) return;
         if (target.heldBy && target.heldBy !== localId) return;
         if (target.ownerId === localId || target.isAuthority) return;
 

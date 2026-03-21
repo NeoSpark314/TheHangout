@@ -1,21 +1,37 @@
 import type * as THREE from 'three';
 import type { IVector3 } from '../../shared/contracts/IMath';
-import { EntityFactory } from '../../world/spawning/EntityFactory';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import type { IObjectSpawnContext } from '../contracts/IObjectModule';
+import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
+import type { PhysicsReplicationProfileId } from '../../physics/runtime/PhysicsReplicationProfiles';
 import { BaseReplicatedObjectInstance } from './BaseReplicatedObjectInstance';
+import { spawnSharedPhysicsProp } from './SharedPhysicsPropSpawner';
 
-interface IReplicatedPhysicsPropInit {
-    size: number;
+interface IReplicatedPhysicsPropBaseInit {
     position: IVector3;
     mesh: THREE.Object3D;
-    halfExtents?: IVector3;
     ownerId?: string | null;
     url?: string;
     entityId?: string;
     scale?: number;
     dualGrabScalable?: boolean;
+    replicationProfileId?: PhysicsReplicationProfileId;
 }
+
+interface IReplicatedBoxPhysicsPropInit extends IReplicatedPhysicsPropBaseInit {
+    shape?: 'box';
+    size?: number;
+    halfExtents?: IVector3;
+}
+
+interface IReplicatedSpherePhysicsPropInit extends IReplicatedPhysicsPropBaseInit {
+    shape: 'sphere';
+    radius?: number;
+}
+
+type IReplicatedPhysicsPropInit =
+    | IReplicatedBoxPhysicsPropInit
+    | IReplicatedSpherePhysicsPropInit;
 
 export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplicatedObjectInstance {
     protected propEntity: PhysicsPropEntity | null = null;
@@ -27,19 +43,21 @@ export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplic
             ? init.entityId
             : this.id;
 
-        this.propEntity = EntityFactory.createGrabbable(
-            context.app,
-            entityId,
-            init.size,
-            init.position,
-            init.mesh as any,
-            init.halfExtents,
-            moduleId,
-            init.ownerId,
-            init.url,
-            init.scale,
-            init.dualGrabScalable
-        );
+        const sharedPropInit = init.shape === 'sphere'
+            ? {
+                ...init,
+                shape: 'sphere' as const,
+                radius: init.radius ?? 0.09,
+                entityId
+            }
+            : {
+                ...init,
+                shape: 'box' as const,
+                size: init.size ?? 0.12,
+                entityId
+            };
+
+        this.propEntity = spawnSharedPhysicsProp(context, moduleId, sharedPropInit);
 
         if (this.propEntity) {
             this.addCleanup(() => {
@@ -53,4 +71,6 @@ export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplic
     public getPrimaryEntity(): PhysicsPropEntity | null {
         return this.propEntity;
     }
+
+    public onReplicationEvent(_eventType: string, _data: unknown, _meta: IObjectReplicationMeta): void { }
 }

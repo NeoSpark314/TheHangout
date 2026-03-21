@@ -12,6 +12,7 @@ import { EntityType } from '../../shared/contracts/IEntityState';
 import { IEntity } from '../../shared/contracts/IEntity';
 import { LocalPlayerControlStrategy } from '../entities/strategies/LocalPlayerControlStrategy';
 import { RemotePlayerReplicationStrategy } from '../entities/strategies/RemotePlayerReplicationStrategy';
+import type { PhysicsReplicationProfileId } from '../../physics/runtime/PhysicsReplicationProfiles';
 
 export class EntityFactory {
     private static registry: Map<string, (context: AppContext, id: string, config: Record<string, any>) => IEntity | null> = new Map();
@@ -36,7 +37,8 @@ export class EntityFactory {
                 config.ownerId,
                 config.url,
                 config.scale,
-                config.dualGrabScalable
+                config.dualGrabScalable,
+                config.replicationProfileId
             );
         });
         this.register('PEN', (context, id, config) => this.createPen(context, id, config));
@@ -101,7 +103,8 @@ export class EntityFactory {
         ownerId?: string | null,
         url?: string,
         scale?: number,
-        dualGrabScalable?: boolean
+        dualGrabScalable?: boolean,
+        replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         const runtime = context.runtime;
         const render = runtime.render;
@@ -130,7 +133,8 @@ export class EntityFactory {
             ownerId,
             url,
             scale,
-            dualGrabScalable
+            dualGrabScalable,
+            replicationProfileId
         );
     }
 
@@ -141,7 +145,8 @@ export class EntityFactory {
         position: IVector3,
         mesh: THREE.Mesh,
         moduleId?: string,
-        ownerId?: string | null
+        ownerId?: string | null,
+        replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         const runtime = context.runtime;
         const render = runtime.render;
@@ -164,7 +169,8 @@ export class EntityFactory {
             mesh,
             view,
             moduleId,
-            ownerId
+            ownerId,
+            replicationProfileId
         );
     }
 

@@ -36,6 +36,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
             : (typeof config.id === 'string' ? config.id : undefined);
 
         super(context, 'simple-shared-object', {
+            shape: 'box',
             size: 0.5,
             position,
             mesh: group as any,
@@ -44,7 +45,8 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
             url: typeof config.url === 'string' ? config.url : undefined,
             entityId,
             scale: typeof config.scale === 'number' ? config.scale : undefined,
-            dualGrabScalable: true
+            dualGrabScalable: true,
+            replicationProfileId: 'default-prop'
         });
 
         this.group = group;

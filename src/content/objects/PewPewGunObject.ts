@@ -8,8 +8,8 @@ import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { BaseReplicatedObjectInstance } from '../runtime/BaseReplicatedObjectInstance';
-import { EntityFactory } from '../../world/spawning/EntityFactory';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
+import { spawnSharedPhysicsProp } from '../runtime/SharedPhysicsPropSpawner';
 
 interface IGunFirePayload {
     origin: [number, number, number];
@@ -66,16 +66,15 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
             this.fxRoot.name = `pew-pew-gun-fx:${this.id}`;
         }
 
-        const entity = EntityFactory.createGrabbable(
-            context.app,
-            context.instanceId,
-            0.42,
+        const entity = spawnSharedPhysicsProp(context, this.moduleId, {
+            shape: 'box',
+            size: 0.42,
             position,
-            built.root as unknown as THREE.Mesh,
-            { x: 0.08, y: 0.07, z: 0.22 },
-            this.moduleId,
-            (typeof config.ownerId === 'string' || config.ownerId === null) ? config.ownerId : undefined
-        ) as (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
+            mesh: built.root,
+            halfExtents: { x: 0.08, y: 0.07, z: 0.22 },
+            ownerId: (typeof config.ownerId === 'string' || config.ownerId === null) ? config.ownerId : undefined,
+            replicationProfileId: 'held-tool'
+        }) as (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
         this.gunEntity = entity;
 
         if (entity && typeof config.rotationY === 'number') {
