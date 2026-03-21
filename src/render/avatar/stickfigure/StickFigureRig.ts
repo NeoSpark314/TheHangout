@@ -42,9 +42,14 @@ export interface StickFigureRigVisuals {
 
 export class StickFigureRig {
     private readonly baseArmDir = new THREE.Vector3(0, -1, 0);
+    private readonly segmentAxis = new THREE.Vector3(0, 1, 0);
     private readonly leftPole = new THREE.Vector3(-1, 0, 0.35).normalize();
     private readonly rightPole = new THREE.Vector3(1, 0, 0.35).normalize();
     private readonly twoBoneIk = new TwoBoneIkSolver();
+    private readonly tmpSegmentStart = new THREE.Vector3();
+    private readonly tmpSegmentEnd = new THREE.Vector3();
+    private readonly tmpSegmentDelta = new THREE.Vector3();
+    private readonly tmpSegmentMidpoint = new THREE.Vector3();
     private readonly leftIk: ITwoBoneIkResult = {
         upperQuaternion: new THREE.Quaternion(),
         lowerQuaternion: new THREE.Quaternion(),
@@ -202,44 +207,51 @@ export class StickFigureRig {
     }
 
     private updateVisualsFromBones(): void {
-        const spineLength = this.bones.chest.position.length() + this.bones.upperChest.position.length();
-        this.setupLocalCylinder(this.visuals.torso, spineLength);
-        this.visuals.torso.position.set(0, spineLength * 0.5, 0);
+        this.root.updateMatrixWorld(true);
 
-        const shoulderWidth = this.bones.leftShoulder.position.distanceTo(this.bones.rightShoulder.position);
-        this.setupLocalCylinder(this.visuals.shoulders, shoulderWidth);
-        this.visuals.shoulders.rotation.z = Math.PI / 2;
+        this.setSegmentFromChild(this.visuals.torso, this.bones.spine, this.bones.upperChest);
+        this.setSegmentBetweenSiblings(this.visuals.shoulders, this.bones.upperChest, this.bones.leftShoulder, this.bones.rightShoulder);
+        this.setSegmentBetweenSiblings(this.visuals.pelvis, this.bones.hips, this.bones.leftUpperLeg, this.bones.rightUpperLeg);
 
-        const pelvisWidth = this.bones.leftUpperLeg.position.distanceTo(this.bones.rightUpperLeg.position);
-        this.setupLocalCylinder(this.visuals.pelvis, pelvisWidth);
-        this.visuals.pelvis.rotation.z = Math.PI / 2;
+        this.setSegmentFromChild(this.visuals.leftLeg, this.bones.leftUpperLeg, this.bones.leftLowerLeg);
+        this.setSegmentFromChild(this.visuals.leftLowerLegMesh, this.bones.leftLowerLeg, this.bones.leftFoot);
+        this.setSegmentFromChild(this.visuals.rightLeg, this.bones.rightUpperLeg, this.bones.rightLowerLeg);
+        this.setSegmentFromChild(this.visuals.rightLowerLegMesh, this.bones.rightLowerLeg, this.bones.rightFoot);
 
-        const leftUpperLegLength = this.bones.leftLowerLeg.position.length();
-        const leftLowerLegLength = this.bones.leftFoot.position.length();
-        this.setupLocalCylinder(this.visuals.leftLeg, leftUpperLegLength);
-        this.visuals.leftLeg.position.set(0, -leftUpperLegLength * 0.5, 0);
-        this.setupLocalCylinder(this.visuals.leftLowerLegMesh, leftLowerLegLength);
-        this.visuals.leftLowerLegMesh.position.set(0, -leftLowerLegLength * 0.5, 0);
+        this.setSegmentFromChild(this.visuals.leftUpperArm, this.bones.leftUpperArm, this.bones.leftLowerArm);
+        this.setSegmentFromChild(this.visuals.leftForearm, this.bones.leftLowerArm, this.bones.leftHand);
+        this.setSegmentFromChild(this.visuals.rightUpperArm, this.bones.rightUpperArm, this.bones.rightLowerArm);
+        this.setSegmentFromChild(this.visuals.rightForearm, this.bones.rightLowerArm, this.bones.rightHand);
+    }
 
-        const rightUpperLegLength = this.bones.rightLowerLeg.position.length();
-        const rightLowerLegLength = this.bones.rightFoot.position.length();
-        this.setupLocalCylinder(this.visuals.rightLeg, rightUpperLegLength);
-        this.visuals.rightLeg.position.set(0, -rightUpperLegLength * 0.5, 0);
-        this.setupLocalCylinder(this.visuals.rightLowerLegMesh, rightLowerLegLength);
-        this.visuals.rightLowerLegMesh.position.set(0, -rightLowerLegLength * 0.5, 0);
+    private setSegmentFromChild(mesh: THREE.Mesh, parent: THREE.Object3D, child: THREE.Object3D): void {
+        this.tmpSegmentStart.set(0, 0, 0);
+        this.tmpSegmentEnd.setFromMatrixPosition(child.matrixWorld);
+        parent.worldToLocal(this.tmpSegmentEnd);
+        this.setSegment(mesh, this.tmpSegmentStart, this.tmpSegmentEnd);
+    }
 
-        const leftUpperArmLength = this.bones.leftLowerArm.position.length();
-        const leftLowerArmLength = this.bones.leftHand.position.length();
-        this.setupLocalCylinder(this.visuals.leftUpperArm, leftUpperArmLength);
-        this.visuals.leftUpperArm.position.copy(this.bones.leftLowerArm.position).multiplyScalar(0.5);
-        this.setupLocalCylinder(this.visuals.leftForearm, leftLowerArmLength);
-        this.visuals.leftForearm.position.copy(this.bones.leftHand.position).multiplyScalar(0.5);
+    private setSegmentBetweenSiblings(mesh: THREE.Mesh, parent: THREE.Object3D, start: THREE.Object3D, end: THREE.Object3D): void {
+        this.tmpSegmentStart.setFromMatrixPosition(start.matrixWorld);
+        parent.worldToLocal(this.tmpSegmentStart);
+        this.tmpSegmentEnd.setFromMatrixPosition(end.matrixWorld);
+        parent.worldToLocal(this.tmpSegmentEnd);
+        this.setSegment(mesh, this.tmpSegmentStart, this.tmpSegmentEnd);
+    }
 
-        const rightUpperArmLength = this.bones.rightLowerArm.position.length();
-        const rightLowerArmLength = this.bones.rightHand.position.length();
-        this.setupLocalCylinder(this.visuals.rightUpperArm, rightUpperArmLength);
-        this.visuals.rightUpperArm.position.copy(this.bones.rightLowerArm.position).multiplyScalar(0.5);
-        this.setupLocalCylinder(this.visuals.rightForearm, rightLowerArmLength);
-        this.visuals.rightForearm.position.copy(this.bones.rightHand.position).multiplyScalar(0.5);
+    private setSegment(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3): void {
+        this.tmpSegmentDelta.copy(end).sub(start);
+        const length = this.tmpSegmentDelta.length();
+        this.setupLocalCylinder(mesh, length);
+
+        if (length < 0.001) {
+            mesh.position.copy(start);
+            mesh.quaternion.identity();
+            return;
+        }
+
+        this.tmpSegmentMidpoint.copy(start).add(end).multiplyScalar(0.5);
+        mesh.position.copy(this.tmpSegmentMidpoint);
+        mesh.quaternion.setFromUnitVectors(this.segmentAxis, this.tmpSegmentDelta.normalize());
     }
 }
