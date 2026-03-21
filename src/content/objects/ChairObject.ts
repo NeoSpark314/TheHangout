@@ -7,6 +7,7 @@ import type { IHoldable } from '../../shared/contracts/IHoldable';
 import type { IInteractable } from '../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../shared/contracts/IInteractionEvent';
 import type { IVector3 } from '../../shared/contracts/IMath';
+import type { IPhysicsColliderHandle } from '../contracts/IObjectRuntimeContext';
 
 import type { ILocalMountBinding } from '../contracts/IMounting';
 import {
@@ -128,6 +129,7 @@ class ChairInstance extends BaseReplicatedObjectInstance {
     private readonly seatPosition: THREE.Vector3;
     private readonly seatYaw: number;
     private readonly seatEntity: ChairSeatEntity;
+    private readonly interactionColliders: IPhysicsColliderHandle[] = [];
     private readonly mountReplication: AuthoritativeSingleMountReplicator;
     private readonly runtimeContext: ObjectRuntimeContext;
     private hovered = false;
@@ -151,6 +153,19 @@ class ChairInstance extends BaseReplicatedObjectInstance {
             });
         });
         this.ownSceneObject(this.seatEntity.mesh);
+        this.createInteractionCollider(
+            { x: 0.28, y: 0.12, z: 0.28 },
+            new THREE.Vector3(0, 0.5, 0)
+        );
+        this.createInteractionCollider(
+            { x: 0.28, y: 0.28, z: 0.08 },
+            new THREE.Vector3(0, 0.78, -0.19)
+        );
+        this.addCleanup(() => {
+            for (const collider of this.interactionColliders) {
+                this.runtimeContext.removeInteractionCollider(collider);
+            }
+        });
         this.mountReplication = new AuthoritativeSingleMountReplicator(
             {
                 context: this.runtimeContext,
@@ -253,6 +268,29 @@ class ChairInstance extends BaseReplicatedObjectInstance {
             position: this.getSeatPose().position.clone().add(forward),
             yaw: this.seatYaw + Math.PI
         };
+    }
+
+    private createInteractionCollider(
+        halfExtents: { x: number; y: number; z: number },
+        localOffset: THREE.Vector3
+    ): void {
+        const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.seatYaw);
+        const worldOffset = localOffset.clone().applyQuaternion(rotation);
+        const collider = this.runtimeContext.createInteractionBox(
+            halfExtents,
+            {
+                x: this.seatPosition.x + worldOffset.x,
+                y: this.seatPosition.y + worldOffset.y,
+                z: this.seatPosition.z + worldOffset.z
+            },
+            this.seatEntity,
+            rotation
+        );
+        if (!collider) return;
+        this.interactionColliders.push(collider);
+        if (collider.body) {
+            this.ownPhysicsBody(collider.body);
+        }
     }
 
     private applySeatVisualState(): void {

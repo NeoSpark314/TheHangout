@@ -23,6 +23,8 @@ import { EntityFactory } from '../../world/spawning/EntityFactory';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import type { PenToolEntity } from '../../world/entities/PenToolEntity';
 import type { ISystemNotificationPayload } from '../../shared/contracts/INotification';
+import type { IHoldable } from '../../shared/contracts/IHoldable';
+import type { IInteractable } from '../../shared/contracts/IInteractable';
 
 export class ObjectRuntimeContext implements IObjectRuntimeContext {
     private readonly cleanupCallbacks: Array<() => void> = [];
@@ -222,6 +224,28 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
 
     public removePhysicsBody(body: IPhysicsBodyHandle | null | undefined): void {
         this.app.runtime.physics.removeRigidBody(body);
+    }
+
+    public createInteractionBox(
+        halfExtents: { x: number; y: number; z: number },
+        position: { x: number; y: number; z: number },
+        target: IHoldable & IInteractable,
+        rotation?: { x: number; y: number; z: number; w: number }
+    ): IPhysicsColliderHandle | null {
+        const collider = this.app.runtime.physics.createStaticCuboidSensor(
+            halfExtents.x,
+            halfExtents.y,
+            halfExtents.z,
+            position,
+            rotation
+        );
+        if (!collider) return null;
+        this.app.runtime.physics.registerInteractionCollider(collider, target);
+        return collider;
+    }
+
+    public removeInteractionCollider(collider: IPhysicsColliderHandle | null | undefined): void {
+        this.app.runtime.physics.unregisterInteractionCollider(collider);
     }
 
     public getLocalMountStatus(): ILocalMountStatus {
