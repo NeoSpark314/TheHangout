@@ -29,14 +29,14 @@ npm install
 npm run dev          # Development (Vite + PeerJS)
 ```
 
-### Static site version (deploy on any static web server)
-First user will be the host. It will use PeerJS for signaling.
+### Static site (no backend required)
+Build it and drop the `dist/` folder onto any static web page host. The first person to join acts as the host via PeerJS.
 ```bash
 npm run build        # Build the client
 ```
-Web page will be in `dist/` directory.
 
 ### Dedicated Server
+Best for internal/offline networks or more "secure" hangouts. It uses a local WebSocket.
 
 | | |
 |---|---|
@@ -59,6 +59,7 @@ https://<server-address>/share
 ```
 
 Steps:
-- Enter your global share key (for example `MyDesktopPC`)
+- Choose and enter a secret share key (for example `MyDesktopPC123`)
 - Click **Connect** and then **Share**
 - Keep the page open (it will start/stop capture when summoned from VR Session tab)
+- Before entering a hangout session configure your screen in the avatar customization section
