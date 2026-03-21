@@ -126,7 +126,7 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         headGeometry.translate(0, headSize / 2, 0);
 
         const faceMaterial = this.accentMaterial;
-        const materials = [this.darkMaterial, this.darkMaterial, this.darkMaterial, this.darkMaterial, this.darkMaterial, faceMaterial];
+        const materials = [this.darkMaterial, this.darkMaterial, this.darkMaterial, this.darkMaterial, faceMaterial, this.darkMaterial];
 
         this.headMesh = new THREE.Mesh(headGeometry, materials);
         const headEdges = new THREE.EdgesGeometry(headGeometry);
@@ -139,17 +139,17 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         const eyeGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8);
         eyeGeom.rotateX(Math.PI / 2);
         this.leftEye = new THREE.Mesh(eyeGeom, this.featureMaterial);
-        this.leftEye.position.set(-0.07, headSize * 0.7, -(headDepth / 2 + 0.01));
+        this.leftEye.position.set(-0.07, headSize * 0.7, headDepth / 2 + 0.01);
         this.headMesh.add(this.leftEye);
         this.rightEye = new THREE.Mesh(eyeGeom, this.featureMaterial);
-        this.rightEye.position.set(0.07, headSize * 0.7, -(headDepth / 2 + 0.01));
+        this.rightEye.position.set(0.07, headSize * 0.7, headDepth / 2 + 0.01);
         this.headMesh.add(this.rightEye);
 
         const mouthGeom = new THREE.CylinderGeometry(0.015, 0.015, 0.12, 8);
         mouthGeom.rotateZ(Math.PI / 2);
         mouthGeom.rotateX(Math.PI / 2);
         this.mouth = new THREE.Mesh(mouthGeom, this.featureMaterial);
-        this.mouth.position.set(0, headSize * 0.3, -(headDepth / 2 + 0.01));
+        this.mouth.position.set(0, headSize * 0.3, headDepth / 2 + 0.01);
         this.headMesh.add(this.mouth);
 
         const limbRadius = 0.025;
