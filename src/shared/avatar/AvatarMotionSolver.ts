@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+    AVATAR_SKELETON_JOINTS,
     AVATAR_SKELETON_PARENT,
     AvatarSkeletonJointName,
     createAvatarSkeletonPose,
@@ -7,85 +8,13 @@ import {
     IAvatarSkeletonPose,
     IAvatarTrackingFrame
 } from './AvatarSkeleton';
+import { AVATAR_REST_LOCAL_POSITIONS } from './AvatarCanonicalRig';
 import {
     copyThreeQuaternion,
     copyThreeVector3,
     LEFT_HAND_FINGER_JOINTS,
     RIGHT_HAND_FINGER_JOINTS
 } from './AvatarSkeletonUtils';
-
-const REST_LOCAL_POSITIONS: Partial<Record<AvatarSkeletonJointName, THREE.Vector3>> = {
-    hips: new THREE.Vector3(0, 0.82, 0),
-    spine: new THREE.Vector3(0, 0.12, 0),
-    chest: new THREE.Vector3(0, 0.16, 0),
-    upperChest: new THREE.Vector3(0, 0.14, 0),
-    neck: new THREE.Vector3(0, 0.1, 0),
-    head: new THREE.Vector3(0, 0.12, 0),
-    leftShoulder: new THREE.Vector3(-0.17, 0.04, 0),
-    leftUpperArm: new THREE.Vector3(-0.02, 0, 0),
-    leftLowerArm: new THREE.Vector3(-0.29, 0, 0),
-    leftHand: new THREE.Vector3(-0.27, 0, 0),
-    rightShoulder: new THREE.Vector3(0.17, 0.04, 0),
-    rightUpperArm: new THREE.Vector3(0.02, 0, 0),
-    rightLowerArm: new THREE.Vector3(0.29, 0, 0),
-    rightHand: new THREE.Vector3(0.27, 0, 0),
-    leftUpperLeg: new THREE.Vector3(-0.11, -0.02, 0),
-    leftLowerLeg: new THREE.Vector3(0, -0.46, 0),
-    leftFoot: new THREE.Vector3(0, -0.46, 0),
-    leftToes: new THREE.Vector3(0, 0, 0.11),
-    rightUpperLeg: new THREE.Vector3(0.11, -0.02, 0),
-    rightLowerLeg: new THREE.Vector3(0, -0.46, 0),
-    rightFoot: new THREE.Vector3(0, -0.46, 0),
-    rightToes: new THREE.Vector3(0, 0, 0.11),
-    leftThumbMetacarpal: new THREE.Vector3(-0.035, -0.01, 0.02),
-    leftThumbProximal: new THREE.Vector3(-0.035, 0, 0.018),
-    leftThumbDistal: new THREE.Vector3(-0.03, 0, 0.012),
-    leftThumbTip: new THREE.Vector3(-0.024, 0, 0.008),
-    leftIndexMetacarpal: new THREE.Vector3(-0.014, 0, 0.03),
-    leftIndexProximal: new THREE.Vector3(-0.034, 0, 0.02),
-    leftIndexIntermediate: new THREE.Vector3(-0.028, 0, 0),
-    leftIndexDistal: new THREE.Vector3(-0.022, 0, 0),
-    leftIndexTip: new THREE.Vector3(-0.018, 0, 0),
-    leftMiddleMetacarpal: new THREE.Vector3(-0.004, 0, 0.01),
-    leftMiddleProximal: new THREE.Vector3(-0.04, 0, 0.014),
-    leftMiddleIntermediate: new THREE.Vector3(-0.03, 0, 0),
-    leftMiddleDistal: new THREE.Vector3(-0.024, 0, 0),
-    leftMiddleTip: new THREE.Vector3(-0.018, 0, 0),
-    leftRingMetacarpal: new THREE.Vector3(0.008, 0, -0.008),
-    leftRingProximal: new THREE.Vector3(-0.036, 0, 0.01),
-    leftRingIntermediate: new THREE.Vector3(-0.028, 0, 0),
-    leftRingDistal: new THREE.Vector3(-0.022, 0, 0),
-    leftRingTip: new THREE.Vector3(-0.018, 0, 0),
-    leftLittleMetacarpal: new THREE.Vector3(0.018, 0, -0.02),
-    leftLittleProximal: new THREE.Vector3(-0.03, 0, 0.006),
-    leftLittleIntermediate: new THREE.Vector3(-0.022, 0, 0),
-    leftLittleDistal: new THREE.Vector3(-0.018, 0, 0),
-    leftLittleTip: new THREE.Vector3(-0.014, 0, 0),
-    rightThumbMetacarpal: new THREE.Vector3(0.035, -0.01, 0.02),
-    rightThumbProximal: new THREE.Vector3(0.035, 0, 0.018),
-    rightThumbDistal: new THREE.Vector3(0.03, 0, 0.012),
-    rightThumbTip: new THREE.Vector3(0.024, 0, 0.008),
-    rightIndexMetacarpal: new THREE.Vector3(0.014, 0, 0.03),
-    rightIndexProximal: new THREE.Vector3(0.034, 0, 0.02),
-    rightIndexIntermediate: new THREE.Vector3(0.028, 0, 0),
-    rightIndexDistal: new THREE.Vector3(0.022, 0, 0),
-    rightIndexTip: new THREE.Vector3(0.018, 0, 0),
-    rightMiddleMetacarpal: new THREE.Vector3(0.004, 0, 0.01),
-    rightMiddleProximal: new THREE.Vector3(0.04, 0, 0.014),
-    rightMiddleIntermediate: new THREE.Vector3(0.03, 0, 0),
-    rightMiddleDistal: new THREE.Vector3(0.024, 0, 0),
-    rightMiddleTip: new THREE.Vector3(0.018, 0, 0),
-    rightRingMetacarpal: new THREE.Vector3(-0.008, 0, -0.008),
-    rightRingProximal: new THREE.Vector3(0.036, 0, 0.01),
-    rightRingIntermediate: new THREE.Vector3(0.028, 0, 0),
-    rightRingDistal: new THREE.Vector3(0.022, 0, 0),
-    rightRingTip: new THREE.Vector3(0.018, 0, 0),
-    rightLittleMetacarpal: new THREE.Vector3(-0.018, 0, -0.02),
-    rightLittleProximal: new THREE.Vector3(0.03, 0, 0.006),
-    rightLittleIntermediate: new THREE.Vector3(0.022, 0, 0),
-    rightLittleDistal: new THREE.Vector3(0.018, 0, 0),
-    rightLittleTip: new THREE.Vector3(0.014, 0, 0)
-};
 
 const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
 const CHEST_TWIST_WEIGHT = 0.25;
@@ -127,10 +56,8 @@ export class AvatarMotionSolver {
     private readonly smoothedRightHand = new THREE.Vector3(0.38, 1.05, 0.12);
 
     constructor() {
-        for (const jointName in REST_LOCAL_POSITIONS) {
-            const name = jointName as AvatarSkeletonJointName;
-            const position = REST_LOCAL_POSITIONS[name];
-            if (!position) continue;
+        for (const name of AVATAR_SKELETON_JOINTS) {
+            const position = AVATAR_REST_LOCAL_POSITIONS[name];
             copyThreeVector3(position, this.pose.joints[name]!.position);
         }
     }
@@ -491,6 +418,6 @@ export class AvatarMotionSolver {
     }
 
     private getRest(jointName: AvatarSkeletonJointName): THREE.Vector3 {
-        return REST_LOCAL_POSITIONS[jointName]?.clone() || new THREE.Vector3();
+        return AVATAR_REST_LOCAL_POSITIONS[jointName].clone();
     }
 }
