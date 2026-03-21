@@ -69,6 +69,7 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
 
     private readonly modelRoot: THREE.Group;
     private readonly rawHeadBone: THREE.Object3D | null;
+    private readonly headBone: THREE.Object3D | null;
     private readonly hipsBone: THREE.Object3D | null;
     private readonly nameTagComponent: NameTagComponent;
     private readonly voiceAudio: VoiceAudioComponent;
@@ -82,6 +83,8 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
     private readonly twoBoneIk = new TwoBoneIkSolver();
     private readonly tmpTargetPos = new THREE.Vector3();
     private readonly tmpTargetQuat = new THREE.Quaternion();
+    private readonly tmpHeadLocalQuat = new THREE.Quaternion();
+    private readonly tmpHeadEuler = new THREE.Euler(0, 0, 0, 'YXZ');
     private readonly tmpWorldQuat = new THREE.Quaternion();
     private readonly tmpParentWorldQuat = new THREE.Quaternion();
     private readonly tmpWorldPosA = new THREE.Vector3();
@@ -114,6 +117,7 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         this.modelRoot.scale.setScalar(1);
         this.mesh.add(this.modelRoot);
         this.rawHeadBone = this.vrmInstance.humanoid.getRawBoneNode(VRMHumanBoneName.Head);
+        this.headBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head);
         this.hipsBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Hips);
 
         this.proxyMaterial = new THREE.MeshBasicMaterial({ color: this.color });
@@ -182,7 +186,7 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
 
         this.vrmInstance.humanoid.resetNormalizedPose();
         this.applyHipsPose(skeleton, lerpFactor);
-        this.applyHeadPose(world, lerpFactor);
+        this.applyHeadPose(skeleton, world, lerpFactor);
         this.applyArmPose(this.leftChain, world.leftHand || null, lerpFactor);
         this.applyArmPose(this.rightChain, world.rightHand || null, lerpFactor);
         this.updateFingers(state, world, lerpFactor);
@@ -284,12 +288,27 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         };
     }
 
-    private applyHeadPose(world: ReturnType<typeof composeAvatarWorldPoses>, lerpFactor: number): void {
-        const headPose = world.head;
-        if (!headPose) return;
-        const headBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head);
+    private applyHeadPose(state: IPlayerAvatarRenderState['skeleton'], _world: ReturnType<typeof composeAvatarWorldPoses>, lerpFactor: number): void {
+        const headPose = state.joints.head;
+        const headBone = this.headBone;
         if (!headBone) return;
-        this.applyWorldOrientation(headBone, headPose.quaternion, lerpFactor);
+        if (!headPose) return;
+
+        this.tmpHeadLocalQuat.set(
+            headPose.quaternion.x,
+            headPose.quaternion.y,
+            headPose.quaternion.z,
+            headPose.quaternion.w
+        );
+        this.tmpHeadEuler.setFromQuaternion(this.tmpHeadLocalQuat, 'YXZ');
+        this.tmpHeadEuler.x *= -1;
+        this.tmpHeadLocalQuat.setFromEuler(this.tmpHeadEuler);
+
+        if (lerpFactor < 1.0) {
+            headBone.quaternion.slerp(this.tmpHeadLocalQuat, lerpFactor);
+        } else {
+            headBone.quaternion.copy(this.tmpHeadLocalQuat);
+        }
     }
 
     private applyHipsPose(state: IPlayerAvatarRenderState['skeleton'], lerpFactor: number): void {

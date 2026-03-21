@@ -104,6 +104,8 @@ export class AvatarMotionSolver {
     private readonly tmpHeadWorldPos = new THREE.Vector3();
     private readonly tmpHeadLocalPos = new THREE.Vector3();
     private readonly tmpHeadWorldQuat = new THREE.Quaternion();
+    private readonly tmpAvatarHeadWorldQuat = new THREE.Quaternion();
+    private readonly tmpAvatarHeadLocalQuat = new THREE.Quaternion();
     private readonly tmpWorldTarget = new THREE.Vector3();
     private readonly tmpLocalTarget = new THREE.Vector3();
     private readonly tmpLocalQuat = new THREE.Quaternion();
@@ -152,6 +154,9 @@ export class AvatarMotionSolver {
             .applyQuaternion(this.tmpInverseRootWorldQuat);
         this.tmpTargetOrientation.copy(this.tmpInverseRootWorldQuat).multiply(this.tmpHeadWorldQuat);
         this.headTargetEuler.setFromQuaternion(this.tmpTargetOrientation, 'YXZ');
+        this.headTargetEuler.x *= -1;
+        this.tmpAvatarHeadLocalQuat.setFromEuler(this.headTargetEuler);
+        this.tmpAvatarHeadWorldQuat.copy(this.tmpRootWorldQuat).multiply(this.tmpAvatarHeadLocalQuat);
 
         this.solveTorso();
         this.solveArm('left', frame.effectors.leftHand || null, delta, !!frame.tracked.leftHand);
@@ -202,7 +207,7 @@ export class AvatarMotionSolver {
         this.setJointLocal('upperChest', scaledSegment('upperChest'), new THREE.Quaternion(), false);
         this.setJointLocal('neck', scaledSegment('neck'), new THREE.Quaternion(), false);
 
-        this.setJointLocal('head', scaledSegment('head'), this.computeLocalQuaternionFromWorld('head', this.tmpHeadWorldQuat), true);
+        this.setJointLocal('head', scaledSegment('head'), this.computeLocalQuaternionFromWorld('head', this.tmpAvatarHeadWorldQuat), true);
         this.setJointLocal('leftShoulder', this.getRest('leftShoulder'), new THREE.Quaternion(), false);
         this.setJointLocal('rightShoulder', this.getRest('rightShoulder'), new THREE.Quaternion(), false);
     }
