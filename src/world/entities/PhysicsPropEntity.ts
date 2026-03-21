@@ -316,6 +316,16 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.context.runtime.physicsAuthority.handleNetworkEvent(this, type, payload);
     }
 
+    public resetProxyFollowStateFromCurrentPose(): void {
+        this.clearSnapshotBuffer();
+        this.seedSnapshotFromCurrentPose();
+        this.copyVec3(this.proxyRenderPos, this.targetPos);
+        this.copyQuat(this.proxyRenderRot, this.targetRot);
+        this.copyVec3(this.presentPos, this.proxyRenderPos);
+        this.copyQuat(this.presentRot, this.proxyRenderRot);
+        this.proxyInitialized = true;
+    }
+
     public update(delta: number, _frame?: XRFrame): void {
         this.context.runtime.physicsAuthority.prepareEntityForUpdate(this);
 
@@ -514,13 +524,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
                 this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
                 if (nextMode === PhysicsSimMode.ProxyKinematic && prevMode !== PhysicsSimMode.ProxyKinematic) {
                     // On authority -> proxy transition, drop stale snapshots and seed from current pose.
-                    this.clearSnapshotBuffer();
-                    this.seedSnapshotFromCurrentPose();
-                    this.copyVec3(this.proxyRenderPos, this.targetPos);
-                    this.copyQuat(this.proxyRenderRot, this.targetRot);
-                    this.copyVec3(this.presentPos, this.proxyRenderPos);
-                    this.copyQuat(this.presentRot, this.proxyRenderRot);
-                    this.proxyInitialized = true;
+                    this.resetProxyFollowStateFromCurrentPose();
                 }
                 break;
             case PhysicsSimMode.AuthoritativeDynamic:

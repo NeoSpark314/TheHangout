@@ -257,6 +257,10 @@ export class PhysicsAuthorityRuntime {
             this.clearPendingRelease(entity.id);
         }
 
+        if (!entity.isAuthority && newOwnerId === null) {
+            entity.resetProxyFollowStateFromCurrentPose();
+        }
+
         this.applyResolvedSimMode(entity);
     }
 

@@ -214,6 +214,10 @@ export class AuthoritativeSessionHost {
                 seq,
                 sentAt: this.nowMs()
             });
+
+            // Reclaim should immediately establish a fresh host-authoritative pose
+            // so guests do not continue following stale snapshots from the departed peer.
+            this.synchronizer.syncEntityNow(entity.id, true);
         }
     }
 
