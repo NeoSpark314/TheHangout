@@ -39,6 +39,8 @@ export interface ISessionConfig {
     seed: number;
 }
 
+export type AvatarPoseOverride = 'none' | 'vrm-tpose';
+
 export interface IRuntimeRegistry {
     entity: EntityRegistry;
     ui: FlatUiRuntime;
@@ -87,6 +89,7 @@ export class AppContext {
         renderMode: 'stick',
         vrmUrl: null
     };
+    public avatarPoseOverride: AvatarPoseOverride = 'vrm-tpose';
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;
     public sessionConfig: ISessionConfig = {

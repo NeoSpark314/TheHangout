@@ -61,7 +61,6 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         super(new THREE.Group());
         this.color = color;
         this.modelRoot = vrmInstance.scene;
-        this.modelRoot.rotation.y = Math.PI;
         this.modelRoot.scale.setScalar(1);
         this.mesh.add(this.modelRoot);
         this.rawHeadBone = this.vrmInstance.humanoid.getRawBoneNode(VRMHumanBoneName.Head);

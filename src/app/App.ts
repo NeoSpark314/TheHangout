@@ -38,6 +38,7 @@ import { IUpdatable } from '../shared/contracts/IUpdatable';
 import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../content/runtime/BuiltInScenarioPlugins';
 import { ConfigRegistry } from '../shared/config/ConfigRegistry';
+import type { AvatarPoseOverride } from './AppContext';
 
 /**
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
@@ -233,6 +234,11 @@ export class App {
         if (typeof window === 'undefined') return;
         const context = this.context;
         const debugApi = {
+            setAvatarPoseOverride: (mode: AvatarPoseOverride) => {
+                context.avatarPoseOverride = mode;
+                context.runtime.diagnostics.record('info', 'system', `Avatar pose override=${mode}`);
+            },
+            getAvatarPoseOverride: () => context.avatarPoseOverride,
             setReplicationDebugMode: (mode: 'off' | 'stats' | 'trace') => {
                 context.runtime.replicationDebug.setMode(mode);
                 context.runtime.diagnostics.record('info', 'replication', `Replication debug mode=${mode}`);

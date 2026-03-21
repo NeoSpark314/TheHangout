@@ -247,6 +247,7 @@ class HeadlessPeerSession {
         this.context.isHost = kind === 'host';
         this.context.sessionId = kind === 'host' ? peerId : (hostSessionId || null);
         this.context.playerName = kind === 'host' ? 'Host' : 'Guest';
+        this.context.avatarPoseOverride = 'none';
 
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
         this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());

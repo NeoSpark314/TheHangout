@@ -11,6 +11,7 @@ import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrateg
 import { AvatarMotionSolver } from '../../../shared/avatar/AvatarMotionSolver';
 import { AvatarFacingResolver } from '../../../shared/avatar/AvatarFacingResolver';
 import { IAvatarMotionContext, IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
+import { createAvatarVrmTPoseAtRoot } from '../../../shared/avatar/AvatarCanonicalRig';
 import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/AvatarHumanoidPose';
 
 export interface ILocalPlayerTeleportOptions {
@@ -100,10 +101,10 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         runtime.input?.processInteractions();
 
         const trackingState = runtime.tracking.getState();
-        const trackingFrame = this.resolveTrackingFrame(player, trackingState.avatarTrackingFrame);
-        const motionContext = this.buildMotionContext(player, delta);
-        const bodyWorldYaw = this.facingResolver.resolve(trackingFrame, motionContext, delta);
-        const solvedPose = this.motionSolver.solve(trackingFrame, motionContext, bodyWorldYaw, delta);
+        const poseOverride = player.appContext.avatarPoseOverride;
+        const solvedPose = poseOverride === 'vrm-tpose'
+            ? createAvatarVrmTPoseAtRoot(this.xrOrigin.position, this.xrOrigin.quaternion)
+            : this.solveTrackedPose(player, trackingState.avatarTrackingFrame, delta);
         player.avatarSkeleton.setPose(solvedPose);
         player.syncLegacyPoseFromSkeleton();
 
@@ -310,5 +311,12 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             tracked: { head: true },
             seated: player.appContext.runtime.mount.isMountedLocal()
         };
+    }
+
+    private solveTrackedPose(player: PlayerAvatarEntity, frame: IAvatarTrackingFrame | undefined, delta: number) {
+        const trackingFrame = this.resolveTrackingFrame(player, frame);
+        const motionContext = this.buildMotionContext(player, delta);
+        const bodyWorldYaw = this.facingResolver.resolve(trackingFrame, motionContext, delta);
+        return this.motionSolver.solve(trackingFrame, motionContext, bodyWorldYaw, delta);
     }
 }
