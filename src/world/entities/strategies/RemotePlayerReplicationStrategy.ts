@@ -6,6 +6,7 @@ import { EVENTS } from '../../../shared/constants/Constants';
 import { formatPlayerDisplayName } from '../../../shared/utils/PlayerBadgeUtils';
 import type { PlayerAvatarEntity } from '../PlayerAvatarEntity';
 import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrategy';
+import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/AvatarHumanoidPose';
 
 export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStrategy {
     public readonly mode = 'remote';
@@ -135,6 +136,7 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
 
         player.view.applyState({
             skeleton: player.avatarSkeleton.getSnapshot(),
+            humanoidPose: createAvatarHumanoidPoseFromSkeleton(player.avatarSkeleton.pose),
             name: formatPlayerDisplayName(
                 {
                     name: player.name || 'Player',

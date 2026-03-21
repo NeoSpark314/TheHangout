@@ -11,6 +11,7 @@ import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrateg
 import { AvatarMotionSolver } from '../../../shared/avatar/AvatarMotionSolver';
 import { AvatarFacingResolver } from '../../../shared/avatar/AvatarFacingResolver';
 import { IAvatarMotionContext, IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
+import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/AvatarHumanoidPose';
 
 export interface ILocalPlayerTeleportOptions {
     // `player` places the user's floor anchor at the target while keeping the current origin Y.
@@ -123,6 +124,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         player.view.applyState({
             skeleton: player.avatarSkeleton.getSnapshot(),
+            humanoidPose: createAvatarHumanoidPoseFromSkeleton(player.avatarSkeleton.pose),
             name: player.name || 'You',
             color: player.avatarConfigSnapshot.color,
             isLocal: true,
