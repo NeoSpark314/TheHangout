@@ -8,6 +8,7 @@ import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 import { ConfigRegistry, IConfigSchema } from '../../shared/config/ConfigRegistry';
 
 export class FlatUiRuntime implements IUpdatable {
+    private static readonly LEGACY_DEFAULT_SESSION_ID = 'DefaultMeetingSession';
     private static readonly KEYBOARD_MOUSE_HELP_HTML = [
         '<b>Controls</b>',
         'Menu: M',
@@ -313,8 +314,8 @@ export class FlatUiRuntime implements IUpdatable {
         }
 
         const storedSession = AppLocalStorage.getLastSessionId();
-        if (!storedSession) {
-            const defaultSession = 'DefaultMeetingSession';
+        if (!storedSession || storedSession === FlatUiRuntime.LEGACY_DEFAULT_SESSION_ID) {
+            const defaultSession = this.generateReadableSessionId();
             this.sessionIdInput.value = defaultSession;
             AppLocalStorage.setLastSessionId(defaultSession);
         } else {
@@ -434,6 +435,7 @@ export class FlatUiRuntime implements IUpdatable {
                 await this.context.runtime.media.ensureMicrophoneEnabled();
             }
             const customId = this.sessionIdInput.value.trim() || this.generateReadableSessionId();
+            this.sessionIdInput.value = customId;
             this.disableAllButtons();
             this.clearError();
             this.saveToStorage();
@@ -692,7 +694,9 @@ export class FlatUiRuntime implements IUpdatable {
         };
     }
     private handleInlineCopy(): void {
-        const sessionId = this.sessionIdInput.value.trim() || 'DefaultMeetingSession';
+        const sessionId = this.sessionIdInput.value.trim() || this.generateReadableSessionId();
+        this.sessionIdInput.value = sessionId;
+        this.saveToStorage();
         const url = new URL(window.location.href);
         url.searchParams.set('session', sessionId);
         const originalIcon = this.copyInviteLinkBtn.textContent;
