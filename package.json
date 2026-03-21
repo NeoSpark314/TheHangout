@@ -14,7 +14,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "serve": "tsx dedicatedServer.ts",
-    "test": "vitest"
+    "test": "vitest",
+    "test:network": "vitest run src/testing/network/NetworkRegression.test.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.50.1",

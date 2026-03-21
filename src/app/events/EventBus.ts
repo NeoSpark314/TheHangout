@@ -58,6 +58,10 @@ class EventBus {
             }
         });
     }
+
+    public reset(): void {
+        this.listeners = {};
+    }
 }
 
 const eventBus = new EventBus();
