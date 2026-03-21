@@ -14,7 +14,7 @@ import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { IAvatarConfig, normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
 import { AvatarSkeletonState } from '../../shared/avatar/AvatarSkeletonState';
-import { AVATAR_SKELETON_JOINTS } from '../../shared/avatar/AvatarSkeleton';
+import { AVATAR_SKELETON_JOINTS, AVATAR_SKELETON_PARENT, AvatarSkeletonJointName } from '../../shared/avatar/AvatarSkeleton';
 import { composeAvatarWorldPoses } from '../../shared/avatar/AvatarSkeletonUtils';
 
 export class PlayerAvatarEntity extends ReplicatedEntity {
@@ -164,6 +164,54 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
             this.view.removeFromScene(render.scene);
             this.view.destroy();
         }
+    }
+
+    public getAvatarHeadWorldPose(): IPose | null {
+        const head = composeAvatarWorldPoses(this.avatarSkeleton.pose).head;
+        if (!head) return null;
+        return {
+            position: { x: head.position.x, y: head.position.y, z: head.position.z },
+            quaternion: { x: head.quaternion.x, y: head.quaternion.y, z: head.quaternion.z, w: head.quaternion.w }
+        };
+    }
+
+    public getAvatarJointWorldPosition(jointName: AvatarSkeletonJointName): IVector3 | null {
+        const joint = composeAvatarWorldPoses(this.avatarSkeleton.pose)[jointName];
+        if (!joint) return null;
+        return { x: joint.position.x, y: joint.position.y, z: joint.position.z };
+    }
+
+    public getAvatarJointWorldQuaternion(jointName: AvatarSkeletonJointName): IPose['quaternion'] | null {
+        const joint = composeAvatarWorldPoses(this.avatarSkeleton.pose)[jointName];
+        if (!joint) return null;
+        return { x: joint.quaternion.x, y: joint.quaternion.y, z: joint.quaternion.z, w: joint.quaternion.w };
+    }
+
+    public setAvatarJointWorldPose(
+        jointName: AvatarSkeletonJointName,
+        pose: IPose,
+        tracked: boolean = true
+    ): void {
+        const world = composeAvatarWorldPoses(this.avatarSkeleton.pose);
+        const parentName = AVATAR_SKELETON_PARENT[jointName];
+        const parentPosition = parentName
+            ? world[parentName]?.position || new THREE.Vector3(this.avatarSkeleton.pose.rootWorldPosition.x, this.avatarSkeleton.pose.rootWorldPosition.y, this.avatarSkeleton.pose.rootWorldPosition.z)
+            : new THREE.Vector3(this.avatarSkeleton.pose.rootWorldPosition.x, this.avatarSkeleton.pose.rootWorldPosition.y, this.avatarSkeleton.pose.rootWorldPosition.z);
+        const parentQuaternion = parentName
+            ? world[parentName]?.quaternion || new THREE.Quaternion(this.avatarSkeleton.pose.rootWorldQuaternion.x, this.avatarSkeleton.pose.rootWorldQuaternion.y, this.avatarSkeleton.pose.rootWorldQuaternion.z, this.avatarSkeleton.pose.rootWorldQuaternion.w)
+            : new THREE.Quaternion(this.avatarSkeleton.pose.rootWorldQuaternion.x, this.avatarSkeleton.pose.rootWorldQuaternion.y, this.avatarSkeleton.pose.rootWorldQuaternion.z, this.avatarSkeleton.pose.rootWorldQuaternion.w);
+        const inverseParentQuaternion = parentQuaternion.clone().invert();
+        const localPosition = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z)
+            .sub(parentPosition)
+            .applyQuaternion(inverseParentQuaternion);
+        const localQuaternion = inverseParentQuaternion.multiply(
+            new THREE.Quaternion(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w)
+        );
+
+        this.avatarSkeleton.setJointLocalPose(jointName, {
+            position: { x: localPosition.x, y: localPosition.y, z: localPosition.z },
+            quaternion: { x: localQuaternion.x, y: localQuaternion.y, z: localQuaternion.z, w: localQuaternion.w }
+        }, tracked);
     }
 
     public syncLegacyPoseFromSkeleton(): void {

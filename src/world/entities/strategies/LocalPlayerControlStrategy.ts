@@ -112,15 +112,26 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     public getNetworkState(player: PlayerAvatarEntity, fullSync: boolean = false): IPlayerEntityState {
         const runtime = player.appContext.runtime;
         const trackingState = runtime.tracking.getState();
+        const headPose = player.getAvatarHeadWorldPose();
+        const rootPosition = player.avatarSkeleton.pose.rootWorldPosition;
+        const rootQuaternion = new THREE.Quaternion(
+            player.avatarSkeleton.pose.rootWorldQuaternion.x,
+            player.avatarSkeleton.pose.rootWorldQuaternion.y,
+            player.avatarSkeleton.pose.rootWorldQuaternion.z,
+            player.avatarSkeleton.pose.rootWorldQuaternion.w
+        );
+        const rootYaw = new THREE.Euler().setFromQuaternion(rootQuaternion, 'YXZ').y;
 
         return {
             id: player.id,
             type: EntityType.PLAYER_AVATAR,
             n: player.name,
-            p: [player.headState.position.x, 0, player.headState.position.z],
-            y: player.targetYaw,
-            h: player.headHeight,
-            hq: [player.headState.quaternion.x, player.headState.quaternion.y, player.headState.quaternion.z, player.headState.quaternion.w],
+            p: [rootPosition.x, rootPosition.y, rootPosition.z],
+            y: rootYaw,
+            h: headPose ? headPose.position.y - rootPosition.y : player.headHeight,
+            hq: headPose
+                ? [headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w]
+                : [player.headState.quaternion.x, player.headState.quaternion.y, player.headState.quaternion.z, player.headState.quaternion.w],
             sk: player.avatarSkeleton.consumeNetworkDelta(fullSync) || undefined,
             hm: [trackingState.hands.left.hasJoints ? 1 : 0, trackingState.hands.right.hasJoints ? 1 : 0],
             conf: {
@@ -232,8 +243,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             rootWorldPosition: { ...this.xrOrigin.position },
             rootWorldQuaternion: { ...this.xrOrigin.quaternion },
             headWorldPose: {
-                position: { ...player.headState.position },
-                quaternion: { ...player.headState.quaternion }
+                position: player.getAvatarHeadWorldPose()?.position || { ...player.headState.position },
+                quaternion: player.getAvatarHeadWorldPose()?.quaternion || { ...player.headState.quaternion }
             },
             effectors: {},
             tracked: { head: true },

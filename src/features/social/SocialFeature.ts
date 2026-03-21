@@ -166,7 +166,7 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
         }
 
         const wristName = hand === 'left' ? 'leftHand' : 'rightHand';
-        const wristPose = this.context.localPlayer?.humanoid.joints[wristName]?.position;
+        const wristPose = this.context.localPlayer?.getAvatarJointWorldPosition(wristName);
         if (wristPose && (wristPose.x !== 0 || wristPose.y !== 0 || wristPose.z !== 0)) {
             return new THREE.Vector3(wristPose.x, wristPose.y, wristPose.z);
         }
@@ -181,11 +181,11 @@ export class SocialFeature implements IUpdatable, IReplicatedFeature {
     private getRemoteHandPosition(remote: PlayerAvatarEntity, hand: Handedness): THREE.Vector3 | null {
         const tipName = hand === 'left' ? 'leftIndexTip' : 'rightIndexTip';
         const wristName = hand === 'left' ? 'leftHand' : 'rightHand';
-        const tip = remote.humanoid.joints[tipName]?.position;
+        const tip = remote.getAvatarJointWorldPosition(tipName);
         if (tip && (tip.x !== 0 || tip.y !== 0 || tip.z !== 0)) {
             return new THREE.Vector3(tip.x, tip.y, tip.z);
         }
-        const wrist = remote.humanoid.joints[wristName]?.position;
+        const wrist = remote.getAvatarJointWorldPosition(wristName);
         if (wrist && (wrist.x !== 0 || wrist.y !== 0 || wrist.z !== 0)) {
             return new THREE.Vector3(wrist.x, wrist.y, wrist.z);
         }

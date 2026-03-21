@@ -164,8 +164,10 @@ export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
         const originQuat = new THREE.Quaternion(xrOriginQuat.x, xrOriginQuat.y, xrOriginQuat.z, xrOriginQuat.w);
         const invOriginQuat = originQuat.clone().invert();
 
-        const headPosData = lp.headState.position;
-        const headQuatData = lp.headState.quaternion;
+        const headPoseData = lp.getAvatarHeadWorldPose();
+        if (!headPoseData) return;
+        const headPosData = headPoseData.position;
+        const headQuatData = headPoseData.quaternion;
         const headPos = new THREE.Vector3(headPosData.x, headPosData.y, headPosData.z);
         const headQuat = new THREE.Quaternion(headQuatData.x, headQuatData.y, headQuatData.z, headQuatData.w);
         const headYaw = new THREE.Euler().setFromQuaternion(headQuat, 'YXZ').y;

@@ -976,7 +976,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
 
     private getAvatarHandStrikePosition(hand: 'left' | 'right'): { x: number; y: number; z: number } | null {
         const trackingState = this.context.tracking.getState().hands[hand];
-        const localHumanoidJoints = this.context.tracking.getLocalPlayer()?.humanoid?.joints;
+        const localPlayer = this.context.tracking.getLocalPlayer();
 
         if (trackingState.hasJoints) {
             const tipPose = trackingState.joints[9]?.pose?.position;
@@ -986,7 +986,7 @@ class DrumPadArcInstance extends BaseReplicatedObjectInstance implements IReplic
         }
 
         const wristName = hand === 'left' ? 'leftHand' : 'rightHand';
-        const wristPose = localHumanoidJoints?.[wristName]?.position;
+        const wristPose = localPlayer?.getAvatarJointWorldPosition(wristName);
         if (wristPose && (wristPose.x !== 0 || wristPose.y !== 0 || wristPose.z !== 0)) {
             return wristPose;
         }

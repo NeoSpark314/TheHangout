@@ -121,8 +121,8 @@ export class RemoteDesktopFeature implements IUpdatable {
             summonerName: this.context.playerName
         };
         const localPlayer: any = this.context.localPlayer;
-        if (localPlayer?.headState) {
-            const head = localPlayer.headState;
+        const head = localPlayer?.getAvatarHeadWorldPose?.();
+        if (head) {
             payload.anchor = [head.position.x, head.position.y, head.position.z];
             payload.quaternion = [head.quaternion.x, head.quaternion.y, head.quaternion.z, head.quaternion.w];
         }

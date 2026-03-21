@@ -153,8 +153,10 @@ export class RenderRuntime {
             this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
 
             if (!this.isXRPresenting()) {
-                const worldPos = new THREE.Vector3(lp.headState.position.x, lp.headState.position.y, lp.headState.position.z);
-                const worldQuat = new THREE.Quaternion(lp.headState.quaternion.x, lp.headState.quaternion.y, lp.headState.quaternion.z, lp.headState.quaternion.w);
+                const headPose = lp.getAvatarHeadWorldPose?.();
+                if (!headPose) return;
+                const worldPos = new THREE.Vector3(headPose.position.x, headPose.position.y, headPose.position.z);
+                const worldQuat = new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w);
 
                 // Convert world pose to be local to cameraGroup
                 this.camera.position.copy(this.cameraGroup.worldToLocal(worldPos));

@@ -300,11 +300,10 @@ export class GrabSkill extends Skill {
                         const handJoint = hand === 'left' ? 'leftHand' : 'rightHand';
                         const worldPos = anchor.position;
                         const worldQuat = anchor.quaternion;
-                        player.humanoid.setJointPose(
-                            handJoint,
-                            { x: worldPos.x, y: worldPos.y, z: worldPos.z },
-                            { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w }
-                        );
+                        player.setAvatarJointWorldPose(handJoint, {
+                            position: { x: worldPos.x, y: worldPos.y, z: worldPos.z },
+                            quaternion: { x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w }
+                        }, true);
 
                         const liveHandPos = handState.pointerPose.position || handState.pose.position;
                         const drift = Math.hypot(

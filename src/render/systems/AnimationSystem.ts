@@ -38,16 +38,17 @@ export class AnimationSystem implements IUpdatable {
         this._smoothedMoveSpeed = THREE.MathUtils.damp(this._smoothedMoveSpeed, moveSpeed, smoothing, delta);
         this._bobTime += delta * (4 + this._smoothedMoveSpeed * 9);
 
-        const originPos = new THREE.Vector3(this.localPlayer.xrOrigin.position.x, this.localPlayer.xrOrigin.position.y, this.localPlayer.xrOrigin.position.z);
-        const originQuat = new THREE.Quaternion(this.localPlayer.xrOrigin.quaternion.x, this.localPlayer.xrOrigin.quaternion.y, this.localPlayer.xrOrigin.quaternion.z, this.localPlayer.xrOrigin.quaternion.w);
-
-        // 1. Update Head State (World Space)
+        const headPose = this.localPlayer.getAvatarHeadWorldPose();
+        if (!headPose) return;
         const bobAmplitude = 0.06 * this._smoothedMoveSpeed;
         const headBobY = Math.sin(this._bobTime) * bobAmplitude;
-        const headLocalPos = new THREE.Vector3(0, (this.localPlayer as any).headHeight + headBobY, 0);
-        const worldHeadPos = headLocalPos.clone().applyQuaternion(originQuat).add(originPos);
-
-        this.localPlayer.headState.position = { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z };
-        // Note: Head quaternion is already synced to camera by RenderRuntime/TrackingProvider on Desktop
+        this.localPlayer.setAvatarJointWorldPose('head', {
+            position: {
+                x: headPose.position.x,
+                y: headPose.position.y + headBobY,
+                z: headPose.position.z
+            },
+            quaternion: headPose.quaternion
+        }, true);
     }
 }

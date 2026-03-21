@@ -1494,21 +1494,23 @@ export class VrUiRuntime implements IUpdatable {
 
         const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 578, 360, 60, () => {
             const localPlayer = this.context.localPlayer;
+            const headPose = localPlayer?.getAvatarHeadWorldPose?.();
             const targetPosition = localPlayer
+                && headPose
                 ? {
-                    x: localPlayer.headState.position.x,
-                    y: localPlayer.headState.position.y - 0.2,
-                    z: localPlayer.headState.position.z
+                    x: headPose.position.x,
+                    y: headPose.position.y - 0.2,
+                    z: headPose.position.z
                 }
                 : { x: 0, y: 1.2, z: -1.8 };
 
-            if (localPlayer) {
+            if (localPlayer && headPose) {
                 const forward = new THREE.Vector3(0, 0, -1);
                 const headQuat = new THREE.Quaternion(
-                    localPlayer.headState.quaternion.x,
-                    localPlayer.headState.quaternion.y,
-                    localPlayer.headState.quaternion.z,
-                    localPlayer.headState.quaternion.w
+                    headPose.quaternion.x,
+                    headPose.quaternion.y,
+                    headPose.quaternion.z,
+                    headPose.quaternion.w
                 );
                 forward.applyQuaternion(headQuat).multiplyScalar(1.1);
                 targetPosition.x += forward.x;
@@ -1676,21 +1678,23 @@ export class VrUiRuntime implements IUpdatable {
             items.forEach((item) => {
                 const button = new UIButton(item.name, 0, rowY, 300, 62, () => {
                     const localPlayer = this.context.localPlayer;
+                    const headPose = localPlayer?.getAvatarHeadWorldPose?.();
                     const targetPosition = localPlayer
+                        && headPose
                         ? {
-                            x: localPlayer.headState.position.x,
-                            y: localPlayer.headState.position.y - 0.2,
-                            z: localPlayer.headState.position.z
+                            x: headPose.position.x,
+                            y: headPose.position.y - 0.2,
+                            z: headPose.position.z
                         }
                         : { x: 0, y: 1.2, z: -1.8 };
 
-                    if (localPlayer) {
+                    if (localPlayer && headPose) {
                         const forward = new THREE.Vector3(0, 0, -1);
                         const headQuat = new THREE.Quaternion(
-                            localPlayer.headState.quaternion.x,
-                            localPlayer.headState.quaternion.y,
-                            localPlayer.headState.quaternion.z,
-                            localPlayer.headState.quaternion.w
+                            headPose.quaternion.x,
+                            headPose.quaternion.y,
+                            headPose.quaternion.z,
+                            headPose.quaternion.w
                         );
                         forward.applyQuaternion(headQuat).multiplyScalar(1.0);
                         targetPosition.x += forward.x;

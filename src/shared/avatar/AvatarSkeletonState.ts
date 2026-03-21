@@ -65,6 +65,34 @@ export class AvatarSkeletonState {
         return cloneAvatarSkeletonPose(this.pose);
     }
 
+    public setJointLocalPose(
+        jointName: AvatarSkeletonJointName,
+        nextPose: { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } },
+        tracked: boolean
+    ): void {
+        const currentPose = this.pose.joints[jointName];
+        if (!currentPose) return;
+
+        let jointDirty = false;
+        if (this.needsVectorUpdate(currentPose.position, nextPose.position)) {
+            currentPose.position = { ...nextPose.position };
+            jointDirty = true;
+        }
+        if (this.needsQuaternionUpdate(currentPose.quaternion, nextPose.quaternion)) {
+            currentPose.quaternion = { ...nextPose.quaternion };
+            jointDirty = true;
+        }
+        if ((this.pose.tracked[jointName] ?? false) !== tracked) {
+            this.pose.tracked[jointName] = tracked;
+            jointDirty = true;
+            this.trackedDirty = true;
+        }
+
+        if (jointDirty) {
+            this.dirtyJoints.add(jointName);
+        }
+    }
+
     public clear(): void {
         const reset = createAvatarSkeletonPose();
         this.pose.rootWorldPosition = reset.rootWorldPosition;

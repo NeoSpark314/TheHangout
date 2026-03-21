@@ -180,7 +180,7 @@ export class TriggerZoneRegistry {
     }
 
     private getPlayerPosition(player: PlayerAvatarEntity): { x: number; y: number; z: number } | null {
-        const headPosition = player.headState?.position;
+        const headPosition = player.getAvatarHeadWorldPose()?.position;
         if (headPosition && Number.isFinite(headPosition.x) && Number.isFinite(headPosition.y) && Number.isFinite(headPosition.z)) {
             return headPosition;
         }
