@@ -2,6 +2,11 @@
 
 A playful space for small groups of people to hang out. 
 
+| | |
+|---|---|
+| ![Desktop screenshot](docs/images/screenshots/desktop_screenshot01.jpg) | ![VR screenshot 1](docs/images/screenshots/vr_screenshot01.jpg) |
+| ![VR screenshot 2](docs/images/screenshots/vr_screenshot02.jpg) | ![VR screenshot 3](docs/images/screenshots/vr_screenshot03.jpg) |
+
 ## Main objectives
 - No setup, no accounts, quick to join
 - Fun
