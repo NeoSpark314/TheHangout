@@ -11,6 +11,7 @@ import { AvatarSkeletonJointName } from '../../../shared/avatar/AvatarSkeleton';
 import { composeAvatarWorldPoses, LEFT_HAND_FINGER_JOINTS, RIGHT_HAND_FINGER_JOINTS } from '../../../shared/avatar/AvatarSkeletonUtils';
 
 interface IArmChain {
+    shoulder: THREE.Object3D;
     upper: THREE.Object3D;
     lower: THREE.Object3D;
     hand: THREE.Object3D;
@@ -69,6 +70,10 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
 
     private readonly modelRoot: THREE.Group;
     private readonly rawHeadBone: THREE.Object3D | null;
+    private readonly spineBone: THREE.Object3D | null;
+    private readonly chestBone: THREE.Object3D | null;
+    private readonly upperChestBone: THREE.Object3D | null;
+    private readonly neckBone: THREE.Object3D | null;
     private readonly headBone: THREE.Object3D | null;
     private readonly hipsBone: THREE.Object3D | null;
     private readonly nameTagComponent: NameTagComponent;
@@ -117,6 +122,10 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         this.modelRoot.scale.setScalar(1);
         this.mesh.add(this.modelRoot);
         this.rawHeadBone = this.vrmInstance.humanoid.getRawBoneNode(VRMHumanBoneName.Head);
+        this.spineBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Spine);
+        this.chestBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Chest);
+        this.upperChestBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.UpperChest);
+        this.neckBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Neck);
         this.headBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head);
         this.hipsBone = this.vrmInstance.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Hips);
 
@@ -186,7 +195,9 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
 
         this.vrmInstance.humanoid.resetNormalizedPose();
         this.applyHipsPose(skeleton, lerpFactor);
+        this.applyTorsoPose(skeleton, lerpFactor);
         this.applyHeadPose(skeleton, world, lerpFactor);
+        this.vrmInstance.humanoid.normalizedHumanBonesRoot.updateMatrixWorld(true);
         this.applyArmPose(this.leftChain, world.leftHand || null, lerpFactor);
         this.applyArmPose(this.rightChain, world.rightHand || null, lerpFactor);
         this.updateFingers(state, world, lerpFactor);
@@ -253,6 +264,9 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
     }
 
     private createArmChain(hand: 'left' | 'right'): IArmChain | null {
+        const shoulder = this.vrmInstance.humanoid.getNormalizedBoneNode(
+            hand === 'left' ? VRMHumanBoneName.LeftShoulder : VRMHumanBoneName.RightShoulder
+        );
         const upper = this.vrmInstance.humanoid.getNormalizedBoneNode(
             hand === 'left' ? VRMHumanBoneName.LeftUpperArm : VRMHumanBoneName.RightUpperArm
         );
@@ -263,11 +277,12 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
             hand === 'left' ? VRMHumanBoneName.LeftHand : VRMHumanBoneName.RightHand
         );
 
-        if (!upper || !lower || !wrist) {
+        if (!shoulder || !upper || !lower || !wrist) {
             return null;
         }
 
         return {
+            shoulder,
             upper,
             lower,
             hand: wrist,
@@ -286,6 +301,13 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
                 lowerLength: Math.max(0.001, wrist.position.length())
             }
         };
+    }
+
+    private applyTorsoPose(state: IPlayerAvatarRenderState['skeleton'], lerpFactor: number): void {
+        this.applyLocalPose(this.spineBone, state.joints.spine, lerpFactor);
+        this.applyLocalPose(this.chestBone, state.joints.chest, lerpFactor);
+        this.applyLocalPose(this.upperChestBone, state.joints.upperChest, lerpFactor);
+        this.applyLocalPose(this.neckBone, state.joints.neck, lerpFactor);
     }
 
     private applyHeadPose(state: IPlayerAvatarRenderState['skeleton'], _world: ReturnType<typeof composeAvatarWorldPoses>, lerpFactor: number): void {
@@ -327,6 +349,19 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         }
     }
 
+    private applyLocalPose(node: THREE.Object3D | null, pose: IPlayerAvatarRenderState['skeleton']['joints'][AvatarSkeletonJointName], lerpFactor: number): void {
+        if (!node || !pose) return;
+
+        if (lerpFactor < 1.0) {
+            node.quaternion.slerp(
+                new THREE.Quaternion(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w),
+                lerpFactor
+            );
+        } else {
+            node.quaternion.set(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w);
+        }
+    }
+
     private applyArmPose(chain: IArmChain | null, handPose: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null, lerpFactor: number): void {
         if (!chain) return;
         if (!handPose) {
@@ -342,11 +377,16 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
             return;
         }
 
-        this.tmpLocalPos.copy(handPose.position);
-        this.mesh.worldToLocal(this.tmpLocalPos);
+        if (chain.shoulder.parent) {
+            this.tmpLocalPos.copy(handPose.position);
+            chain.shoulder.parent.worldToLocal(this.tmpLocalPos);
+        } else {
+            this.tmpLocalPos.copy(handPose.position);
+            this.mesh.worldToLocal(this.tmpLocalPos);
+        }
 
         this.twoBoneIk.solve({
-            rigRoot: this.mesh,
+            rigRoot: chain.shoulder.parent || this.mesh,
             upper: chain.upper,
             targetLocalPosition: this.tmpLocalPos,
             baseUpperDirection: chain.baseUpperDir,
@@ -364,7 +404,9 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
             chain.lower.quaternion.copy(chain.ik.lowerQuaternion);
         }
 
+        this.vrmInstance.humanoid.normalizedHumanBonesRoot.updateMatrixWorld(true);
         this.applyWorldOrientation(chain.hand, handPose.quaternion, lerpFactor);
+        this.vrmInstance.humanoid.normalizedHumanBonesRoot.updateMatrixWorld(true);
     }
 
     private applyWorldOrientation(node: THREE.Object3D, worldQuat: THREE.Quaternion, lerpFactor: number): void {
