@@ -28,7 +28,9 @@ export class EntityRegistry implements IUpdatable {
         if (this.entities.has(id)) return this.entities.get(id)!;
 
         const entityId = id;
-        const moduleId = config.m;
+        const moduleId = typeof config.moduleId === 'string'
+            ? config.moduleId
+            : config.m;
 
         if (moduleId && typeof moduleId === 'string') {
             console.log(`[EntityRegistry] Discovering entity ${id} as part of object module: ${moduleId}`);
@@ -55,9 +57,9 @@ export class EntityRegistry implements IUpdatable {
                 halfExtents: config.he ? { x: config.he[0], y: config.he[1], z: config.he[2] } : undefined,
                 position: config.p ? { x: config.p[0], y: config.p[1], z: config.p[2] } : undefined,
                 isAuthority: false,
-                ownerId: config.o ?? config.ownerId,
+                ownerId: config.ownerId,
                 url: config.url,
-                scale: config.s
+                scale: config.scale ?? config.s
             };
 
             const instance = this.context.runtime.session?.spawnObjectInstance(moduleId, spawnConfig);
@@ -69,7 +71,14 @@ export class EntityRegistry implements IUpdatable {
             return null;
         }
 
-        const entity = EntityFactory.spawn(this.context, type, id, config);
+        const normalizedConfig = {
+            ...config,
+            moduleId,
+            ownerId: config.ownerId,
+            scale: config.scale ?? config.s
+        };
+
+        const entity = EntityFactory.spawn(this.context, type, id, normalizedConfig);
 
         if (entity) {
             this.addEntity(entity);

@@ -35,11 +35,8 @@ export function applyEntityStateUpdates(
         }
         if (!entity) continue;
 
-        const state = stateData.state as { ownerId?: string | null; o?: string | null; b?: string | null };
-        const hasOwnershipHint = state.ownerId !== undefined || state.o !== undefined;
-        const incomingOwnerId = hasOwnershipHint
-            ? (state.ownerId !== undefined ? state.ownerId : state.o)
-            : undefined;
+        const state = stateData.state as { ownerId?: string | null; b?: string | null };
+        const incomingOwnerId = state.ownerId;
         const incomingHeldBy = state.b ?? undefined;
 
         if (options.source === 'player_input' && stateData.type !== EntityType.PLAYER_AVATAR) {

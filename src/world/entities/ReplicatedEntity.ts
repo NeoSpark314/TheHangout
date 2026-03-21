@@ -61,8 +61,7 @@ export abstract class ReplicatedEntity implements IEntity, INetworkable<any> {
     protected syncNetworkState(state: any): void {
         const localId = this.context.localPlayer?.id || 'local';
 
-        // Support both full and abbreviated keys
-        const incomingOwnerId = state.ownerId !== undefined ? state.ownerId : state.o;
+        const incomingOwnerId = state.ownerId;
 
         if (incomingOwnerId !== undefined && incomingOwnerId !== this.ownerId) {
             if (this.isAuthority && incomingOwnerId === null) return;

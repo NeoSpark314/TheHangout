@@ -262,13 +262,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
                 id: ball.id,
                 position: ball.position,
                 color: ball.color,
-                size: 0.18,
-                physics: {
-                    linearDamping: 0.16,
-                    angularDamping: 0.45,
-                    friction: 0.78,
-                    restitution: 0.08
-                }
+                size: 0.18
             });
         }
     }
@@ -634,10 +628,3 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
         return new TargetTossScenario(session, app);
     }
 };
-
-
-
-
-
-
-

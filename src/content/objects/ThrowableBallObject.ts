@@ -42,32 +42,3 @@ export class ThrowableBallObject implements IObjectModule {
     }
 }
 
-function readSpherePhysicsOverrides(config: IObjectSpawnConfig): {
-    linearDamping?: number;
-    angularDamping?: number;
-    friction?: number;
-    restitution?: number;
-} | undefined {
-    const candidate = (config as IObjectSpawnConfig & {
-        physics?: {
-            linearDamping?: unknown;
-            angularDamping?: unknown;
-            friction?: unknown;
-            restitution?: unknown;
-        };
-    }).physics;
-
-    if (!candidate || typeof candidate !== 'object') {
-        return undefined;
-    }
-
-    const overrides = {
-        linearDamping: typeof candidate.linearDamping === 'number' ? candidate.linearDamping : undefined,
-        angularDamping: typeof candidate.angularDamping === 'number' ? candidate.angularDamping : undefined,
-        friction: typeof candidate.friction === 'number' ? candidate.friction : undefined,
-        restitution: typeof candidate.restitution === 'number' ? candidate.restitution : undefined
-    };
-
-    return Object.values(overrides).some((value) => value !== undefined) ? overrides : undefined;
-}
-

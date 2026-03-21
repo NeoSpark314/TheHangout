@@ -32,10 +32,10 @@ export class EntityFactory {
                 config.position || { x: 0, y: 0, z: 0 },
                 config.mesh,
                 config.halfExtents,
-                config.m || config.moduleId,
-                config.ownerId || config.o,
+                config.moduleId,
+                config.ownerId,
                 config.url,
-                config.s ?? config.scale,
+                config.scale,
                 config.dualGrabScalable
             );
         });
