@@ -255,6 +255,16 @@ export class AuthoritativeSessionHost {
         this.transport.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, transferPayload);
     }
 
+    public broadcastOwnershipTransfer(entityId: string, newOwnerId: string | null): void {
+        const seq = this.nextOwnershipSeq(entityId);
+        this.transport.broadcast(PACKET_TYPES.OWNERSHIP_TRANSFER, {
+            entityId,
+            newOwnerId,
+            seq,
+            sentAt: this.nowMs()
+        });
+    }
+
     public handleOwnershipRelease(senderId: string, payload: IOwnershipReleasePayload): void {
         const entity = this.context.runtime.entity.getEntity(payload.entityId);
         if (!entity) return;
@@ -338,3 +348,4 @@ export class AuthoritativeSessionHost {
             : Date.now();
     }
 }
+

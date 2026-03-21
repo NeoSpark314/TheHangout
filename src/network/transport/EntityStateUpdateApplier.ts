@@ -16,6 +16,7 @@ export function applyEntityStateUpdates(
 ): void {
     const runtime = context.runtime;
     const localId = context.localPlayer?.id || 'local';
+    const nowMs = () => ((typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now());
 
     for (const stateData of entityStates) {
         let entity = runtime.entity.getEntity(stateData.id);
@@ -53,7 +54,9 @@ export function applyEntityStateUpdates(
                     options.senderId !== undefined &&
                     incomingOwnerId !== undefined &&
                     incomingOwnerId === options.senderId;
+                const optimisticClaimBlockUntilMs = (entity as { optimisticClaimBlockUntilMs?: number }).optimisticClaimBlockUntilMs ?? 0;
                 const canAdoptOptimisticUnownedClaim =
+                    optimisticClaimBlockUntilMs <= nowMs() &&
                     currentOwnerId === null &&
                     senderMatchesIncomingOwner &&
                     stateData.type === EntityType.PHYSICS_PROP;
@@ -85,3 +88,4 @@ export function applyEntityStateUpdates(
         }
     }
 }
+

@@ -32,6 +32,34 @@ import { ThrowableBallObject } from '../../content/objects/ThrowableBallObject';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
 
 let canvasContextInstalled = false;
+let mockClockInstalled = false;
+let mockNowMs = 0;
+let originalPerformanceNow: (() => number) | null = null;
+let originalDateNow: (() => number) | null = null;
+
+function ensureMockClockInstalled(): void {
+    if (mockClockInstalled) return;
+
+    if (typeof performance !== 'undefined') {
+        originalPerformanceNow = performance.now.bind(performance);
+        Object.defineProperty(performance, 'now', {
+            configurable: true,
+            value: () => mockNowMs
+        });
+    }
+
+    originalDateNow = Date.now;
+    Date.now = () => Math.floor(mockNowMs);
+    mockClockInstalled = true;
+}
+
+function resetMockClock(): void {
+    mockNowMs = 0;
+}
+
+function advanceMockClock(deltaMs: number): void {
+    mockNowMs += deltaMs;
+}
 
 function ensureCanvasContextMock(): void {
     if (canvasContextInstalled || typeof HTMLCanvasElement === 'undefined') return;
@@ -284,11 +312,11 @@ class HeadlessPeerSession {
 
 export class HeadlessNetworkHarness {
     public readonly hostId = 'host-peer';
-    public readonly guestId = 'guest-peer';
     public readonly host = new HeadlessPeerSession(this.hostId, 'host');
-    public readonly guest = new HeadlessPeerSession(this.guestId, 'guest', this.hostId);
-    private hostConnection!: MemoryConnection;
-    private guestConnection!: MemoryConnection;
+    public guest: HeadlessPeerSession | null = null;
+    public guestId: string | null = null;
+    private hostConnection: MemoryConnection | null = null;
+    private guestConnection: MemoryConnection | null = null;
 
     public static async create(): Promise<HeadlessNetworkHarness> {
         const harness = new HeadlessNetworkHarness();
@@ -296,26 +324,22 @@ export class HeadlessNetworkHarness {
         return harness;
     }
 
+    public static async createHostOnly(): Promise<HeadlessNetworkHarness> {
+        const harness = new HeadlessNetworkHarness();
+        await harness.host.initialize();
+        harness.stepFrames(10);
+        return harness;
+    }
+
     private async initialize(): Promise<void> {
         await this.host.initialize();
-        await this.guest.initialize();
-
-        this.hostConnection = new MemoryConnection(this.guestId, (data) => this.guestConnection.receive(data));
-        this.guestConnection = new MemoryConnection(this.hostId, (data) => this.hostConnection.receive(data));
-
-        this.host.attachConnection(this.hostConnection);
-        this.guest.attachConnection(this.guestConnection);
-
-        this.hostConnection.emitOpen();
-        this.guestConnection.emitOpen();
-        this.guest.initializeLocalPlayer();
-        this.stepFrames(10);
+        await this.connectGuest();
     }
 
     public stepFrames(count: number, delta: number = 1 / 60): void {
         for (let i = 0; i < count; i++) {
             this.host.step(delta);
-            this.guest.step(delta);
+            this.guest?.step(delta);
         }
     }
 
@@ -340,15 +364,50 @@ export class HeadlessNetworkHarness {
         return instance;
     }
 
+    public requireGuest(): HeadlessPeerSession {
+        if (!this.guest) {
+            throw new Error('Guest session is not connected.');
+        }
+        return this.guest;
+    }
+
+    public async connectGuest(peerId: string = 'guest-peer'): Promise<HeadlessPeerSession> {
+        if (this.guest) {
+            throw new Error('Guest session is already connected.');
+        }
+
+        const guest = new HeadlessPeerSession(peerId, 'guest', this.hostId);
+        await guest.initialize();
+
+        this.guestId = peerId;
+        this.hostConnection = new MemoryConnection(peerId, (data) => this.guestConnection?.receive(data));
+        this.guestConnection = new MemoryConnection(this.hostId, (data) => this.hostConnection?.receive(data));
+
+        this.host.attachConnection(this.hostConnection);
+        guest.attachConnection(this.guestConnection);
+
+        this.guest = guest;
+        this.hostConnection.emitOpen();
+        this.guestConnection.emitOpen();
+        guest.initializeLocalPlayer();
+        this.stepFrames(10);
+        return guest;
+    }
+
     public disconnectGuest(): void {
-        this.guestConnection.close();
-        this.hostConnection.close();
+        this.guestConnection?.close();
+        this.hostConnection?.close();
+        this.guest?.disconnect();
+        this.guest = null;
+        this.guestId = null;
+        this.guestConnection = null;
+        this.hostConnection = null;
         this.stepFrames(2);
     }
 
     public reset(): void {
         this.host.disconnect();
-        this.guest.disconnect();
+        this.guest?.disconnect();
         const storage = (globalThis as { localStorage?: { clear?: () => void } }).localStorage;
         storage?.clear?.();
         eventBus.reset();
@@ -433,8 +492,4 @@ function yawFromQuaternion(quaternion: { x: number; y: number; z: number; w: num
     );
     return euler.y;
 }
-
-
-
-
 
