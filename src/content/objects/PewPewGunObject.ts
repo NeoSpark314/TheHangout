@@ -34,7 +34,7 @@ const GUN_MAX_RANGE = 22;
 const GUN_FIRE_COOLDOWN_MS = 120;
 const GUN_RECOIL_DISTANCE = 0.035;
 const GUN_RECOIL_RECOVER_SPEED = 8.5;
-const GUN_IMPULSE_STRENGTH = 0.045;
+const GUN_IMPULSE_STRENGTH = 0.035;
 
 class PewPewGunInstance extends BaseReplicatedObjectInstance {
     public readonly replicationPolicy = {
@@ -180,14 +180,18 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
                         hit = true;
 
                         if (entity?.type === EntityType.PHYSICS_PROP) {
-                            this.context.app.runtime.physics?.applyImpulseAtPoint(
+                            this.context.app.runtime.physics?.applyInteractionImpulse(
                                 physicsHit.entityId,
                                 {
                                     x: direction.x * GUN_IMPULSE_STRENGTH,
                                     y: direction.y * GUN_IMPULSE_STRENGTH,
                                     z: direction.z * GUN_IMPULSE_STRENGTH
                                 },
-                                physicsHit.point
+                                physicsHit.point,
+                                {
+                                    linearFactor: 1,
+                                    torqueFactor: 0.18
+                                }
                             );
                         }
                     }

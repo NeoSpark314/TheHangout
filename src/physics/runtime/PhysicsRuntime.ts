@@ -36,6 +36,12 @@ export interface IPhysicsRayHit {
     entityId: string | null;
     colliderId: number;
 }
+
+interface IInteractionImpulseOptions {
+    linearFactor?: number;
+    torqueFactor?: number;
+}
+
 interface IPhysicsDebugBodyEntry {
     id: string;
     rigidBody: RAPIER.RigidBody;
@@ -81,6 +87,8 @@ export class PhysicsRuntime {
     private touchQueryHitsByEntityWindow: Map<string, number> = new Map();
     private collisionSoundCooldownMs: number = 100;
     private lastCollisionSoundAtByPair: Map<string, number> = new Map();
+    private pendingImpulseByEntity: Map<string, { impulse: IVector3; point: IVector3; expiresAtMs: number; options?: IInteractionImpulseOptions }> = new Map();
+    private pendingImpulseLifetimeMs: number = 400;
 
     constructor(private context: AppContext) { }
 
@@ -378,6 +386,7 @@ export class PhysicsRuntime {
 
         this.processTouchOwnershipLeases();
         this.processProximityTouchLeases();
+        this.processPendingImpulses();
         this.updateTouchQueryMetrics(delta);
     }
 
@@ -445,20 +454,30 @@ export class PhysicsRuntime {
     }
 
 
-    public applyImpulseAtPoint(entityId: string, impulse: IVector3, point: IVector3): boolean {
+    public applyInteractionImpulse(
+        entityId: string,
+        impulse: IVector3,
+        point: IVector3,
+        options?: IInteractionImpulseOptions
+    ): boolean {
         const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
         if (!entity || entity.type !== EntityType.PHYSICS_PROP || !entity.rigidBody) return false;
         if (entity.heldBy) return false;
-        if (!entity.requestImmediatePhysicsAuthority()) return false;
+        if (!entity.requestImmediatePhysicsAuthority({ allowSpeculativeHostClaim: true })) {
+            this.pendingImpulseByEntity.set(entityId, {
+                impulse: { x: impulse.x, y: impulse.y, z: impulse.z },
+                point: { x: point.x, y: point.y, z: point.z },
+                expiresAtMs: this.nowMs() + this.pendingImpulseLifetimeMs,
+                options
+            });
+            return false;
+        }
 
-        entity.rigidBody.wakeUp();
-        entity.rigidBody.applyImpulseAtPoint(
-            { x: impulse.x, y: impulse.y, z: impulse.z },
-            { x: point.x, y: point.y, z: point.z },
-            true
-        );
-        this.context.runtime.network?.syncEntityNow(entity.id, true);
-        return true;
+        return this.applyInteractionImpulseNow(entity, impulse, point, options);
+    }
+
+    public applyImpulseAtPoint(entityId: string, impulse: IVector3, point: IVector3): boolean {
+        return this.applyInteractionImpulse(entityId, impulse, point);
     }
     public raycast(origin: IVector3, direction: IVector3, maxDist: number): IPhysicsRayHit | null {
         if (!this.world) return null;
@@ -839,6 +858,67 @@ export class PhysicsRuntime {
 
     private contactKey(a: number, b: number): string {
         return a < b ? `${a}:${b}` : `${b}:${a}`;
+    }
+
+    private processPendingImpulses(): void {
+        const nowMs = this.nowMs();
+        for (const [entityId, pending] of this.pendingImpulseByEntity.entries()) {
+            if (pending.expiresAtMs <= nowMs) {
+                this.pendingImpulseByEntity.delete(entityId);
+                continue;
+            }
+
+            const entity = this.context.runtime.entity.getEntity(entityId) as PhysicsPropEntity | undefined;
+            if (!entity || entity.isDestroyed || !entity.rigidBody || entity.heldBy) {
+                this.pendingImpulseByEntity.delete(entityId);
+                continue;
+            }
+
+            if (!entity.isAuthority) {
+                continue;
+            }
+
+            this.applyInteractionImpulseNow(entity, pending.impulse, pending.point, pending.options);
+            this.pendingImpulseByEntity.delete(entityId);
+        }
+    }
+
+    private applyInteractionImpulseNow(
+        entity: PhysicsPropEntity,
+        impulse: IVector3,
+        point: IVector3,
+        options?: IInteractionImpulseOptions
+    ): boolean {
+        const linearFactor = Math.max(0, options?.linearFactor ?? 1);
+        const torqueFactor = Math.max(0, options?.torqueFactor ?? 0);
+
+        entity.rigidBody.wakeUp();
+        entity.rigidBody.applyImpulse(
+            {
+                x: impulse.x * linearFactor,
+                y: impulse.y * linearFactor,
+                z: impulse.z * linearFactor
+            },
+            true
+        );
+
+        if (torqueFactor > 0) {
+            const center = entity.rigidBody.translation();
+            const rx = point.x - center.x;
+            const ry = point.y - center.y;
+            const rz = point.z - center.z;
+            entity.rigidBody.applyTorqueImpulse(
+                {
+                    x: ((ry * impulse.z) - (rz * impulse.y)) * torqueFactor,
+                    y: ((rz * impulse.x) - (rx * impulse.z)) * torqueFactor,
+                    z: ((rx * impulse.y) - (ry * impulse.x)) * torqueFactor
+                },
+                true
+            );
+        }
+
+        this.context.runtime.network?.syncEntityNow(entity.id, true);
+        return true;
     }
 
     private nowMs(): number {

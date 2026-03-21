@@ -600,6 +600,12 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         // Notify entity-level state machines (e.g. PhysicsPropEntity pending-release handoff).
         const networkable = entity as unknown as { onNetworkEvent?: (type: string, data: unknown) => void };
         networkable.onNetworkEvent?.('OWNERSHIP_TRANSFER', payload);
+
+        if (isLocalOwner) {
+            // Flush the current local state immediately after ownership grant so
+            // speculative local interactions survive the transfer on the first try.
+            this.syncEntityNow(entity.id, true);
+        }
     }
 
     public handleOwnershipRequest(senderId: string, payload: IOwnershipRequestPayload): void {

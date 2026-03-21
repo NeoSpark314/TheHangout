@@ -293,10 +293,25 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.rigidBody.setNextKinematicRotation(pose.quaternion);
     }
 
-    public requestImmediatePhysicsAuthority(): boolean {
+    public requestImmediatePhysicsAuthority(options?: { allowSpeculativeHostClaim?: boolean }): boolean {
         if (!this.rigidBody) return false;
         const hasAuthority = this.requestOwnership();
-        if (!hasAuthority || !this.isAuthority) return false;
+        if (!hasAuthority || !this.isAuthority) {
+            const localId = this.context.localPlayer?.id || 'local';
+            const hostId = this.context.sessionId;
+            const allowSpeculativeHostClaim = options?.allowSpeculativeHostClaim === true;
+            const canSpeculativelyClaimHostAuthority =
+                allowSpeculativeHostClaim &&
+                !this.context.isHost &&
+                !this.heldBy &&
+                !!hostId &&
+                this.ownerId === hostId;
+
+            if (!canSpeculativelyClaimHostAuthority) return false;
+
+            this.ownerId = localId;
+            this.isAuthority = true;
+        }
 
         this.pendingReleaseArmed = false;
         this.refreshSimMode();
