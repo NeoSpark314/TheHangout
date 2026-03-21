@@ -95,10 +95,10 @@ function createHandWorldQuaternion(backOfHand: THREE.Vector3, thumbSide: THREE.V
 }
 
 function createGripToHandOffset(side: 'left' | 'right'): THREE.Quaternion {
-    return createHandWorldQuaternion(
-        new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0),
-        new THREE.Vector3(0, 0, -1)
-    );
+    const rawGripOffset = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+    const backOfHand = new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(rawGripOffset);
+    const thumbSide = new THREE.Vector3(0, 0, -1).applyQuaternion(rawGripOffset);
+    return createHandWorldQuaternion(backOfHand, thumbSide);
 }
 
 function setTrackedHandPose(
@@ -270,7 +270,7 @@ describe('AvatarMotionSolver', () => {
         expect(solvedThumb.dot(targetThumb)).toBeGreaterThan(0.995);
     });
 
-    it('maps WebXR grip-space controllers to inward-facing palms', () => {
+    it('maps WebXR grip-space controllers through the controller hand offset', () => {
         const solver = new AvatarMotionSolver();
         const frame = createTrackingFrame(false);
         clearTrackedFingerSkeleton(frame, 'left');
@@ -303,11 +303,9 @@ describe('AvatarMotionSolver', () => {
 
         const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
         const world = composeAvatarWorldPoses(pose);
-        const leftPalm = new THREE.Vector3(0, -1, 0).applyQuaternion(world.leftHand!.quaternion);
-        const rightPalm = new THREE.Vector3(0, -1, 0).applyQuaternion(world.rightHand!.quaternion);
 
-        expect(leftPalm.x).toBeLessThan(-0.95);
-        expect(rightPalm.x).toBeGreaterThan(0.95);
+        expect(world.leftHand!.quaternion.angleTo(leftHandWorldQuaternion)).toBeLessThan(1e-4);
+        expect(world.rightHand!.quaternion.angleTo(rightHandWorldQuaternion)).toBeLessThan(1e-4);
     });
 
     it('maps controller grip quaternions semantically instead of copying them as hand-bone rotations', () => {

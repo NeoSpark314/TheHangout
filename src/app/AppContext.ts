@@ -90,7 +90,7 @@ export class AppContext {
         vrmUrl: null
     };
     public avatarRenderOverride: AvatarRenderMode | null = null;
-    public avatarPoseOverride: AvatarPoseOverride = 'vrm-tpose';
+    public avatarPoseOverride: AvatarPoseOverride = 'none';
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;
     public sessionConfig: ISessionConfig = {

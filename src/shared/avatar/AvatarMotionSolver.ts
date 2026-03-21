@@ -22,6 +22,10 @@ const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
 const CHEST_TWIST_WEIGHT = 0.25;
 const UPPER_CHEST_TWIST_WEIGHT = 0.35;
 const NECK_TWIST_WEIGHT = 0.4;
+const CONTROLLER_RAW_GRIP_OFFSET = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(1, 0, 0),
+    Math.PI / 2
+);
 const LEFT_FINGER_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
     ['leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip'],
     ['leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip'],
@@ -475,7 +479,8 @@ export class AvatarMotionSolver {
     ): THREE.Quaternion {
         const rawGripQuaternion = new THREE.Quaternion();
         const rawGrip = convertAvatarWorldQuaternionToRawWorldQuaternion(effector.quaternion);
-        rawGripQuaternion.set(rawGrip.x, rawGrip.y, rawGrip.z, rawGrip.w);
+        rawGripQuaternion.set(rawGrip.x, rawGrip.y, rawGrip.z, rawGrip.w)
+            .multiply(CONTROLLER_RAW_GRIP_OFFSET);
         const backOfHand = new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(rawGripQuaternion);
         const thumbSide = new THREE.Vector3(0, 0, -1).applyQuaternion(rawGripQuaternion);
         return this.createHandWorldQuaternion(backOfHand, thumbSide);
