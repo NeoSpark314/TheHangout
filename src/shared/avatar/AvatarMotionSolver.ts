@@ -96,7 +96,6 @@ export class AvatarMotionSolver {
             .applyQuaternion(this.tmpInverseRootWorldQuat);
         this.tmpTargetOrientation.copy(this.tmpInverseRootWorldQuat).multiply(this.tmpHeadWorldQuat);
         this.headTargetEuler.setFromQuaternion(this.tmpTargetOrientation, 'YXZ');
-        this.headTargetEuler.x *= -1;
         this.tmpAvatarHeadLocalQuat.setFromEuler(this.headTargetEuler);
         this.tmpAvatarHeadWorldQuat.copy(this.tmpRootWorldQuat).multiply(this.tmpAvatarHeadLocalQuat);
 
@@ -171,15 +170,15 @@ export class AvatarMotionSolver {
         const effector = frame.effectors[handName] || null;
         const tracked = !!frame.tracked[handName];
         const hasTrackedHandSkeleton = this.hasTrackedHandSkeleton(side, frame);
-        const upperBase = side === 'left' ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(1, 0, 0);
-        const lowerBase = upperBase.clone();
+        const upperBase = this.getRest(lowerName).normalize();
+        const lowerBase = this.getRest(handName).normalize();
         const upperLength = this.getRest(lowerName).length();
         const lowerLength = this.getRest(handName).length();
         const shoulderWorldPos = this.jointWorldPositions[shoulderName]!;
         const shoulderWorldQuat = this.jointWorldQuaternions[shoulderName]!;
         const upperLocalPos = this.getRest(upperName);
         const restTarget = shoulderWorldPos.clone()
-            .add(upperBase.clone().multiplyScalar(side === 'left' ? -0.58 : 0.58))
+            .add(upperBase.clone().applyQuaternion(this.tmpRootWorldQuat).multiplyScalar(0.58))
             .add(new THREE.Vector3(0, -0.38, 0.18).applyQuaternion(this.tmpRootWorldQuat));
 
         this.tmpTargetPosition.copy(restTarget);
@@ -207,7 +206,7 @@ export class AvatarMotionSolver {
             upperLength,
             lowerBase,
             lowerLength,
-            new THREE.Vector3(0, -1, side === 'left' ? -0.35 : 0.35)
+            new THREE.Vector3(0, -1, side === 'left' ? 0.35 : -0.35)
         );
 
         this.setJointLocal(upperName, upperLocalPos, ik.upperQuaternion, tracked);
@@ -240,7 +239,7 @@ export class AvatarMotionSolver {
         const hipsWorldQuat = this.jointWorldQuaternions.hips!;
         const footForward = seated ? 0.34 : 0.06;
         const footLift = seated ? 0.08 : 0.0;
-        const lateral = side === 'left' ? -0.13 : 0.13;
+        const lateral = Math.sign(this.getRest(upperName).x) * 0.13;
         const footTargetLocal = new THREE.Vector3(
             lateral,
             footLift,
@@ -275,7 +274,7 @@ export class AvatarMotionSolver {
             upperLength,
             lowerBase,
             lowerLength,
-            new THREE.Vector3(side === 'left' ? -0.55 : 0.55, 0, seated ? -0.15 : 0.1)
+            new THREE.Vector3(Math.sign(this.getRest(upperName).x) * 0.55, 0, seated ? -0.15 : 0.1)
         );
 
         this.setJointLocal(upperName, this.getRest(upperName), ik.upperQuaternion, tracked);

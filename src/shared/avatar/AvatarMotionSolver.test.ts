@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { AvatarMotionSolver } from './AvatarMotionSolver';
 import { composeAvatarWorldPoses } from './AvatarSkeletonUtils';
-import { IAvatarMotionContext, IAvatarTrackingFrame } from './AvatarSkeleton';
+import { AvatarSkeletonJointName, IAvatarMotionContext, IAvatarTrackingFrame } from './AvatarSkeleton';
+import { AVATAR_REST_LOCAL_POSITIONS } from './AvatarCanonicalRig';
 
 function createTrackingFrame(seated = false): IAvatarTrackingFrame {
     const headQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0.1, 0, 'YXZ'));
@@ -50,6 +51,23 @@ function createMotionContext(mode: IAvatarMotionContext['mode'] = 'desktop'): IA
     };
 }
 
+function expectChildAxisAlignment(
+    pose: ReturnType<AvatarMotionSolver['solve']>,
+    jointName: AvatarSkeletonJointName,
+    childName: AvatarSkeletonJointName
+): void {
+    const world = composeAvatarWorldPoses(pose);
+    const joint = world[jointName]!;
+    const child = world[childName]!;
+    const actualDirection = child.position.clone().sub(joint.position).normalize();
+    const expectedDirection = AVATAR_REST_LOCAL_POSITIONS[childName]
+        .clone()
+        .normalize()
+        .applyQuaternion(joint.quaternion);
+
+    expect(actualDirection.distanceTo(expectedDirection)).toBeLessThan(1e-4);
+}
+
 describe('AvatarMotionSolver', () => {
     it('keeps canonical head and hand world targets aligned to tracking anchors', () => {
         const solver = new AvatarMotionSolver();
@@ -93,6 +111,33 @@ describe('AvatarMotionSolver', () => {
         expect(solvedHeadYaw).toBeCloseTo(headYaw, 2);
         expect(Math.abs(chestYaw)).toBeGreaterThan(0.1);
         expect(Math.abs(neckYaw)).toBeGreaterThan(Math.abs(chestYaw));
+    });
+
+    it('preserves tracked head pitch direction in canonical space', () => {
+        const solver = new AvatarMotionSolver();
+        const headPitch = -0.3;
+        const headQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(headPitch, 0, 0, 'YXZ'));
+        const frame = createTrackingFrame(false);
+        frame.headWorldPose.quaternion = { x: headQuat.x, y: headQuat.y, z: headQuat.z, w: headQuat.w };
+
+        const pose = solver.solve(frame, createMotionContext('desktop'), 0, 1 / 60);
+        const world = composeAvatarWorldPoses(pose);
+        const headForward = new THREE.Vector3(0, 0, 1).applyQuaternion(world.head!.quaternion);
+
+        expect(headForward.y).toBeGreaterThan(0);
+    });
+
+    it('keeps solved limb rotations aligned with canonical child axes', () => {
+        const solver = new AvatarMotionSolver();
+        let pose = solver.solve(createTrackingFrame(false), createMotionContext('desktop'), 0, 1 / 60);
+        for (let i = 0; i < 8; i += 1) {
+            pose = solver.solve(createTrackingFrame(false), createMotionContext('desktop'), 0, 1 / 60);
+        }
+
+        expectChildAxisAlignment(pose, 'leftUpperArm', 'leftLowerArm');
+        expectChildAxisAlignment(pose, 'rightUpperArm', 'rightLowerArm');
+        expectChildAxisAlignment(pose, 'leftUpperLeg', 'leftLowerLeg');
+        expectChildAxisAlignment(pose, 'rightUpperLeg', 'rightLowerLeg');
     });
 
     it('does not use controller-style wrist orientation as a direct hand-bone rotation without tracked fingers', () => {
