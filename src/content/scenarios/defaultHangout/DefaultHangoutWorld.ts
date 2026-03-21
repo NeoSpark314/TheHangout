@@ -45,9 +45,8 @@ export class DefaultHangoutWorld {
 
         context.physics.ensureGround();
         const scene = context.scene.getRoot();
-        if (!scene) return;
 
-        if (!this.environment) {
+        if (scene && !this.environment) {
             this.environment = new EnvironmentBuilder(scene, () => context.random.float());
         }
 
@@ -69,15 +68,15 @@ export class DefaultHangoutWorld {
     }
 
     public applyConfig(context: IScenarioContext, config: ISessionConfig): void {
-        if (!this.props || !this.environment) {
+        if (!this.props || (context.scene.getRoot() && !this.environment)) {
             this.load(context);
         }
 
-        if (!this.props || !this.environment) {
+        if (!this.props) {
             return;
         }
 
-        this.environment.applyConfig(config);
+        this.environment?.applyConfig(config);
         this.props.applyConfig(config);
     }
 

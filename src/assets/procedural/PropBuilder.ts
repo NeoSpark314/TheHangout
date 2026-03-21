@@ -30,7 +30,7 @@ interface IPropBuilderRuntime {
 }
 
 export class PropBuilder {
-    private scene: THREE.Scene;
+    private scene: THREE.Scene | null;
     private random: () => number;
 
     private tableGroup: THREE.Group | null = null;
@@ -44,7 +44,7 @@ export class PropBuilder {
     private readonly spawnedEntityIds: string[] = [];
     private readonly staticPhysicsBodies: IScenarioStaticBodyHandle[] = [];
 
-    constructor(scene: THREE.Scene, randomFunc: () => number, private runtime: IPropBuilderRuntime) {
+    constructor(scene: THREE.Scene | null, randomFunc: () => number, private runtime: IPropBuilderRuntime) {
         this.scene = scene;
         this.random = randomFunc;
     }
