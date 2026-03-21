@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { IQuaternion } from '../contracts/IMath';
+import { IQuaternion, IVector3 } from '../contracts/IMath';
 
 const RAW_WORLD_TO_AVATAR_WORLD = new THREE.Quaternion().setFromAxisAngle(
     new THREE.Vector3(0, 1, 0),
@@ -19,5 +19,21 @@ export function convertRawWorldQuaternionToAvatarWorldQuaternion(rawQuaternion: 
         y: quaternion.y,
         z: quaternion.z,
         w: quaternion.w
+    };
+}
+
+export function resolveAvatarRootWorldPosition(
+    trackingOriginWorldPosition: IVector3,
+    headWorldPosition: IVector3,
+    seated: boolean
+): IVector3 {
+    if (seated) {
+        return { ...trackingOriginWorldPosition };
+    }
+
+    return {
+        x: headWorldPosition.x,
+        y: trackingOriginWorldPosition.y,
+        z: headWorldPosition.z
     };
 }

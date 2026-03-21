@@ -13,7 +13,10 @@ import { AvatarFacingResolver } from '../../../shared/avatar/AvatarFacingResolve
 import { IAvatarMotionContext, IAvatarTrackingFrame } from '../../../shared/avatar/AvatarSkeleton';
 import { createAvatarVrmTPoseAtRoot } from '../../../shared/avatar/AvatarCanonicalRig';
 import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/AvatarHumanoidPose';
-import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../../shared/avatar/AvatarTrackingSpace';
+import {
+    convertRawWorldQuaternionToAvatarWorldQuaternion,
+    resolveAvatarRootWorldPosition
+} from '../../../shared/avatar/AvatarTrackingSpace';
 
 export interface ILocalPlayerTeleportOptions {
     // `player` places the user's floor anchor at the target while keeping the current origin Y.
@@ -27,7 +30,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     public xrOrigin!: IPose;
     private readonly motionSolver = new AvatarMotionSolver();
     private readonly facingResolver = new AvatarFacingResolver();
-    private readonly lastOriginPosition = new THREE.Vector3();
+    private readonly lastAvatarRootPosition = new THREE.Vector3();
     private skills: Skill[] = [];
     private activeSkill: Skill | null = null;
     private lastProviderId: string | null = null;
@@ -44,7 +47,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             }
         };
         this.facingResolver.reset(player.spawnYaw);
-        this.lastOriginPosition.set(player.spawnPosition.x, player.spawnPosition.y, player.spawnPosition.z);
+        this.lastAvatarRootPosition.set(player.spawnPosition.x, player.spawnPosition.y, player.spawnPosition.z);
         this.suppressVelocityForFrame = true;
 
         this.initializeSkills(player);
@@ -94,21 +97,21 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
                 'YXZ'
             ).y;
             this.facingResolver.reset(rootYaw);
-            this.lastOriginPosition.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+            this.lastAvatarRootPosition.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             this.suppressVelocityForFrame = true;
         }
 
         runtime.tracking.update(delta, frame);
         runtime.input?.processInteractions();
 
-        const trackingState = runtime.tracking.getState();
+        const trackingFrame = this.resolveTrackingFrame(player, runtime.tracking.getState().avatarTrackingFrame);
         const poseOverride = player.appContext.avatarPoseOverride;
         const solvedPose = poseOverride === 'vrm-tpose'
             ? createAvatarVrmTPoseAtRoot(
-                this.xrOrigin.position,
-                convertRawWorldQuaternionToAvatarWorldQuaternion(this.xrOrigin.quaternion)
+                trackingFrame.rootWorldPosition,
+                trackingFrame.rootWorldQuaternion
             )
-            : this.solveTrackedPose(player, trackingState.avatarTrackingFrame, delta);
+            : this.solveTrackedPose(player, trackingFrame, delta);
         player.avatarSkeleton.setPose(solvedPose);
         player.syncLegacyPoseFromSkeleton();
 
@@ -209,7 +212,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             w: Math.cos(yaw / 2)
         };
         this.facingResolver.reset(yaw);
-        this.lastOriginPosition.copy(position);
+        this.lastAvatarRootPosition.copy(position);
         this.suppressVelocityForFrame = true;
     }
 
@@ -239,7 +242,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             w: Math.cos(targetOriginYaw / 2)
         };
         this.facingResolver.reset(yaw);
-        this.lastOriginPosition.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
+        this.lastAvatarRootPosition.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
         this.suppressVelocityForFrame = true;
 
         const movement = this.getSkill('movement') as MovementSkill | undefined;
@@ -259,22 +262,22 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         this.addSkill(player, uiPointer);
     }
 
-    private buildMotionContext(player: PlayerAvatarEntity, delta: number): IAvatarMotionContext {
+    private buildMotionContext(player: PlayerAvatarEntity, trackingFrame: IAvatarTrackingFrame, delta: number): IAvatarMotionContext {
         const render = player.appContext.runtime.render;
         const isXR = render.isXRPresenting();
         const seatPose = player.appContext.runtime.mount.getLocalSeatPose();
         const movement = this.getSkill('movement') as MovementSkill | undefined;
         const explicitTurnDeltaYaw = movement?.consumeExplicitTurnDeltaYaw() ?? 0;
-        const currentOriginPosition = new THREE.Vector3(
-            this.xrOrigin.position.x,
-            this.xrOrigin.position.y,
-            this.xrOrigin.position.z
+        const currentAvatarRootPosition = new THREE.Vector3(
+            trackingFrame.rootWorldPosition.x,
+            trackingFrame.rootWorldPosition.y,
+            trackingFrame.rootWorldPosition.z
         );
         const locomotionVelocity = new THREE.Vector3();
         if (!this.suppressVelocityForFrame && delta > 0 && Math.abs(explicitTurnDeltaYaw) < 1e-5) {
-            locomotionVelocity.copy(currentOriginPosition).sub(this.lastOriginPosition).divideScalar(delta);
+            locomotionVelocity.copy(currentAvatarRootPosition).sub(this.lastAvatarRootPosition).divideScalar(delta);
         }
-        this.lastOriginPosition.copy(currentOriginPosition);
+        this.lastAvatarRootPosition.copy(currentAvatarRootPosition);
         this.suppressVelocityForFrame = false;
 
         return {
@@ -292,38 +295,54 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     }
 
     private resolveTrackingFrame(player: PlayerAvatarEntity, frame?: IAvatarTrackingFrame): IAvatarTrackingFrame {
+        const seated = player.appContext.runtime.mount.isMountedLocal();
         if (frame) {
             return {
                 ...frame,
+                rootWorldPosition: resolveAvatarRootWorldPosition(
+                    frame.rootWorldPosition,
+                    frame.headWorldPose.position,
+                    seated
+                ),
+                rootWorldQuaternion: { ...frame.rootWorldQuaternion },
+                headWorldPose: {
+                    position: { ...frame.headWorldPose.position },
+                    quaternion: { ...frame.headWorldPose.quaternion }
+                },
                 effectors: { ...frame.effectors },
                 tracked: {
                     ...frame.tracked,
                     head: true
                 },
-                seated: player.appContext.runtime.mount.isMountedLocal()
+                seated
             };
         }
 
         const rawHeadPose = player.appContext.runtime.tracking.getState().head.pose;
+        const headWorldPosition = rawHeadPose?.position || player.getAvatarHeadWorldPose()?.position || { ...player.headState.position };
+        const rootWorldPosition = resolveAvatarRootWorldPosition(
+            this.xrOrigin.position,
+            headWorldPosition,
+            seated
+        );
 
         return {
-            rootWorldPosition: { ...this.xrOrigin.position },
+            rootWorldPosition,
             rootWorldQuaternion: convertRawWorldQuaternionToAvatarWorldQuaternion(this.xrOrigin.quaternion),
             headWorldPose: {
-                position: rawHeadPose?.position || player.getAvatarHeadWorldPose()?.position || { ...player.headState.position },
+                position: headWorldPosition,
                 quaternion: convertRawWorldQuaternionToAvatarWorldQuaternion(
                     rawHeadPose?.quaternion || this.xrOrigin.quaternion
                 )
             },
             effectors: {},
             tracked: { head: true },
-            seated: player.appContext.runtime.mount.isMountedLocal()
+            seated
         };
     }
 
-    private solveTrackedPose(player: PlayerAvatarEntity, frame: IAvatarTrackingFrame | undefined, delta: number) {
-        const trackingFrame = this.resolveTrackingFrame(player, frame);
-        const motionContext = this.buildMotionContext(player, delta);
+    private solveTrackedPose(player: PlayerAvatarEntity, trackingFrame: IAvatarTrackingFrame, delta: number) {
+        const motionContext = this.buildMotionContext(player, trackingFrame, delta);
         const bodyWorldYaw = this.facingResolver.resolve(trackingFrame, motionContext, delta);
         return this.motionSolver.solve(trackingFrame, motionContext, bodyWorldYaw, delta);
     }
