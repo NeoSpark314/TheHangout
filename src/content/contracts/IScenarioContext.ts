@@ -51,6 +51,7 @@ export interface IScenarioContext {
         getCamera(): THREE.Camera | null;
         getRenderer(): THREE.WebGLRenderer | null;
         getRoot(): THREE.Scene | null;
+        getGlobalUniforms(): { [key: string]: THREE.IUniform } | null;
     };
 
     assets: {

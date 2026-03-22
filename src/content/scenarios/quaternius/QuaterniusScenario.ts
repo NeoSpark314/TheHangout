@@ -4,6 +4,8 @@ import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from 
 import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IScenarioActionProvider } from '../../contracts/IScenarioAction';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
+import { applyWindSway } from '../../../render/utils/WindShader';
+import type { IUniform } from 'three';
 
 interface IInstanceFlat {
     assetId: string;
@@ -329,6 +331,21 @@ export class QuaterniusScenario implements IScenarioModule {
                 }
                 
                 instMesh.instanceMatrix.needsUpdate = true;
+                
+                // Apply wind sway if it's a nature asset
+                const uniforms = this.context?.scene.getGlobalUniforms();
+                const globalTime = uniforms?.uTime as IUniform;
+
+                if (globalTime) {
+                    const isTree = assetId.includes('tree') || assetId.includes('pine');
+                    const isFoliage = assetId.includes('grass') || assetId.includes('flower') || assetId.includes('bush');
+                    if (isTree) {
+                        applyWindSway(instMesh.material as THREE.Material, { uTime: globalTime, speed: 0.8, amplitude: 0.1 });
+                    } else if (isFoliage) {
+                        applyWindSway(instMesh.material as THREE.Material, { uTime: globalTime, speed: 1.5, amplitude: 0.2 });
+                    }
+                }
+
                 this.root.add(instMesh);
                 this.instancedMeshes.push(instMesh);
             }

@@ -95,7 +95,8 @@ export class ScenarioRuntimeContext implements IScenarioContext {
             isRenderingAvailable: () => !!this.app.runtime.render,
             getCamera: () => this.app.runtime.render?.camera ?? null,
             getRenderer: () => this.app.runtime.render?.renderer ?? null,
-            getRoot: () => this.app.runtime.render?.scene ?? null
+            getRoot: () => this.app.runtime.render?.scene ?? null,
+            getGlobalUniforms: () => this.app.runtime.render?.getGlobalUniforms() ?? null
         };
 
         this.assets = {

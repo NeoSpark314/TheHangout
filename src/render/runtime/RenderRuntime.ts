@@ -30,6 +30,9 @@ export class RenderRuntime {
     private mrEntryButton: HTMLElement | null = null;
     private readonly xrButtonLabelObservers = new WeakMap<HTMLElement, MutationObserver>();
     private readonly trackedInputGhost: TrackedInputGhost;
+    private readonly globalUniforms = {
+        uTime: { value: 0 }
+    };
 
     constructor(private context: AppContext) {
         this.container = document.getElementById('app')!;
@@ -136,6 +139,10 @@ export class RenderRuntime {
     }
 
     public update(delta: number, possessedPlayer: any): void {
+        if (delta > 0) {
+            this.globalUniforms.uTime.value += delta;
+        }
+
         if (this.isMenuMode) {
             this.menuRotation += delta * 0.1;
             const radius = 18;
@@ -246,6 +253,10 @@ export class RenderRuntime {
 
     public getXRHand(index: number): THREE.Group {
         return this.hands[index];
+    }
+
+    public getGlobalUniforms(): { [key: string]: THREE.IUniform } {
+        return this.globalUniforms;
     }
 
     public onWindowResize(): void {
