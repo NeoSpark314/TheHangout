@@ -66,6 +66,7 @@ class ScenarioStaticBodyHandle implements IScenarioStaticBodyHandle {
 
 export class ScenarioRuntimeContext implements IScenarioContext {
     private readonly cleanupCallbacks: Array<() => void> = [];
+    private readonly tracks: Array<IScenarioStaticBodyHandle> = [];
     private nextStaticBodyId = 0;
 
     public readonly scene;
@@ -228,13 +229,17 @@ export class ScenarioRuntimeContext implements IScenarioContext {
                 );
                 if (!collider) return null;
                 const id = options.id || `scenario-static-body-${this.nextStaticBodyId++}`;
-                return new ScenarioStaticBodyHandle(id, this.app, collider);
+                const handle = new ScenarioStaticBodyHandle(id, this.app, collider);
+                this.tracks.push(handle);
+                return handle;
             },
             createStaticHeightfield: (options: IScenarioStaticHeightfieldOptions) => {
                 const collider = this.app.runtime.physics.createStaticHeightfield(options);
                 if (!collider) return null;
                 const id = options.id || `scenario-static-body-${this.nextStaticBodyId++}`;
-                return new ScenarioStaticBodyHandle(id, this.app, collider);
+                const handle = new ScenarioStaticBodyHandle(id, this.app, collider);
+                this.tracks.push(handle);
+                return handle;
             },
             removeBody: (target: IScenarioStaticBodyHandle | IPhysicsColliderHandle | null | undefined) => {
                 if (!target) return;
@@ -276,6 +281,11 @@ export class ScenarioRuntimeContext implements IScenarioContext {
     }
 
     public runCleanupCallbacks(): void {
+        while (this.tracks.length > 0) {
+            const track = this.tracks.pop();
+            track?.destroy();
+        }
+
         while (this.cleanupCallbacks.length > 0) {
             const cleanup = this.cleanupCallbacks.pop();
             if (!cleanup) break;

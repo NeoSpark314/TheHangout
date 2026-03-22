@@ -80,6 +80,7 @@ export class QuaterniusScenario implements IScenarioModule {
     private root = new THREE.Group();
     private context: IScenarioContext | null = null;
     private previousShadowMapEnabled: boolean | null = null;
+    private isUnloaded = false;
 
     constructor(private readonly configUrl: string) {}
 
@@ -137,6 +138,7 @@ export class QuaterniusScenario implements IScenarioModule {
         const configDir = this.configUrl.substring(0, this.configUrl.lastIndexOf('/') + 1);
         
         const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
+            if (this.isUnloaded) return;
             let baseUrl = this.metadata.assetKit.baseUrl;
             if (!baseUrl.startsWith('/') && !baseUrl.includes('://')) {
                 baseUrl = configDir + baseUrl;
@@ -151,11 +153,14 @@ export class QuaterniusScenario implements IScenarioModule {
         });
         await Promise.all(promises);
         
+        if (this.isUnloaded) return;
+
         // Build layout
         this.buildLayout(seed);
     }
 
     public unload(_context: IScenarioContext): void {
+        this.isUnloaded = true;
         this.colliders.forEach(c => c.destroy());
         this.colliders = [];
         this.lights.forEach(l => l.removeFromParent());
