@@ -15,6 +15,7 @@ import type {
     IPhysicsBodyHandle,
     IPhysicsColliderHandle
 } from '../../content/contracts/IObjectRuntimeContext';
+import type { IScenarioStaticHeightfieldOptions } from '../../content/contracts/IScenarioContext';
 import { resolvePhysicsReplicationProfile, type PhysicsReplicationProfileId } from './PhysicsReplicationProfiles';
 
 export interface IPhysicsDebugBody {

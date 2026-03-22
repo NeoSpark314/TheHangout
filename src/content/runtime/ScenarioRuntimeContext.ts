@@ -13,7 +13,8 @@ import type {
     IScenarioPlayerTeleportOptions,
     IScenarioPropResetOptions,
     IScenarioStaticBodyHandle,
-    IScenarioStaticBoxOptions
+    IScenarioStaticBoxOptions,
+    IScenarioStaticHeightfieldOptions
 } from '../contracts/IScenarioContext';
 import type { IObjectSpawnConfig } from '../contracts/IObjectModule';
 import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';

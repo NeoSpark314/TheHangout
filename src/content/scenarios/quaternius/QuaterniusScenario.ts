@@ -5,6 +5,13 @@ import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IScenarioActionProvider } from '../../contracts/IScenarioAction';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 
+interface IInstanceFlat {
+    assetId: string;
+    position: { x: number, y: number, z: number };
+    rotation: { x: number, y: number, z: number };
+    scale: number;
+}
+
 interface IAssetDef {
     id: string;
     url: string;
@@ -194,13 +201,6 @@ export class QuaterniusScenario implements IScenarioModule {
 
     private buildLayout(seed: number): void {
         if (!this.metadata) return;
-
-        interface IInstanceFlat {
-            assetId: string;
-            position: { x: number, y: number, z: number };
-            rotation: { x: number, y: number, z: number };
-            scale: number;
-        }
 
         const flatInstances: IInstanceFlat[] = [];
         const rng = new SimplePNoise(seed); // Deterministic RNG for layout
