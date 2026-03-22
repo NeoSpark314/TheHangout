@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { IQuaternion, IVector3 } from '../contracts/IMath';
 
-const RAW_WORLD_TO_AVATAR_WORLD = new THREE.Quaternion().identity();
+// WebXR/Three.js use -Z as the local forward basis. The avatar rig and VRM 1.0
+// use +Z forward, so tracked world-space quaternions need a 180 degree Y-basis remap.
+const RAW_WORLD_TO_AVATAR_WORLD = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    Math.PI
+);
 
 export function convertRawWorldQuaternionToAvatarWorldQuaternion(rawQuaternion: IQuaternion): IQuaternion {
     const quaternion = new THREE.Quaternion(

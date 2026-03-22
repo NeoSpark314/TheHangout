@@ -1,5 +1,6 @@
 import { VRMHumanBoneName, type VRMPose } from '@pixiv/three-vrm';
 import { AvatarHumanoidJointName, IAvatarHumanoidPose } from '../../../shared/avatar/AvatarHumanoidPose';
+import * as THREE from 'three';
 
 const HUMANOID_TO_VRM_BONE: Record<AvatarHumanoidJointName, VRMHumanBoneName> = {
     hips: VRMHumanBoneName.Hips,
@@ -56,20 +57,50 @@ const HUMANOID_TO_VRM_BONE: Record<AvatarHumanoidJointName, VRMHumanBoneName> = 
     rightLittleDistal: VRMHumanBoneName.RightLittleDistal
 };
 
-export function buildNormalizedVrmPose(humanoidPose: IAvatarHumanoidPose): VRMPose {
+const VRM0_HEAD_SPACE_CORRECTION = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    Math.PI
+);
+
+function adaptRotationForVrmVersion(
+    jointName: AvatarHumanoidJointName,
+    rotation: { x: number; y: number; z: number; w: number },
+    metaVersion: string | null | undefined
+): [number, number, number, number] {
+    if (metaVersion !== '0' || jointName !== 'head') {
+        return [rotation.x, rotation.y, rotation.z, rotation.w];
+    }
+
+    // VRM 0 avatars are authored facing -Z. `rotateVRM0` fixes the model root,
+    // but the semantic "face front" of the head bone remains inverted relative
+    // to our +Z-forward canonical rig. Conjugating the local head rotation by
+    // a 180 degree Y rotation aligns head pitch with the visible face.
+    const corrected = new THREE.Quaternion(
+        rotation.x,
+        rotation.y,
+        rotation.z,
+        rotation.w
+    ).premultiply(VRM0_HEAD_SPACE_CORRECTION).multiply(VRM0_HEAD_SPACE_CORRECTION);
+
+    return [corrected.x, corrected.y, corrected.z, corrected.w];
+}
+
+export function buildNormalizedVrmPose(
+    humanoidPose: IAvatarHumanoidPose,
+    options: {
+        metaVersion?: string | null;
+    } = {}
+): VRMPose {
     const vrmPose: VRMPose = {};
+    const metaVersion = options.metaVersion ?? null;
 
     for (const [jointName, transform] of Object.entries(humanoidPose.joints) as Array<[AvatarHumanoidJointName, IAvatarHumanoidPose['joints'][AvatarHumanoidJointName]]>) {
         if (!transform) continue;
 
         const boneName = HUMANOID_TO_VRM_BONE[jointName];
+        const rotation = adaptRotationForVrmVersion(jointName, transform.rotation, metaVersion);
         vrmPose[boneName] = {
-            rotation: [
-                transform.rotation.x,
-                transform.rotation.y,
-                transform.rotation.z,
-                transform.rotation.w
-            ]
+            rotation
         };
 
         if (jointName === 'hips' && transform.position) {

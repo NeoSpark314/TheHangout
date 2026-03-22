@@ -50,7 +50,7 @@ describe('DesktopTrackingProvider', () => {
         expect(forward.y).toBeLessThan(0);
     });
 
-    it('builds avatar tracking quaternions in the canonical avatar basis', () => {
+    it('builds avatar tracking quaternions in the canonical +Z-forward avatar basis', () => {
         const context = createTestContext(0.7);
         const provider = new DesktopTrackingProvider(context);
         provider.activate();
@@ -68,7 +68,7 @@ describe('DesktopTrackingProvider', () => {
         const rawForward = new THREE.Vector3(0, 0, -1).applyQuaternion(
             new THREE.Quaternion(rawHead.x, rawHead.y, rawHead.z, rawHead.w)
         );
-        const avatarForward = new THREE.Vector3(0, 0, -1).applyQuaternion(
+        const avatarForward = new THREE.Vector3(0, 0, 1).applyQuaternion(
             new THREE.Quaternion(avatarHead.x, avatarHead.y, avatarHead.z, avatarHead.w)
         );
 

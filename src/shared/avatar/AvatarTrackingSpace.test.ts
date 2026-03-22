@@ -11,7 +11,7 @@ function toThreeQuaternion(quaternion: { x: number; y: number; z: number; w: num
 }
 
 describe('AvatarTrackingSpace', () => {
-    it('maps raw engine forward (-Z) directly to avatar forward (-Z)', () => {
+    it('maps raw engine forward (-Z) into avatar forward (+Z)', () => {
         const rawQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, -0.65, 0.1, 'YXZ'));
         const avatarQuaternion = toThreeQuaternion(convertRawWorldQuaternionToAvatarWorldQuaternion({
             x: rawQuaternion.x,
@@ -21,7 +21,7 @@ describe('AvatarTrackingSpace', () => {
         }));
 
         const rawForward = new THREE.Vector3(0, 0, -1).applyQuaternion(rawQuaternion);
-        const avatarForward = new THREE.Vector3(0, 0, -1).applyQuaternion(avatarQuaternion);
+        const avatarForward = new THREE.Vector3(0, 0, 1).applyQuaternion(avatarQuaternion);
 
         expect(avatarForward.distanceTo(rawForward)).toBeLessThan(1e-6);
     });

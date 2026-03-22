@@ -62,7 +62,9 @@ export class VrmAvatarView extends BaseAvatarView {
     public applyState(state: IPlayerAvatarRenderState, delta: number): void {
         super.applyState(state, delta);
 
-        this.vrmInstance.humanoid.setNormalizedPose(buildNormalizedVrmPose(state.humanoidPose));
+        this.vrmInstance.humanoid.setNormalizedPose(buildNormalizedVrmPose(state.humanoidPose, {
+            metaVersion: this.vrmInstance.metaVersion
+        }));
         this.updateLocalSelfView();
 
         if (this.vrmInstance.expressionManager) {

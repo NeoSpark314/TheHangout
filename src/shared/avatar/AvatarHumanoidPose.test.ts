@@ -34,4 +34,26 @@ describe('AvatarHumanoidPose', () => {
 
         expect(vrmPose[VRMHumanBoneName.Hips]?.position).toEqual([0, 0, 0]);
     });
+
+    it('applies the VRM 0 head compatibility correction without changing rest pose', () => {
+        const humanoidPose = createAvatarHumanoidPoseFromSkeleton(createAvatarRestSkeletonPose());
+        const vrmPose = buildNormalizedVrmPose(humanoidPose, { metaVersion: '0' });
+
+        const [x, y, z, w] = vrmPose[VRMHumanBoneName.Head]!.rotation!;
+        expect(quaternionAngle({ x, y, z, w })).toBeLessThan(1e-4);
+    });
+
+    it('flips VRM 0 head pitch so visible face motion matches canonical look direction', () => {
+        const pose = createAvatarRestSkeletonPose();
+        const pitchUp = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.3, 0, 0, 'YXZ'));
+        pose.joints.head!.quaternion = { x: pitchUp.x, y: pitchUp.y, z: pitchUp.z, w: pitchUp.w };
+
+        const humanoidPose = createAvatarHumanoidPoseFromSkeleton(pose);
+        const vrmPose = buildNormalizedVrmPose(humanoidPose, { metaVersion: '0' });
+        const [x, y, z, w] = vrmPose[VRMHumanBoneName.Head]!.rotation!;
+        const corrected = new THREE.Quaternion(x, y, z, w);
+        const semanticFaceForward = new THREE.Vector3(0, 0, -1).applyQuaternion(corrected);
+
+        expect(semanticFaceForward.y).toBeGreaterThan(0);
+    });
 });
