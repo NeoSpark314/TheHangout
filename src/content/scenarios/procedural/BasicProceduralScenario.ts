@@ -66,7 +66,7 @@ interface IScenarioMetadata {
     layout: ILayoutElement[];
 }
 
-export class QuaterniusScenario implements IScenarioModule {
+export class BasicProceduralScenario implements IScenarioModule {
     public id: string = 'quaternius-generic';
     public displayName: string = 'Quaternius World';
     public kind = 'social' as const;
@@ -138,15 +138,15 @@ export class QuaterniusScenario implements IScenarioModule {
         }
 
         // Preload assets
-        const configDir = this.configUrl.substring(0, this.configUrl.lastIndexOf('/') + 1);
+        const baseLoc = new URL(this.configUrl, window.location.href);
 
         const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
             if (this.isUnloaded) return;
-            let baseUrl = this.metadata.assetKit.baseUrl;
-            if (!baseUrl.startsWith('/') && !baseUrl.includes('://')) {
-                baseUrl = configDir + baseUrl;
-            }
-            const fullUrl = baseUrl + assetDef.url;
+            if (!this.metadata) return;
+            
+            const baseUrl = this.metadata.assetKit.baseUrl;
+            const fullUrl = new URL(baseUrl + assetDef.url, baseLoc).toString();
+
             try {
                 const model = await this.context!.assets.loadGLTF(fullUrl);
                 this.assetCache.set(assetDef.id, model);
@@ -308,16 +308,28 @@ export class QuaterniusScenario implements IScenarioModule {
             }
         }
 
-        // Group by assetId
-        const groups = new Map<string, IInstanceFlat[]>();
+        const GRID_SIZE = 4;
+        const sectorSizeX = width / GRID_SIZE;
+        const sectorSizeZ = depth / GRID_SIZE;
+
+        // Group by [sectorIndex][assetId]
+        const sectors = new Map<number, Map<string, IInstanceFlat[]>>();
+
         for (const inst of flatInstances) {
-            if (!groups.has(inst.assetId)) groups.set(inst.assetId, []);
-            groups.get(inst.assetId)!.push(inst);
+            const sX = Math.floor((inst.position.x + halfW) / sectorSizeX);
+            const sZ = Math.floor((inst.position.z + halfD) / sectorSizeZ);
+            const sectorIdx = Math.max(0, Math.min(GRID_SIZE - 1, sX)) + Math.max(0, Math.min(GRID_SIZE - 1, sZ)) * GRID_SIZE;
+
+            if (!sectors.has(sectorIdx)) sectors.set(sectorIdx, new Map());
+            const sectorGroups = sectors.get(sectorIdx)!;
+            if (!sectorGroups.has(inst.assetId)) sectorGroups.set(inst.assetId, []);
+            sectorGroups.get(inst.assetId)!.push(inst);
         }
 
-        // Processing groups
-        for (const [assetId, instances] of groups) {
-            const sourceGroup = this.assetCache.get(assetId);
+        // Processing sectors and groups
+        for (const [sectorIdx, sectorGroups] of sectors) {
+            for (const [assetId, instances] of sectorGroups) {
+                const sourceGroup = this.assetCache.get(assetId);
             if (!sourceGroup) continue;
 
             // Find meshes in the source group
@@ -391,6 +403,7 @@ export class QuaterniusScenario implements IScenarioModule {
             }
         }
     }
+}
 
     private addCollision(assetId: string, inst: IInstanceFlat, worldMatrix: THREE.Matrix4): void {
         const assetDef = this.metadata?.assetKit.assets.find(a => a.id === assetId);
@@ -643,7 +656,7 @@ export class QuaterniusScenario implements IScenarioModule {
     }
 }
 
-export const QuaterniusNatureScenarioPlugin: IScenarioPlugin = {
+export const NatureParkScenarioPlugin: IScenarioPlugin = {
     id: 'quaternius-nature',
     displayName: 'Quaternius Nature',
     kind: 'social',
@@ -656,7 +669,7 @@ export const QuaterniusNatureScenarioPlugin: IScenarioPlugin = {
         hasPortableObjects: true
     },
     create() {
-        return new QuaterniusScenario('/scenarios/quaternius/nature_park.json');
+        return new BasicProceduralScenario('/scenarios/BasicProcedural/nature_park.json');
     }
 };
 

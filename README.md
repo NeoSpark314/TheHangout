@@ -76,6 +76,11 @@ The Hangout is built on top of a small set of open source libraries:
 - [Vitest](https://vitest.dev/) for testing
 - [Express](https://expressjs.com/) and [ws](https://github.com/websockets/ws) for the dedicated server and WebSocket transport
 
+## Credits & Assets
+
+- **[Quaternius](https://quaternius.com/)**: For the amazing [Stylized Nature Mega Kit](https://quaternius.com/packs/stylizednaturemegakit.html).
+- **[gltfpack](https://meshoptimizer.org/gltf/)**: All 3D assets are optimized using the `gltfpack` tool from the Meshoptimizer project for efficient web delivery.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

@@ -107,7 +107,7 @@ export class HudRuntime implements IUpdatable {
         this.group.add(this.crosshair);
 
         this.draw();
-        this.drawPerformanceStats(0, 0, 0, 0, 0);
+        this.drawPerformanceStats(0, 0, 0, 0, 0, 0);
     }
 
     public setShowPerformanceStats(enabled: boolean): void {
