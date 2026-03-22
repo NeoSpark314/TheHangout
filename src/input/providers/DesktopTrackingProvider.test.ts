@@ -68,7 +68,7 @@ describe('DesktopTrackingProvider', () => {
         const rawForward = new THREE.Vector3(0, 0, -1).applyQuaternion(
             new THREE.Quaternion(rawHead.x, rawHead.y, rawHead.z, rawHead.w)
         );
-        const avatarForward = new THREE.Vector3(0, 0, 1).applyQuaternion(
+        const avatarForward = new THREE.Vector3(0, 0, -1).applyQuaternion(
             new THREE.Quaternion(avatarHead.x, avatarHead.y, avatarHead.z, avatarHead.w)
         );
 

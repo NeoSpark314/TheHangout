@@ -1,10 +1,7 @@
 import * as THREE from 'three';
 import { IQuaternion, IVector3 } from '../contracts/IMath';
 
-const RAW_WORLD_TO_AVATAR_WORLD = new THREE.Quaternion().setFromAxisAngle(
-    new THREE.Vector3(0, 1, 0),
-    Math.PI
-);
+const RAW_WORLD_TO_AVATAR_WORLD = new THREE.Quaternion().identity();
 
 export function convertRawWorldQuaternionToAvatarWorldQuaternion(rawQuaternion: IQuaternion): IQuaternion {
     const quaternion = new THREE.Quaternion(
