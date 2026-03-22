@@ -56,4 +56,22 @@ describe('AvatarHumanoidPose', () => {
 
         expect(semanticFaceForward.y).toBeGreaterThan(0);
     });
+
+    it('applies the VRM 0 arm-chain compatibility correction to exported upper-arm rotations', () => {
+        const pose = createAvatarRestSkeletonPose();
+        const raiseArm = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -1.1, -0.35, 'YXZ'));
+        pose.joints.leftUpperArm!.quaternion = { x: raiseArm.x, y: raiseArm.y, z: raiseArm.z, w: raiseArm.w };
+
+        const humanoidPose = createAvatarHumanoidPoseFromSkeleton(pose);
+        const uncorrected = buildNormalizedVrmPose(humanoidPose);
+        const corrected = buildNormalizedVrmPose(humanoidPose, { metaVersion: '0' });
+        const [ux, uy, uz, uw] = uncorrected[VRMHumanBoneName.LeftUpperArm]!.rotation!;
+        const [cx, cy, cz, cw] = corrected[VRMHumanBoneName.LeftUpperArm]!.rotation!;
+        const correction = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+        const expected = new THREE.Quaternion(ux, uy, uz, uw)
+            .premultiply(correction)
+            .multiply(correction);
+
+        expect(new THREE.Quaternion(cx, cy, cz, cw).angleTo(expected)).toBeLessThan(1e-6);
+    });
 });
