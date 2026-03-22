@@ -92,6 +92,7 @@ export class AppContext {
     };
     public avatarRenderOverride: AvatarRenderMode | null = null;
     public avatarPoseOverride: AvatarPoseOverride = 'none';
+    public renderLocalAvatar: boolean = true;
     public voiceEnabled: boolean = false;
     public voiceAutoEnable: boolean = true;
     public sessionConfig: ISessionConfig = {

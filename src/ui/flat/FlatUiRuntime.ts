@@ -384,6 +384,7 @@ export class FlatUiRuntime implements IUpdatable {
         }
         this.context.voiceEnabled = this.context.runtime.media?.isMicrophoneEnabled() || false;
         this.updateVoiceButton(this.context.voiceAutoEnable);
+        this.context.renderLocalAvatar = AppLocalStorage.getRenderLocalAvatar() ?? true;
 
         const storedColor = AppLocalStorage.getAvatarColor();
         let avatarColor = storedColor;
@@ -434,6 +435,7 @@ export class FlatUiRuntime implements IUpdatable {
         AppLocalStorage.setAvatarVrmUrl(this.context.avatarConfig.vrmUrl || null);
         AppLocalStorage.setAvatarPlayerHeightM(this.context.avatarConfig.playerHeightM);
         AppLocalStorage.setVoiceAutoEnable(this.context.voiceAutoEnable);
+        AppLocalStorage.setRenderLocalAvatar(this.context.renderLocalAvatar);
         if (session) {
             AppLocalStorage.setLastSessionId(session);
         }

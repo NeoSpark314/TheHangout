@@ -1207,14 +1207,26 @@ export class VrUiRuntime implements IUpdatable {
         refreshDevicesBtn.borderColor = UITheme.colors.secondary;
         systemContainer.addChild(refreshDevicesBtn);
 
-        const micStatus = new UILabel("", 90, 128, 1000, 36);
+        const micStatus = new UILabel("", 90, 128, 1000, 32);
         micStatus.font = getFont(UITheme.typography.sizes.small);
         micStatus.textColor = UITheme.colors.textMuted;
         micStatus.textAlign = 'left';
         systemContainer.addChild(micStatus);
 
-        const micListContainer = this.createPlainContainer(90, 172, 1100, 320);
+        const micListContainer = this.createPlainContainer(90, 168, 1100, 280);
         systemContainer.addChild(micListContainer);
+
+        const renderLocalAvatarToggle = new UIToggle(
+            "Render local avatar",
+            this.context.renderLocalAvatar,
+            90, 484, 620, 52,
+            (checked) => {
+                this.context.renderLocalAvatar = checked;
+                AppLocalStorage.setRenderLocalAvatar(checked);
+                this.tablet?.ui.markDirty();
+            }
+        );
+        systemContainer.addChild(renderLocalAvatarToggle);
 
         if (this.sessionMicRefreshHandler) {
             eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);

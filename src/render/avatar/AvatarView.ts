@@ -111,6 +111,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     public applyState(state: IPlayerAvatarRenderState, delta: number): void {
         this.lastState = state;
         this.syncViewMode();
+        this.syncLocalVisibility();
         this.activeView.applyState(state, delta);
         AvatarRenderBudget.recalculate();
     }
@@ -300,5 +301,15 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
         }
 
         this.activeView.setMuted(this.muted);
+        this.syncLocalVisibility();
+    }
+
+    private syncLocalVisibility(): void {
+        if (!this.isLocalAvatar()) {
+            this.mesh.visible = true;
+            return;
+        }
+
+        this.mesh.visible = this.context.renderLocalAvatar;
     }
 }

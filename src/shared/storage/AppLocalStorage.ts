@@ -20,6 +20,7 @@ interface IAppStorageSessionV1 {
 interface IAppStorageSettingsV1 {
     voiceAutoEnable?: boolean;
     preferredMicDeviceId?: string;
+    renderLocalAvatar?: boolean;
 }
 
 interface IAppStorageRemoteDesktopV1 {
@@ -94,7 +95,10 @@ function sanitizeDataV1(value: unknown): IAppStorageDataV1 {
             voiceAutoEnable: typeof value.settings.voiceAutoEnable === 'boolean'
                 ? value.settings.voiceAutoEnable
                 : undefined,
-            preferredMicDeviceId: asNonEmptyTrimmedString(value.settings.preferredMicDeviceId)
+            preferredMicDeviceId: asNonEmptyTrimmedString(value.settings.preferredMicDeviceId),
+            renderLocalAvatar: typeof value.settings.renderLocalAvatar === 'boolean'
+                ? value.settings.renderLocalAvatar
+                : undefined
         }
         : undefined;
 
@@ -193,6 +197,17 @@ export class AppLocalStorage {
         this.update((data) => {
             data.settings = data.settings || {};
             data.settings.preferredMicDeviceId = asNonEmptyTrimmedString(deviceId);
+        });
+    }
+
+    public static getRenderLocalAvatar(): boolean | undefined {
+        return readEnvelope().data.settings?.renderLocalAvatar;
+    }
+
+    public static setRenderLocalAvatar(enabled: boolean): void {
+        this.update((data) => {
+            data.settings = data.settings || {};
+            data.settings.renderLocalAvatar = !!enabled;
         });
     }
 

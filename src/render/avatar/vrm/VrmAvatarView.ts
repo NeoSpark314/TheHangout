@@ -14,6 +14,9 @@ interface IVrmArmNodes {
     hand: THREE.Object3D;
 }
 
+const VRM_FIRST_PERSON_ONLY_LAYER = 9;
+const VRM_THIRD_PERSON_ONLY_LAYER = 10;
+
 export class VrmAvatarView extends BaseAvatarView {
     private readonly modelRoot: THREE.Group;
     private readonly rawHeadBone: THREE.Object3D | null;
@@ -25,6 +28,7 @@ export class VrmAvatarView extends BaseAvatarView {
     private restHeadHeight = 1.6;
     private playerHeightM = 1.8;
     private usingLocalProxy = false;
+    private usingFirstPersonLayers = false;
     private readonly vrmMeshes: THREE.Mesh[] = [];
     private readonly proxyMeshes: THREE.Mesh[] = [];
 
@@ -61,6 +65,7 @@ export class VrmAvatarView extends BaseAvatarView {
 
         this.captureHeadMetrics();
         this.updateModelScale();
+        this.setupFirstPerson();
     }
 
     public applyState(state: IPlayerAvatarRenderState, delta: number): void {
@@ -93,6 +98,7 @@ export class VrmAvatarView extends BaseAvatarView {
     }
 
     public destroy(): void {
+        this.setFirstPersonCameraMode(false);
         super.destroy();
         this.proxyMaterial.dispose();
         this.vrmInstance.dispose();
@@ -142,7 +148,10 @@ export class VrmAvatarView extends BaseAvatarView {
     }
 
     private updateLocalSelfView(): void {
-        const shouldUseProxy = !!this.mesh.userData.isLocalAvatar && !!this.context.runtime.render?.isXRPresenting?.();
+        const isLocalAvatar = !!this.mesh.userData.isLocalAvatar;
+        const shouldUseFirstPerson = isLocalAvatar && !!this.vrmInstance.firstPerson;
+        this.setFirstPersonCameraMode(shouldUseFirstPerson);
+        const shouldUseProxy = false;
         if (this.usingLocalProxy === shouldUseProxy) return;
 
         this.usingLocalProxy = shouldUseProxy;
@@ -151,6 +160,37 @@ export class VrmAvatarView extends BaseAvatarView {
         }
         for (const mesh of this.proxyMeshes) {
             mesh.visible = shouldUseProxy;
+        }
+    }
+
+    private setupFirstPerson(): void {
+        if (!this.mesh.userData.isLocalAvatar || !this.vrmInstance.firstPerson) {
+            return;
+        }
+
+        this.vrmInstance.firstPerson.setup({
+            firstPersonOnlyLayer: VRM_FIRST_PERSON_ONLY_LAYER,
+            thirdPersonOnlyLayer: VRM_THIRD_PERSON_ONLY_LAYER
+        });
+    }
+
+    private setFirstPersonCameraMode(enabled: boolean): void {
+        if (this.usingFirstPersonLayers === enabled) {
+            return;
+        }
+
+        this.usingFirstPersonLayers = enabled;
+        const camera = this.context.runtime.render?.camera;
+        if (!camera) {
+            return;
+        }
+
+        if (enabled) {
+            camera.layers.enable(VRM_FIRST_PERSON_ONLY_LAYER);
+            camera.layers.disable(VRM_THIRD_PERSON_ONLY_LAYER);
+        } else {
+            camera.layers.disable(VRM_FIRST_PERSON_ONLY_LAYER);
+            camera.layers.enable(VRM_THIRD_PERSON_ONLY_LAYER);
         }
     }
 
