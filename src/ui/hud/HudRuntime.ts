@@ -175,13 +175,16 @@ export class HudRuntime implements IUpdatable {
 
         if (this.perfRefreshTimer >= 0.25) {
             this.perfRefreshTimer = 0;
-            const renderInfo = this.context.runtime.render?.renderer.info.render;
+            const renderer = this.context.runtime.render?.renderer;
+            const renderInfo = renderer?.info.render;
+            const memoryInfo = renderer?.info.memory;
             this.drawPerformanceStats(
                 Math.round(this.smoothedFps),
                 renderInfo?.calls ?? 0,
                 renderInfo?.triangles ?? 0,
                 renderInfo?.lines ?? 0,
-                renderInfo?.points ?? 0
+                renderInfo?.points ?? 0,
+                memoryInfo?.textures ?? 0
             );
         }
     }
@@ -304,7 +307,7 @@ export class HudRuntime implements IUpdatable {
         ctx.closePath();
     }
 
-    private drawPerformanceStats(fps: number, drawCalls: number, triangles: number, lines: number, points: number): void {
+    private drawPerformanceStats(fps: number, drawCalls: number, triangles: number, lines: number, points: number, textures: number): void {
         const ctx = this.perfContext;
         ctx.clearRect(0, 0, this.perfCanvas.width, this.perfCanvas.height);
         ctx.save();
@@ -325,7 +328,7 @@ export class HudRuntime implements IUpdatable {
         ctx.font = `bold 30px ${UITheme.typography.fontFamily}`;
         ctx.fillStyle = UITheme.colors.text;
         ctx.textAlign = 'left';
-        const text = `FPS ${fps}   D ${drawCalls}   T ${triangles.toLocaleString()}   L ${lines.toLocaleString()}   P ${points.toLocaleString()}`;
+        const text = `FPS ${fps}   D ${drawCalls}  TX ${textures}  T ${triangles.toLocaleString()}   L ${lines.toLocaleString()}   P ${points.toLocaleString()}`;
         ctx.fillText(text, 34, 74);
         ctx.restore();
 
