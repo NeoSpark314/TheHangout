@@ -245,9 +245,7 @@ export class AvatarMotionSolver {
         const scaledSegment = (jointName: AvatarSkeletonJointName) =>
             torsoDirection.clone().multiplyScalar(torsoDistance * (this.getRest(jointName).length() / totalRest));
 
-        const torsoYaw = context.disableTorsoTwist
-            ? 0
-            : THREE.MathUtils.clamp(this.headTargetEuler.y, -MAX_TORSO_TWIST_YAW, MAX_TORSO_TWIST_YAW);
+        const torsoYaw = THREE.MathUtils.clamp(this.headTargetEuler.y, -MAX_TORSO_TWIST_YAW, MAX_TORSO_TWIST_YAW);
         this.tmpChestQuat.setFromEuler(this.torsoEuler.set(0, torsoYaw * CHEST_TWIST_WEIGHT, 0, 'YXZ'));
         this.tmpUpperChestQuat.setFromEuler(this.torsoEuler.set(0, torsoYaw * UPPER_CHEST_TWIST_WEIGHT, 0, 'YXZ'));
         this.tmpNeckQuat.setFromEuler(this.torsoEuler.set(0, torsoYaw * NECK_TWIST_WEIGHT, 0, 'YXZ'));

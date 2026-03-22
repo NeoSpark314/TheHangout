@@ -39,7 +39,7 @@ export interface ISessionConfig {
     seed: number;
 }
 
-export type AvatarPoseOverride = 'none' | 'vrm-tpose' | 'xr-raw';
+export type AvatarPoseOverride = 'none' | 'vrm-tpose';
 
 export interface IRuntimeRegistry {
     entity: EntityRegistry;
