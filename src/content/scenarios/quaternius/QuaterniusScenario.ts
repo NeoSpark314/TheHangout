@@ -5,6 +5,7 @@ import type { IObjectModule } from '../../contracts/IObjectModule';
 import type { IScenarioActionProvider } from '../../contracts/IScenarioAction';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import { applyWindSway } from '../../../render/utils/WindShader';
+import { createWaterMaterial } from '../../../render/utils/WaterShader';
 import type { IUniform } from 'three';
 
 interface IInstanceFlat {
@@ -84,11 +85,11 @@ export class QuaterniusScenario implements IScenarioModule {
     private previousShadowMapEnabled: boolean | null = null;
     private isUnloaded = false;
 
-    constructor(private readonly configUrl: string) {}
+    constructor(private readonly configUrl: string) { }
 
     public async load(context: IScenarioContext, options: IScenarioLoadOptions): Promise<void> {
         this.context = context;
-        
+
         try {
             const response = await fetch(this.configUrl);
             this.metadata = await response.json();
@@ -138,7 +139,7 @@ export class QuaterniusScenario implements IScenarioModule {
 
         // Preload assets
         const configDir = this.configUrl.substring(0, this.configUrl.lastIndexOf('/') + 1);
-        
+
         const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
             if (this.isUnloaded) return;
             let baseUrl = this.metadata.assetKit.baseUrl;
@@ -154,7 +155,7 @@ export class QuaterniusScenario implements IScenarioModule {
             }
         });
         await Promise.all(promises);
-        
+
         if (this.isUnloaded) return;
 
         // Build layout
@@ -213,14 +214,22 @@ export class QuaterniusScenario implements IScenarioModule {
         const flatInstances: IInstanceFlat[] = [];
         const rng = new SimplePNoise(seed); // Deterministic RNG for layout
 
+        const width = this.metadata.terrain?.size?.[0] ?? 100;
+        const depth = this.metadata.terrain?.size?.[1] ?? 100;
+        const halfW = width * 0.5 - 0.5; // 0.5m padding
+        const halfD = depth * 0.5 - 0.5;
+
         // Flatten areas and instances
         for (const element of this.metadata.layout) {
             if (element.type === 'instance') {
                 const x = element.position?.x ?? 0;
                 const z = element.position?.z ?? 0;
+                
+                if (Math.abs(x) > halfW || Math.abs(z) > halfD) continue;
+
                 const h = this.getHeight(x, z);
                 const pos = { x, y: (element.position?.y ?? 0) + h, z };
-                
+
                 const rot = element.rotation ? { x: element.rotation.x ?? 0, y: element.rotation.y ?? 0, z: element.rotation.z ?? 0 } : { x: 0, y: 0, z: 0 };
                 const scl = element.scale ?? 1.0;
                 flatInstances.push({ assetId: element.assetId, position: pos, rotation: rot, scale: scl });
@@ -236,6 +245,8 @@ export class QuaterniusScenario implements IScenarioModule {
                     const x = center.x + Math.cos(angle) * r;
                     const z = center.z + Math.sin(angle) * r;
                     
+                    if (Math.abs(x) > halfW || Math.abs(z) > halfD) continue;
+
                     const h = this.getHeight(x, z);
                     const y = (element.position?.y ?? 0) + h;
 
@@ -244,9 +255,9 @@ export class QuaterniusScenario implements IScenarioModule {
                         : (element.scale ?? 1.0);
 
                     const rotationY = element.randomRotation ? rng.nextFloat() * Math.PI * 2 : (element.rotation?.y ?? 0); // Use rng
-                    
+
                     // Simple clearance check for the spawn area (0, 0, 2)
-                    const spawnPos = { x: 0, z: 2 }; 
+                    const spawnPos = { x: 0, z: 2 };
                     const clearanceRadius = 6.0;
                     const dx = x - spawnPos.x;
                     const dz = z - spawnPos.z;
@@ -256,6 +267,14 @@ export class QuaterniusScenario implements IScenarioModule {
                     const isLarge = element.assetId.includes('tree') || element.assetId.includes('pine') || element.assetId.includes('rock');
                     if (isLarge && distToSpawn < clearanceRadius) {
                         continue;
+                    }
+
+                    // Pond clearance (28, 28) with 22m radius
+                    if (isLarge) {
+                        const pdx = x - 28;
+                        const pdz = z - 28;
+                        const distToPond = Math.sqrt(pdx * pdx + pdz * pdz);
+                        if (distToPond < 21.0) continue;
                     }
 
                     flatInstances.push({
@@ -306,19 +325,19 @@ export class QuaterniusScenario implements IScenarioModule {
                     instMesh.castShadow = true;
                     instMesh.receiveShadow = true;
                 }
-                
+
                 // Get the mesh's full transform (incorporates deep node hierarchy from optimized GLTFs)
                 const childMatrix = mesh.matrixWorld;
 
                 for (let i = 0; i < instCount; i++) {
                     const inst = instances[i];
-                    
+
                     // Local transform of the instance
                     tempPos.set(inst.position.x, inst.position.y, inst.position.z);
                     tempEuler.set(inst.rotation.x, inst.rotation.y, inst.rotation.z);
                     tempQuat.setFromEuler(tempEuler);
                     tempScale.set(inst.scale, inst.scale, inst.scale);
-                    
+
                     // Combine instance placement with the full computed child matrix
                     tempMatrix.compose(tempPos, tempQuat, tempScale).multiply(childMatrix);
 
@@ -329,9 +348,9 @@ export class QuaterniusScenario implements IScenarioModule {
                         this.addCollision(assetId, inst, tempMatrix);
                     }
                 }
-                
+
                 instMesh.instanceMatrix.needsUpdate = true;
-                
+
                 // Apply wind sway if it's a nature asset
                 const uniforms = this.context?.scene.getGlobalUniforms();
                 const globalTime = uniforms?.uTime as IUniform;
@@ -398,16 +417,38 @@ export class QuaterniusScenario implements IScenarioModule {
             for (let xIdx = 0; xIdx < numPointsX; xIdx++) {
                 const x = (xIdx / resX - 0.5) * width;
                 const z = (zIdx / resZ - 0.5) * depth;
-                
+
                 // Fractal noise
                 let h = noise.noise(x * 0.05, z * 0.05) * maxHeight;
                 h += noise.noise(x * 0.1, z * 0.1) * maxHeight * 0.3;
                 h += noise.noise(x * 0.2, z * 0.2) * maxHeight * 0.1;
-                
+
                 // Flatten the center area slightly
                 const distToCenter = Math.sqrt(x * x + z * z);
                 if (distToCenter < 10) {
                     h *= (distToCenter / 10);
+                }
+
+                // Pond carving and containment rim
+                const pondCenter = { x: 28, z: 28 };
+                const pondRadius = 22;
+                const rimRadius = 26; // Embankment to contain the water plane
+                const dx = x - pondCenter.x;
+                const dz = z - pondCenter.z;
+                const pondDist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (pondDist < pondRadius) {
+                    const falloff = 1.0 - (pondDist / pondRadius);
+                    h -= falloff * 5.5; // Basin depth
+                    // Ensure the waterline edge is submerged
+                    if (pondDist > pondRadius * 0.95) {
+                        h = Math.min(h, 0.4); 
+                    }
+                } else if (pondDist < rimRadius) {
+                    // Rim area: Ensure it's high enough to "contain" the 45x45 water plane
+                    const t = (pondDist - pondRadius) / (rimRadius - pondRadius); // 0 to 1
+                    const boost = (1.0 - t) * 1.5; // Add up to 1.5m at the very edge
+                    h = Math.max(h, 0.8) + boost;
                 }
 
                 // Guard against NaN and ensure non-negative (some engines prefer it)
@@ -418,7 +459,7 @@ export class QuaterniusScenario implements IScenarioModule {
                 heights[zIdx * numPointsX + xIdx] = h;
             }
         }
-        
+
         this.terrainHeights = heights;
 
         console.log(`[QuaterniusScenario] Creating Heightfield: ${resX}x${resZ} subdivisions, heights points: ${numPointsX}x${numPointsZ}, total elements: ${heights.length}`);
@@ -430,7 +471,7 @@ export class QuaterniusScenario implements IScenarioModule {
             // In Rapier 0.19, scale is the full dimension of the heightfield
             scale: { x: width, y: 1.0, z: depth }
         });
-        
+
         // Ensure grounding happens at the end to place player on NEW surface
         const localPlayer = this.context.players.getLocal();
         if (localPlayer) {
@@ -443,7 +484,7 @@ export class QuaterniusScenario implements IScenarioModule {
 
         const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
         const colors: number[] = [];
-        
+
         const grassColor = new THREE.Color('#4d7c32');
         const rockColor = new THREE.Color('#7a7a7a');
         const sandColor = new THREE.Color('#d2b48c');
@@ -451,16 +492,20 @@ export class QuaterniusScenario implements IScenarioModule {
         for (let i = 0; i < posAttr.count; i++) {
             const x = posAttr.getX(i);
             const z = posAttr.getZ(i);
-            
+
             // Find height from our array
             const xIdx = Math.round((x / width + 0.5) * resX);
             const zIdx = Math.round((z / depth + 0.5) * resZ);
             const h = heights[zIdx * numPointsX + xIdx];
-            
+
             posAttr.setY(i, h);
 
             // Coloring based on height and slope
-            if (h < 0.5) {
+            const waterLevel = 0.6;
+            if (h < waterLevel - 0.2) {
+                const mudColor = new THREE.Color('#3d2b1f');
+                colors.push(mudColor.r, mudColor.g, mudColor.b);
+            } else if (h < waterLevel + 0.4) {
                 colors.push(sandColor.r, sandColor.g, sandColor.b);
             } else if (h > maxHeight * 0.6) {
                 colors.push(rockColor.r, rockColor.g, rockColor.b);
@@ -486,6 +531,21 @@ export class QuaterniusScenario implements IScenarioModule {
         this.terrainMesh = new THREE.Mesh(facetedGeometry, material);
         this.terrainMesh.receiveShadow = true;
         scene.add(this.terrainMesh);
+
+        // Add Water Mesh
+        const waterLevel = 0.6;
+        const waterGeom = new THREE.CircleGeometry(22.5, 32); 
+        waterGeom.rotateX(-Math.PI / 2);
+        
+        const uniforms = this.context?.scene.getGlobalUniforms();
+        const globalTime = uniforms?.uTime as IUniform;
+        if (globalTime) {
+            const waterMat = createWaterMaterial({ uTime: globalTime });
+            const waterMesh = new THREE.Mesh(waterGeom, waterMat);
+            waterMesh.position.set(28, waterLevel, 28);
+            scene.add(waterMesh);
+            this.lights.push(waterMesh as any); // Add to cleanup array
+        }
     }
 
     private getHeight(x: number, z: number): number {
@@ -537,7 +597,7 @@ export class QuaterniusScenario implements IScenarioModule {
         );
         const sunDir = env.sunDirection ?? { x: 5, y: 10, z: 2 };
         sun.position.set(sunDir.x, sunDir.y, sunDir.z);
-        
+
         if (env.castShadows) {
             sun.castShadow = true;
             sun.shadow.mapSize.set(2048, 2048);
@@ -547,6 +607,7 @@ export class QuaterniusScenario implements IScenarioModule {
             sun.shadow.camera.right = 50;
             sun.shadow.camera.top = 50;
             sun.shadow.camera.bottom = -50;
+            sun.shadow.bias = -0.01 // Help prevent shadow acne/self-shadowing
 
             const renderer = this.context?.scene.getRenderer();
             if (renderer) {
@@ -555,7 +616,7 @@ export class QuaterniusScenario implements IScenarioModule {
                 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             }
         }
-        
+
         scene.add(sun);
         this.lights.push(sun);
     }
