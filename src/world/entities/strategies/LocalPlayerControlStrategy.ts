@@ -111,6 +111,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
                 trackingFrame.rootWorldPosition,
                 trackingFrame.rootWorldQuaternion
             )
+            : poseOverride === 'xr-raw'
+                ? this.solveRawTrackedPose(player, trackingFrame, delta)
             : this.solveTrackedPose(player, trackingFrame, delta);
         player.avatarSkeleton.setPose(solvedPose);
         player.syncLegacyPoseFromSkeleton();
@@ -344,6 +346,21 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     private solveTrackedPose(player: PlayerAvatarEntity, trackingFrame: IAvatarTrackingFrame, delta: number) {
         const motionContext = this.buildMotionContext(player, trackingFrame, delta);
         const bodyWorldYaw = this.facingResolver.resolve(trackingFrame, motionContext, delta);
+        return this.motionSolver.solve(trackingFrame, motionContext, bodyWorldYaw, delta);
+    }
+
+    private solveRawTrackedPose(player: PlayerAvatarEntity, trackingFrame: IAvatarTrackingFrame, delta: number) {
+        const motionContext = {
+            ...this.buildMotionContext(player, trackingFrame, delta),
+            disableTorsoTwist: true
+        };
+        const rootQuat = new THREE.Quaternion(
+            trackingFrame.rootWorldQuaternion.x,
+            trackingFrame.rootWorldQuaternion.y,
+            trackingFrame.rootWorldQuaternion.z,
+            trackingFrame.rootWorldQuaternion.w
+        );
+        const bodyWorldYaw = new THREE.Euler().setFromQuaternion(rootQuat, 'YXZ').y;
         return this.motionSolver.solve(trackingFrame, motionContext, bodyWorldYaw, delta);
     }
 }

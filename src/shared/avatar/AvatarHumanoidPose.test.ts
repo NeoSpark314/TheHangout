@@ -115,4 +115,27 @@ describe('AvatarHumanoidPose', () => {
 
         expect(new THREE.Quaternion(cx, cy, cz, cw).angleTo(expected)).toBeLessThan(1e-6);
     });
+
+    it('applies the VRM 0 finger compatibility correction to exported finger rotations', () => {
+        const pose = createAvatarRestSkeletonPose();
+        const curlIndex = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.55, 0.1, 0.08, 'YXZ'));
+        pose.joints.leftIndexProximal!.quaternion = {
+            x: curlIndex.x,
+            y: curlIndex.y,
+            z: curlIndex.z,
+            w: curlIndex.w
+        };
+
+        const humanoidPose = createAvatarHumanoidPoseFromSkeleton(pose);
+        const uncorrected = buildNormalizedVrmPose(humanoidPose);
+        const corrected = buildNormalizedVrmPose(humanoidPose, { metaVersion: '0' });
+        const [ux, uy, uz, uw] = uncorrected[VRMHumanBoneName.LeftIndexProximal]!.rotation!;
+        const [cx, cy, cz, cw] = corrected[VRMHumanBoneName.LeftIndexProximal]!.rotation!;
+        const correction = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+        const expected = new THREE.Quaternion(ux, uy, uz, uw)
+            .premultiply(correction)
+            .multiply(correction);
+
+        expect(new THREE.Quaternion(cx, cy, cz, cw).angleTo(expected)).toBeLessThan(1e-6);
+    });
 });
