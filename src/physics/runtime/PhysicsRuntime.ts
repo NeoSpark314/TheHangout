@@ -220,6 +220,7 @@ export class PhysicsRuntime {
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
             .setRestitution(replicationProfile.material.restitution)
             .setFriction(replicationProfile.material.friction)
+            .setDensity(replicationProfile.material.density)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
@@ -276,6 +277,7 @@ export class PhysicsRuntime {
         const colliderDesc = RAPIER.ColliderDesc.ball(radius)
             .setRestitution(replicationProfile.material.restitution)
             .setFriction(replicationProfile.material.friction)
+            .setDensity(replicationProfile.material.density)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
@@ -327,10 +329,12 @@ export class PhysicsRuntime {
         const hx = halfExtents?.x ?? (size / 2);
         const hy = halfExtents?.y ?? (size / 2);
         const hz = halfExtents?.z ?? (size / 2);
+        const replicationProfile = resolvePhysicsReplicationProfile(entity.getReplicationProfileId(), 'box');
 
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
-            .setRestitution(0.2)
-            .setFriction(0.7)
+            .setRestitution(replicationProfile.material.restitution)
+            .setFriction(replicationProfile.material.friction)
+            .setDensity(replicationProfile.material.density)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
 
         const collider = this.world.createCollider(colliderDesc, rigidBody);

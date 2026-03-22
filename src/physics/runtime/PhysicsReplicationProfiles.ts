@@ -14,6 +14,7 @@ export interface IPhysicsBodyTuning {
 export interface IPhysicsMaterialTuning {
     friction: number;
     restitution: number;
+    density: number;
 }
 
 export interface IPhysicsReplicationProfile {
@@ -61,7 +62,8 @@ const SHAPE_DEFAULTS: Record<PhysicsPropShape, { body: IPhysicsBodyTuning; mater
         },
         material: {
             friction: 0.7,
-            restitution: 0.2
+            restitution: 0.2,
+            density: 280
         }
     },
     sphere: {
@@ -71,7 +73,8 @@ const SHAPE_DEFAULTS: Record<PhysicsPropShape, { body: IPhysicsBodyTuning; mater
         },
         material: {
             friction: 1.15,
-            restitution: 0.1
+            restitution: 0.1,
+            density: 170
         }
     }
 };
@@ -89,7 +92,8 @@ const PROFILES: Record<PhysicsReplicationProfileId, IPhysicsReplicationProfile> 
         pendingReleaseAngularSpeedThreshold: 1.4,
         material: {
             friction: 0.95,
-            restitution: 0.16
+            restitution: 0.16,
+            density: 140
         }
     },
     'held-tool': {
@@ -105,6 +109,9 @@ const PROFILES: Record<PhysicsReplicationProfileId, IPhysicsReplicationProfile> 
         body: {
             linearDamping: 0.58,
             angularDamping: 0.8
+        },
+        material: {
+            density: 520
         }
     },
     'heavy-prop': {
@@ -125,7 +132,8 @@ const PROFILES: Record<PhysicsReplicationProfileId, IPhysicsReplicationProfile> 
         },
         material: {
             friction: 1.2,
-            restitution: 0.02
+            restitution: 0.02,
+            density: 1100
         }
     }
 };

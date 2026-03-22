@@ -28,7 +28,7 @@ class GrabbableCubeInstance extends BaseReplicatedPhysicsPropObjectInstance {
             halfExtents: { x: size / 2, y: size / 2, z: size / 2 },
             ownerId,
             entityId,
-            replicationProfileId: 'default-prop'
+            replicationProfileId: 'heavy-prop'
         });
     }
 }
