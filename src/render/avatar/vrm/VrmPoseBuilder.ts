@@ -61,7 +61,7 @@ const VRM0_HEAD_SPACE_CORRECTION = new THREE.Quaternion().setFromAxisAngle(
     new THREE.Vector3(0, 1, 0),
     Math.PI
 );
-const VRM0_ARM_SPACE_CORRECTION = VRM0_HEAD_SPACE_CORRECTION;
+const VRM0_LOCAL_SPACE_CORRECTION = VRM0_HEAD_SPACE_CORRECTION;
 const VRM0_Y_FLIPPED_JOINTS = new Set<AvatarHumanoidJointName>([
     'head',
     'leftUpperArm',
@@ -88,13 +88,13 @@ function adaptRotationForVrmVersion(
     }
 
     // VRM 0 avatars are authored facing -Z. `rotateVRM0` fixes the model root,
-    // but some raw bone local spaces still behave as if their semantic forward
-    // is inverted relative to our +Z-forward canonical rig. Conjugating the
-    // local rotation by a 180 degree Y rotation aligns visible pitch/swing for
-    // the head and both arm chains.
+    // but some normalized humanoid bone local spaces still behave as if their
+    // semantic forward is inverted relative to our +Z-forward canonical rig.
+    // Conjugating selected local rotations by a 180 degree Y rotation keeps
+    // visible motion aligned for the affected VRM 0 head, arm, and leg chains.
     const correction = jointName === 'head'
         ? VRM0_HEAD_SPACE_CORRECTION
-        : VRM0_ARM_SPACE_CORRECTION;
+        : VRM0_LOCAL_SPACE_CORRECTION;
     const corrected = new THREE.Quaternion(
         rotation.x,
         rotation.y,

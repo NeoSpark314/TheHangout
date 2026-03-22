@@ -6,7 +6,7 @@ The goal is to keep the system simple:
 
 - keep raw XR and engine data in the native WebXR basis
 - keep the canonical avatar rig in the VRM 1.0 basis
-- convert between those spaces exactly once at the boundary
+- isolate convention fixes at clear boundaries instead of spreading them through the solver
 
 ## Summary
 
@@ -111,9 +111,9 @@ Examples:
 - [`VrmPoseBuilder.ts`](/C:/programming/TheHangout/src/render/avatar/vrm/VrmPoseBuilder.ts)
 - [`VrmAvatarView.ts`](/C:/programming/TheHangout/src/render/avatar/vrm/VrmAvatarView.ts)
 
-## Required Boundary Conversion
+## Boundary Conversion
 
-The only intentional basis change is between raw tracking space and canonical avatar space.
+The main intentional basis change is between raw tracking orientation space and canonical avatar orientation space.
 
 Because:
 
@@ -122,7 +122,7 @@ Because:
 
 the conversion is a 180 degree rotation around the Y axis.
 
-In this project that boundary lives in:
+In this project that orientation boundary lives in:
 
 - [`AvatarTrackingSpace.ts`](/C:/programming/TheHangout/src/shared/avatar/AvatarTrackingSpace.ts)
 
@@ -130,16 +130,22 @@ Responsibilities of that module:
 
 - convert raw world quaternions into avatar-world quaternions
 - convert avatar-world quaternions back into raw world quaternions when needed
-- keep the basis remap isolated to one place
+- keep the orientation basis remap isolated to one place
 
-This conversion must not be duplicated elsewhere.
+Important current implementation detail:
+
+- tracked world positions are still carried in raw world coordinates
+- the solver reconciles those positions with the canonical rig through the resolved root/body orientation
+- so `AvatarTrackingSpace.ts` is currently the central orientation-basis adapter, not a full position-space remapper
+
+That means future cleanup should continue to reduce duplicated convention logic, but the code today is not a pure "all raw data is fully converted once" pipeline yet.
 
 ## Canonical Rig Rules
 
 The canonical rig must behave as follows:
 
 1. Identity root rotation means the avatar faces `+Z`.
-2. Left-side joints have negative local `X`; right-side joints have positive local `X`.
+2. Left-side joints have positive local `X`; right-side joints have negative local `X`.
 3. Forward-facing rest offsets, such as toes, point toward positive local `Z`.
 4. The canonical rig is renderer-independent.
 5. VRM renderers should consume canonical humanoid poses directly, without adding an extra hidden 180 degree body flip.
@@ -158,7 +164,8 @@ Current tests guarding this:
 
 - Do not reinterpret WebXR itself as `+Z` forward.
 - Do not redefine the canonical avatar rig to match raw engine space.
-- Do not add renderer-specific 180 degree corrections unless a specific asset importer proves they are required.
+- Do not add renderer-specific 180 degree corrections unless a specific asset/runtime proves they are required.
+- The current exception is VRM 0 compatibility in [`VrmPoseBuilder.ts`](/C:/programming/TheHangout/src/render/avatar/vrm/VrmPoseBuilder.ts), which is intentionally isolated there.
 - If a pose looks backward, first check whether raw-space and avatar-space transforms were mixed without going through [`AvatarTrackingSpace.ts`](/C:/programming/TheHangout/src/shared/avatar/AvatarTrackingSpace.ts).
 - When adding another avatar renderer, treat canonical avatar space as the source of truth.
 
