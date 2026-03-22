@@ -91,7 +91,7 @@ function applyInteractionConfig(entity: PhysicsPropEntity, init: SharedPhysicsPr
     if (interaction.getPreferredHeldQuaternionSpace) {
         (entity as PhysicsPropEntity & IMovableHoldable).getPreferredHeldQuaternionSpace = () => {
             const space = interaction.getPreferredHeldQuaternionSpace?.(entity as any);
-            return space === 'pointer' ? 'pointer' : 'grip';
+            return space === 'aim' ? 'aim' : 'grip';
         };
     }
 }

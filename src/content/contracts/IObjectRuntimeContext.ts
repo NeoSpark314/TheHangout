@@ -37,7 +37,7 @@ export interface ISharedPropInteractionConfig {
     onGrab?: (playerId: string, hand: 'left' | 'right', handle: ISharedPropHandle) => void;
     onRelease?: (velocity: IVector3 | undefined, handle: ISharedPropHandle) => void;
     getCanonicalGrabOffset?: (hand: 'left' | 'right', handle: ISharedPropHandle) => IPose | undefined;
-    getPreferredHeldQuaternionSpace?: (handle: ISharedPropHandle) => 'world' | 'pointer' | undefined;
+    getPreferredHeldQuaternionSpace?: (handle: ISharedPropHandle) => 'grip' | 'aim' | undefined;
 }
 
 interface ISharedPropSpawnBase {

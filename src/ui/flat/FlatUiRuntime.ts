@@ -65,6 +65,8 @@ export class FlatUiRuntime implements IUpdatable {
     private inviteSessionId: string | null = null;
     private hostScenarioOverrideId: string | null = null;
     private desktopHelpMode: 'keyboardMouse' | 'controller' | null = null;
+    private overlayHideRequestTimeout: number | null = null;
+    private overlayHideFinalizeTimeout: number | null = null;
 
     constructor(private context: AppContext) {
         this.overlay = document.getElementById('ui-overlay')!;
@@ -255,14 +257,14 @@ export class FlatUiRuntime implements IUpdatable {
             if (this.context.isHost) {
                 this.setStatus('Session Created! Starting...');
                 this.ensureAudioContextResumed();
-                setTimeout(() => this.hideOverlay(), 1000);
+                this.scheduleOverlayHide();
             }
         });
 
         eventBus.on(EVENTS.SESSION_CONNECTED, () => {
             if (!this.context.isHost) {
                 this.setStatus('Connected!');
-                setTimeout(() => this.hideOverlay(), 1000);
+                this.scheduleOverlayHide();
             }
         });
 
@@ -826,12 +828,15 @@ export class FlatUiRuntime implements IUpdatable {
 
     public hideOverlay(): void {
         console.log('[FlatUiRuntime] hideOverlay() called');
+        this.cancelOverlayHideRequest();
+        this.cancelOverlayHideFinalize();
         this.context.isMenuOpen = false;
         this.controllerCursor.hide();
         this.updateControllerCursorTarget(null);
         if (this.overlay) {
             this.overlay.style.opacity = '0';
-            setTimeout(() => {
+            this.overlayHideFinalizeTimeout = window.setTimeout(() => {
+                this.overlayHideFinalizeTimeout = null;
                 this.hideElement(this.overlay);
                 if (this.desktopControls && !this.isMobile) {
                     console.log('[FlatUiRuntime] Showing desktop controls');
@@ -958,6 +963,8 @@ export class FlatUiRuntime implements IUpdatable {
 
     public showOverlay(): void {
         console.log('[FlatUiRuntime] showOverlay() called');
+        this.cancelOverlayHideRequest();
+        this.cancelOverlayHideFinalize();
         this.context.isMenuOpen = true;
         this.controllerCursor.reset();
         if (this.overlay) {
@@ -984,11 +991,11 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.context.runtime.entity) {
             const entities = Array.from(this.context.runtime.entity.entities.values());
             entities.forEach(entity => {
-                if (entity.id !== this.context.localPlayer?.id) {
-                    this.context.runtime.entity!.removeEntity(entity.id);
-                }
+                this.context.runtime.entity!.removeEntity(entity.id);
             });
         }
+        this.context.runtime.session.assignedSpawnIndex = undefined;
+        eventBus.emit(EVENTS.SESSION_LEFT);
         this.context.isDedicatedHost = false;
         this.mobileHudEnabled = false;
         if (this.mobileMenuBtn) this.hideElement(this.mobileMenuBtn);
@@ -1059,6 +1066,28 @@ export class FlatUiRuntime implements IUpdatable {
             return;
         }
         this.hideElement(element);
+    }
+
+    private scheduleOverlayHide(): void {
+        this.cancelOverlayHideRequest();
+        this.overlayHideRequestTimeout = window.setTimeout(() => {
+            this.overlayHideRequestTimeout = null;
+            this.hideOverlay();
+        }, 1000);
+    }
+
+    private cancelOverlayHideRequest(): void {
+        if (this.overlayHideRequestTimeout !== null) {
+            window.clearTimeout(this.overlayHideRequestTimeout);
+            this.overlayHideRequestTimeout = null;
+        }
+    }
+
+    private cancelOverlayHideFinalize(): void {
+        if (this.overlayHideFinalizeTimeout !== null) {
+            window.clearTimeout(this.overlayHideFinalizeTimeout);
+            this.overlayHideFinalizeTimeout = null;
+        }
     }
 
     private isElementHidden(element: HTMLElement): boolean {

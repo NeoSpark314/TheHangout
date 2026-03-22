@@ -77,7 +77,7 @@ class PewPewGunInstance extends BaseReplicatedObjectInstance {
             interaction: {
                 onUse: (event) => this.handleInteraction(event),
                 getCanonicalGrabOffset: (hand) => canonicalGunGrip(hand),
-                getPreferredHeldQuaternionSpace: () => 'pointer'
+                getPreferredHeldQuaternionSpace: () => 'aim'
             }
         }) as SharedPropHandle | null;
         const entity = handle?.getEntity() as (PhysicsPropEntity & IEntity & IInteractable & IMovableHoldable) | null;
@@ -398,7 +398,7 @@ function canonicalGunGrip(hand: 'left' | 'right'): IPose {
     );
     const quat = new THREE.Quaternion().setFromEuler(euler);
     return {
-        position: { x, y: 0.078, z: -0.038 },
+        position: { x, y: 0.052, z: -0.1 },
         quaternion: { x: quat.x, y: quat.y, z: quat.z, w: quat.w }
     };
 }

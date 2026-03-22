@@ -123,7 +123,7 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
                 this.context.runtime.session.applySessionConfigUpdate(payload);
                 const network = this.context.runtime.network as any;
                 const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
-                if (localId && !this.context.localPlayer) {
+                if (localId) {
                     eventBus.emit(EVENTS.SESSION_CONNECTED, localId);
                 }
             }

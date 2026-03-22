@@ -21,6 +21,7 @@ export interface AppEventMap {
     CREATE_SESSION: string;
     HOST_READY: string;
     SESSION_CONNECTED: string;
+    SESSION_LEFT: void;
     ENTITY_DISCOVERED: string;
     PEER_DISCONNECTED: string;
     ASSET_LOADED: unknown; // Reserved until asset loading emits a stable shared payload.

@@ -27,7 +27,7 @@ export class DefaultHangoutWorld {
         if (!context.objects.get(this.defaultGunId)) {
             context.objects.spawn('pew-pew-gun', {
                 id: this.defaultGunId,
-                position: { x: 0.0, y: 1.12, z: -0.82 },
+                position: { x: 1.0, y: 1.12, z: -0.82 },
                 rotationY: 0
             });
         }

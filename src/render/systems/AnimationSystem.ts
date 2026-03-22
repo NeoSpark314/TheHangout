@@ -22,6 +22,13 @@ export class AnimationSystem implements IUpdatable {
         this.runtime = runtime;
     }
 
+    public clearLocalPlayer(): void {
+        this.localPlayer = null;
+        this.runtime = null;
+        this._bobTime = 0;
+        this._smoothedMoveSpeed = 0;
+    }
+
     public update(delta: number): void {
         if (!this.localPlayer || !this.runtime) return;
         const render = this.runtime.render;

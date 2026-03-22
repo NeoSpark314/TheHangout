@@ -182,6 +182,11 @@ export class App {
                 this.initPlayerOnce(localId);
             }
         });
+        eventBus.on(EVENTS.SESSION_LEFT, () => {
+            this.playerInitialized = false;
+            this.context.localPlayer = null;
+            this.context.runtime.animation.clearLocalPlayer();
+        });
     }
 
     private async initSystems(): Promise<void> {
