@@ -16,8 +16,8 @@ interface IHandGhostMeshes {
     root: THREE.Group;
     controller: THREE.Mesh;
     pointer: THREE.Line;
-    joints: THREE.Mesh[];
-    bones: THREE.Mesh[];
+    joints: THREE.Points;
+    bones: THREE.LineSegments;
 }
 
 export class TrackedInputGhost {
@@ -61,14 +61,10 @@ export class TrackedInputGhost {
             hand.controller.geometry.dispose();
             (hand.controller.material as THREE.Material).dispose();
             hand.pointer.geometry.dispose();
-            for (const joint of hand.joints) {
-                joint.geometry.dispose();
-                (joint.material as THREE.Material).dispose();
-            }
-            for (const bone of hand.bones) {
-                bone.geometry.dispose();
-                (bone.material as THREE.Material).dispose();
-            }
+            hand.joints.geometry.dispose();
+            (hand.joints.material as THREE.Material).dispose();
+            hand.bones.geometry.dispose();
+            (hand.bones.material as THREE.Material).dispose();
         }
     }
 
@@ -80,13 +76,15 @@ export class TrackedInputGhost {
             opacity: 0.28,
             depthWrite: false
         });
-        const jointMaterial = new THREE.MeshBasicMaterial({
+        const jointMaterial = new THREE.PointsMaterial({
             color,
             transparent: true,
             opacity: 0.42,
-            depthWrite: false
+            depthWrite: false,
+            size: 0.018,
+            sizeAttenuation: true
         });
-        const boneMaterial = new THREE.MeshBasicMaterial({
+        const boneMaterial = new THREE.LineBasicMaterial({
             color,
             transparent: true,
             opacity: 0.22,
@@ -101,20 +99,15 @@ export class TrackedInputGhost {
         const pointer = new THREE.Line(pointerGeometry, this.pointerMaterial);
         root.add(pointer);
 
-        const joints: THREE.Mesh[] = [];
-        for (let i = 0; i < 25; i += 1) {
-            const radius = i === 0 ? 0.018 : 0.011;
-            const joint = new THREE.Mesh(new THREE.SphereGeometry(radius, 10, 10), jointMaterial.clone());
-            joints.push(joint);
-            root.add(joint);
-        }
+        const jointGeometry = new THREE.BufferGeometry();
+        jointGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(25 * 3), 3));
+        const joints = new THREE.Points(jointGeometry, jointMaterial);
+        root.add(joints);
 
-        const bones: THREE.Mesh[] = [];
-        for (let i = 0; i < HAND_INDICES.length / 2; i += 1) {
-            const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 1, 6), boneMaterial.clone());
-            bones.push(bone);
-            root.add(bone);
-        }
+        const boneGeometry = new THREE.BufferGeometry();
+        boneGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(HAND_INDICES.length * 3), 3));
+        const bones = new THREE.LineSegments(boneGeometry, boneMaterial);
+        root.add(bones);
 
         return { root, controller, pointer, joints, bones };
     }
@@ -149,12 +142,8 @@ export class TrackedInputGhost {
             handState.pose.quaternion.w
         );
 
-        for (const joint of meshes.joints) {
-            joint.visible = false;
-        }
-        for (const bone of meshes.bones) {
-            bone.visible = false;
-        }
+        meshes.joints.visible = false;
+        meshes.bones.visible = false;
 
         const positions = meshes.pointer.geometry.getAttribute('position') as THREE.BufferAttribute;
         positions.setXYZ(0, handState.pose.position.x, handState.pose.position.y, handState.pose.position.z);
@@ -164,37 +153,32 @@ export class TrackedInputGhost {
     }
 
     private updateTrackedHandSkeleton(meshes: IHandGhostMeshes, handState: ITrackingState['hands']['left']): void {
-        for (let i = 0; i < meshes.joints.length; i += 1) {
+        meshes.joints.visible = true;
+        meshes.bones.visible = true;
+
+        const jointPositions = meshes.joints.geometry.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < 25; i += 1) {
             const jointState = handState.joints[i];
-            const jointMesh = meshes.joints[i];
-            jointMesh.visible = true;
-            jointMesh.position.set(
+            jointPositions.setXYZ(
+                i,
                 jointState.pose.position.x,
                 jointState.pose.position.y,
                 jointState.pose.position.z
             );
         }
+        jointPositions.needsUpdate = true;
+        meshes.joints.geometry.computeBoundingSphere();
 
-        for (let i = 0; i < meshes.bones.length; i += 1) {
+        const bonePositions = meshes.bones.geometry.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < HAND_INDICES.length / 2; i += 1) {
             const startIdx = HAND_INDICES[i * 2];
             const endIdx = HAND_INDICES[i * 2 + 1];
-            const start = meshes.joints[startIdx].position;
-            const end = meshes.joints[endIdx].position;
-            const bone = meshes.bones[i];
-            bone.visible = true;
-            this.alignCylinder(bone, start, end);
+            const start = handState.joints[startIdx].pose.position;
+            const end = handState.joints[endIdx].pose.position;
+            bonePositions.setXYZ(i * 2, start.x, start.y, start.z);
+            bonePositions.setXYZ(i * 2 + 1, end.x, end.y, end.z);
         }
-    }
-
-    private alignCylinder(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3): void {
-        const dir = new THREE.Vector3().subVectors(end, start);
-        const len = dir.length();
-        if (len < 0.0001) {
-            mesh.visible = false;
-            return;
-        }
-        mesh.scale.set(1, len, 1);
-        mesh.position.copy(start).addScaledVector(dir, 0.5);
-        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+        bonePositions.needsUpdate = true;
+        meshes.bones.geometry.computeBoundingSphere();
     }
 }
