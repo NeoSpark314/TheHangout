@@ -100,6 +100,8 @@ export class ScenarioRuntimeContext implements IScenarioContext {
         this.assets = {
             getNormalizedModel: (url: string, targetSize?: number) =>
                 this.app.runtime.assets.getNormalizedModel(url, targetSize),
+            loadGLTF: (url: string) =>
+                this.app.runtime.assets.loadGLTF(url),
             loadTexture: (url: string) =>
                 this.app.runtime.assets.loadTexture(url)
         };

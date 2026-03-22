@@ -136,19 +136,20 @@ export class QuaterniusScenario implements IScenarioModule {
         // Preload assets
         const configDir = this.configUrl.substring(0, this.configUrl.lastIndexOf('/') + 1);
         
-        for (const asset of this.metadata.assetKit.assets) {
+        const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
             let baseUrl = this.metadata.assetKit.baseUrl;
             if (!baseUrl.startsWith('/') && !baseUrl.includes('://')) {
                 baseUrl = configDir + baseUrl;
             }
-            const fullUrl = baseUrl + asset.url;
+            const fullUrl = baseUrl + assetDef.url;
             try {
-                const model = await context.assets.getNormalizedModel(fullUrl, 1.0);
-                this.assetCache.set(asset.id, model);
+                const model = await this.context!.assets.loadGLTF(fullUrl);
+                this.assetCache.set(assetDef.id, model);
             } catch (err) {
-                console.error(`[QuaterniusScenario] Failed to load asset ${asset.id}:`, err);
+                console.error(`[QuaterniusScenario] Failed to load asset ${assetDef.id}:`, err);
             }
-        }
+        });
+        await Promise.all(promises);
         
         // Build layout
         this.buildLayout(seed);
@@ -275,6 +276,9 @@ export class QuaterniusScenario implements IScenarioModule {
             const tempQuat = new THREE.Quaternion();
             const tempScale = new THREE.Vector3();
 
+            // Ensure matrices are computed down the tree hierarchy
+            sourceGroup.updateMatrixWorld(true);
+
             for (const mesh of meshes) {
                 const instMesh = new THREE.InstancedMesh(mesh.geometry, mesh.material, instCount);
                 if (this.metadata.environment.castShadows) {
@@ -282,10 +286,8 @@ export class QuaterniusScenario implements IScenarioModule {
                     instMesh.receiveShadow = true;
                 }
                 
-                // Copy the relative transform from the child mesh to the source group
-                const childPos = mesh.position;
-                const childQuat = mesh.quaternion;
-                const childScale = mesh.scale;
+                // Get the mesh's full transform (incorporates deep node hierarchy from optimized GLTFs)
+                const childMatrix = mesh.matrixWorld;
 
                 for (let i = 0; i < instCount; i++) {
                     const inst = instances[i];
@@ -296,8 +298,7 @@ export class QuaterniusScenario implements IScenarioModule {
                     tempQuat.setFromEuler(tempEuler);
                     tempScale.set(inst.scale, inst.scale, inst.scale);
                     
-                    // Combine with the child mesh's local transform relative to the source group
-                    const childMatrix = new THREE.Matrix4().compose(childPos, childQuat, childScale);
+                    // Combine instance placement with the full computed child matrix
                     tempMatrix.compose(tempPos, tempQuat, tempScale).multiply(childMatrix);
 
                     instMesh.setMatrixAt(i, tempMatrix);

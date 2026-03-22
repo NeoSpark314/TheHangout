@@ -55,6 +55,7 @@ export interface IScenarioContext {
 
     assets: {
         getNormalizedModel(url: string, targetSize?: number): Promise<THREE.Group>;
+        loadGLTF(url: string): Promise<THREE.Group>;
         loadTexture(url: string): Promise<THREE.Texture>;
     };
 
