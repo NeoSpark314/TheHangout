@@ -47,6 +47,7 @@ export class StickFigureView extends BaseAvatarView {
     private handMeshes: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private handCylinders: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private wristMeshes: { left: THREE.Mesh, right: THREE.Mesh };
+    private handDebugMaterials: Record<'wrist' | 'thumb' | 'index' | 'middle' | 'ring' | 'little', THREE.MeshBasicMaterial> | null = null;
 
     private rig!: StickFigureRig;
     private hands!: StickFigureHands;
@@ -279,13 +280,22 @@ export class StickFigureView extends BaseAvatarView {
         rightLowerArm.add(this.rightForearm);
 
         const handJointGeom = new THREE.SphereGeometry(0.006, 6, 4);
+        const handTipGeom = new THREE.SphereGeometry(0.009, 8, 6);
         const handLimbRadius = 0.003;
         const handCylinderGeom = new THREE.CylinderGeometry(handLimbRadius, handLimbRadius, 1, 4);
+        this.handDebugMaterials = {
+            wrist: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+            thumb: new THREE.MeshBasicMaterial({ color: 0xff9f1c }),
+            index: new THREE.MeshBasicMaterial({ color: 0x00d1ff }),
+            middle: new THREE.MeshBasicMaterial({ color: 0x39d353 }),
+            ring: new THREE.MeshBasicMaterial({ color: 0xff4fd8 }),
+            little: new THREE.MeshBasicMaterial({ color: 0xffd60a })
+        };
 
         const wristGeom = new THREE.BoxGeometry(0.03, 0.03, 0.03);
         this.wristMeshes = {
-            left: new THREE.Mesh(wristGeom, this.accentMaterial),
-            right: new THREE.Mesh(wristGeom, this.accentMaterial)
+            left: new THREE.Mesh(wristGeom, this.handDebugMaterials.wrist),
+            right: new THREE.Mesh(wristGeom, this.handDebugMaterials.wrist)
         };
         this.mesh.add(this.wristMeshes.left);
         this.mesh.add(this.wristMeshes.right);
@@ -293,26 +303,45 @@ export class StickFigureView extends BaseAvatarView {
         this.wristMeshes.right.visible = false;
 
         for (let i = 0; i < 25; i++) {
-            const leftJoint = new THREE.Mesh(handJointGeom, this.accentMaterial);
+            const jointMaterial = this.getHandDebugMaterial(i);
+            const jointGeometry = this.isHandTipIndex(i) ? handTipGeom : handJointGeom;
+            const leftJoint = new THREE.Mesh(jointGeometry, jointMaterial);
             leftJoint.visible = false;
             this.mesh.add(leftJoint);
             this.handMeshes.left.push(leftJoint);
-            const rightJoint = new THREE.Mesh(handJointGeom, this.accentMaterial);
+            const rightJoint = new THREE.Mesh(jointGeometry, jointMaterial);
             rightJoint.visible = false;
             this.mesh.add(rightJoint);
             this.handMeshes.right.push(rightJoint);
         }
 
         for (let i = 0; i < StickFigureHands.HAND_INDICES.length / 2; i++) {
-            const leftCyl = new THREE.Mesh(handCylinderGeom, this.cyberMaterial);
+            const material = this.getHandDebugMaterial(StickFigureHands.HAND_INDICES[i * 2 + 1]);
+            const leftCyl = new THREE.Mesh(handCylinderGeom, material);
             leftCyl.visible = false;
             this.mesh.add(leftCyl);
             this.handCylinders.left.push(leftCyl);
-            const rightCyl = new THREE.Mesh(handCylinderGeom, this.cyberMaterial);
+            const rightCyl = new THREE.Mesh(handCylinderGeom, material);
             rightCyl.visible = false;
             this.mesh.add(rightCyl);
             this.handCylinders.right.push(rightCyl);
         }
+    }
+
+    private getHandDebugMaterial(index: number): THREE.MeshBasicMaterial {
+        if (!this.handDebugMaterials) {
+            return this.accentMaterial;
+        }
+        if (index === 0) return this.handDebugMaterials.wrist;
+        if (index <= 4) return this.handDebugMaterials.thumb;
+        if (index <= 9) return this.handDebugMaterials.index;
+        if (index <= 14) return this.handDebugMaterials.middle;
+        if (index <= 19) return this.handDebugMaterials.ring;
+        return this.handDebugMaterials.little;
+    }
+
+    private isHandTipIndex(index: number): boolean {
+        return index === 4 || index === 9 || index === 14 || index === 19 || index === 24;
     }
 
     public applyState(state: IPlayerAvatarRenderState, delta: number): void {
