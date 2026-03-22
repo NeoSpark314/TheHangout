@@ -6,14 +6,22 @@ import { formatPlayerDisplayName } from '../../../shared/utils/PlayerBadgeUtils'
 import type { PlayerAvatarEntity } from '../PlayerAvatarEntity';
 import type { IPlayerAvatarControlStrategy } from './IPlayerAvatarControlStrategy';
 import { createAvatarHumanoidPoseFromSkeleton } from '../../../shared/avatar/AvatarHumanoidPose';
+import { AVATAR_SKELETON_JOINTS, cloneAvatarSkeletonPose, IAvatarSkeletonPose } from '../../../shared/avatar/AvatarSkeleton';
+import * as THREE from 'three';
+
+const REMOTE_SKELETON_LERP_SPEED = 20;
+const REMOTE_SKELETON_SNAP_DISTANCE = 2.5;
+const REMOTE_SKELETON_SNAP_ANGLE = THREE.MathUtils.degToRad(120);
 
 export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStrategy {
     public readonly mode = 'remote';
     private lastNetworkUpdateTime = performance.now();
     private onVoiceStream: (data?: IVoiceStreamReceivedEvent) => void = () => { };
+    private renderPose: IAvatarSkeletonPose | null = null;
 
     public attach(player: PlayerAvatarEntity): void {
         player.name = 'Player';
+        this.renderPose = cloneAvatarSkeletonPose(player.avatarSkeleton.pose);
 
         this.onVoiceStream = (data) => {
             const voiceView = player.view as unknown as Partial<IVoiceStreamReceiver>;
@@ -86,6 +94,9 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
         if (data.sk) {
             player.avatarSkeleton.applyNetworkDelta(data.sk);
             player.syncLegacyPoseFromSkeleton();
+            if (!this.renderPose) {
+                this.renderPose = cloneAvatarSkeletonPose(player.avatarSkeleton.pose);
+            }
             return;
         }
 
@@ -107,10 +118,11 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
 
         const lerpFactor = 15 * delta;
         player.audioLevel = player.view.getAudioLevel();
+        const renderPose = this.getRenderPose(player, delta);
 
         player.view.applyState({
-            skeleton: player.avatarSkeleton.getSnapshot(),
-            humanoidPose: createAvatarHumanoidPoseFromSkeleton(player.avatarSkeleton.pose),
+            skeleton: renderPose,
+            humanoidPose: createAvatarHumanoidPoseFromSkeleton(renderPose),
             name: formatPlayerDisplayName(
                 {
                     name: player.name || 'Player',
@@ -130,9 +142,118 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
 
     public detach(_player: PlayerAvatarEntity): void {
         eventBus.off(EVENTS.VOICE_STREAM_RECEIVED, this.onVoiceStream);
+        this.renderPose = null;
     }
 
     public destroy(player: PlayerAvatarEntity): void {
         this.detach(player);
+    }
+
+    private getRenderPose(player: PlayerAvatarEntity, delta: number): IAvatarSkeletonPose {
+        const targetPose = player.avatarSkeleton.pose;
+        if (!this.renderPose) {
+            this.renderPose = cloneAvatarSkeletonPose(targetPose);
+            return this.renderPose;
+        }
+
+        if (this.shouldSnapToTarget(this.renderPose, targetPose)) {
+            this.renderPose = cloneAvatarSkeletonPose(targetPose);
+            return this.renderPose;
+        }
+
+        const alpha = THREE.MathUtils.clamp(
+            1 - Math.exp(-Math.max(0.0001, delta) * REMOTE_SKELETON_LERP_SPEED),
+            0,
+            1
+        );
+        this.interpolatePoseToward(this.renderPose, targetPose, alpha);
+        return this.renderPose;
+    }
+
+    private shouldSnapToTarget(current: IAvatarSkeletonPose, target: IAvatarSkeletonPose): boolean {
+        const rootDelta = new THREE.Vector3(
+            current.rootWorldPosition.x - target.rootWorldPosition.x,
+            current.rootWorldPosition.y - target.rootWorldPosition.y,
+            current.rootWorldPosition.z - target.rootWorldPosition.z
+        );
+        if (rootDelta.length() > REMOTE_SKELETON_SNAP_DISTANCE) {
+            return true;
+        }
+
+        const currentRoot = new THREE.Quaternion(
+            current.rootWorldQuaternion.x,
+            current.rootWorldQuaternion.y,
+            current.rootWorldQuaternion.z,
+            current.rootWorldQuaternion.w
+        );
+        const targetRoot = new THREE.Quaternion(
+            target.rootWorldQuaternion.x,
+            target.rootWorldQuaternion.y,
+            target.rootWorldQuaternion.z,
+            target.rootWorldQuaternion.w
+        );
+        return currentRoot.angleTo(targetRoot) > REMOTE_SKELETON_SNAP_ANGLE;
+    }
+
+    private interpolatePoseToward(current: IAvatarSkeletonPose, target: IAvatarSkeletonPose, alpha: number): void {
+        current.rootWorldPosition = {
+            x: THREE.MathUtils.lerp(current.rootWorldPosition.x, target.rootWorldPosition.x, alpha),
+            y: THREE.MathUtils.lerp(current.rootWorldPosition.y, target.rootWorldPosition.y, alpha),
+            z: THREE.MathUtils.lerp(current.rootWorldPosition.z, target.rootWorldPosition.z, alpha)
+        };
+
+        const currentRootQuat = new THREE.Quaternion(
+            current.rootWorldQuaternion.x,
+            current.rootWorldQuaternion.y,
+            current.rootWorldQuaternion.z,
+            current.rootWorldQuaternion.w
+        );
+        const targetRootQuat = new THREE.Quaternion(
+            target.rootWorldQuaternion.x,
+            target.rootWorldQuaternion.y,
+            target.rootWorldQuaternion.z,
+            target.rootWorldQuaternion.w
+        );
+        currentRootQuat.slerp(targetRootQuat, alpha);
+        current.rootWorldQuaternion = {
+            x: currentRootQuat.x,
+            y: currentRootQuat.y,
+            z: currentRootQuat.z,
+            w: currentRootQuat.w
+        };
+        current.poseState = target.poseState;
+
+        for (const jointName of AVATAR_SKELETON_JOINTS) {
+            const currentJoint = current.joints[jointName];
+            const targetJoint = target.joints[jointName];
+            if (!currentJoint || !targetJoint) continue;
+
+            currentJoint.position = {
+                x: THREE.MathUtils.lerp(currentJoint.position.x, targetJoint.position.x, alpha),
+                y: THREE.MathUtils.lerp(currentJoint.position.y, targetJoint.position.y, alpha),
+                z: THREE.MathUtils.lerp(currentJoint.position.z, targetJoint.position.z, alpha)
+            };
+
+            const currentJointQuat = new THREE.Quaternion(
+                currentJoint.quaternion.x,
+                currentJoint.quaternion.y,
+                currentJoint.quaternion.z,
+                currentJoint.quaternion.w
+            );
+            const targetJointQuat = new THREE.Quaternion(
+                targetJoint.quaternion.x,
+                targetJoint.quaternion.y,
+                targetJoint.quaternion.z,
+                targetJoint.quaternion.w
+            );
+            currentJointQuat.slerp(targetJointQuat, alpha);
+            currentJoint.quaternion = {
+                x: currentJointQuat.x,
+                y: currentJointQuat.y,
+                z: currentJointQuat.z,
+                w: currentJointQuat.w
+            };
+            current.tracked[jointName] = target.tracked[jointName];
+        }
     }
 }
