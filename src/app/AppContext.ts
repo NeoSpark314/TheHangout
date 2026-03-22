@@ -87,7 +87,8 @@ export class AppContext {
     public avatarConfig: IAvatarConfig = {
         color: DEFAULT_AVATAR_COLOR,
         renderMode: 'stick',
-        vrmUrl: null
+        vrmUrl: null,
+        playerHeightM: 1.8
     };
     public avatarRenderOverride: AvatarRenderMode | null = null;
     public avatarPoseOverride: AvatarPoseOverride = 'none';

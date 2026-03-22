@@ -38,6 +38,7 @@ export interface IPlayerEntityState extends IBaseEntityState {
         color: string | number;
         renderMode?: AvatarRenderMode;
         vrmUrl?: string | null;
+        playerHeightM?: number;
     };
     mic?: boolean; // self-mute state
 }

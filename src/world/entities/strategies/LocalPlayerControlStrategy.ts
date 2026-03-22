@@ -167,7 +167,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             conf: {
                 color: player.avatarConfigSnapshot.color,
                 renderMode: player.avatarConfigSnapshot.renderMode,
-                vrmUrl: player.avatarConfigSnapshot.vrmUrl
+                vrmUrl: player.avatarConfigSnapshot.vrmUrl,
+                playerHeightM: player.avatarConfigSnapshot.playerHeightM
             },
             mic: player.appContext.voiceEnabled,
             ownerId: player.ownerId
@@ -290,7 +291,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
                 z: locomotionVelocity.z
             },
             explicitTurnDeltaYaw,
-            seatWorldYaw: seatPose?.yaw
+            seatWorldYaw: seatPose?.yaw,
+            playerHeightM: player.avatarConfigSnapshot.playerHeightM
         };
     }
 

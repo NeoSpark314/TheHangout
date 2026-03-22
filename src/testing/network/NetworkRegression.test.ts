@@ -241,7 +241,8 @@ describe.sequential('Headless Network Regression', () => {
         guest.context.avatarConfig = {
             color: '#22ccff',
             renderMode: 'vrm-auto',
-            vrmUrl: 'https://cdn.example.com/guest-avatar.vrm'
+            vrmUrl: 'https://cdn.example.com/guest-avatar.vrm',
+            playerHeightM: 1.8
         };
         guest.context.localPlayer?.setAvatarConfig(guest.context.avatarConfig);
 

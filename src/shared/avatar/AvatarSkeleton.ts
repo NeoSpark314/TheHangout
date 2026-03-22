@@ -117,6 +117,7 @@ export interface IAvatarMotionContext {
     locomotionWorldVelocity: IVector3;
     explicitTurnDeltaYaw: number;
     seatWorldYaw?: number;
+    playerHeightM?: number;
 }
 
 export interface IAvatarSkeletonPose {

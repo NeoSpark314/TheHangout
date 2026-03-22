@@ -25,6 +25,7 @@ const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
 const CHEST_TWIST_WEIGHT = 0.25;
 const UPPER_CHEST_TWIST_WEIGHT = 0.35;
 const NECK_TWIST_WEIGHT = 0.4;
+const DEFAULT_PLAYER_HEIGHT_M = 1.8;
 const CONTROLLER_RAW_GRIP_OFFSET = new THREE.Quaternion().setFromAxisAngle(
     new THREE.Vector3(1, 0, 0),
     Math.PI / 2
@@ -163,6 +164,7 @@ export class AvatarMotionSolver {
     private readonly tmpChestQuat = new THREE.Quaternion();
     private readonly tmpUpperChestQuat = new THREE.Quaternion();
     private readonly tmpNeckQuat = new THREE.Quaternion();
+    private bodyScale = 1;
 
     constructor() {
         for (const name of AVATAR_SKELETON_JOINTS) {
@@ -172,6 +174,7 @@ export class AvatarMotionSolver {
     }
 
     public solve(frame: IAvatarTrackingFrame, context: IAvatarMotionContext, bodyWorldYaw: number, delta: number): IAvatarSkeletonPose {
+        this.bodyScale = Math.max(0.6, (context.playerHeightM ?? DEFAULT_PLAYER_HEIGHT_M) / DEFAULT_PLAYER_HEIGHT_M);
         this.pose.rootWorldPosition = { ...frame.rootWorldPosition };
         this.pose.rootWorldQuaternion = {
             x: 0,
@@ -222,14 +225,14 @@ export class AvatarMotionSolver {
     private solveTorso(context: IAvatarMotionContext): void {
         const standing = this.pose.poseState === 'standing';
         const hipsY = THREE.MathUtils.clamp(
-            this.tmpHeadLocalPos.y - (standing ? 0.88 : 1.02),
-            standing ? 0.72 : 0.46,
-            standing ? 1.02 : 0.74
+            this.tmpHeadLocalPos.y - this.scaleScalar(standing ? 0.88 : 1.02),
+            this.scaleScalar(standing ? 0.72 : 0.46),
+            this.scaleScalar(standing ? 1.02 : 0.74)
         );
         const hipsPosition = new THREE.Vector3(
-            THREE.MathUtils.clamp(this.tmpHeadLocalPos.x * 0.14, -0.12, 0.12),
+            THREE.MathUtils.clamp(this.tmpHeadLocalPos.x * 0.14, -this.scaleScalar(0.12), this.scaleScalar(0.12)),
             hipsY,
-            THREE.MathUtils.clamp(this.tmpHeadLocalPos.z * (standing ? 0.1 : 0.22), -0.12, 0.18)
+            THREE.MathUtils.clamp(this.tmpHeadLocalPos.z * (standing ? 0.1 : 0.22), -this.scaleScalar(0.12), this.scaleScalar(0.18))
         );
         const hipsQuat = new THREE.Quaternion();
         this.setJointLocal('hips', hipsPosition, hipsQuat, false);
@@ -288,8 +291,8 @@ export class AvatarMotionSolver {
         const shoulderWorldQuat = this.jointWorldQuaternions[shoulderName]!;
         const upperLocalPos = this.getRest(upperName);
         const restTarget = shoulderWorldPos.clone()
-            .add(upperBase.clone().applyQuaternion(this.tmpRootWorldQuat).multiplyScalar(0.58))
-            .add(new THREE.Vector3(0, -0.38, 0.18).applyQuaternion(this.tmpRootWorldQuat));
+            .add(upperBase.clone().applyQuaternion(this.tmpRootWorldQuat).multiplyScalar(this.scaleScalar(0.58)))
+            .add(new THREE.Vector3(0, -this.scaleScalar(0.38), this.scaleScalar(0.18)).applyQuaternion(this.tmpRootWorldQuat));
 
         this.tmpTargetPosition.copy(restTarget);
         this.tmpTargetOrientation.copy(this.tmpRootWorldQuat);
@@ -369,13 +372,13 @@ export class AvatarMotionSolver {
         const lowerLength = Math.abs(this.getRest(footName).y);
         const hipsWorldPos = this.jointWorldPositions.hips!;
         const hipsWorldQuat = this.jointWorldQuaternions.hips!;
-        const footForward = seated ? 0.34 : 0.06;
-        const footLift = seated ? 0.08 : 0.0;
-        const lateral = Math.sign(this.getRest(upperName).x) * 0.13;
+        const footForward = this.scaleScalar(seated ? 0.34 : 0.06);
+        const footLift = this.scaleScalar(seated ? 0.08 : 0.0);
+        const lateral = Math.sign(this.getRest(upperName).x) * this.scaleScalar(0.13);
         const footTargetLocal = new THREE.Vector3(
             lateral,
             footLift,
-            footForward + THREE.MathUtils.clamp(this.tmpHeadLocalPos.z * 0.08, -0.04, 0.12)
+            footForward + THREE.MathUtils.clamp(this.tmpHeadLocalPos.z * 0.08, -this.scaleScalar(0.04), this.scaleScalar(0.12))
         );
 
         this.tmpTargetPosition.copy(footTargetLocal)
@@ -708,6 +711,10 @@ export class AvatarMotionSolver {
     }
 
     private getRest(jointName: AvatarSkeletonJointName): THREE.Vector3 {
-        return AVATAR_REST_LOCAL_POSITIONS[jointName].clone();
+        return AVATAR_REST_LOCAL_POSITIONS[jointName].clone().multiplyScalar(this.bodyScale);
+    }
+
+    private scaleScalar(value: number): number {
+        return value * this.bodyScale;
     }
 }

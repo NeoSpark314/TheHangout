@@ -66,15 +66,18 @@ export class RemotePlayerReplicationStrategy implements IPlayerAvatarControlStra
         if (data.conf) {
             const incomingRenderMode = data.conf.renderMode ?? 'stick';
             const incomingUrl = data.conf.vrmUrl ?? null;
+            const incomingPlayerHeightM = data.conf.playerHeightM;
             const changed = data.conf.color !== player.avatarConfigSnapshot.color
                 || incomingRenderMode !== player.avatarConfigSnapshot.renderMode
-                || incomingUrl !== (player.avatarConfigSnapshot.vrmUrl ?? null);
+                || incomingUrl !== (player.avatarConfigSnapshot.vrmUrl ?? null)
+                || (typeof incomingPlayerHeightM === 'number' && incomingPlayerHeightM !== player.avatarConfigSnapshot.playerHeightM);
 
             if (changed) {
                 player.setAvatarConfig({
                     color: data.conf.color,
                     renderMode: incomingRenderMode,
-                    vrmUrl: incomingUrl
+                    vrmUrl: incomingUrl,
+                    playerHeightM: incomingPlayerHeightM
                 });
                 stateChanged = true;
             }

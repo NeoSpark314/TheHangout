@@ -7,7 +7,7 @@ import { ControllerPointer } from '../shared/ControllerPointer';
 import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
 import { ConfigRegistry, IConfigSchema } from '../../shared/config/ConfigRegistry';
 import { validateVrmUrl } from '../../shared/avatar/AvatarUrlUtils';
-import { normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
+import { clampPlayerHeightM, normalizeAvatarConfig } from '../../shared/contracts/IAvatar';
 
 export class FlatUiRuntime implements IUpdatable {
     private static readonly KEYBOARD_MOUSE_HELP_HTML = [
@@ -39,6 +39,7 @@ export class FlatUiRuntime implements IUpdatable {
     private closeAvatarBtn: HTMLButtonElement;
     private avatarColorInput: HTMLInputElement;
     private avatarVrmUrlInput: HTMLInputElement | null;
+    private avatarHeightInput: HTMLInputElement | null;
     private clearAvatarVrmBtn: HTMLButtonElement | null;
     private avatarVrmStatus: HTMLElement | null;
     private extensionsBtn: HTMLButtonElement | null;
@@ -78,6 +79,7 @@ export class FlatUiRuntime implements IUpdatable {
         this.closeAvatarBtn = document.getElementById('close-avatar-btn') as HTMLButtonElement;
         this.avatarColorInput = document.getElementById('avatar-color') as HTMLInputElement;
         this.avatarVrmUrlInput = document.getElementById('avatar-vrm-url') as HTMLInputElement | null;
+        this.avatarHeightInput = document.getElementById('avatar-height-m') as HTMLInputElement | null;
         this.clearAvatarVrmBtn = document.getElementById('clear-avatar-vrm-btn') as HTMLButtonElement | null;
         this.avatarVrmStatus = document.getElementById('avatar-vrm-status');
 
@@ -185,6 +187,18 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.avatarVrmUrlInput) {
             this.avatarVrmUrlInput.addEventListener('input', () => {
                 this.applyAvatarUrlInput();
+            });
+        }
+
+        if (this.avatarHeightInput) {
+            this.avatarHeightInput.addEventListener('input', () => {
+                const nextHeight = clampPlayerHeightM(Number(this.avatarHeightInput!.value));
+                this.context.avatarConfig = normalizeAvatarConfig({
+                    ...this.context.avatarConfig,
+                    playerHeightM: nextHeight
+                });
+                this.saveToStorage();
+                eventBus.emit(EVENTS.AVATAR_CONFIG_UPDATED, this.context.avatarConfig);
             });
         }
 
@@ -380,14 +394,17 @@ export class FlatUiRuntime implements IUpdatable {
         }
         const storedRenderMode = AppLocalStorage.getAvatarRenderMode();
         const storedVrmUrl = AppLocalStorage.getAvatarVrmUrl();
+        const storedPlayerHeightM = AppLocalStorage.getAvatarPlayerHeightM();
         this.context.avatarConfig = normalizeAvatarConfig({
             color: avatarColor,
             renderMode: storedRenderMode,
-            vrmUrl: storedVrmUrl
+            vrmUrl: storedVrmUrl,
+            playerHeightM: storedPlayerHeightM
         });
 
         if (this.avatarColorInput) this.avatarColorInput.value = this.context.avatarConfig.color as string;
         if (this.avatarVrmUrlInput) this.avatarVrmUrlInput.value = this.context.avatarConfig.vrmUrl || '';
+        if (this.avatarHeightInput) this.avatarHeightInput.value = this.context.avatarConfig.playerHeightM.toFixed(2);
         this.updateAvatarButtonColor(this.context.avatarConfig.color as string);
         this.updateAvatarUrlStatus();
 
@@ -415,6 +432,7 @@ export class FlatUiRuntime implements IUpdatable {
         }
         AppLocalStorage.setAvatarRenderMode(this.context.avatarConfig.renderMode);
         AppLocalStorage.setAvatarVrmUrl(this.context.avatarConfig.vrmUrl || null);
+        AppLocalStorage.setAvatarPlayerHeightM(this.context.avatarConfig.playerHeightM);
         AppLocalStorage.setVoiceAutoEnable(this.context.voiceAutoEnable);
         if (session) {
             AppLocalStorage.setLastSessionId(session);
@@ -874,6 +892,9 @@ export class FlatUiRuntime implements IUpdatable {
         }
         if (this.avatarVrmUrlInput) {
             this.avatarVrmUrlInput.value = this.context.avatarConfig.vrmUrl || '';
+        }
+        if (this.avatarHeightInput) {
+            this.avatarHeightInput.value = this.context.avatarConfig.playerHeightM.toFixed(2);
         }
         this.updateAvatarUrlStatus();
     }

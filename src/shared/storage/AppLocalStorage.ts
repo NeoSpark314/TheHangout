@@ -10,6 +10,7 @@ interface IAppStorageProfileV1 {
     avatarColor?: string;
     avatarRenderMode?: AvatarRenderMode;
     avatarVrmUrl?: string;
+    avatarPlayerHeightM?: number;
 }
 
 interface IAppStorageSessionV1 {
@@ -77,7 +78,10 @@ function sanitizeDataV1(value: unknown): IAppStorageDataV1 {
                         ? 'vrm-auto'
                         : 'stick'
             ) as AvatarRenderMode,
-            avatarVrmUrl: asNonEmptyTrimmedString(value.profile.avatarVrmUrl)
+            avatarVrmUrl: asNonEmptyTrimmedString(value.profile.avatarVrmUrl),
+            avatarPlayerHeightM: typeof value.profile.avatarPlayerHeightM === 'number' && Number.isFinite(value.profile.avatarPlayerHeightM)
+                ? value.profile.avatarPlayerHeightM
+                : undefined
         }
         : undefined;
 
@@ -222,6 +226,17 @@ export class AppLocalStorage {
         this.update((data) => {
             data.profile = data.profile || {};
             data.profile.avatarVrmUrl = asNonEmptyTrimmedString(url);
+        });
+    }
+
+    public static getAvatarPlayerHeightM(): number | undefined {
+        return readEnvelope().data.profile?.avatarPlayerHeightM;
+    }
+
+    public static setAvatarPlayerHeightM(heightM: number): void {
+        this.update((data) => {
+            data.profile = data.profile || {};
+            data.profile.avatarPlayerHeightM = Number.isFinite(heightM) ? heightM : undefined;
         });
     }
 
