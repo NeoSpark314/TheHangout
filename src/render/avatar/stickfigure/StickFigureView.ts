@@ -1,20 +1,16 @@
 import * as THREE from 'three';
-import { EntityView } from '../../views/EntityView';
+import { BaseAvatarView } from '../BaseAvatarView';
 import { AppContext } from '../../../app/AppContext';
-import { NameTagComponent } from '../components/NameTagComponent';
-import { VoiceAudioComponent } from '../components/VoiceAudioComponent';
 import { StickFigureRig, StickFigureBones, StickFigureRigVisuals } from './StickFigureRig';
 import { StickFigureHands } from './StickFigureHands';
 import { IPlayerAvatarRenderState } from '../IPlayerAvatarRenderState';
-import { composeAvatarWorldPoses, LEFT_HAND_FINGER_JOINTS, RIGHT_HAND_FINGER_JOINTS } from '../../../shared/avatar/AvatarSkeletonUtils';
+import { composeAvatarWorldPoses } from '../../../shared/avatar/AvatarSkeletonUtils';
 
 export type IPlayerViewState = IPlayerAvatarRenderState;
 
-export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
-    public color: string | number;
+export class StickFigureView extends BaseAvatarView {
     public isLocal: boolean;
     public headMesh!: THREE.Mesh;
-    private currentHeadHeight: number = 1.7;
 
     private accentMaterial!: THREE.MeshBasicMaterial;
     private cyberMaterial!: THREE.MeshBasicMaterial;
@@ -51,21 +47,17 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
     private handMeshes: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private handCylinders: { left: THREE.Mesh[], right: THREE.Mesh[] } = { left: [], right: [] };
     private wristMeshes: { left: THREE.Mesh, right: THREE.Mesh };
-    private nameTagComponent!: NameTagComponent;
 
-    private voiceAudio!: VoiceAudioComponent;
     private rig!: StickFigureRig;
     private hands!: StickFigureHands;
-    private readonly tmpTargetPos = new THREE.Vector3();
-    private readonly tmpTargetQuat = new THREE.Quaternion();
 
-    constructor(private context: AppContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
-        super(new THREE.Group());
-        this.color = color;
+    constructor(context: AppContext, { color = 0x00ffff, isLocal = false }: { color?: string | number, isLocal?: boolean } = {}) {
+        const tempGroup = new THREE.Group();
+        const tempHead = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1));
+        super(context, tempGroup, tempHead, { color, isLocal });
+        
         this.isLocal = isLocal;
 
-        // Initializing wrist meshes to avoid 'used before assigned' error, 
-        // though _buildGeometry will re-assign them properly.
         const dummyGeom = new THREE.BoxGeometry(0.01, 0.01, 0.01);
         const dummyMat = new THREE.MeshBasicMaterial();
         this.wristMeshes = {
@@ -74,8 +66,11 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         };
 
         this._buildGeometry();
-        this.nameTagComponent = new NameTagComponent(this.mesh, () => this.headMesh.position.y, this.color);
-        this.voiceAudio = new VoiceAudioComponent(this.headMesh, this.context.runtime.render?.audioListener, this.isLocal);
+        
+        // Re-initialize VoiceAudio with the actual headMesh
+        (this as any).voiceAudio.destroy();
+        (this as any).voiceAudio = new (this as any).voiceAudio.constructor(this.headMesh, this.context.runtime.render?.audioListener, this.isLocal);
+        
         this.rig = new StickFigureRig(
             this.mesh,
             this.bones as unknown as StickFigureBones,
@@ -93,25 +88,9 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
                 rightUpperArm: this.rightUpperArm,
                 rightForearm: this.rightForearm
             } as StickFigureRigVisuals,
-            () => this._updateNameTagPosition()
+            () => this.nameTagComponent.updatePosition()
         );
         this.hands = new StickFigureHands(this.wristMeshes, this.handMeshes, this.handCylinders);
-    }
-
-    public attachVoiceStream(stream: MediaStream): void {
-        this.voiceAudio.attachVoiceStream(stream);
-    }
-
-    public attachAudioChunk(data: { chunk: string, isHeader: boolean } | string): void {
-        this.voiceAudio.attachAudioChunk(data);
-    }
-
-    public setMuted(muted: boolean): void {
-        this.voiceAudio.setMuted(muted);
-    }
-
-    public getAudioLevel(): number {
-        return this.voiceAudio.getAudioLevel();
     }
 
     private _buildGeometry(): void {
@@ -167,7 +146,7 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         upperChest.name = 'upperChest';
         const neck = new THREE.Bone();
         neck.name = 'neck';
-        const headBone = new THREE.Bone(); // We'll attach headMesh here
+        const headBone = new THREE.Bone();
         headBone.name = 'head';
 
         const leftShoulder = new THREE.Bone();
@@ -242,7 +221,6 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         this.skeleton = new THREE.Skeleton(boneArray);
 
         // --- ATTACH VISUAL MESHES TO BONES ---
-        // Torso mapping
         this.torso = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         spine.add(this.torso);
 
@@ -300,13 +278,6 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         this.rightForearm = new THREE.Mesh(cylinderGeom, this.cyberMaterial);
         rightLowerArm.add(this.rightForearm);
 
-        /**
-         * The head mesh was previously attached to `this.mesh`. 
-         * We now attach it directly directly to the root for absolute IK or the `headBone` if driven by forward IK.
-         * For now, we will leave it attached to `this.mesh` to preserve the `updatePosture` lerping logic
-         * until we fully transition to standard Forward Kinematics.
-         */
-
         const handJointGeom = new THREE.SphereGeometry(0.006, 6, 4);
         const handLimbRadius = 0.003;
         const handCylinderGeom = new THREE.CylinderGeometry(handLimbRadius, handLimbRadius, 1, 4);
@@ -344,27 +315,11 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
         }
     }
 
-    public applyState(state: IPlayerViewState, delta: number): void {
+    public applyState(state: IPlayerAvatarRenderState, delta: number): void {
+        super.applyState(state, delta);
+        
         const lerpFactor = state.lerpFactor ?? 1.0;
         const skeleton = state.skeleton;
-        this.tmpTargetPos.set(
-            skeleton.rootWorldPosition.x,
-            skeleton.rootWorldPosition.y,
-            skeleton.rootWorldPosition.z
-        );
-        this.tmpTargetQuat.set(
-            skeleton.rootWorldQuaternion.x,
-            skeleton.rootWorldQuaternion.y,
-            skeleton.rootWorldQuaternion.z,
-            skeleton.rootWorldQuaternion.w
-        );
-        if (lerpFactor < 1.0) {
-            this.mesh.position.lerp(this.tmpTargetPos, lerpFactor);
-            this.mesh.quaternion.slerp(this.tmpTargetQuat, lerpFactor);
-        } else {
-            this.mesh.position.copy(this.tmpTargetPos);
-            this.mesh.quaternion.copy(this.tmpTargetQuat);
-        }
 
         this.rig.applySkeletonPose(skeleton);
         const world = composeAvatarWorldPoses(skeleton);
@@ -373,7 +328,8 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
             const headLocal = headWorld.position.clone();
             this.mesh.worldToLocal(headLocal);
             const headHeight = Math.max(0.4, headWorld.position.y - skeleton.rootWorldPosition.y);
-            this.currentHeadHeight = headHeight;
+            this.currentHeadHeight = headHeight; 
+            this.currentHeadAnchorY = headHeight;
             this.headMesh.position.set(headLocal.x, headLocal.y, headLocal.z);
             this.headMesh.quaternion.copy(this.mesh.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(headWorld.quaternion.clone()));
         }
@@ -389,35 +345,17 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
                 this.mouth.scale.y = 1.0;
             }
         }
-
-        this._billboardNameTag();
-        if (state.name !== undefined) {
-            this.setName(state.name);
-        }
-
-        if (state.color !== undefined && state.color !== this.color) {
-            this.setColor(state.color);
-        }
-    }
-
-    private _billboardNameTag(): void {
-        this.nameTagComponent.faceCamera(this.context.runtime.render?.camera);
     }
 
     public setColor(color: string | number): void {
-        this.color = color;
+        super.setColor(color);
         const colorObj = new THREE.Color(color as any);
         this.accentMaterial.color.copy(colorObj);
         if (this.headOutline) (this.headOutline.material as THREE.LineBasicMaterial).color.copy(colorObj);
-        this.nameTagComponent.setColor(color);
     }
 
     public setName(name: string): void {
-        this.nameTagComponent.setName(this.isLocal ? '' : name);
-    }
-
-    private _updateNameTagPosition(): void {
-        this.nameTagComponent.updatePosition();
+        super.setName(this.isLocal ? '' : name);
     }
 
     public getLeftWristMarkerPosition(): THREE.Vector3 {
@@ -429,8 +367,7 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
     }
 
     public destroy(): void {
-        this._cleanupMesh();
-        this.voiceAudio.destroy();
+        super.destroy();
 
         this.mesh.traverse((object) => {
             const mesh = object as THREE.Mesh;
@@ -445,6 +382,9 @@ export class StickFigureView extends EntityView<IPlayerAvatarRenderState> {
                 }
             }
         });
-        this.nameTagComponent.destroy();
+    }
+
+    private set currentHeadHeight(val: number) {
+        // Compatibility with rig logic if needed
     }
 }

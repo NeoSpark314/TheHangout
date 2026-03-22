@@ -7,6 +7,7 @@ import { StickFigureView } from './stickfigure/StickFigureView';
 import { VrmAvatarView } from './vrm/VrmAvatarView';
 import { IPlayerAvatarRenderState } from './IPlayerAvatarRenderState';
 import { CoordinateAvatarView } from './coordinates/CoordinateAvatarView';
+import { BaseAvatarView } from './BaseAvatarView';
 
 class AvatarRenderBudget {
     private static readonly MAX_ACTIVE_VRMS = 6;
@@ -64,7 +65,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     private readonly stickView: StickFigureView;
     private readonly coordinateView: CoordinateAvatarView;
     private vrmView: VrmAvatarView | null = null;
-    private activeView: EntityView<IPlayerAvatarRenderState>;
+    private activeView: BaseAvatarView;
     private avatarConfig: IAvatarConfig;
     private lastState: IPlayerAvatarRenderState | null = null;
     private pendingVoiceStream: MediaStream | null = null;
@@ -137,10 +138,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     }
 
     public attachAudioChunk(data: { chunk: string; isHeader: boolean } | string): void {
-        const viewWithAudio = this.activeView as any;
-        if (typeof viewWithAudio.attachAudioChunk === 'function') {
-            viewWithAudio.attachAudioChunk(data);
-        }
+        this.activeView.attachAudioChunk(data);
     }
 
     public getAudioLevel(): number {
@@ -149,10 +147,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
 
     public setMuted(muted: boolean): void {
         this.muted = muted;
-        const viewWithMute = this.activeView as any;
-        if (typeof viewWithMute.setMuted === 'function') {
-            viewWithMute.setMuted(muted);
-        }
+        this.activeView.setMuted(muted);
     }
 
     public setAvatarConfig(config: Partial<IAvatarConfig>): void {
@@ -280,10 +275,10 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
         }
     }
 
-    private switchTo(nextView: EntityView<IPlayerAvatarRenderState>): void {
+    private switchTo(nextView: BaseAvatarView): void {
         if (this.activeView === nextView) return;
 
-        (this.activeView as unknown as { setMuted?: (next: boolean) => void }).setMuted?.(true);
+        this.activeView.setMuted(true);
         if (this.activeView.mesh.parent === this.mesh) {
             this.mesh.remove(this.activeView.mesh);
         }
@@ -302,6 +297,6 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
             this.activeView.attachVoiceStream(this.pendingVoiceStream);
         }
 
-        (this.activeView as unknown as { setMuted?: (next: boolean) => void }).setMuted?.(this.muted);
+        this.activeView.setMuted(this.muted);
     }
 }
