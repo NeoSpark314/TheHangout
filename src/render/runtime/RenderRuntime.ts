@@ -6,6 +6,7 @@ import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { EnvironmentBuilder } from '../../assets/procedural/EnvironmentBuilder';
+import { TrackedInputGhost } from '../debug/TrackedInputGhost';
 
 export class RenderRuntime {
     public container: HTMLElement;
@@ -28,6 +29,7 @@ export class RenderRuntime {
     private vrEntryButton: HTMLElement | null = null;
     private mrEntryButton: HTMLElement | null = null;
     private readonly xrButtonLabelObservers = new WeakMap<HTMLElement, MutationObserver>();
+    private readonly trackedInputGhost: TrackedInputGhost;
 
     constructor(private context: AppContext) {
         this.container = document.getElementById('app')!;
@@ -39,6 +41,8 @@ export class RenderRuntime {
         // Interaction Group (isolated for performance and precision)
         this.interactionGroup = new THREE.Group();
         this.scene.add(this.interactionGroup);
+        this.trackedInputGhost = new TrackedInputGhost();
+        this.scene.add(this.trackedInputGhost.root);
 
         // Camera setup
         this.camera = new THREE.PerspectiveCamera(
@@ -141,10 +145,14 @@ export class RenderRuntime {
                 Math.sin(this.menuRotation) * radius
             );
             this.camera.lookAt(0, 0, 0);
+            this.trackedInputGhost.update(null);
             return;
         }
 
-        if (!possessedPlayer) return;
+        if (!possessedPlayer) {
+            this.updateTrackedInputGhost();
+            return;
+        }
 
         // Camera following logic
         if (possessedPlayer.controlMode === 'local') {
@@ -168,6 +176,8 @@ export class RenderRuntime {
                 this.camera.quaternion.copy(groupWorldQuat.invert().multiply(worldQuat));
             }
         }
+
+        this.updateTrackedInputGhost();
     }
 
     public setupControllers(): void {
@@ -385,5 +395,18 @@ export class RenderRuntime {
         button.style.setProperty('margin', '0', 'important');
         button.style.setProperty('padding', '0', 'important');
         button.style.setProperty('line-height', '40px', 'important');
+    }
+
+    private updateTrackedInputGhost(): void {
+        if (!this.context.showTrackedInputGhost) {
+            this.trackedInputGhost.update(null);
+            return;
+        }
+        this.trackedInputGhost.update(this.context.runtime.tracking?.getState());
+    }
+
+    public destroy(): void {
+        this.trackedInputGhost.destroy();
+        this.trackedInputGhost.root.removeFromParent();
     }
 }

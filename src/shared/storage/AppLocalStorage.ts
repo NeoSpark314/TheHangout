@@ -21,6 +21,7 @@ interface IAppStorageSettingsV1 {
     voiceAutoEnable?: boolean;
     preferredMicDeviceId?: string;
     renderLocalAvatar?: boolean;
+    showTrackedInputGhost?: boolean;
 }
 
 interface IAppStorageRemoteDesktopV1 {
@@ -98,6 +99,9 @@ function sanitizeDataV1(value: unknown): IAppStorageDataV1 {
             preferredMicDeviceId: asNonEmptyTrimmedString(value.settings.preferredMicDeviceId),
             renderLocalAvatar: typeof value.settings.renderLocalAvatar === 'boolean'
                 ? value.settings.renderLocalAvatar
+                : undefined,
+            showTrackedInputGhost: typeof value.settings.showTrackedInputGhost === 'boolean'
+                ? value.settings.showTrackedInputGhost
                 : undefined
         }
         : undefined;
@@ -208,6 +212,17 @@ export class AppLocalStorage {
         this.update((data) => {
             data.settings = data.settings || {};
             data.settings.renderLocalAvatar = !!enabled;
+        });
+    }
+
+    public static getShowTrackedInputGhost(): boolean | undefined {
+        return readEnvelope().data.settings?.showTrackedInputGhost;
+    }
+
+    public static setShowTrackedInputGhost(enabled: boolean): void {
+        this.update((data) => {
+            data.settings = data.settings || {};
+            data.settings.showTrackedInputGhost = !!enabled;
         });
     }
 

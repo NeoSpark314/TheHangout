@@ -1228,6 +1228,18 @@ export class VrUiRuntime implements IUpdatable {
         );
         systemContainer.addChild(renderLocalAvatarToggle);
 
+        const trackedGhostToggle = new UIToggle(
+            "Show tracked ghost hands/controllers",
+            this.context.showTrackedInputGhost,
+            90, 548, 620, 52,
+            (checked) => {
+                this.context.showTrackedInputGhost = checked;
+                AppLocalStorage.setShowTrackedInputGhost(checked);
+                this.tablet?.ui.markDirty();
+            }
+        );
+        systemContainer.addChild(trackedGhostToggle);
+
         if (this.sessionMicRefreshHandler) {
             eventBus.off(EVENTS.VOICE_STATE_UPDATED, this.sessionMicRefreshHandler);
         }
