@@ -242,6 +242,20 @@ export class QuaterniusScenario implements IScenarioModule {
                         : (element.scale ?? 1.0);
 
                     const rotationY = element.randomRotation ? rng.nextFloat() * Math.PI * 2 : (element.rotation?.y ?? 0); // Use rng
+                    
+                    // Simple clearance check for the spawn area (0, 0, 2)
+                    const spawnPos = { x: 0, z: 2 }; 
+                    const clearanceRadius = 6.0;
+                    const dx = x - spawnPos.x;
+                    const dz = z - spawnPos.z;
+                    const distToSpawn = Math.sqrt(dx * dx + dz * dz);
+
+                    // Skip larger objects if they are too close to the player spawn point
+                    const isLarge = element.assetId.includes('tree') || element.assetId.includes('pine') || element.assetId.includes('rock');
+                    if (isLarge && distToSpawn < clearanceRadius) {
+                        continue;
+                    }
+
                     flatInstances.push({
                         assetId: element.assetId,
                         position: { x, y, z },
