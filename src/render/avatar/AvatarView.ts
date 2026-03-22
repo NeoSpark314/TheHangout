@@ -137,7 +137,10 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
     }
 
     public attachAudioChunk(data: { chunk: string; isHeader: boolean } | string): void {
-        (this.activeView as unknown as { attachAudioChunk: (payload: { chunk: string; isHeader: boolean } | string) => void }).attachAudioChunk(data);
+        const viewWithAudio = this.activeView as any;
+        if (typeof viewWithAudio.attachAudioChunk === 'function') {
+            viewWithAudio.attachAudioChunk(data);
+        }
     }
 
     public getAudioLevel(): number {
@@ -146,7 +149,10 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
 
     public setMuted(muted: boolean): void {
         this.muted = muted;
-        (this.activeView as unknown as { setMuted?: (next: boolean) => void }).setMuted?.(muted);
+        const viewWithMute = this.activeView as any;
+        if (typeof viewWithMute.setMuted === 'function') {
+            viewWithMute.setMuted(muted);
+        }
     }
 
     public setAvatarConfig(config: Partial<IAvatarConfig>): void {

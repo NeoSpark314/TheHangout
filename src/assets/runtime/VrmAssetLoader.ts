@@ -10,69 +10,15 @@ import {
 } from '@pixiv/three-vrm';
 import type { IVrmInstance, IVrmTemplate } from './IVrmAsset';
 
-const VRM_BONE_NAMES: VRMHumanBoneName[] = [
-    VRMHumanBoneName.Hips,
-    VRMHumanBoneName.Spine,
-    VRMHumanBoneName.Chest,
-    VRMHumanBoneName.UpperChest,
-    VRMHumanBoneName.Neck,
-    VRMHumanBoneName.Head,
-    VRMHumanBoneName.LeftShoulder,
-    VRMHumanBoneName.LeftUpperArm,
-    VRMHumanBoneName.LeftLowerArm,
-    VRMHumanBoneName.LeftHand,
-    VRMHumanBoneName.RightShoulder,
-    VRMHumanBoneName.RightUpperArm,
-    VRMHumanBoneName.RightLowerArm,
-    VRMHumanBoneName.RightHand,
-    VRMHumanBoneName.LeftUpperLeg,
-    VRMHumanBoneName.LeftLowerLeg,
-    VRMHumanBoneName.LeftFoot,
-    VRMHumanBoneName.RightUpperLeg,
-    VRMHumanBoneName.RightLowerLeg,
-    VRMHumanBoneName.RightFoot,
-    VRMHumanBoneName.LeftThumbMetacarpal,
-    VRMHumanBoneName.LeftThumbProximal,
-    VRMHumanBoneName.LeftThumbDistal,
-    VRMHumanBoneName.LeftIndexProximal,
-    VRMHumanBoneName.LeftIndexIntermediate,
-    VRMHumanBoneName.LeftIndexDistal,
-    VRMHumanBoneName.LeftMiddleProximal,
-    VRMHumanBoneName.LeftMiddleIntermediate,
-    VRMHumanBoneName.LeftMiddleDistal,
-    VRMHumanBoneName.LeftRingProximal,
-    VRMHumanBoneName.LeftRingIntermediate,
-    VRMHumanBoneName.LeftRingDistal,
-    VRMHumanBoneName.LeftLittleProximal,
-    VRMHumanBoneName.LeftLittleIntermediate,
-    VRMHumanBoneName.LeftLittleDistal,
-    VRMHumanBoneName.RightThumbMetacarpal,
-    VRMHumanBoneName.RightThumbProximal,
-    VRMHumanBoneName.RightThumbDistal,
-    VRMHumanBoneName.RightIndexProximal,
-    VRMHumanBoneName.RightIndexIntermediate,
-    VRMHumanBoneName.RightIndexDistal,
-    VRMHumanBoneName.RightMiddleProximal,
-    VRMHumanBoneName.RightMiddleIntermediate,
-    VRMHumanBoneName.RightMiddleDistal,
-    VRMHumanBoneName.RightRingProximal,
-    VRMHumanBoneName.RightRingIntermediate,
-    VRMHumanBoneName.RightRingDistal,
-    VRMHumanBoneName.RightLittleProximal,
-    VRMHumanBoneName.RightLittleIntermediate,
-    VRMHumanBoneName.RightLittleDistal
-];
-
 class VrmTemplate implements IVrmTemplate {
     private readonly rawBoneNames = new Map<VRMHumanBoneName, string>();
     private readonly normalizedRigRootName: string | null;
 
     constructor(private readonly vrm: VRM) {
         this.normalizedRigRootName = this.vrm.humanoid.normalizedHumanBonesRoot.name || null;
-        for (const boneName of VRM_BONE_NAMES) {
-            const node = this.vrm.humanoid.getRawBoneNode(boneName);
-            if (node?.name) {
-                this.rawBoneNames.set(boneName, node.name);
+        for (const [boneName, boneNode] of Object.entries(this.vrm.humanoid.humanBones) as Array<[VRMHumanBoneName, { node: THREE.Object3D }]>) {
+            if (boneNode?.node?.name) {
+                this.rawBoneNames.set(boneName, boneNode.node.name);
             }
         }
     }
@@ -105,9 +51,7 @@ class VrmTemplate implements IVrmTemplate {
 
     private buildHumanoidForClone(scene: THREE.Group): VRMHumanoid {
         const humanBones: Partial<Record<VRMHumanBoneName, { node: THREE.Object3D }>> = {};
-        for (const boneName of VRM_BONE_NAMES) {
-            const originalName = this.rawBoneNames.get(boneName);
-            if (!originalName) continue;
+        for (const [boneName, originalName] of this.rawBoneNames) {
             const cloneBone = scene.getObjectByName(originalName);
             if (cloneBone) {
                 humanBones[boneName] = { node: cloneBone };

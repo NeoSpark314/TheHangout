@@ -46,6 +46,8 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
     private restHeadHeight = 1.6;
     private currentHeadAnchorY = 1.6;
     private usingLocalProxy = false;
+    private readonly vrmMeshes: THREE.Mesh[] = [];
+    private readonly proxyMeshes: THREE.Mesh[] = [];
 
     constructor(
         private readonly context: AppContext,
@@ -68,18 +70,14 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         this.rightArmNodes = this.captureArmNodes('right');
 
         this.proxyMaterial = new THREE.MeshBasicMaterial({ color: this.color });
-        this.leftProxy = this.createProxyArm();
-        this.rightProxy = this.createProxyArm();
-        this.localProxyGroup.visible = false;
-        this.localProxyGroup.add(
-            this.leftProxy.upper,
-            this.leftProxy.lower,
-            this.leftProxy.wrist,
-            this.rightProxy.upper,
-            this.rightProxy.lower,
-            this.rightProxy.wrist
-        );
         this.mesh.add(this.localProxyGroup);
+        this.setupProxyArms();
+
+        this.modelRoot.traverse((obj) => {
+            if ((obj as THREE.Mesh).isMesh) {
+                this.vrmMeshes.push(obj as THREE.Mesh);
+            }
+        });
 
         this.captureHeadMetrics();
 
@@ -129,10 +127,6 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
 
         this.vrmInstance.humanoid.setNormalizedPose(buildNormalizedVrmPose(state.humanoidPose));
         this.updateLocalSelfView();
-
-        if (this.usingLocalProxy) {
-            this.updateLocalProxyVisuals();
-        }
 
         this.vrmInstance.update(delta);
         this.updateHeadAnchorHeight();
@@ -204,67 +198,89 @@ export class VrmAvatarView extends EntityView<IPlayerAvatarRenderState> {
         if (this.usingLocalProxy === shouldUseProxy) return;
 
         this.usingLocalProxy = shouldUseProxy;
-        this.modelRoot.visible = !shouldUseProxy;
-        this.localProxyGroup.visible = shouldUseProxy;
+        for (const mesh of this.vrmMeshes) {
+            mesh.visible = !shouldUseProxy;
+        }
+        for (const mesh of this.proxyMeshes) {
+            mesh.visible = shouldUseProxy;
+        }
     }
 
-    private createProxyArm(): IProxyArmVisuals {
+    private setupProxyArms(): void {
         const geo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
         const wristGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
 
-        return {
-            upper: new THREE.Mesh(geo, this.proxyMaterial),
-            lower: new THREE.Mesh(geo.clone(), this.proxyMaterial),
-            wrist: new THREE.Mesh(wristGeo, this.proxyMaterial)
+        const setupSegment = (bone: THREE.Object3D, nextBone: THREE.Object3D | null) => {
+            const mesh = new THREE.Mesh(geo, this.proxyMaterial);
+            if (nextBone) {
+                const start = new THREE.Vector3();
+                const end = new THREE.Vector3();
+                bone.getWorldPosition(start);
+                nextBone.getWorldPosition(end);
+                const distance = start.distanceTo(end);
+                mesh.scale.set(1, distance, 1);
+                mesh.position.set(0, distance * 0.5, 0); // Correct for cylinder origin if needed, but bones usually point Y?
+                // VRM bones in T-pose point towards their children. 
+                // Normalized bones in three-vrm point +Y for arms? Let's check.
+                // Actually, normalized bones are oriented such that identity is T-pose.
+            }
+            bone.add(mesh);
+            return mesh;
         };
+
+        const setupSide = (nodes: IVrmArmNodes | null) => {
+            if (!nodes) return;
+            const upper = new THREE.Mesh(geo, this.proxyMaterial);
+            const lower = new THREE.Mesh(geo, this.proxyMaterial);
+            const wrist = new THREE.Mesh(wristGeo, this.proxyMaterial);
+
+            // In VRM normalized humanoid, bones usually point towards their child.
+            // However, we need to know the length.
+            const dUpper = nodes.upper.position.distanceTo(nodes.lower.position); // This is not correct because they are in different spaces.
+            // But they are normalized...
+            
+            // Let's use a simpler approach: get world positions in T-pose (resetting pose briefly).
+            const currentPose = this.vrmInstance.humanoid.getNormalizedPose();
+            this.vrmInstance.humanoid.resetNormalizedPose();
+            this.vrmInstance.scene.updateMatrixWorld(true);
+            
+            const p1 = new THREE.Vector3();
+            const p2 = new THREE.Vector3();
+            const p3 = new THREE.Vector3();
+            
+            nodes.upper.getWorldPosition(p1);
+            nodes.lower.getWorldPosition(p2);
+            nodes.hand.getWorldPosition(p3);
+            
+            const lenUpper = p1.distanceTo(p2);
+            const lenLower = p2.distanceTo(p3);
+            
+            upper.scale.set(1, lenUpper, 1);
+            upper.position.set(0, lenUpper * 0.5, 0);
+            nodes.upper.add(upper);
+            
+            lower.scale.set(1, lenLower, 1);
+            lower.position.set(0, lenLower * 0.5, 0);
+            nodes.lower.add(lower);
+            
+            nodes.hand.add(wrist);
+            
+            upper.visible = this.usingLocalProxy;
+            lower.visible = this.usingLocalProxy;
+            wrist.visible = this.usingLocalProxy;
+            
+            this.proxyMeshes.push(upper, lower, wrist);
+            
+            // Re-apply pose
+            this.vrmInstance.humanoid.setNormalizedPose(currentPose);
+        };
+
+        setupSide(this.leftArmNodes);
+        setupSide(this.rightArmNodes);
+        
+        this.localProxyGroup.visible = false;
     }
 
-    private updateLocalProxyVisuals(): void {
-        const leftArm = this.leftArmNodes;
-        if (leftArm) {
-            leftArm.upper.parent?.getWorldPosition(this.tmpWorldPosA);
-            leftArm.lower.getWorldPosition(this.tmpWorldPosB);
-            leftArm.hand.getWorldPosition(this.tmpWorldPosC);
-            this.alignProxySegment(this.leftProxy.upper, this.tmpWorldPosA, this.tmpWorldPosB);
-            this.alignProxySegment(this.leftProxy.lower, this.tmpWorldPosB, this.tmpWorldPosC);
-            this.positionProxyWrist(this.leftProxy.wrist, this.tmpWorldPosC);
-        }
-
-        const rightArm = this.rightArmNodes;
-        if (rightArm) {
-            rightArm.upper.parent?.getWorldPosition(this.tmpWorldPosA);
-            rightArm.lower.getWorldPosition(this.tmpWorldPosB);
-            rightArm.hand.getWorldPosition(this.tmpWorldPosC);
-            this.alignProxySegment(this.rightProxy.upper, this.tmpWorldPosA, this.tmpWorldPosB);
-            this.alignProxySegment(this.rightProxy.lower, this.tmpWorldPosB, this.tmpWorldPosC);
-            this.positionProxyWrist(this.rightProxy.wrist, this.tmpWorldPosC);
-        }
-    }
-
-    private alignProxySegment(mesh: THREE.Mesh, worldStart: THREE.Vector3, worldEnd: THREE.Vector3): void {
-        this.tmpCylinderStart.copy(worldStart);
-        this.tmpCylinderEnd.copy(worldEnd);
-        this.mesh.worldToLocal(this.tmpCylinderStart);
-        this.mesh.worldToLocal(this.tmpCylinderEnd);
-        this.tmpCylinderDir.subVectors(this.tmpCylinderEnd, this.tmpCylinderStart);
-        const length = this.tmpCylinderDir.length();
-        if (length < 0.0001) {
-            mesh.visible = false;
-            return;
-        }
-
-        mesh.visible = true;
-        mesh.scale.set(1, length, 1);
-        mesh.position.copy(this.tmpCylinderStart).addScaledVector(this.tmpCylinderDir, 0.5);
-        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), this.tmpCylinderDir.normalize());
-    }
-
-    private positionProxyWrist(mesh: THREE.Mesh, worldPos: THREE.Vector3): void {
-        this.tmpLocalPos.copy(worldPos);
-        this.mesh.worldToLocal(this.tmpLocalPos);
-        mesh.visible = true;
-        mesh.position.copy(this.tmpLocalPos);
-    }
 
     private updateHeadAnchorHeight(): void {
         if (!this.rawHeadBone) {
