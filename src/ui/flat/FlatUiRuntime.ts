@@ -882,10 +882,10 @@ export class FlatUiRuntime implements IUpdatable {
     private updateVoiceButton(enabled: boolean): void {
         if (!this.voiceBtn) return;
         if (enabled) {
-            this.voiceBtn.textContent = 'Auto Mic: On';
+            this.voiceBtn.textContent = 'Microphone: On';
             this.voiceBtn.classList.add('ready');
         } else {
-            this.voiceBtn.textContent = 'Auto Mic: Off';
+            this.voiceBtn.textContent = 'Microphone: Off';
             this.voiceBtn.classList.remove('ready');
         }
     }
@@ -927,20 +927,25 @@ export class FlatUiRuntime implements IUpdatable {
         if (!this.avatarVrmStatus) return;
 
         const rawValue = this.avatarVrmUrlInput?.value.trim() || '';
+        const clearBtn = this.clearAvatarVrmBtn;
         if (overrideError) {
             this.avatarVrmStatus.textContent = overrideError;
+            clearBtn?.classList.remove('ready');
             return;
         }
 
         if (!rawValue) {
-            this.avatarVrmStatus.textContent = 'Stick figure fallback is active.';
+            this.avatarVrmStatus.textContent = '';
+            clearBtn?.classList.remove('ready');
             return;
         }
 
         const validation = validateVrmUrl(rawValue, window.location.href, window.location.origin);
-        this.avatarVrmStatus.textContent = validation.valid
-            ? 'VRM will be used when supported. Stick figure stays as fallback.'
+        const valid = validation.valid;
+        this.avatarVrmStatus.textContent = valid
+            ? 'VRM available'
             : (validation.error || 'Avatar URL is invalid.');
+        clearBtn?.classList.toggle('ready', valid);
     }
 
     private updateAvatarButtonColor(color: string): void {

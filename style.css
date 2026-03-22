@@ -380,6 +380,78 @@ body {
     letter-spacing: 2px;
 }
 
+.avatar-compact-row {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: 14px;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+
+.avatar-compact-row .input-group {
+    margin-bottom: 0;
+}
+
+.avatar-color-group input[type="color"] {
+    height: 48px;
+    padding: 0.25rem;
+    border: 1px solid var(--synth-border-strong);
+    background: rgba(0, 0, 0, 0.24);
+}
+
+.avatar-height-group input {
+    height: 48px;
+    text-align: center;
+}
+
+.avatar-url-group {
+    margin-bottom: 0.7rem;
+}
+
+.avatar-url-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.avatar-url-row input {
+    flex: 1 1 auto;
+    height: 48px;
+    min-width: 0;
+}
+
+.avatar-clear-btn.primary-btn.secondary-style {
+    flex: 0 0 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 110px;
+    margin-top: 0;
+    height: 48px;
+    padding: 0 0.9rem;
+    line-height: 1;
+    box-shadow: none;
+}
+
+.avatar-clear-btn.ready {
+    border-color: var(--synth-success);
+    color: var(--synth-success);
+    background: rgba(0, 255, 100, 0.1);
+    box-shadow: 0 0 10px rgba(0, 255, 100, 0.28);
+}
+
+.avatar-clear-btn.ready:hover,
+.avatar-clear-btn.ready.gamepad-focus {
+    background: var(--synth-success);
+    color: var(--bg-color);
+    box-shadow: 0 0 16px rgba(0, 255, 100, 0.42);
+}
+
+#avatar-vrm-status {
+    margin-top: 0.85rem;
+    margin-bottom: 1.2rem;
+}
+
 .screens-list {
     display: flex;
     flex-direction: column;
@@ -518,7 +590,7 @@ input[type="color"] {
 }
 
 #voice-btn.ready {
-    background: var(--danger-color);
+    background: var(--synth-success);
     border-color: var(--danger-hover);
     box-shadow: 0 0 15px var(--danger-color);
 }
