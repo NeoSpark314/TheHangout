@@ -35,6 +35,14 @@ export interface IScenarioStaticBoxOptions {
     rotation?: IQuaternion;
 }
 
+export interface IScenarioStaticHeightfieldOptions {
+    id?: string;
+    nrows: number;
+    ncols: number;
+    heights: Float32Array;
+    scale: IVector3;
+}
+
 export interface IScenarioContext {
     scene: {
         add(object: THREE.Object3D): void;
@@ -85,6 +93,7 @@ export interface IScenarioContext {
     physics: {
         ensureGround(size?: number): void;
         createStaticBox(options: IScenarioStaticBoxOptions): IScenarioStaticBodyHandle | null;
+        createStaticHeightfield(options: IScenarioStaticHeightfieldOptions): IScenarioStaticBodyHandle | null;
         removeBody(target: IScenarioStaticBodyHandle | IPhysicsColliderHandle | null | undefined): void;
     };
 

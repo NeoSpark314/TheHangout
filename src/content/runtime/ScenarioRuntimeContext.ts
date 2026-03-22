@@ -227,6 +227,17 @@ export class ScenarioRuntimeContext implements IScenarioContext {
                 const id = options.id || `scenario-static-body-${this.nextStaticBodyId++}`;
                 return new ScenarioStaticBodyHandle(id, this.app, collider);
             },
+            createStaticHeightfield: (options: IScenarioStaticHeightfieldOptions) => {
+                const collider = this.app.runtime.physics.createStaticHeightfield(
+                    options.nrows,
+                    options.ncols,
+                    options.heights,
+                    options.scale
+                );
+                if (!collider) return null;
+                const id = options.id || `scenario-static-body-${this.nextStaticBodyId++}`;
+                return new ScenarioStaticBodyHandle(id, this.app, collider);
+            },
             removeBody: (target: IScenarioStaticBodyHandle | IPhysicsColliderHandle | null | undefined) => {
                 if (!target) return;
                 if ('destroy' in target && typeof target.destroy === 'function') {

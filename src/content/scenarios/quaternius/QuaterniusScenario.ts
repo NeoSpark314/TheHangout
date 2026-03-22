@@ -47,6 +47,12 @@ interface IScenarioMetadata {
         hemiIntensity?: number;
         castShadows?: boolean;
     };
+    terrain?: {
+        size?: [number, number];
+        resolution?: [number, number];
+        height?: number;
+        seed?: number;
+    };
     layout: ILayoutElement[];
 }
 
@@ -60,6 +66,9 @@ export class QuaterniusScenario implements IScenarioModule {
     private assetCache: Map<string, THREE.Group> = new Map();
     private colliders: IScenarioStaticBodyHandle[] = [];
     private instancedMeshes: THREE.InstancedMesh[] = [];
+    private terrainMesh: THREE.Mesh | null = null;
+    private terrainHeights: Float32Array | null = null;
+    private terrainBody: IScenarioStaticBodyHandle | null = null;
     private lights: THREE.Light[] = [];
     private root = new THREE.Group();
     private context: IScenarioContext | null = null;
@@ -98,11 +107,18 @@ export class QuaterniusScenario implements IScenarioModule {
             }
             if (this.metadata.environment.fogColor) {
                 scene.fog = new THREE.Fog(
-                    this.metadata.environment.fogColor,
-                    this.metadata.environment.fogNear ?? 20,
-                    this.metadata.environment.fogFar ?? 100
+                    this.metadata.environment.fogColor ?? '#ffffff',
+                    this.metadata.environment.fogNear ?? 1,
+                    this.metadata.environment.fogFar ?? 1000
                 );
             }
+
+            if (this.metadata.terrain) {
+                this.generateTerrain(scene);
+            } else {
+                context.physics.ensureGround();
+            }
+
             scene.add(this.root);
             this.setupLights(scene);
         }
@@ -140,6 +156,18 @@ export class QuaterniusScenario implements IScenarioModule {
             else im.material.dispose();
         });
         this.instancedMeshes = [];
+        this.terrainMesh?.removeFromParent();
+        this.terrainMesh?.geometry.dispose();
+        if (this.terrainMesh?.material) {
+            if (Array.isArray(this.terrainMesh.material)) this.terrainMesh.material.forEach(m => m.dispose());
+            else this.terrainMesh.material.dispose();
+        }
+        this.terrainMesh = null;
+        this.terrainHeights = null;
+        if (this.terrainBody) {
+            _context.physics.removeBody(this.terrainBody);
+            this.terrainBody = null;
+        }
         this.root.removeFromParent();
         this.root.clear();
         this.assetCache.clear();
@@ -176,7 +204,11 @@ export class QuaterniusScenario implements IScenarioModule {
         // Flatten areas and instances
         for (const element of this.metadata.layout) {
             if (element.type === 'instance') {
-                const pos = element.position ?? { x: 0, y: 0, z: 0 };
+                const x = element.position?.x ?? 0;
+                const z = element.position?.z ?? 0;
+                const h = this.getHeight(x, z);
+                const pos = { x, y: (element.position?.y ?? 0) + h, z };
+                
                 const rot = element.rotation ? { x: element.rotation.x ?? 0, y: element.rotation.y ?? 0, z: element.rotation.z ?? 0 } : { x: 0, y: 0, z: 0 };
                 const scl = element.scale ?? 1.0;
                 flatInstances.push({ assetId: element.assetId, position: pos, rotation: rot, scale: scl });
@@ -191,7 +223,9 @@ export class QuaterniusScenario implements IScenarioModule {
                     const r = innerRadius + Math.sqrt(Math.random()) * (radius - innerRadius);
                     const x = center.x + Math.cos(angle) * r;
                     const z = center.z + Math.sin(angle) * r;
-                    const y = element.position?.y ?? 0;
+                    
+                    const h = this.getHeight(x, z);
+                    const y = (element.position?.y ?? 0) + h;
 
                     const scale = element.randomScale
                         ? element.randomScale[0] + Math.random() * (element.randomScale[1] - element.randomScale[0])
@@ -302,6 +336,134 @@ export class QuaterniusScenario implements IScenarioModule {
         }
     }
 
+    private generateTerrain(scene: THREE.Scene): void {
+        if (!this.metadata?.terrain || !this.context) return;
+        const config = this.metadata.terrain;
+
+        const width = config.size?.[0] ?? 100;
+        const depth = config.size?.[1] ?? 100;
+        const resX = config.resolution?.[0] ?? 64;
+        const resZ = config.resolution?.[1] ?? 64;
+        const maxHeight = config.height ?? 10;
+
+        // Generate Heightfield for Physics
+        // In Rapier, a heightfield is usually defined by a grid of points.
+        // We use Row-Major order: Z is rows, X is columns.
+        const numPointsX = resX + 1;
+        const numPointsZ = resZ + 1;
+        const heights = new Float32Array(numPointsX * numPointsZ);
+        const noise = new SimplePNoise(config.seed ?? 42);
+
+        for (let zIdx = 0; zIdx < numPointsZ; zIdx++) {
+            for (let xIdx = 0; xIdx < numPointsX; xIdx++) {
+                const x = (xIdx / resX - 0.5) * width;
+                const z = (zIdx / resZ - 0.5) * depth;
+                
+                // Fractal noise
+                let h = noise.noise(x * 0.05, z * 0.05) * maxHeight;
+                h += noise.noise(x * 0.1, z * 0.1) * maxHeight * 0.3;
+                h += noise.noise(x * 0.2, z * 0.2) * maxHeight * 0.1;
+                
+                // Flatten the center area slightly
+                const distToCenter = Math.sqrt(x * x + z * z);
+                if (distToCenter < 10) {
+                    h *= (distToCenter / 10);
+                }
+
+                // Row-major: index = row * numCols + col => zIdx * numPointsX + xIdx
+                heights[zIdx * numPointsX + xIdx] = h;
+            }
+        }
+        
+        this.terrainHeights = heights;
+
+        this.terrainBody = this.context.physics.createStaticHeightfield({
+            nrows: resZ, // number of subdivisions along Z
+            ncols: resX, // number of subdivisions along X
+            heights,
+            scale: { x: width / resX, y: 1.0, z: depth / resZ }
+        });
+
+        // Generate Visual Mesh
+        const geometry = new THREE.PlaneGeometry(width, depth, resX, resZ);
+        geometry.rotateX(-Math.PI / 2);
+
+        const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
+        const colors: number[] = [];
+        
+        const grassColor = new THREE.Color('#4d7c32');
+        const rockColor = new THREE.Color('#7a7a7a');
+        const sandColor = new THREE.Color('#d2b48c');
+
+        for (let i = 0; i < posAttr.count; i++) {
+            const x = posAttr.getX(i);
+            const z = posAttr.getZ(i);
+            
+            // Find height from our array
+            const xIdx = Math.round((x / width + 0.5) * resX);
+            const zIdx = Math.round((z / depth + 0.5) * resZ);
+            const h = heights[zIdx * numPointsX + xIdx];
+            
+            posAttr.setY(i, h);
+
+            // Coloring based on height and slope
+            if (h < 0.5) {
+                colors.push(sandColor.r, sandColor.g, sandColor.b);
+            } else if (h > maxHeight * 0.6) {
+                colors.push(rockColor.r, rockColor.g, rockColor.b);
+            } else {
+                colors.push(grassColor.r, grassColor.g, grassColor.b);
+            }
+        }
+
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.computeVertexNormals();
+
+        // Convert to non-indexed for a faceted low-poly look
+        const facetedGeometry = geometry.toNonIndexed();
+        facetedGeometry.computeVertexNormals();
+
+        const material = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            flatShading: true,
+            roughness: 0.8,
+            metalness: 0.1
+        });
+
+        this.terrainMesh = new THREE.Mesh(facetedGeometry, material);
+        this.terrainMesh.receiveShadow = true;
+        scene.add(this.terrainMesh);
+    }
+
+    private getHeight(x: number, z: number): number {
+        if (!this.metadata?.terrain || !this.terrainHeights) return 0;
+        const config = this.metadata.terrain;
+        const width = config.size?.[0] ?? 100;
+        const depth = config.size?.[1] ?? 100;
+        const resX = config.resolution?.[0] ?? 64;
+        const resZ = config.resolution?.[1] ?? 64;
+
+        // Convert to grid-relative coords [0, res]
+        const gx = (x / width + 0.5) * resX;
+        const gz = (z / depth + 0.5) * resZ;
+
+        if (gx < 0 || gx >= resX || gz < 0 || gz >= resZ) return 0;
+
+        const ix = Math.floor(gx);
+        const iz = Math.floor(gz);
+        const fx = gx - ix;
+        const fz = gz - iz;
+
+        const numPointsX = resX + 1;
+        const h00 = this.terrainHeights[iz * numPointsX + ix];
+        const h10 = this.terrainHeights[iz * numPointsX + (ix + 1)];
+        const h01 = this.terrainHeights[(iz + 1) * numPointsX + ix];
+        const h11 = this.terrainHeights[(iz + 1) * numPointsX + (ix + 1)];
+
+        // Bilinear interpolation
+        return (1 - fz) * ((1 - fx) * h00 + fx * h10) + fz * ((1 - fx) * h01 + fx * h11);
+    }
+
     private setupLights(scene: THREE.Scene): void {
         if (!this.metadata) return;
         const env = this.metadata.environment;
@@ -362,3 +524,48 @@ export const QuaterniusNatureScenarioPlugin: IScenarioPlugin = {
         return new QuaterniusScenario('/scenarios/quaternius/nature_park.json');
     }
 };
+
+class SimplePNoise {
+    private p: number[] = [];
+    constructor(seed: number) {
+        for (let i = 0; i < 256; i++) this.p[i] = i;
+        // Pseudo-random shuffle based on seed
+        let s = seed;
+        for (let i = 255; i > 0; i--) {
+            s = (s * 16807) % 2147483647;
+            const j = s % (i + 1);
+            [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
+        }
+        this.p = [...this.p, ...this.p];
+    }
+
+    private fade(t: number) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    private lerp(t: number, a: number, b: number) { return a + t * (b - a); }
+    private grad(hash: number, x: number, y: number) {
+        const h = hash & 15;
+        const u = h < 8 ? x : y;
+        const v = h < 4 ? y : h === 12 || h === 14 ? x : 0;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+
+    public noise(x: number, y: number) {
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const X = xi & 255;
+        const Y = yi & 255;
+        const xf = x - xi;
+        const yf = y - yi;
+        const u = this.fade(xf);
+        const v = this.fade(yf);
+
+        const aa = this.p[this.p[X] + Y];
+        const ab = this.p[this.p[X] + Y + 1];
+        const ba = this.p[this.p[X + 1] + Y];
+        const bb = this.p[this.p[X + 1] + Y + 1];
+
+        return this.lerp(v,
+            this.lerp(u, this.grad(aa, xf, yf), this.grad(ba, xf - 1, yf)),
+            this.lerp(u, this.grad(ab, xf, yf - 1), this.grad(bb, xf - 1, yf - 1))
+        );
+    }
+}

@@ -617,6 +617,31 @@ export class PhysicsRuntime {
         return this.createColliderHandle(collider);
     }
 
+    public createStaticHeightfield(
+        nrows: number,
+        ncols: number,
+        heights: Float32Array,
+        scale: IVector3
+    ): IPhysicsColliderHandle | null {
+        if (!this.world) return null;
+        
+        console.log(`[PhysicsRuntime] Creating heightfield: ${nrows}x${ncols}, array size: ${heights.length}, scale:`, scale);
+        // Check for NaN
+        for (let i = 0; i < Math.min(heights.length, 10); i++) {
+            if (isNaN(heights[i])) console.error(`[PhysicsRuntime] Height at index ${i} is NaN!`);
+        }
+
+        // Heightfield in Rapier is centered at 0,0,0
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0);
+        const body = this.world.createRigidBody(bodyDesc);
+        
+        const colliderDesc = RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, scale);
+        const collider = this.world.createCollider(colliderDesc, body);
+        
+        this.registerDebugBody(`static-heightfield-${this.nextPhysicsId++}`, body, collider);
+        return this.createColliderHandle(collider);
+    }
+
     public registerInteractionCollider(collider: IPhysicsColliderHandle | null | undefined, target: PhysicsInteractionTarget): void {
         if (!collider) return;
         this.interactionColliders.set(collider.id, target);
