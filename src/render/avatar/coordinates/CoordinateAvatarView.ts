@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AppContext } from '../../../app/AppContext';
-import { AVATAR_SKELETON_JOINTS, AvatarSkeletonJointName } from '../../../shared/avatar/AvatarSkeleton';
+import { AVATAR_SKELETON_JOINTS, AvatarSkeletonJointName, AVATAR_SKELETON_PARENT } from '../../../shared/avatar/AvatarSkeleton';
 import { composeAvatarWorldPoses } from '../../../shared/avatar/AvatarSkeletonUtils';
 import { BaseAvatarView } from '../BaseAvatarView';
 import { IPlayerAvatarRenderState } from '../IPlayerAvatarRenderState';
@@ -15,7 +15,13 @@ export class CoordinateAvatarView extends BaseAvatarView {
     private readonly tmpRootQuat = new THREE.Quaternion();
     private readonly tmpInverseRootQuat = new THREE.Quaternion();
     private readonly tmpLocalPos = new THREE.Vector3();
+    private readonly tmpParentLocalPos = new THREE.Vector3();
     private readonly tmpLocalQuat = new THREE.Quaternion();
+
+    private readonly linesMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+    private readonly linesGeometry = new THREE.BufferGeometry();
+    private readonly linesMesh: THREE.LineSegments;
+    private readonly linePoints = new Float32Array(AVATAR_SKELETON_JOINTS.length * 6);
 
     constructor(
         context: AppContext,
@@ -34,7 +40,11 @@ export class CoordinateAvatarView extends BaseAvatarView {
         this.originMarkerMaterial = new THREE.MeshBasicMaterial({ color: this.color });
         this.originMarker = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), this.originMarkerMaterial);
         this.originMarker.name = 'AvatarOriginMarker';
-        this.mesh.add(this.rootAxes, this.originMarker, this.headAnchor);
+
+        this.linesGeometry.setAttribute('position', new THREE.BufferAttribute(this.linePoints, 3));
+        this.linesMesh = new THREE.LineSegments(this.linesGeometry, this.linesMaterial);
+        
+        this.mesh.add(this.rootAxes, this.originMarker, this.headAnchor, this.linesMesh);
 
         this.jointAxes = Object.fromEntries(
             AVATAR_SKELETON_JOINTS.map((jointName) => {
@@ -55,6 +65,9 @@ export class CoordinateAvatarView extends BaseAvatarView {
         this.tmpRootQuat.copy(this.tmpTargetQuat);
         this.tmpInverseRootQuat.copy(this.tmpRootQuat).invert();
 
+        let lineIdx = 0;
+        const positions = this.linesGeometry.attributes.position.array as Float32Array;
+
         for (const jointName of AVATAR_SKELETON_JOINTS) {
             const joint = world[jointName];
             const axes = this.jointAxes[jointName];
@@ -71,7 +84,26 @@ export class CoordinateAvatarView extends BaseAvatarView {
             axes.visible = true;
             axes.position.copy(this.tmpLocalPos);
             axes.quaternion.copy(this.tmpLocalQuat);
+
+            const parentName = AVATAR_SKELETON_PARENT[jointName];
+            const parentJoint = parentName ? world[parentName] : null;
+            if (parentJoint) {
+                this.tmpParentLocalPos.copy(parentJoint.position)
+                    .sub(this.tmpRootPos)
+                    .applyQuaternion(this.tmpInverseRootQuat);
+
+                positions[lineIdx++] = this.tmpParentLocalPos.x;
+                positions[lineIdx++] = this.tmpParentLocalPos.y;
+                positions[lineIdx++] = this.tmpParentLocalPos.z;
+
+                positions[lineIdx++] = this.tmpLocalPos.x;
+                positions[lineIdx++] = this.tmpLocalPos.y;
+                positions[lineIdx++] = this.tmpLocalPos.z;
+            }
         }
+
+        this.linesGeometry.setDrawRange(0, lineIdx / 3);
+        this.linesGeometry.attributes.position.needsUpdate = true;
 
         const head = world.head;
         if (head) {
@@ -101,6 +133,8 @@ export class CoordinateAvatarView extends BaseAvatarView {
         }
         this.originMarker.geometry.dispose();
         this.originMarkerMaterial.dispose();
+        this.linesGeometry.dispose();
+        this.linesMaterial.dispose();
     }
 
     private getJointAxesSize(jointName: AvatarSkeletonJointName): number {
