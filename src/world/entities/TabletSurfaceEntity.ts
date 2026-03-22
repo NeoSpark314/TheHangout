@@ -9,7 +9,9 @@ import { CanvasUI } from '../../ui/shared/canvasui';
 import { PlayerAvatarEntity } from './PlayerAvatarEntity';
 
 export class TabletSurfaceEntity implements IEntity, IGrabbable, IInteractable {
-    private static readonly DEFAULT_RELATIVE_POSITION = new THREE.Vector3(0, -0.1, -0.5);
+    // Our canonical avatar/view space is +Z forward, so the default tablet
+    // offset in front of the user must also be on +Z.
+    private static readonly DEFAULT_RELATIVE_POSITION = new THREE.Vector3(0, -0.1, 0.5);
     private static readonly DEFAULT_RELATIVE_QUATERNION = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI * 0.0, 0, 0));
 
     public id: string;
