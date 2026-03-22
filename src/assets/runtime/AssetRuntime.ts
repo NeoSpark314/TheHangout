@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { IVrmInstance, IVrmTemplate } from './IVrmAsset';
 
 import { AppContext } from '../../app/AppContext';
@@ -9,6 +11,7 @@ import { AppContext } from '../../app/AppContext';
  */
 export class AssetRuntime {
     private loader = new GLTFLoader();
+    private ktx2Loader: KTX2Loader | null = null;
     private textureLoader = new THREE.TextureLoader();
     private cache: Map<string, THREE.Group> = new Map();
     private loadingPromises: Map<string, Promise<THREE.Group>> = new Map();
@@ -17,7 +20,9 @@ export class AssetRuntime {
     private vrmCache: Map<string, IVrmTemplate> = new Map();
     private vrmLoadingPromises: Map<string, Promise<IVrmTemplate>> = new Map();
 
-    constructor(private context: AppContext) { }
+    constructor(private context: AppContext) {
+        this.loader.setMeshoptDecoder(MeshoptDecoder);
+    }
 
     public async loadTexture(url: string): Promise<THREE.Texture> {
         if (this.textureCache.has(url)) {
@@ -55,6 +60,8 @@ export class AssetRuntime {
             const group = await this.loadingPromises.get(url);
             return group!.clone();
         }
+
+        this.ensureKTX2Loader();
 
         const promise = new Promise<THREE.Group>((resolve, reject) => {
             this.loader.load(url,
@@ -110,5 +117,19 @@ export class AssetRuntime {
         model.position.copy(center);
 
         return model;
+    }
+
+    private ensureKTX2Loader(): void {
+        if (!this.ktx2Loader) {
+            const renderer = this.context.runtime.render?.renderer;
+            if (renderer) {
+                this.ktx2Loader = new KTX2Loader()
+                    .setTranscoderPath('/basis/')
+                    .detectSupport(renderer);
+                this.loader.setKTX2Loader(this.ktx2Loader);
+            } else {
+                console.warn('[AssetRuntime] WebGLRenderer not available yet; cannot initialize KTX2Loader.');
+            }
+        }
     }
 }
