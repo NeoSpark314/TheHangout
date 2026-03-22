@@ -308,7 +308,7 @@ export class AvatarMotionSolver {
             upperLength,
             lowerBase,
             lowerLength,
-            new THREE.Vector3(side === 'left' ? -0.5 : 0.5, -1, 0.5)
+            new THREE.Vector3(side === 'left' ? 0.5 : -0.5, -1, 0.5)
         );
 
         this.setJointLocal(upperName, upperLocalPos, ik.upperQuaternion, tracked);
@@ -389,7 +389,7 @@ export class AvatarMotionSolver {
             upperLength,
             lowerBase,
             lowerLength,
-            new THREE.Vector3(side === 'left' ? -0.2 : 0.2, 0, seated ? -0.5 : -0.2)
+            new THREE.Vector3(side === 'left' ? 0.2 : -0.2, 0, seated ? 0.5 : 0.2)
         );
 
         this.setJointLocal(upperName, this.getRest(upperName), ik.upperQuaternion, tracked);

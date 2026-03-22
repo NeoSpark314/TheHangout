@@ -216,6 +216,63 @@ describe('AvatarMotionSolver', () => {
         expectChildAxisAlignment(pose, 'rightUpperLeg', 'rightLowerLeg');
     });
 
+    it('bends elbows and knees outward in the provider-style desktop pose', () => {
+        const solver = new AvatarMotionSolver();
+        const rawRootQuaternion = new THREE.Quaternion();
+        const avatarRootQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawRootQuaternion.x,
+            y: rawRootQuaternion.y,
+            z: rawRootQuaternion.z,
+            w: rawRootQuaternion.w
+        });
+        const rawHeadQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.25, 0.1, 0, 'YXZ'));
+        const avatarHeadQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawHeadQuaternion.x,
+            y: rawHeadQuaternion.y,
+            z: rawHeadQuaternion.z,
+            w: rawHeadQuaternion.w
+        });
+        const frame: IAvatarTrackingFrame = {
+            rootWorldPosition: { x: 0, y: 0, z: 0 },
+            rootWorldQuaternion: avatarRootQuaternion,
+            headWorldPose: {
+                position: { x: 0.02, y: 1.68, z: 0.05 },
+                quaternion: avatarHeadQuaternion
+            },
+            effectors: {
+                leftHand: {
+                    position: { x: -0.2, y: 1.2, z: -0.2 },
+                    quaternion: avatarHeadQuaternion
+                },
+                rightHand: {
+                    position: { x: 0.2, y: 1.2, z: -0.2 },
+                    quaternion: avatarHeadQuaternion
+                }
+            },
+            tracked: {
+                head: true,
+                leftHand: true,
+                rightHand: true
+            },
+            seated: false
+        };
+
+        let pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        for (let i = 0; i < 8; i += 1) {
+            pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        }
+
+        const world = composeAvatarWorldPoses(pose);
+
+        expect(world.leftLowerArm!.position.x).toBeLessThan(world.rightLowerArm!.position.x);
+        expect(world.leftLowerArm!.position.x).toBeLessThan(0);
+        expect(world.rightLowerArm!.position.x).toBeGreaterThan(0);
+        expect(world.leftLowerLeg!.position.x).toBeLessThan(0);
+        expect(world.rightLowerLeg!.position.x).toBeGreaterThan(0);
+        expect(world.leftLowerLeg!.position.z).toBeLessThan(world.leftFoot!.position.z);
+        expect(world.rightLowerLeg!.position.z).toBeLessThan(world.rightFoot!.position.z);
+    });
+
     it('derives tracked hand pose from joint positions instead of raw XR joint quaternions', () => {
         const solver = new AvatarMotionSolver();
         const seedPose = solver.solve(createTrackingFrame(false), createMotionContext('xr-standing'), 0, 1 / 60);
@@ -329,5 +386,57 @@ describe('AvatarMotionSolver', () => {
         const world = composeAvatarWorldPoses(pose);
 
         expect(world.leftHand!.quaternion.angleTo(leftHandWorldQuaternion)).toBeLessThan(1e-4);
+    });
+
+    it('keeps provider-style raw world left and right hand targets on their correct sides', () => {
+        const solver = new AvatarMotionSolver();
+        const rawRootQuaternion = new THREE.Quaternion();
+        const avatarRootQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawRootQuaternion.x,
+            y: rawRootQuaternion.y,
+            z: rawRootQuaternion.z,
+            w: rawRootQuaternion.w
+        });
+        const rawHeadQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.2, 0.15, 0, 'YXZ'));
+        const avatarHeadQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawHeadQuaternion.x,
+            y: rawHeadQuaternion.y,
+            z: rawHeadQuaternion.z,
+            w: rawHeadQuaternion.w
+        });
+        const frame: IAvatarTrackingFrame = {
+            rootWorldPosition: { x: 0, y: 0, z: 0 },
+            rootWorldQuaternion: avatarRootQuaternion,
+            headWorldPose: {
+                position: { x: 0.02, y: 1.68, z: -0.04 },
+                quaternion: avatarHeadQuaternion
+            },
+            effectors: {
+                leftHand: {
+                    position: { x: -0.42, y: 1.16, z: -0.2 },
+                    quaternion: avatarHeadQuaternion
+                },
+                rightHand: {
+                    position: { x: 0.42, y: 1.16, z: -0.2 },
+                    quaternion: avatarHeadQuaternion
+                }
+            },
+            tracked: {
+                head: true,
+                leftHand: true,
+                rightHand: true
+            },
+            seated: false
+        };
+
+        let pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        for (let i = 0; i < 8; i += 1) {
+            pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        }
+
+        const world = composeAvatarWorldPoses(pose);
+        expect(world.leftHand!.position.x).toBeLessThan(0);
+        expect(world.rightHand!.position.x).toBeGreaterThan(0);
+        expect(world.leftHand!.position.x).toBeLessThan(world.rightHand!.position.x);
     });
 });
