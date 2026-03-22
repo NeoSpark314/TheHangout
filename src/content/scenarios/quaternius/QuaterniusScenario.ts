@@ -342,13 +342,13 @@ export class QuaterniusScenario implements IScenarioModule {
 
         const width = config.size?.[0] ?? 100;
         const depth = config.size?.[1] ?? 100;
-        const resX = config.resolution?.[0] ?? 64;
-        const resZ = config.resolution?.[1] ?? 64;
+        // Diagnostic: Use a slightly lower resolution (32x32) to rule out size issues
+        const resX = config.resolution?.[0] ?? 32;
+        const resZ = config.resolution?.[1] ?? 32;
         const maxHeight = config.height ?? 10;
 
         // Generate Heightfield for Physics
-        // In Rapier, a heightfield is usually defined by a grid of points.
-        // We use Row-Major order: Z is rows, X is columns.
+        // Row-Major order: Z is rows, X is columns.
         const numPointsX = resX + 1;
         const numPointsZ = resZ + 1;
         const heights = new Float32Array(numPointsX * numPointsZ);
@@ -370,19 +370,32 @@ export class QuaterniusScenario implements IScenarioModule {
                     h *= (distToCenter / 10);
                 }
 
-                // Row-major: index = row * numCols + col => zIdx * numPointsX + xIdx
+                // Guard against NaN and ensure non-negative (some engines prefer it)
+                if (isNaN(h)) h = 0;
+                h = Math.max(0, h);
+
+                // Row-major: row = Z, col = X
                 heights[zIdx * numPointsX + xIdx] = h;
             }
         }
         
         this.terrainHeights = heights;
 
+        console.log(`[QuaterniusScenario] Creating Heightfield: ${resX}x${resZ} subdivisions, heights points: ${numPointsX}x${numPointsZ}, total elements: ${heights.length}`);
+
         this.terrainBody = this.context.physics.createStaticHeightfield({
-            nrows: resZ, // number of subdivisions along Z
-            ncols: resX, // number of subdivisions along X
+            nrows: resX, // Subdivisions along X (standard Rapier)
+            ncols: resZ, // Subdivisions along Z (standard Rapier)
             heights,
-            scale: { x: width / resX, y: 1.0, z: depth / resZ }
+            // In Rapier 0.19, scale is the full dimension of the heightfield
+            scale: { x: width, y: 1.0, z: depth }
         });
+        
+        // Ensure grounding happens at the end to place player on NEW surface
+        const localPlayer = this.context.players.getLocal();
+        if (localPlayer) {
+            this.context.players.teleport(localPlayer.id, { x: 0, y: 5, z: 0 }, 0);
+        }
 
         // Generate Visual Mesh
         const geometry = new THREE.PlaneGeometry(width, depth, resX, resZ);

@@ -85,6 +85,14 @@ export class PhysicsRuntime {
     private lastCollisionSoundAtByPair: Map<string, number> = new Map();
     private pendingImpulseByEntity: Map<string, { impulse: IVector3; point: IVector3; expiresAtMs: number; options?: IInteractionImpulseOptions }> = new Map();
     private pendingImpulseLifetimeMs: number = 400;
+    
+    // Terrain heightfield storage for sampling
+    private terrainMetadata: {
+        nrows: number;
+        ncols: number;
+        heights: Float32Array;
+        scale: IVector3;
+    } | null = null;
 
     constructor(private context: AppContext) { }
 
@@ -617,13 +625,9 @@ export class PhysicsRuntime {
         return this.createColliderHandle(collider);
     }
 
-    public createStaticHeightfield(
-        nrows: number,
-        ncols: number,
-        heights: Float32Array,
-        scale: IVector3
-    ): IPhysicsColliderHandle | null {
+    public createStaticHeightfield(options: IScenarioStaticHeightfieldOptions): IPhysicsColliderHandle | null {
         if (!this.world) return null;
+        const { nrows, ncols, heights, scale } = options;
         
         console.log(`[PhysicsRuntime] Creating heightfield: ${nrows}x${ncols}, array size: ${heights.length}, scale:`, scale);
         // Check for NaN
@@ -635,11 +639,52 @@ export class PhysicsRuntime {
         const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, 0, 0);
         const body = this.world.createRigidBody(bodyDesc);
         
+        // If nrows/ncols are point counts (e.g. 65), then scale should be total size 
         const colliderDesc = RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, scale);
         const collider = this.world.createCollider(colliderDesc, body);
         
         this.registerDebugBody(`static-heightfield-${this.nextPhysicsId++}`, body, collider);
+
+        // Store metadata for software sampling (grounding)
+        this.terrainMetadata = { nrows, ncols, heights, scale };
+
         return this.createColliderHandle(collider);
+    }
+
+    public getTerrainHeight(x: number, z: number): number {
+        if (!this.terrainMetadata) return 0;
+        const { nrows, ncols, heights, scale } = this.terrainMetadata;
+
+        // Spacing based on subdivisions (nrows=X, ncols=Z)
+        const spacingX = scale.x / nrows;
+        const spacingZ = scale.z / ncols;
+
+        const halfWidth = scale.x * 0.5;
+        const halfDepth = scale.z * 0.5;
+
+        const lx = x + halfWidth;
+        const lz = z + halfDepth;
+
+        const gx = lx / spacingX;
+        const gz = lz / spacingZ;
+
+        if (gx < 0 || gx >= nrows || gz < 0 || gz >= ncols) return 0;
+
+        const ix = Math.floor(gx);
+        const iz = Math.floor(gz);
+        const fx = gx - ix;
+        const fz = gz - iz;
+
+        // Row-major: Z is the outer loop (rows), X is the inner loop (columns)
+        // stride = numPointsX = nrows + 1
+        const stride = nrows + 1;
+        const h00 = heights[iz * stride + ix];
+        const h10 = heights[iz * stride + (ix + 1)];
+        const h01 = heights[(iz + 1) * stride + ix];
+        const h11 = heights[(iz + 1) * stride + (ix + 1)];
+
+        // Bilinear interpolation
+        return (1 - fz) * ((1 - fx) * h00 + fx * h10) + fz * ((1 - fx) * h01 + fx * h11);
     }
 
     public registerInteractionCollider(collider: IPhysicsColliderHandle | null | undefined, target: PhysicsInteractionTarget): void {

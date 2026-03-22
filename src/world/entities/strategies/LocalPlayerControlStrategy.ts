@@ -73,6 +73,15 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         }
 
         if (render.cameraGroup) {
+            // Apply grounding if not mounted
+            if (!runtime.mount.isMountedLocal()) {
+                const headWorldPos = this.getHeadWorldPosition(player);
+                
+                // Sample height at the absolute world position of the head
+                const groundHeight = runtime.physics.getTerrainHeight(headWorldPos.x, headWorldPos.z);
+                this.xrOrigin.position.y = groundHeight;
+            }
+
             render.cameraGroup.position.set(this.xrOrigin.position.x, this.xrOrigin.position.y, this.xrOrigin.position.z);
             render.cameraGroup.quaternion.set(
                 this.xrOrigin.quaternion.x,
@@ -248,6 +257,16 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         const movement = this.getSkill('movement') as MovementSkill | undefined;
         movement?.setYaw(targetOriginYaw);
+    }
+
+    public getHeadWorldPosition(player: PlayerAvatarEntity): IVector3 {
+        const render = player.appContext.runtime.render;
+        const trackingHeadPose = player.appContext.runtime.tracking.getState().head.pose;
+        return {
+            x: trackingHeadPose.position.x,
+            y: trackingHeadPose.position.y,
+            z: trackingHeadPose.position.z
+        };
     }
 
     private initializeSkills(player: PlayerAvatarEntity): void {
