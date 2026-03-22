@@ -46,10 +46,10 @@ const LEFT_TRACKED_HAND_REST_BASIS = createTrackedHandBasisQuaternion(
     AVATAR_REST_LOCAL_POSITIONS.leftMiddleMetacarpal,
     AVATAR_REST_LOCAL_POSITIONS.leftRingMetacarpal,
     AVATAR_REST_LOCAL_POSITIONS.leftLittleMetacarpal,
-    AVATAR_REST_LOCAL_POSITIONS.leftIndexProximal,
-    AVATAR_REST_LOCAL_POSITIONS.leftMiddleProximal,
-    AVATAR_REST_LOCAL_POSITIONS.leftRingProximal,
-    AVATAR_REST_LOCAL_POSITIONS.leftLittleProximal
+    AVATAR_REST_LOCAL_POSITIONS.leftIndexMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.leftIndexProximal),
+    AVATAR_REST_LOCAL_POSITIONS.leftMiddleMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.leftMiddleProximal),
+    AVATAR_REST_LOCAL_POSITIONS.leftRingMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.leftRingProximal),
+    AVATAR_REST_LOCAL_POSITIONS.leftLittleMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.leftLittleProximal)
 )!;
 const RIGHT_TRACKED_HAND_REST_BASIS = createTrackedHandBasisQuaternion(
     'right',
@@ -57,10 +57,10 @@ const RIGHT_TRACKED_HAND_REST_BASIS = createTrackedHandBasisQuaternion(
     AVATAR_REST_LOCAL_POSITIONS.rightMiddleMetacarpal,
     AVATAR_REST_LOCAL_POSITIONS.rightRingMetacarpal,
     AVATAR_REST_LOCAL_POSITIONS.rightLittleMetacarpal,
-    AVATAR_REST_LOCAL_POSITIONS.rightIndexProximal,
-    AVATAR_REST_LOCAL_POSITIONS.rightMiddleProximal,
-    AVATAR_REST_LOCAL_POSITIONS.rightRingProximal,
-    AVATAR_REST_LOCAL_POSITIONS.rightLittleProximal
+    AVATAR_REST_LOCAL_POSITIONS.rightIndexMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.rightIndexProximal),
+    AVATAR_REST_LOCAL_POSITIONS.rightMiddleMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.rightMiddleProximal),
+    AVATAR_REST_LOCAL_POSITIONS.rightRingMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.rightRingProximal),
+    AVATAR_REST_LOCAL_POSITIONS.rightLittleMetacarpal.clone().add(AVATAR_REST_LOCAL_POSITIONS.rightLittleProximal)
 )!;
 
 interface ITwoBoneSolveResult {
@@ -528,44 +528,23 @@ export class AvatarMotionSolver {
                 );
                 if (targetDirection.lengthSq() > 1e-8) {
                     targetDirection.normalize().applyQuaternion(parentWorldQuat.clone().invert());
-                    localQuaternion = new THREE.Quaternion().setFromUnitVectors(
+                    localQuaternion = this.calculateConstrainedLookAt(
                         this.getRest(nextJointName).normalize(),
                         targetDirection
                     );
                 }
             }
 
-            this.setJointFromWorldWithLocalQuaternion(
+            this.setJointLocal(
                 jointName,
-                worldPosition,
+                this.getRest(jointName),
                 localQuaternion,
                 !!frame.tracked[jointName]
             );
         }
     }
 
-    private setJointFromWorldWithLocalQuaternion(
-        jointName: AvatarSkeletonJointName,
-        worldPosition: THREE.Vector3,
-        localQuaternion: THREE.Quaternion,
-        tracked: boolean
-    ): void {
-        const parentName = AVATAR_SKELETON_PARENT[jointName];
-        const parentWorldPos = parentName
-            ? this.jointWorldPositions[parentName]!
-            : this.tmpParentWorldPos.set(
-                this.pose.rootWorldPosition.x,
-                this.pose.rootWorldPosition.y,
-                this.pose.rootWorldPosition.z
-            );
-        const parentWorldQuat = parentName
-            ? this.jointWorldQuaternions[parentName]!
-            : this.tmpRootWorldQuat;
-        const localPosition = worldPosition.clone()
-            .sub(parentWorldPos)
-            .applyQuaternion(parentWorldQuat.clone().invert());
-        this.setJointLocal(jointName, localPosition, localQuaternion, tracked);
-    }
+
 
     private createHandWorldQuaternion(
         backOfHand: THREE.Vector3,
@@ -696,6 +675,25 @@ export class AvatarMotionSolver {
             upperLength: solvedUpperLength,
             lowerLength: solvedLowerLength
         };
+    }
+
+    private calculateConstrainedLookAt(restDirection: THREE.Vector3, targetDirection: THREE.Vector3): THREE.Quaternion {
+        const up = new THREE.Vector3(0, 1, 0);
+
+        const rRight = up.clone().cross(restDirection);
+        if (rRight.lengthSq() < 1e-6) return new THREE.Quaternion().setFromUnitVectors(restDirection, targetDirection);
+        rRight.normalize();
+        const rUp = restDirection.clone().cross(rRight).normalize();
+
+        const tRight = up.clone().cross(targetDirection);
+        if (tRight.lengthSq() < 1e-6) return new THREE.Quaternion().setFromUnitVectors(restDirection, targetDirection);
+        tRight.normalize();
+        const tUp = targetDirection.clone().cross(tRight).normalize();
+
+        const mR = new THREE.Matrix4().makeBasis(rRight, rUp, restDirection);
+        const mT = new THREE.Matrix4().makeBasis(tRight, tUp, targetDirection);
+
+        return new THREE.Quaternion().setFromRotationMatrix(mT.multiply(mR.invert()));
     }
 
     private getRest(jointName: AvatarSkeletonJointName): THREE.Vector3 {

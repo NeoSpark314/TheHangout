@@ -65,6 +65,12 @@ export class VrmAvatarView extends BaseAvatarView {
         this.vrmInstance.humanoid.setNormalizedPose(buildNormalizedVrmPose(state.humanoidPose));
         this.updateLocalSelfView();
 
+        if (this.vrmInstance.expressionManager) {
+            const audioLevel = this.getAudioLevel();
+            // Map the microphone volume directly to the 'Aa' mouth shape
+            this.vrmInstance.expressionManager.setValue('aa', Math.min(1.0, audioLevel));
+        }
+
         this.vrmInstance.update(delta);
         this.updateHeadAnchorHeight();
     }
