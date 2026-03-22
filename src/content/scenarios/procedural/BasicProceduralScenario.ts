@@ -143,7 +143,7 @@ export class BasicProceduralScenario implements IScenarioModule {
             : new URL(this.configUrl, 'http://localhost');
         const baseUrlVal = (import.meta as any).env?.BASE_URL ?? '/';
         const appRoot = typeof window !== 'undefined'
-            ? new URL(baseUrlVal, window.location.origin).toString()
+            ? new URL(baseUrlVal, window.location.href).toString()
             : baseUrlVal;
 
         const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
