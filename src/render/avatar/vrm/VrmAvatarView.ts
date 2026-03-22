@@ -5,6 +5,8 @@ import { BaseAvatarView } from '../BaseAvatarView';
 import type { IPlayerAvatarRenderState } from '../IPlayerAvatarRenderState';
 import type { IVrmInstance } from '../../../assets/runtime/IVrmAsset';
 import { buildNormalizedVrmPose } from './VrmPoseBuilder';
+import type { IAvatarConfig } from '../../../shared/contracts/IAvatar';
+import { estimateStandingEyeHeightM } from '../../../shared/avatar/AvatarMetrics';
 
 interface IVrmArmNodes {
     upper: THREE.Object3D;
@@ -21,6 +23,7 @@ export class VrmAvatarView extends BaseAvatarView {
     private readonly proxyMaterial: THREE.MeshBasicMaterial;
     private readonly restHipsPosition = new THREE.Vector3();
     private restHeadHeight = 1.6;
+    private playerHeightM = 1.8;
     private usingLocalProxy = false;
     private readonly vrmMeshes: THREE.Mesh[] = [];
     private readonly proxyMeshes: THREE.Mesh[] = [];
@@ -57,6 +60,7 @@ export class VrmAvatarView extends BaseAvatarView {
         });
 
         this.captureHeadMetrics();
+        this.updateModelScale();
     }
 
     public applyState(state: IPlayerAvatarRenderState, delta: number): void {
@@ -81,6 +85,11 @@ export class VrmAvatarView extends BaseAvatarView {
         super.setColor(color);
         const colorObj = new THREE.Color(color as THREE.ColorRepresentation);
         this.proxyMaterial.color.copy(colorObj);
+    }
+
+    public setAvatarConfig(config: IAvatarConfig): void {
+        this.playerHeightM = config.playerHeightM;
+        this.updateModelScale();
     }
 
     public destroy(): void {
@@ -121,6 +130,15 @@ export class VrmAvatarView extends BaseAvatarView {
         if (hipsBone) {
             this.restHipsPosition.copy(hipsBone.position);
         }
+    }
+
+    private updateModelScale(): void {
+        const targetEyeHeight = estimateStandingEyeHeightM(this.playerHeightM);
+        const restEyeHeight = Math.max(0.6, this.restHeadHeight);
+        // This is only a simple uniform height match using the head bone as an
+        // eye-height proxy. It improves first-person scale perception, but it
+        // is not a full body calibration or limb-length retargeting solution.
+        this.modelRoot.scale.setScalar(targetEyeHeight / restEyeHeight);
     }
 
     private updateLocalSelfView(): void {

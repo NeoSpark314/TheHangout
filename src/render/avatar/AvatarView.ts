@@ -157,6 +157,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
         });
         this.stickView.setColor(this.avatarConfig.color);
         this.coordinateView.setColor(this.avatarConfig.color);
+        this.vrmView?.setAvatarConfig(this.avatarConfig);
         AvatarRenderBudget.recalculate();
         this.syncViewMode();
     }
@@ -262,6 +263,7 @@ export class AvatarView extends EntityView<IPlayerAvatarRenderState> {
                 color: this.avatarConfig.color,
                 isLocal: this.isLocalAvatar()
             });
+            this.vrmView.setAvatarConfig(this.avatarConfig);
             this.activeVrmUrl = url;
             this.syncViewMode();
         } catch (error) {
