@@ -76,7 +76,7 @@ export class QuaterniusScenario implements IScenarioModule {
 
     constructor(private readonly configUrl: string) {}
 
-    public async load(context: IScenarioContext, _options: IScenarioLoadOptions): Promise<void> {
+    public async load(context: IScenarioContext, options: IScenarioLoadOptions): Promise<void> {
         this.context = context;
         
         try {
@@ -91,6 +91,9 @@ export class QuaterniusScenario implements IScenarioModule {
 
         this.id = this.metadata.id;
         this.displayName = this.metadata.displayName;
+
+        // Use session seed if provided, fallback to config seed, then 42
+        const seed = options.seed ?? this.metadata.terrain?.seed ?? 42;
 
         // Load ground texture if specified
         if (this.metadata.environment.groundTexture) {
@@ -114,7 +117,7 @@ export class QuaterniusScenario implements IScenarioModule {
             }
 
             if (this.metadata.terrain) {
-                this.generateTerrain(scene);
+                this.generateTerrain(scene, seed);
             } else {
                 context.physics.ensureGround();
             }
@@ -141,7 +144,7 @@ export class QuaterniusScenario implements IScenarioModule {
         }
         
         // Build layout
-        this.buildLayout();
+        this.buildLayout(seed);
     }
 
     public unload(_context: IScenarioContext): void {
@@ -189,7 +192,7 @@ export class QuaterniusScenario implements IScenarioModule {
         };
     }
 
-    private buildLayout(): void {
+    private buildLayout(seed: number): void {
         if (!this.metadata) return;
 
         interface IInstanceFlat {
@@ -200,6 +203,7 @@ export class QuaterniusScenario implements IScenarioModule {
         }
 
         const flatInstances: IInstanceFlat[] = [];
+        const rng = new SimplePNoise(seed); // Deterministic RNG for layout
 
         // Flatten areas and instances
         for (const element of this.metadata.layout) {
@@ -219,8 +223,8 @@ export class QuaterniusScenario implements IScenarioModule {
                 const innerRadius = element.innerRadius ?? 0;
 
                 for (let i = 0; i < count; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const r = innerRadius + Math.sqrt(Math.random()) * (radius - innerRadius);
+                    const angle = rng.nextFloat() * Math.PI * 2; // Use rng
+                    const r = innerRadius + Math.sqrt(rng.nextFloat()) * (radius - innerRadius); // Use rng
                     const x = center.x + Math.cos(angle) * r;
                     const z = center.z + Math.sin(angle) * r;
                     
@@ -228,10 +232,10 @@ export class QuaterniusScenario implements IScenarioModule {
                     const y = (element.position?.y ?? 0) + h;
 
                     const scale = element.randomScale
-                        ? element.randomScale[0] + Math.random() * (element.randomScale[1] - element.randomScale[0])
+                        ? element.randomScale[0] + rng.nextFloat() * (element.randomScale[1] - element.randomScale[0]) // Use rng
                         : (element.scale ?? 1.0);
 
-                    const rotationY = element.randomRotation ? Math.random() * Math.PI * 2 : (element.rotation?.y ?? 0);
+                    const rotationY = element.randomRotation ? rng.nextFloat() * Math.PI * 2 : (element.rotation?.y ?? 0); // Use rng
                     flatInstances.push({
                         assetId: element.assetId,
                         position: { x, y, z },
@@ -293,9 +297,8 @@ export class QuaterniusScenario implements IScenarioModule {
                     tempScale.set(inst.scale, inst.scale, inst.scale);
                     
                     // Combine with the child mesh's local transform relative to the source group
-                    tempMatrix.compose(tempPos, tempQuat, tempScale);
                     const childMatrix = new THREE.Matrix4().compose(childPos, childQuat, childScale);
-                    tempMatrix.multiply(childMatrix);
+                    tempMatrix.compose(tempPos, tempQuat, tempScale).multiply(childMatrix);
 
                     instMesh.setMatrixAt(i, tempMatrix);
 
@@ -336,7 +339,7 @@ export class QuaterniusScenario implements IScenarioModule {
         }
     }
 
-    private generateTerrain(scene: THREE.Scene): void {
+    private generateTerrain(scene: THREE.Scene, seed: number): void {
         if (!this.metadata?.terrain || !this.context) return;
         const config = this.metadata.terrain;
 
@@ -352,7 +355,7 @@ export class QuaterniusScenario implements IScenarioModule {
         const numPointsX = resX + 1;
         const numPointsZ = resZ + 1;
         const heights = new Float32Array(numPointsX * numPointsZ);
-        const noise = new SimplePNoise(config.seed ?? 42);
+        const noise = new SimplePNoise(seed); // Use provided seed
 
         for (let zIdx = 0; zIdx < numPointsZ; zIdx++) {
             for (let xIdx = 0; xIdx < numPointsX; xIdx++) {
@@ -540,7 +543,10 @@ export const QuaterniusNatureScenarioPlugin: IScenarioPlugin = {
 
 class SimplePNoise {
     private p: number[] = [];
+    private seed: number;
+
     constructor(seed: number) {
+        this.seed = seed;
         for (let i = 0; i < 256; i++) this.p[i] = i;
         // Pseudo-random shuffle based on seed
         let s = seed;
@@ -550,6 +556,11 @@ class SimplePNoise {
             [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
         }
         this.p = [...this.p, ...this.p];
+    }
+
+    public nextFloat(): number {
+        this.seed = (this.seed * 16807) % 2147483647;
+        return (this.seed - 1) / 2147483646;
     }
 
     private fade(t: number) { return t * t * t * (t * (t * 6 - 15) + 10); }
