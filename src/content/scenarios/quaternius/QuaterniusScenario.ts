@@ -213,6 +213,7 @@ export class QuaterniusScenario implements IScenarioModule {
 
         const flatInstances: IInstanceFlat[] = [];
         const rng = new SimplePNoise(seed); // Deterministic RNG for layout
+        const largePositions: { x: number, z: number }[] = [];
 
         const width = this.metadata.terrain?.size?.[0] ?? 100;
         const depth = this.metadata.terrain?.size?.[1] ?? 100;
@@ -232,6 +233,12 @@ export class QuaterniusScenario implements IScenarioModule {
 
                 const rot = element.rotation ? { x: element.rotation.x ?? 0, y: element.rotation.y ?? 0, z: element.rotation.z ?? 0 } : { x: 0, y: 0, z: 0 };
                 const scl = element.scale ?? 1.0;
+                
+                const isLarge = element.assetId.includes('tree') || element.assetId.includes('pine') || element.assetId.includes('rock');
+                if (isLarge) {
+                    largePositions.push({ x, z });
+                }
+
                 flatInstances.push({ assetId: element.assetId, position: pos, rotation: rot, scale: scl });
             } else if (element.type === 'area') {
                 const count = element.count ?? 10;
@@ -275,6 +282,20 @@ export class QuaterniusScenario implements IScenarioModule {
                         const pdz = z - 28;
                         const distToPond = Math.sqrt(pdx * pdx + pdz * pdz);
                         if (distToPond < 21.0) continue;
+
+                        // Proximity check against other large objects
+                        let tooClose = false;
+                        for (const other of largePositions) {
+                            const ddx = x - other.x;
+                            const ddz = z - other.z;
+                            if (Math.sqrt(ddx * ddx + ddz * ddz) < 3.0) { // 3m min distance
+                                tooClose = true;
+                                break;
+                            }
+                        }
+                        if (tooClose) continue;
+                        
+                        largePositions.push({ x, z });
                     }
 
                     flatInstances.push({
