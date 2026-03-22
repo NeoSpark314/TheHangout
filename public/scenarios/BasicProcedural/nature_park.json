@@ -1,0 +1,176 @@
+{
+  "id": "basic-procedural-nature",
+  "displayName": "Basic Procedural Nature",
+  "assetKit": {
+    "baseUrl": "models/quaternius/StylizedNatureMegaKit/",
+    "assets": [
+      {
+        "id": "tree-1",
+        "url": "CommonTree_1.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "tree-2",
+        "url": "CommonTree_2.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "pine-1",
+        "url": "Pine_1.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "rock-1",
+        "url": "Rock_Medium_1.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "rock-2",
+        "url": "Rock_Medium_2.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "grass-1",
+        "url": "Grass_Common_Short.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "bush-1",
+        "url": "Bush_Common.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "flower-1",
+        "url": "Flower_3_Group.gltf",
+        "collision": "none"
+      },
+      {
+        "id": "mushroom-1",
+        "url": "Mushroom_Common.gltf",
+        "collision": "none"
+      }
+    ]
+  },
+  "environment": {
+    "hemiSkyColor": "#dff5ff",
+    "hemiGroundColor": "#7ca35a",
+    "hemiIntensity": 1.1,
+    "castShadows": true,
+    "sunDirection": {
+      "x": 10,
+      "y": 20,
+      "z": 8
+    },
+    "sunColor": "#fff1cf",
+    "sunIntensity": 1.75,
+    "skyColor": "#8edbff",
+    "fogColor": "#bfecc8",
+    "fogNear": 30,
+    "fogFar": 120
+  },
+  "terrain": {
+    "size": [
+      100,
+      100
+    ],
+    "resolution": [
+      64,
+      64
+    ],
+    "height": 10,
+    "seed": 1337
+  },
+  "layout": [
+    {
+      "type": "area",
+      "assetId": "tree-1",
+      "center": {
+        "x": -20,
+        "z": -20
+      },
+      "radius": 30,
+      "innerRadius": 5,
+      "count": 15,
+      "randomScale": [
+        1.2,
+        2.0
+      ],
+      "randomRotation": true
+    },
+    {
+      "type": "area",
+      "assetId": "pine-1",
+      "center": {
+        "x": 25,
+        "z": 25
+      },
+      "radius": 40,
+      "count": 25,
+      "randomScale": [
+        1.8,
+        3.0
+      ],
+      "randomRotation": true
+    },
+    {
+      "type": "area",
+      "assetId": "rock-1",
+      "center": {
+        "x": 10,
+        "z": -15
+      },
+      "radius": 20,
+      "count": 10,
+      "randomScale": [
+        0.8,
+        2.5
+      ],
+      "randomRotation": true
+    },
+    {
+      "type": "area",
+      "assetId": "rock-2",
+      "center": {
+        "x": -30,
+        "z": 10
+      },
+      "radius": 15,
+      "count": 8,
+      "randomScale": [
+        0.5,
+        1.8
+      ],
+      "randomRotation": true
+    },
+    {
+      "type": "area",
+      "assetId": "grass-1",
+      "center": {
+        "x": 0,
+        "z": 0
+      },
+      "radius": 80,
+      "count": 500,
+      "randomScale": [
+        0.5,
+        1.2
+      ],
+      "randomRotation": true
+    },
+    {
+      "type": "area",
+      "assetId": "flower-1",
+      "center": {
+        "x": -5,
+        "z": 5
+      },
+      "radius": 30,
+      "count": 50,
+      "randomScale": [
+        0.8,
+        1.5
+      ],
+      "randomRotation": true
+    }
+  ]
+}

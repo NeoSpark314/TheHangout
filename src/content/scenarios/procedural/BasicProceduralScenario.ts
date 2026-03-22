@@ -94,7 +94,7 @@ export class BasicProceduralScenario implements IScenarioModule {
             const response = await fetch(this.configUrl);
             this.metadata = await response.json();
         } catch (err) {
-            console.error('[QuaterniusScenario] Failed to load metadata:', err);
+            console.error('[BasicProceduralScenario] Failed to load metadata:', err);
             return;
         }
 
@@ -138,20 +138,32 @@ export class BasicProceduralScenario implements IScenarioModule {
         }
 
         // Preload assets
-        const baseLoc = new URL(this.configUrl, window.location.href);
+        const baseLoc = typeof window !== 'undefined'
+            ? new URL(this.configUrl, window.location.href)
+            : new URL(this.configUrl, 'http://localhost');
+        const baseUrlVal = (import.meta as any).env?.BASE_URL ?? '/';
+        const appRoot = typeof window !== 'undefined'
+            ? new URL(baseUrlVal, window.location.origin).toString()
+            : baseUrlVal;
 
         const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
             if (this.isUnloaded) return;
             if (!this.metadata) return;
 
             const baseUrl = this.metadata.assetKit.baseUrl;
-            const fullUrl = new URL(baseUrl + assetDef.url, baseLoc).toString();
+            const isRelative = baseUrl.startsWith('.');
+            
+            const kitBase = isRelative
+                ? new URL(baseUrl.endsWith('/') ? baseUrl : baseUrl + '/', baseLoc).toString()
+                : new URL(baseUrl.endsWith('/') ? baseUrl : baseUrl + '/', appRoot).toString();
+
+            const fullUrl = new URL(assetDef.url, kitBase).toString();
 
             try {
                 const model = await this.context!.assets.loadGLTF(fullUrl);
                 this.assetCache.set(assetDef.id, model);
             } catch (err) {
-                console.error(`[QuaterniusScenario] Failed to load asset ${assetDef.id}:`, err);
+                console.error(`[BasicProceduralScenario] Failed to load asset ${assetDef.id}:`, err);
             }
         });
         await Promise.all(promises);
@@ -669,7 +681,9 @@ export const NatureParkScenarioPlugin: IScenarioPlugin = {
         hasPortableObjects: true
     },
     create() {
-        return new BasicProceduralScenario('/scenarios/BasicProcedural/nature_park.json');
+        const base = (import.meta as any).env?.BASE_URL ?? '/';
+        const metadataPath = base.endsWith('/') ? base + 'scenarios/BasicProcedural/nature_park.json' : base + '/scenarios/BasicProcedural/nature_park.json';
+        return new BasicProceduralScenario(metadataPath);
     }
 };
 
