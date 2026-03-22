@@ -63,3 +63,19 @@ Steps:
 - Click **Connect** and then **Share**
 - Keep the page open (it will start/stop capture when summoned from VR Session tab)
 - Before entering a hangout session configure your screen in the avatar customization section
+
+## Technology Stack
+
+The Hangout is built on top of a small set of open source libraries:
+
+- [Three.js](https://threejs.org/) for rendering and WebXR integration
+- [three-vrm](https://github.com/pixiv/three-vrm) for VRM avatar loading and humanoid posing
+- [Rapier](https://rapier.rs/) via [`@dimforge/rapier3d-compat`](https://www.npmjs.com/package/@dimforge/rapier3d-compat) for physics
+- [PeerJS](https://peerjs.com/) and [peer](https://github.com/peers/peerjs-server) for browser-to-browser signaling and networking
+- [Vite](https://vitejs.dev/) for development and production builds
+- [Vitest](https://vitest.dev/) for testing
+- [Express](https://expressjs.com/) and [ws](https://github.com/websockets/ws) for the dedicated server and WebSocket transport
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
