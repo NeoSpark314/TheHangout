@@ -43,7 +43,23 @@ describe('AvatarFacingResolver', () => {
         expect(yaw).toBeCloseTo(0, 4);
     });
 
-    it('rotates toward locomotion direction when XR movement is active', () => {
+    it('rotates toward locomotion direction when XR movement has a forward component', () => {
+        const resolver = new AvatarFacingResolver();
+        let yaw = 0;
+        for (let i = 0; i < 12; i += 1) {
+            yaw = resolver.resolve(
+                createFrame(0),
+                createContext('xr-standing', {
+                    locomotionWorldVelocity: { x: 1, y: 0, z: 1 }
+                }),
+                1 / 60
+            );
+        }
+
+        expect(yaw).toBeGreaterThan(0.5);
+    });
+
+    it('does not turn the body for pure XR strafing', () => {
         const resolver = new AvatarFacingResolver();
         let yaw = 0;
         for (let i = 0; i < 12; i += 1) {
@@ -56,7 +72,23 @@ describe('AvatarFacingResolver', () => {
             );
         }
 
-        expect(yaw).toBeGreaterThan(0.5);
+        expect(yaw).toBeCloseTo(0, 4);
+    });
+
+    it('does not turn the body when XR locomotion is backward relative to view', () => {
+        const resolver = new AvatarFacingResolver();
+        let yaw = 0;
+        for (let i = 0; i < 12; i += 1) {
+            yaw = resolver.resolve(
+                createFrame(0),
+                createContext('xr-standing', {
+                    locomotionWorldVelocity: { x: 0, y: 0, z: -1 }
+                }),
+                1 / 60
+            );
+        }
+
+        expect(yaw).toBeCloseTo(0, 4);
     });
 
     it('anchors seated XR body yaw to the seat', () => {

@@ -8,6 +8,7 @@ const MOVE_TURN_SPEED = THREE.MathUtils.degToRad(360);
 const MOVE_SPEED_THRESHOLD = 0.15;
 const MOVE_ENGAGE_TIME = 0.12;
 const MOVE_RELEASE_TIME = 0.15;
+const MOVE_FACING_FORWARD_THRESHOLD = 0.1;
 
 export class AvatarFacingResolver {
     private bodyWorldYaw = 0;
@@ -17,6 +18,7 @@ export class AvatarFacingResolver {
     private initialized = false;
     private readonly forward = new THREE.Vector3(0, 0, 1);
     private readonly projectedForward = new THREE.Vector3();
+    private readonly projectedMove = new THREE.Vector3();
 
     public reset(bodyWorldYaw = 0): void {
         this.bodyWorldYaw = this.normalizeAngle(bodyWorldYaw);
@@ -56,8 +58,17 @@ export class AvatarFacingResolver {
             this.lastMoveWorldYaw = this.bodyWorldYaw;
         }
 
-        const speed = Math.hypot(context.locomotionWorldVelocity.x, context.locomotionWorldVelocity.z);
-        if (speed >= MOVE_SPEED_THRESHOLD) {
+        this.projectedMove.set(
+            context.locomotionWorldVelocity.x,
+            0,
+            context.locomotionWorldVelocity.z
+        );
+        const speed = this.projectedMove.length();
+        const moveForwardDot = speed > 1e-6
+            ? this.projectedMove.normalize().dot(this.projectedForward)
+            : 0;
+
+        if (speed >= MOVE_SPEED_THRESHOLD && moveForwardDot > MOVE_FACING_FORWARD_THRESHOLD) {
             this.moveActiveSeconds += Math.max(0, delta);
             this.moveIdleSeconds = 0;
             this.lastMoveWorldYaw = Math.atan2(context.locomotionWorldVelocity.x, context.locomotionWorldVelocity.z);
