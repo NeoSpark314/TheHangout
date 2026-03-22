@@ -74,4 +74,45 @@ describe('AvatarHumanoidPose', () => {
 
         expect(new THREE.Quaternion(cx, cy, cz, cw).angleTo(expected)).toBeLessThan(1e-6);
     });
+
+    it('applies the VRM 0 leg-chain compatibility correction to exported upper-leg rotations', () => {
+        const pose = createAvatarRestSkeletonPose();
+        const raiseKnee = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.55, 0, 0.2, 'YXZ'));
+        pose.joints.leftUpperLeg!.quaternion = { x: raiseKnee.x, y: raiseKnee.y, z: raiseKnee.z, w: raiseKnee.w };
+
+        const humanoidPose = createAvatarHumanoidPoseFromSkeleton(pose);
+        const uncorrected = buildNormalizedVrmPose(humanoidPose);
+        const corrected = buildNormalizedVrmPose(humanoidPose, { metaVersion: '0' });
+        const [ux, uy, uz, uw] = uncorrected[VRMHumanBoneName.LeftUpperLeg]!.rotation!;
+        const [cx, cy, cz, cw] = corrected[VRMHumanBoneName.LeftUpperLeg]!.rotation!;
+        const correction = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+        const expected = new THREE.Quaternion(ux, uy, uz, uw)
+            .premultiply(correction)
+            .multiply(correction);
+
+        expect(new THREE.Quaternion(cx, cy, cz, cw).angleTo(expected)).toBeLessThan(1e-6);
+    });
+
+    it('applies the VRM 0 foot compatibility correction to exported foot rotations', () => {
+        const pose = createAvatarRestSkeletonPose();
+        const flattenFoot = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.3, 0.05, 0.15, 'YXZ'));
+        pose.joints.leftFoot!.quaternion = {
+            x: flattenFoot.x,
+            y: flattenFoot.y,
+            z: flattenFoot.z,
+            w: flattenFoot.w
+        };
+
+        const humanoidPose = createAvatarHumanoidPoseFromSkeleton(pose);
+        const uncorrected = buildNormalizedVrmPose(humanoidPose);
+        const corrected = buildNormalizedVrmPose(humanoidPose, { metaVersion: '0' });
+        const [ux, uy, uz, uw] = uncorrected[VRMHumanBoneName.LeftFoot]!.rotation!;
+        const [cx, cy, cz, cw] = corrected[VRMHumanBoneName.LeftFoot]!.rotation!;
+        const correction = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+        const expected = new THREE.Quaternion(ux, uy, uz, uw)
+            .premultiply(correction)
+            .multiply(correction);
+
+        expect(new THREE.Quaternion(cx, cy, cz, cw).angleTo(expected)).toBeLessThan(1e-6);
+    });
 });

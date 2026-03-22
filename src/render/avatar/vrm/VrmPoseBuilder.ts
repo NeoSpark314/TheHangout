@@ -67,9 +67,15 @@ const VRM0_Y_FLIPPED_JOINTS = new Set<AvatarHumanoidJointName>([
     'leftUpperArm',
     'leftLowerArm',
     'leftHand',
+    'leftUpperLeg',
+    'leftLowerLeg',
+    'leftFoot',
     'rightUpperArm',
     'rightLowerArm',
-    'rightHand'
+    'rightHand',
+    'rightUpperLeg',
+    'rightLowerLeg',
+    'rightFoot'
 ]);
 
 function adaptRotationForVrmVersion(
