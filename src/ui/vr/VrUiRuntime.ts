@@ -1516,9 +1516,13 @@ export class VrUiRuntime implements IUpdatable {
         scenarioLabel.textAlign = 'left';
         debugContainer.addChild(scenarioLabel);
 
-        const scenarios = this.context.runtime.session.getAvailableScenarios().slice(0, 3);
+        const scenarios = this.context.runtime.session.getAvailableScenarios();
+        let scenarioRows = 0;
         scenarios.forEach((scenario, index) => {
-            const button = new UIButton(scenario.displayName, 90 + (index * 340), 478, 320, 58, () => {
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            scenarioRows = row + 1;
+            const button = new UIButton(scenario.displayName, 90 + (col * 340), 478 + (row * 70), 320, 58, () => {
                 this.context.runtime.network.requestSessionConfigUpdate({
                     activeScenarioId: scenario.id
                 });
@@ -1529,7 +1533,9 @@ export class VrUiRuntime implements IUpdatable {
             debugContainer.addChild(button);
         });
 
-        const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, 578, 360, 60, () => {
+        const nextY = 478 + (scenarioRows * 70) + 30;
+
+        const spawnBeaconBtn = new UIButton("Spawn Debug Beacon", 90, nextY, 360, 60, () => {
             const localPlayer = this.context.localPlayer;
             const headPose = localPlayer?.getAvatarHeadWorldPose?.();
             const targetPosition = localPlayer
@@ -1564,7 +1570,7 @@ export class VrUiRuntime implements IUpdatable {
         spawnBeaconBtn.borderColor = UITheme.colors.secondary;
         debugContainer.addChild(spawnBeaconBtn);
 
-        const statsLabel = new UILabel("", 90, 678, 1080, 42);
+        const statsLabel = new UILabel("", 90, nextY + 100, 1080, 42);
         statsLabel.font = getFont(UITheme.typography.sizes.small, 'bold');
         statsLabel.textColor = UITheme.colors.accent;
         statsLabel.textAlign = 'left';

@@ -67,8 +67,8 @@ interface IScenarioMetadata {
 }
 
 export class BasicProceduralScenario implements IScenarioModule {
-    public id: string = 'quaternius-generic';
-    public displayName: string = 'Quaternius World';
+    public id: string = 'basic-procedural-generic';
+    public displayName: string = 'Basic Procedural World';
     public kind = 'social' as const;
     public maxPlayers = 16;
 
@@ -143,7 +143,7 @@ export class BasicProceduralScenario implements IScenarioModule {
         const promises = this.metadata.assetKit.assets.map(async (assetDef) => {
             if (this.isUnloaded) return;
             if (!this.metadata) return;
-            
+
             const baseUrl = this.metadata.assetKit.baseUrl;
             const fullUrl = new URL(baseUrl + assetDef.url, baseLoc).toString();
 
@@ -225,7 +225,7 @@ export class BasicProceduralScenario implements IScenarioModule {
             if (element.type === 'instance') {
                 const x = element.position?.x ?? 0;
                 const z = element.position?.z ?? 0;
-                
+
                 if (Math.abs(x) > halfW || Math.abs(z) > halfD) continue;
 
                 const h = this.getHeight(x, z);
@@ -233,7 +233,7 @@ export class BasicProceduralScenario implements IScenarioModule {
 
                 const rot = element.rotation ? { x: element.rotation.x ?? 0, y: element.rotation.y ?? 0, z: element.rotation.z ?? 0 } : { x: 0, y: 0, z: 0 };
                 const scl = element.scale ?? 1.0;
-                
+
                 const isLarge = element.assetId.includes('tree') || element.assetId.includes('pine') || element.assetId.includes('rock');
                 if (isLarge) {
                     largePositions.push({ x, z });
@@ -251,7 +251,7 @@ export class BasicProceduralScenario implements IScenarioModule {
                     const r = innerRadius + Math.sqrt(rng.nextFloat()) * (radius - innerRadius); // Use rng
                     const x = center.x + Math.cos(angle) * r;
                     const z = center.z + Math.sin(angle) * r;
-                    
+
                     if (Math.abs(x) > halfW || Math.abs(z) > halfD) continue;
 
                     const h = this.getHeight(x, z);
@@ -294,7 +294,7 @@ export class BasicProceduralScenario implements IScenarioModule {
                             }
                         }
                         if (tooClose) continue;
-                        
+
                         largePositions.push({ x, z });
                     }
 
@@ -330,80 +330,80 @@ export class BasicProceduralScenario implements IScenarioModule {
         for (const [sectorIdx, sectorGroups] of sectors) {
             for (const [assetId, instances] of sectorGroups) {
                 const sourceGroup = this.assetCache.get(assetId);
-            if (!sourceGroup) continue;
+                if (!sourceGroup) continue;
 
-            // Find meshes in the source group
-            const meshes: THREE.Mesh[] = [];
-            sourceGroup.traverse(child => {
-                if ((child as THREE.Mesh).isMesh) {
-                    meshes.push(child as THREE.Mesh);
-                }
-            });
-
-            if (meshes.length === 0) continue;
-
-            const instCount = instances.length;
-            const tempMatrix = new THREE.Matrix4();
-            const tempEuler = new THREE.Euler();
-            const tempPos = new THREE.Vector3();
-            const tempQuat = new THREE.Quaternion();
-            const tempScale = new THREE.Vector3();
-
-            // Ensure matrices are computed down the tree hierarchy
-            sourceGroup.updateMatrixWorld(true);
-
-            for (const mesh of meshes) {
-                const instMesh = new THREE.InstancedMesh(mesh.geometry, mesh.material, instCount);
-                if (this.metadata.environment.castShadows) {
-                    instMesh.castShadow = true;
-                    instMesh.receiveShadow = true;
-                }
-
-                // Get the mesh's full transform (incorporates deep node hierarchy from optimized GLTFs)
-                const childMatrix = mesh.matrixWorld;
-
-                for (let i = 0; i < instCount; i++) {
-                    const inst = instances[i];
-
-                    // Local transform of the instance
-                    tempPos.set(inst.position.x, inst.position.y, inst.position.z);
-                    tempEuler.set(inst.rotation.x, inst.rotation.y, inst.rotation.z);
-                    tempQuat.setFromEuler(tempEuler);
-                    tempScale.set(inst.scale, inst.scale, inst.scale);
-
-                    // Combine instance placement with the full computed child matrix
-                    tempMatrix.compose(tempPos, tempQuat, tempScale).multiply(childMatrix);
-
-                    instMesh.setMatrixAt(i, tempMatrix);
-
-                    // Add collision logic for the first mesh (to avoid duplicate colliders)
-                    if (mesh === meshes[0]) {
-                        this.addCollision(assetId, inst, tempMatrix);
+                // Find meshes in the source group
+                const meshes: THREE.Mesh[] = [];
+                sourceGroup.traverse(child => {
+                    if ((child as THREE.Mesh).isMesh) {
+                        meshes.push(child as THREE.Mesh);
                     }
-                }
+                });
 
-                instMesh.instanceMatrix.needsUpdate = true;
+                if (meshes.length === 0) continue;
 
-                // Apply wind sway if it's a nature asset
-                const uniforms = this.context?.scene.getGlobalUniforms();
-                const globalTime = uniforms?.uTime as IUniform;
+                const instCount = instances.length;
+                const tempMatrix = new THREE.Matrix4();
+                const tempEuler = new THREE.Euler();
+                const tempPos = new THREE.Vector3();
+                const tempQuat = new THREE.Quaternion();
+                const tempScale = new THREE.Vector3();
 
-                if (globalTime) {
-                    const isTree = assetId.includes('tree') || assetId.includes('pine');
-                    const isFoliage = assetId.includes('grass') || assetId.includes('flower') || assetId.includes('bush');
-                    if (isTree) {
-                        applyWindSway(instMesh.material as THREE.Material, { uTime: globalTime, speed: 0.8, amplitude: 0.1 });
-                    } else if (isFoliage) {
-                        applyWindSway(instMesh.material as THREE.Material, { uTime: globalTime, speed: 1.5, amplitude: 0.2 });
+                // Ensure matrices are computed down the tree hierarchy
+                sourceGroup.updateMatrixWorld(true);
+
+                for (const mesh of meshes) {
+                    const instMesh = new THREE.InstancedMesh(mesh.geometry, mesh.material, instCount);
+                    if (this.metadata.environment.castShadows) {
+                        instMesh.castShadow = true;
+                        instMesh.receiveShadow = true;
                     }
-                }
 
-                this.root.add(instMesh);
-                this.instancedMeshes.push(instMesh);
+                    // Get the mesh's full transform (incorporates deep node hierarchy from optimized GLTFs)
+                    const childMatrix = mesh.matrixWorld;
+
+                    for (let i = 0; i < instCount; i++) {
+                        const inst = instances[i];
+
+                        // Local transform of the instance
+                        tempPos.set(inst.position.x, inst.position.y, inst.position.z);
+                        tempEuler.set(inst.rotation.x, inst.rotation.y, inst.rotation.z);
+                        tempQuat.setFromEuler(tempEuler);
+                        tempScale.set(inst.scale, inst.scale, inst.scale);
+
+                        // Combine instance placement with the full computed child matrix
+                        tempMatrix.compose(tempPos, tempQuat, tempScale).multiply(childMatrix);
+
+                        instMesh.setMatrixAt(i, tempMatrix);
+
+                        // Add collision logic for the first mesh (to avoid duplicate colliders)
+                        if (mesh === meshes[0]) {
+                            this.addCollision(assetId, inst, tempMatrix);
+                        }
+                    }
+
+                    instMesh.instanceMatrix.needsUpdate = true;
+
+                    // Apply wind sway if it's a nature asset
+                    const uniforms = this.context?.scene.getGlobalUniforms();
+                    const globalTime = uniforms?.uTime as IUniform;
+
+                    if (globalTime) {
+                        const isTree = assetId.includes('tree') || assetId.includes('pine');
+                        const isFoliage = assetId.includes('grass') || assetId.includes('flower') || assetId.includes('bush');
+                        if (isTree) {
+                            applyWindSway(instMesh.material as THREE.Material, { uTime: globalTime, speed: 0.8, amplitude: 0.1 });
+                        } else if (isFoliage) {
+                            applyWindSway(instMesh.material as THREE.Material, { uTime: globalTime, speed: 1.5, amplitude: 0.2 });
+                        }
+                    }
+
+                    this.root.add(instMesh);
+                    this.instancedMeshes.push(instMesh);
+                }
             }
         }
     }
-}
 
     private addCollision(assetId: string, inst: IInstanceFlat, worldMatrix: THREE.Matrix4): void {
         const assetDef = this.metadata?.assetKit.assets.find(a => a.id === assetId);
@@ -470,13 +470,13 @@ export class BasicProceduralScenario implements IScenarioModule {
                 const dx = x - pondCenter.x;
                 const dz = z - pondCenter.z;
                 const pondDist = Math.sqrt(dx * dx + dz * dz);
-                
+
                 if (pondDist < pondRadius) {
                     const falloff = 1.0 - (pondDist / pondRadius);
                     h -= falloff * 5.5; // Basin depth
                     // Ensure the waterline edge is submerged
                     if (pondDist > pondRadius * 0.95) {
-                        h = Math.min(h, 0.4); 
+                        h = Math.min(h, 0.4);
                     }
                 } else if (pondDist < rimRadius) {
                     // Rim area: Ensure it's high enough to "contain" the 45x45 water plane
@@ -568,9 +568,9 @@ export class BasicProceduralScenario implements IScenarioModule {
 
         // Add Water Mesh
         const waterLevel = 0.6;
-        const waterGeom = new THREE.CircleGeometry(22.5, 32); 
+        const waterGeom = new THREE.CircleGeometry(22.5, 32);
         waterGeom.rotateX(-Math.PI / 2);
-        
+
         const uniforms = this.context?.scene.getGlobalUniforms();
         const globalTime = uniforms?.uTime as IUniform;
         if (globalTime) {
@@ -657,8 +657,8 @@ export class BasicProceduralScenario implements IScenarioModule {
 }
 
 export const NatureParkScenarioPlugin: IScenarioPlugin = {
-    id: 'quaternius-nature',
-    displayName: 'Quaternius Nature',
+    id: 'basic-procedural-nature',
+    displayName: 'Basic Procedural Nature',
     kind: 'social',
     maxPlayers: 16,
     capabilities: {
