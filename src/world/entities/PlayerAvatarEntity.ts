@@ -15,9 +15,10 @@ import { IAvatarConfig, normalizeAvatarConfig } from '../../shared/contracts/IAv
 import { AvatarSkeletonState } from '../../shared/avatar/AvatarSkeletonState';
 import { AVATAR_SKELETON_JOINTS, AVATAR_SKELETON_PARENT, AvatarSkeletonJointName } from '../../shared/avatar/AvatarSkeleton';
 import { composeAvatarWorldPoses } from '../../shared/avatar/AvatarSkeletonUtils';
+import { estimateStandingEyeHeightM } from '../../shared/avatar/AvatarMetrics';
 
 export class PlayerAvatarEntity extends ReplicatedEntity {
-    public static readonly DEFAULT_HEAD_HEIGHT = 1.7;
+    public static readonly DEFAULT_HEAD_HEIGHT = estimateStandingEyeHeightM();
     public name: string = '';
     public headHeight: number = PlayerAvatarEntity.DEFAULT_HEAD_HEIGHT;
     public headState: IPose;

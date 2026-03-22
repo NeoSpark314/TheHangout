@@ -20,12 +20,12 @@ import {
     LEFT_HAND_FINGER_JOINTS,
     RIGHT_HAND_FINGER_JOINTS
 } from './AvatarSkeletonUtils';
+import { getAvatarBodyScale } from './AvatarMetrics';
 
 const MAX_TORSO_TWIST_YAW = THREE.MathUtils.degToRad(60);
 const CHEST_TWIST_WEIGHT = 0.25;
 const UPPER_CHEST_TWIST_WEIGHT = 0.35;
 const NECK_TWIST_WEIGHT = 0.4;
-const DEFAULT_PLAYER_HEIGHT_M = 1.8;
 const CONTROLLER_RAW_GRIP_OFFSET = new THREE.Quaternion().setFromAxisAngle(
     new THREE.Vector3(1, 0, 0),
     Math.PI / 2
@@ -174,7 +174,7 @@ export class AvatarMotionSolver {
     }
 
     public solve(frame: IAvatarTrackingFrame, context: IAvatarMotionContext, bodyWorldYaw: number, delta: number): IAvatarSkeletonPose {
-        this.bodyScale = Math.max(0.6, (context.playerHeightM ?? DEFAULT_PLAYER_HEIGHT_M) / DEFAULT_PLAYER_HEIGHT_M);
+        this.bodyScale = Math.max(0.6, getAvatarBodyScale(context.playerHeightM));
         this.pose.rootWorldPosition = { ...frame.rootWorldPosition };
         this.pose.rootWorldQuaternion = {
             x: 0,

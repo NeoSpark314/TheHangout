@@ -8,6 +8,7 @@ import { EVENTS } from '../../shared/constants/Constants';
 import { ILookIntentPayload } from '../../shared/contracts/IIntents';
 import { IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
 import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../shared/avatar/AvatarTrackingSpace';
+import { estimateStandingEyeHeightM } from '../../shared/avatar/AvatarMetrics';
 
 const LERP_SPEED = 15;
 const MAX_REACH = 4.0;
@@ -28,7 +29,6 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private assistedReach: { left: number | null; right: number | null } = { left: null, right: null };
 
     private pitch = 0;
-    private headHeight = PlayerAvatarEntity.DEFAULT_HEAD_HEIGHT;
     private assistedForwardBase = 0.22;
     private assistedCameraPos = new THREE.Vector3();
     private assistedCameraQuat = new THREE.Quaternion();
@@ -82,10 +82,11 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     }
 
     private createInitialState(): ITrackingState {
+        const headHeight = this.getHeadHeight();
         return {
             head: {
                 pose: {
-                    position: { x: 0, y: this.headHeight, z: 0 },
+                    position: { x: 0, y: headHeight, z: 0 },
                     quaternion: { x: 0, y: 0, z: 0, w: 1 },
                 },
                 yaw: 0
@@ -107,13 +108,14 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         const lp = this.context.localPlayer as PlayerAvatarEntity;
         if (!lp || lp.controlMode !== 'local') return;
+        const headHeight = this.getHeadHeight();
 
         // 1. Source of Truth: Origin and Orientation
         const originPos = new THREE.Vector3(lp.xrOrigin.position.x, lp.xrOrigin.position.y, lp.xrOrigin.position.z);
         const originQuat = new THREE.Quaternion(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
 
         // Calculate Head-Local Pose (height + pitch)
-        const localHeadPos = new THREE.Vector3(0, this.headHeight, 0);
+        const localHeadPos = new THREE.Vector3(0, headHeight, 0);
         const localHeadQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
 
         // Combine to World Space
@@ -155,8 +157,8 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // 3. Update Hand Poses relative to physical body (Origin)
         // Base hand positions (Lowered Y relative to head-local)
         // Note: we apply origin rotation to these offsets
-        const leftBaseOffset = new THREE.Vector3(-HAND_X_SPACING, this.headHeight - HAND_Y_OFFSET, HAND_Z_OFFSET);
-        const rightBaseOffset = new THREE.Vector3(HAND_X_SPACING, this.headHeight - HAND_Y_OFFSET, HAND_Z_OFFSET);
+        const leftBaseOffset = new THREE.Vector3(-HAND_X_SPACING, headHeight - HAND_Y_OFFSET, HAND_Z_OFFSET);
+        const rightBaseOffset = new THREE.Vector3(HAND_X_SPACING, headHeight - HAND_Y_OFFSET, HAND_Z_OFFSET);
 
         const leftBaseWorld = leftBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
         const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
@@ -219,5 +221,9 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
     public destroy(): void {
         this.deactivate();
+    }
+
+    private getHeadHeight(): number {
+        return estimateStandingEyeHeightM(this.context.avatarConfig.playerHeightM);
     }
 }

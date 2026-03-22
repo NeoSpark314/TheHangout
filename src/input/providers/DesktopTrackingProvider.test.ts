@@ -4,9 +4,14 @@ import { AppContext } from '../../app/AppContext';
 import eventBus from '../../app/events/EventBus';
 import { EVENTS } from '../../shared/constants/Constants';
 import { DesktopTrackingProvider } from './DesktopTrackingProvider';
+import { estimateStandingEyeHeightM } from '../../shared/avatar/AvatarMetrics';
 
-function createTestContext(yaw = 0): AppContext {
+function createTestContext(yaw = 0, playerHeightM = 1.8): AppContext {
     const context = new AppContext();
+    context.avatarConfig = {
+        ...context.avatarConfig,
+        playerHeightM
+    };
     context.setRuntime('render', {
         isXRPresenting: () => false,
         camera: new THREE.PerspectiveCamera()
@@ -73,5 +78,14 @@ describe('DesktopTrackingProvider', () => {
         );
 
         expect(avatarForward.distanceTo(rawForward)).toBeLessThan(1e-6);
+    });
+
+    it('uses estimated standing eye height from the configured player height', () => {
+        const context = createTestContext(0, 1.6);
+        const provider = new DesktopTrackingProvider(context);
+
+        provider.update(1 / 60);
+
+        expect(provider.getState().head.pose.position.y).toBeCloseTo(estimateStandingEyeHeightM(1.6));
     });
 });
