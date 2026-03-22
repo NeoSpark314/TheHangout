@@ -1539,10 +1539,10 @@ export class VrUiRuntime implements IUpdatable {
                     y: headPose.position.y - 0.2,
                     z: headPose.position.z
                 }
-                : { x: 0, y: 1.2, z: -1.8 };
+                : { x: 0, y: 1.2, z: 1.8 };
 
             if (localPlayer && headPose) {
-                const forward = new THREE.Vector3(0, 0, -1);
+                const forward = new THREE.Vector3(0, 0, 1);
                 const headQuat = new THREE.Quaternion(
                     headPose.quaternion.x,
                     headPose.quaternion.y,
@@ -1723,10 +1723,10 @@ export class VrUiRuntime implements IUpdatable {
                             y: headPose.position.y - 0.2,
                             z: headPose.position.z
                         }
-                        : { x: 0, y: 1.2, z: -1.8 };
+                        : { x: 0, y: 1.2, z: 1.8 };
 
                     if (localPlayer && headPose) {
-                        const forward = new THREE.Vector3(0, 0, -1);
+                        const forward = new THREE.Vector3(0, 0, 1);
                         const headQuat = new THREE.Quaternion(
                             headPose.quaternion.x,
                             headPose.quaternion.y,

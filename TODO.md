@@ -9,4 +9,3 @@
 
 * Connect WebXR full body tracking
 * Whiteboard prop?
-* VRM avatar support?
