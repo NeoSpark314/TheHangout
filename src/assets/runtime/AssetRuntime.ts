@@ -124,8 +124,10 @@ export class AssetRuntime {
         if (!this.ktx2Loader) {
             const renderer = this.context.runtime.render?.renderer;
             if (renderer) {
+                const baseUrl = (import.meta as any).env?.BASE_URL ?? '/';
+                const transcoderPath = baseUrl.endsWith('/') ? baseUrl + 'basis/' : baseUrl + '/basis/';
                 this.ktx2Loader = new KTX2Loader()
-                    .setTranscoderPath('/basis/')
+                    .setTranscoderPath(transcoderPath)
                     .detectSupport(renderer);
                 this.loader.setKTX2Loader(this.ktx2Loader);
             } else {
