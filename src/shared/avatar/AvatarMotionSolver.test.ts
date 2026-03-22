@@ -4,7 +4,10 @@ import { AvatarMotionSolver } from './AvatarMotionSolver';
 import { composeAvatarWorldPoses } from './AvatarSkeletonUtils';
 import { AvatarSkeletonJointName, IAvatarMotionContext, IAvatarTrackingFrame } from './AvatarSkeleton';
 import { AVATAR_REST_LOCAL_POSITIONS } from './AvatarCanonicalRig';
-import { convertRawWorldQuaternionToAvatarWorldQuaternion } from './AvatarTrackingSpace';
+import {
+    convertRawWorldDirectionToAvatarWorldDirection,
+    convertRawWorldQuaternionToAvatarWorldQuaternion
+} from './AvatarTrackingSpace';
 
 const LEFT_TRACKED_HAND_CHAINS: ReadonlyArray<readonly AvatarSkeletonJointName[]> = [
     ['leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip'],
@@ -144,6 +147,45 @@ function clearTrackedFingerSkeleton(frame: IAvatarTrackingFrame, side: 'left' | 
     }
 }
 
+function setProviderStyleTrackedHandPose(
+    frame: IAvatarTrackingFrame,
+    side: 'left' | 'right',
+    handRawWorldPosition: THREE.Vector3,
+    handRawWorldQuaternion: THREE.Quaternion
+): void {
+    const handName = side === 'left' ? 'leftHand' : 'rightHand';
+    const chains = side === 'left' ? LEFT_TRACKED_HAND_CHAINS : RIGHT_TRACKED_HAND_CHAINS;
+    const rawAvatarBasisRemap = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+    const avatarHandQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+        x: handRawWorldQuaternion.x,
+        y: handRawWorldQuaternion.y,
+        z: handRawWorldQuaternion.z,
+        w: handRawWorldQuaternion.w
+    });
+
+    frame.effectors[handName] = {
+        position: { x: handRawWorldPosition.x, y: handRawWorldPosition.y, z: handRawWorldPosition.z },
+        quaternion: avatarHandQuaternion
+    };
+    frame.tracked[handName] = true;
+
+    for (const chain of chains) {
+        let parentRawWorldPosition = handRawWorldPosition.clone();
+
+        for (const jointName of chain) {
+            const avatarLocalPosition = AVATAR_REST_LOCAL_POSITIONS[jointName].clone();
+            const rawLocalPosition = avatarLocalPosition.applyQuaternion(rawAvatarBasisRemap);
+            const rawWorldPosition = rawLocalPosition.applyQuaternion(handRawWorldQuaternion).add(parentRawWorldPosition);
+            frame.effectors[jointName] = {
+                position: { x: rawWorldPosition.x, y: rawWorldPosition.y, z: rawWorldPosition.z },
+                quaternion: avatarHandQuaternion
+            };
+            frame.tracked[jointName] = true;
+            parentRawWorldPosition = rawWorldPosition;
+        }
+    }
+}
+
 describe('AvatarMotionSolver', () => {
     it('keeps canonical head and hand world targets aligned to tracking anchors', () => {
         const solver = new AvatarMotionSolver();
@@ -273,53 +315,145 @@ describe('AvatarMotionSolver', () => {
         expect(world.rightLowerLeg!.position.z).toBeLessThan(world.rightFoot!.position.z);
     });
 
-    it('derives tracked hand pose from joint positions instead of raw XR joint quaternions', () => {
+    it('derives tracked hand pose from provider-style joint positions instead of raw XR joint quaternions', () => {
         const solver = new AvatarMotionSolver();
-        const seedPose = solver.solve(createTrackingFrame(false), createMotionContext('xr-standing'), 0, 1 / 60);
-        const world = composeAvatarWorldPoses(seedPose);
         const flippedQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, Math.PI / 2, 'YXZ'));
-        const frame = createTrackingFrame(false);
-        const trackedJoints: AvatarSkeletonJointName[] = [
+        const frame = {
+            rootWorldPosition: { x: 0, y: 0, z: 0 },
+            rootWorldQuaternion: convertRawWorldQuaternionToAvatarWorldQuaternion({ x: 0, y: 0, z: 0, w: 1 }),
+            headWorldPose: {
+                position: { x: 0.02, y: 1.68, z: -0.04 },
+                quaternion: convertRawWorldQuaternionToAvatarWorldQuaternion({
+                    x: 0,
+                    y: Math.sin(0.15 / 2),
+                    z: 0,
+                    w: Math.cos(0.15 / 2)
+                })
+            },
+            effectors: {},
+            tracked: { head: true },
+            seated: false
+        } satisfies IAvatarTrackingFrame;
+        const rawTrackedHandQuaternion = new THREE.Quaternion().setFromRotationMatrix(
+            new THREE.Matrix4().makeBasis(
+                new THREE.Vector3(0, 0, -1),
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(1, 0, 0)
+            )
+        );
+        setProviderStyleTrackedHandPose(frame, 'left', new THREE.Vector3(-0.28, 1.15, -0.25), rawTrackedHandQuaternion);
+        for (const jointName of [
             'leftHand',
             'leftThumbMetacarpal', 'leftThumbProximal', 'leftThumbDistal', 'leftThumbTip',
             'leftIndexMetacarpal', 'leftIndexProximal', 'leftIndexIntermediate', 'leftIndexDistal', 'leftIndexTip',
             'leftMiddleMetacarpal', 'leftMiddleProximal', 'leftMiddleIntermediate', 'leftMiddleDistal', 'leftMiddleTip',
             'leftRingMetacarpal', 'leftRingProximal', 'leftRingIntermediate', 'leftRingDistal', 'leftRingTip',
             'leftLittleMetacarpal', 'leftLittleProximal', 'leftLittleIntermediate', 'leftLittleDistal', 'leftLittleTip'
-        ];
-
-        for (const jointName of trackedJoints) {
-            const joint = world[jointName]!;
-            frame.effectors[jointName] = {
-                position: { x: joint.position.x, y: joint.position.y, z: joint.position.z },
-                quaternion: { x: flippedQuat.x, y: flippedQuat.y, z: flippedQuat.z, w: flippedQuat.w }
-            };
-            frame.tracked[jointName] = true;
+        ] as AvatarSkeletonJointName[]) {
+            frame.effectors[jointName]!.quaternion = { x: flippedQuat.x, y: flippedQuat.y, z: flippedQuat.z, w: flippedQuat.w };
         }
 
-        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        let pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        for (let i = 0; i < 8; i += 1) {
+            pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        }
         const solvedWorld = composeAvatarWorldPoses(pose);
+        const expectedAvatarQuaternion = new THREE.Quaternion(
+            convertRawWorldQuaternionToAvatarWorldQuaternion({
+                x: rawTrackedHandQuaternion.x,
+                y: rawTrackedHandQuaternion.y,
+                z: rawTrackedHandQuaternion.z,
+                w: rawTrackedHandQuaternion.w
+            }).x,
+            convertRawWorldQuaternionToAvatarWorldQuaternion({
+                x: rawTrackedHandQuaternion.x,
+                y: rawTrackedHandQuaternion.y,
+                z: rawTrackedHandQuaternion.z,
+                w: rawTrackedHandQuaternion.w
+            }).y,
+            convertRawWorldQuaternionToAvatarWorldQuaternion({
+                x: rawTrackedHandQuaternion.x,
+                y: rawTrackedHandQuaternion.y,
+                z: rawTrackedHandQuaternion.z,
+                w: rawTrackedHandQuaternion.w
+            }).z,
+            convertRawWorldQuaternionToAvatarWorldQuaternion({
+                x: rawTrackedHandQuaternion.x,
+                y: rawTrackedHandQuaternion.y,
+                z: rawTrackedHandQuaternion.z,
+                w: rawTrackedHandQuaternion.w
+            }).w
+        );
+        const rawFingerDirection = new THREE.Vector3(
+            frame.effectors.leftIndexProximal!.position.x - frame.effectors.leftIndexMetacarpal!.position.x,
+            frame.effectors.leftIndexProximal!.position.y - frame.effectors.leftIndexMetacarpal!.position.y,
+            frame.effectors.leftIndexProximal!.position.z - frame.effectors.leftIndexMetacarpal!.position.z
+        ).normalize();
+        const expectedFingerDirectionData = convertRawWorldDirectionToAvatarWorldDirection({
+            x: rawFingerDirection.x,
+            y: rawFingerDirection.y,
+            z: rawFingerDirection.z
+        });
+        const solvedFingerDirection = solvedWorld.leftIndexProximal!.position.clone()
+            .sub(solvedWorld.leftIndexMetacarpal!.position)
+            .normalize();
+        const expectedFingerDirection = new THREE.Vector3(
+            expectedFingerDirectionData.x,
+            expectedFingerDirectionData.y,
+            expectedFingerDirectionData.z
+        ).normalize();
 
-        expect(solvedWorld.leftIndexDistal?.position.distanceTo(world.leftIndexDistal!.position)).toBeLessThan(1e-4);
+        expect(solvedWorld.leftHand!.quaternion.angleTo(expectedAvatarQuaternion)).toBeLessThan(1e-4);
+        expect(solvedFingerDirection.dot(expectedFingerDirection)).toBeGreaterThan(0.98);
         expectChildAxisAlignment(pose, 'leftIndexMetacarpal', 'leftIndexProximal');
         expectChildAxisAlignment(pose, 'leftIndexProximal', 'leftIndexIntermediate');
         expectChildAxisAlignment(pose, 'leftIndexIntermediate', 'leftIndexDistal');
     });
 
-    it('recovers tracked hand orientation from wrist and knuckle positions', () => {
+    it('recovers tracked hand orientation from provider-style wrist and knuckle positions', () => {
         const solver = new AvatarMotionSolver();
-        const frame = createTrackingFrame(false);
-        const targetHandQuaternion = createHandWorldQuaternion(
+        const rawTargetHandQuaternion = createHandWorldQuaternion(
             new THREE.Vector3(0.35, 0.92, 0.18),
             new THREE.Vector3(0.15, -0.05, 0.98)
         );
-        const targetHandPosition = new THREE.Vector3(-0.42, 1.18, 0.22);
-        setTrackedHandPose(frame, 'left', targetHandPosition, targetHandQuaternion);
+        const targetHandPosition = new THREE.Vector3(-0.42, 1.18, -0.22);
+        const frame = {
+            rootWorldPosition: { x: 0, y: 0, z: 0 },
+            rootWorldQuaternion: convertRawWorldQuaternionToAvatarWorldQuaternion({ x: 0, y: 0, z: 0, w: 1 }),
+            headWorldPose: {
+                position: { x: 0.02, y: 1.68, z: -0.04 },
+                quaternion: convertRawWorldQuaternionToAvatarWorldQuaternion({
+                    x: 0,
+                    y: Math.sin(0.15 / 2),
+                    z: 0,
+                    w: Math.cos(0.15 / 2)
+                })
+            },
+            effectors: {},
+            tracked: { head: true },
+            seated: false
+        } satisfies IAvatarTrackingFrame;
+        setProviderStyleTrackedHandPose(frame, 'left', targetHandPosition, rawTargetHandQuaternion);
 
-        const pose = solver.solve(frame, createMotionContext('xr-standing'), 0, 1 / 60);
+        let pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        for (let i = 0; i < 8; i += 1) {
+            pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        }
         const world = composeAvatarWorldPoses(pose);
-        const targetBack = new THREE.Vector3(0, 1, 0).applyQuaternion(targetHandQuaternion);
-        const targetThumb = new THREE.Vector3(0, 0, 1).applyQuaternion(targetHandQuaternion);
+        const avatarTargetHandQuaternionData = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawTargetHandQuaternion.x,
+            y: rawTargetHandQuaternion.y,
+            z: rawTargetHandQuaternion.z,
+            w: rawTargetHandQuaternion.w
+        });
+        const avatarTargetHandQuaternion = new THREE.Quaternion(
+            avatarTargetHandQuaternionData.x,
+            avatarTargetHandQuaternionData.y,
+            avatarTargetHandQuaternionData.z,
+            avatarTargetHandQuaternionData.w
+        );
+        const targetBack = new THREE.Vector3(0, 1, 0).applyQuaternion(avatarTargetHandQuaternion);
+        const targetThumb = new THREE.Vector3(0, 0, 1).applyQuaternion(avatarTargetHandQuaternion);
         const solvedBack = new THREE.Vector3(0, 1, 0).applyQuaternion(world.leftHand!.quaternion);
         const solvedThumb = new THREE.Vector3(0, 0, 1).applyQuaternion(world.leftHand!.quaternion);
 
@@ -438,5 +572,90 @@ describe('AvatarMotionSolver', () => {
         expect(world.leftHand!.position.x).toBeLessThan(0);
         expect(world.rightHand!.position.x).toBeGreaterThan(0);
         expect(world.leftHand!.position.x).toBeLessThan(world.rightHand!.position.x);
+    });
+
+    it('maps provider-style WebXR tracked hand skeletons into the canonical hand orientation', () => {
+        const solver = new AvatarMotionSolver();
+        const rawRootQuaternion = new THREE.Quaternion();
+        const avatarRootQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawRootQuaternion.x,
+            y: rawRootQuaternion.y,
+            z: rawRootQuaternion.z,
+            w: rawRootQuaternion.w
+        });
+        const rawHeadQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.2, 0.15, 0, 'YXZ'));
+        const avatarHeadQuaternion = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawHeadQuaternion.x,
+            y: rawHeadQuaternion.y,
+            z: rawHeadQuaternion.z,
+            w: rawHeadQuaternion.w
+        });
+        const rawTrackedHandQuaternion = new THREE.Quaternion().setFromRotationMatrix(
+            new THREE.Matrix4().makeBasis(
+                new THREE.Vector3(0, 0, -1),
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(1, 0, 0)
+            )
+        );
+        const frame: IAvatarTrackingFrame = {
+            rootWorldPosition: { x: 0, y: 0, z: 0 },
+            rootWorldQuaternion: avatarRootQuaternion,
+            headWorldPose: {
+                position: { x: 0.02, y: 1.68, z: -0.04 },
+                quaternion: avatarHeadQuaternion
+            },
+            effectors: {},
+            tracked: {
+                head: true
+            },
+            seated: false
+        };
+
+        setProviderStyleTrackedHandPose(
+            frame,
+            'left',
+            new THREE.Vector3(-0.28, 1.15, -0.25),
+            rawTrackedHandQuaternion
+        );
+
+        let pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        for (let i = 0; i < 8; i += 1) {
+            pose = solver.solve(frame, createMotionContext('desktop'), Math.PI, 1 / 60);
+        }
+
+        const world = composeAvatarWorldPoses(pose);
+        const expectedAvatarHandQuaternionData = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: rawTrackedHandQuaternion.x,
+            y: rawTrackedHandQuaternion.y,
+            z: rawTrackedHandQuaternion.z,
+            w: rawTrackedHandQuaternion.w
+        });
+        const expectedAvatarHandQuaternion = new THREE.Quaternion(
+            expectedAvatarHandQuaternionData.x,
+            expectedAvatarHandQuaternionData.y,
+            expectedAvatarHandQuaternionData.z,
+            expectedAvatarHandQuaternionData.w
+        );
+        const rawFingerDirection = new THREE.Vector3(
+            frame.effectors.leftIndexProximal!.position.x - frame.effectors.leftIndexMetacarpal!.position.x,
+            frame.effectors.leftIndexProximal!.position.y - frame.effectors.leftIndexMetacarpal!.position.y,
+            frame.effectors.leftIndexProximal!.position.z - frame.effectors.leftIndexMetacarpal!.position.z
+        ).normalize();
+        const expectedFingerDirectionData = convertRawWorldDirectionToAvatarWorldDirection({
+            x: rawFingerDirection.x,
+            y: rawFingerDirection.y,
+            z: rawFingerDirection.z
+        });
+        const solvedFingerDirection = world.leftIndexProximal!.position.clone()
+            .sub(world.leftIndexMetacarpal!.position)
+            .normalize();
+        const expectedFingerDirection = new THREE.Vector3(
+            expectedFingerDirectionData.x,
+            expectedFingerDirectionData.y,
+            expectedFingerDirectionData.z
+        ).normalize();
+
+        expect(world.leftHand!.quaternion.angleTo(expectedAvatarHandQuaternion)).toBeLessThan(1e-4);
+        expect(solvedFingerDirection.dot(expectedFingerDirection)).toBeGreaterThan(0.98);
     });
 });

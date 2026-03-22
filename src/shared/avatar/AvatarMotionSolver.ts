@@ -10,7 +10,10 @@ import {
     IAvatarTrackingFrame
 } from './AvatarSkeleton';
 import { AVATAR_REST_LOCAL_POSITIONS } from './AvatarCanonicalRig';
-import { convertAvatarWorldQuaternionToRawWorldQuaternion } from './AvatarTrackingSpace';
+import {
+    convertAvatarWorldQuaternionToRawWorldQuaternion,
+    convertRawWorldDirectionToAvatarWorldDirection
+} from './AvatarTrackingSpace';
 import {
     copyThreeQuaternion,
     copyThreeVector3,
@@ -527,7 +530,17 @@ export class AvatarMotionSolver {
                     nextEffector.position.z - effector.position.z
                 );
                 if (targetDirection.lengthSq() > 1e-8) {
-                    targetDirection.normalize().applyQuaternion(parentWorldQuat.clone().invert());
+                    targetDirection.normalize();
+                    const avatarTargetDirection = convertRawWorldDirectionToAvatarWorldDirection({
+                        x: targetDirection.x,
+                        y: targetDirection.y,
+                        z: targetDirection.z
+                    });
+                    targetDirection.set(
+                        avatarTargetDirection.x,
+                        avatarTargetDirection.y,
+                        avatarTargetDirection.z
+                    ).applyQuaternion(parentWorldQuat.clone().invert());
                     localQuaternion = this.calculateConstrainedLookAt(
                         this.getRest(nextJointName).normalize(),
                         targetDirection

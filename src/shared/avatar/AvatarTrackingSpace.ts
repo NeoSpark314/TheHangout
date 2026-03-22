@@ -44,6 +44,20 @@ export function convertAvatarWorldQuaternionToRawWorldQuaternion(avatarQuaternio
     };
 }
 
+export function convertRawWorldDirectionToAvatarWorldDirection(rawDirection: IVector3): IVector3 {
+    const direction = new THREE.Vector3(
+        rawDirection.x,
+        rawDirection.y,
+        rawDirection.z
+    ).applyQuaternion(RAW_WORLD_TO_AVATAR_WORLD);
+
+    return {
+        x: direction.x,
+        y: direction.y,
+        z: direction.z
+    };
+}
+
 export function resolveAvatarRootWorldPosition(
     trackingOriginWorldPosition: IVector3,
     headWorldPosition: IVector3,

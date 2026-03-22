@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
     convertAvatarWorldQuaternionToRawWorldQuaternion,
+    convertRawWorldDirectionToAvatarWorldDirection,
     convertRawWorldQuaternionToAvatarWorldQuaternion,
     resolveAvatarRootWorldPosition
 } from './AvatarTrackingSpace';
@@ -37,6 +38,18 @@ describe('AvatarTrackingSpace', () => {
         const roundTripQuaternion = toThreeQuaternion(convertAvatarWorldQuaternionToRawWorldQuaternion(avatarQuaternion));
 
         expect(roundTripQuaternion.angleTo(rawQuaternion)).toBeLessThan(1e-6);
+    });
+
+    it('maps raw world hand-joint directions into avatar world directions', () => {
+        const avatarDirection = convertRawWorldDirectionToAvatarWorldDirection({
+            x: 0.2,
+            y: 0.4,
+            z: -0.8
+        });
+
+        expect(avatarDirection.x).toBeCloseTo(-0.2, 6);
+        expect(avatarDirection.y).toBeCloseTo(0.4, 6);
+        expect(avatarDirection.z).toBeCloseTo(0.8, 6);
     });
 
     it('projects standing avatar root translation onto the tracked head on the ground plane', () => {
