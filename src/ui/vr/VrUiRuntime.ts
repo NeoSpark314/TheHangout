@@ -708,8 +708,23 @@ export class VrUiRuntime implements IUpdatable {
         if (!this.overlayContainer) {
             this.overlayContainer = document.createElement('div');
             this.overlayContainer.id = 'menu-2d-overlay';
+            this.overlayContainer.style.position = 'fixed';
+            this.overlayContainer.style.inset = '0';
+            this.overlayContainer.style.display = 'flex';
+            this.overlayContainer.style.alignItems = 'center';
+            this.overlayContainer.style.justifyContent = 'center';
+            this.overlayContainer.style.padding = '24px';
+            this.overlayContainer.style.background = 'rgba(4, 2, 12, 0.72)';
+            this.overlayContainer.style.backdropFilter = 'blur(6px)';
+            this.overlayContainer.style.zIndex = '1200';
 
             const canvas = this.tablet.ui.canvas;
+            canvas.style.width = 'min(92vw, 1280px)';
+            canvas.style.maxHeight = '88vh';
+            canvas.style.height = 'auto';
+            canvas.style.borderRadius = '18px';
+            canvas.style.boxShadow = '0 24px 80px rgba(0, 0, 0, 0.55)';
+            canvas.style.border = '1px solid rgba(0, 255, 255, 0.28)';
             this.overlayContainer.appendChild(canvas);
 
             // Add events
@@ -737,6 +752,9 @@ export class VrUiRuntime implements IUpdatable {
 
         // Always re-append to ensure it's in the DOM
         if (this.tablet && !this.overlayContainer.contains(this.tablet.ui.canvas)) {
+            this.tablet.ui.canvas.style.width = 'min(92vw, 1280px)';
+            this.tablet.ui.canvas.style.maxHeight = '88vh';
+            this.tablet.ui.canvas.style.height = 'auto';
             this.overlayContainer.appendChild(this.tablet.ui.canvas);
         }
 

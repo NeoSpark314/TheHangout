@@ -182,22 +182,21 @@ export class RenderRuntime {
                         localHeadPose.quaternion.z,
                         localHeadPose.quaternion.w
                     );
-                    return;
+                } else {
+                    const trackingHeadPose = trackingHead?.pose;
+                    const headPose = trackingHeadPose || lp.getAvatarHeadWorldPose?.();
+                    if (!headPose) return;
+                    const worldPos = new THREE.Vector3(headPose.position.x, headPose.position.y, headPose.position.z);
+                    const worldQuat = new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w);
+
+                    // Convert world pose to be local to cameraGroup
+                    this.camera.position.copy(this.cameraGroup.worldToLocal(worldPos));
+
+                    // For rotation, we need to handle the world-to-local quat as well
+                    const groupWorldQuat = new THREE.Quaternion();
+                    this.cameraGroup.getWorldQuaternion(groupWorldQuat);
+                    this.camera.quaternion.copy(groupWorldQuat.invert().multiply(worldQuat));
                 }
-
-                const trackingHeadPose = trackingHead?.pose;
-                const headPose = trackingHeadPose || lp.getAvatarHeadWorldPose?.();
-                if (!headPose) return;
-                const worldPos = new THREE.Vector3(headPose.position.x, headPose.position.y, headPose.position.z);
-                const worldQuat = new THREE.Quaternion(headPose.quaternion.x, headPose.quaternion.y, headPose.quaternion.z, headPose.quaternion.w);
-
-                // Convert world pose to be local to cameraGroup
-                this.camera.position.copy(this.cameraGroup.worldToLocal(worldPos));
-
-                // For rotation, we need to handle the world-to-local quat as well
-                const groupWorldQuat = new THREE.Quaternion();
-                this.cameraGroup.getWorldQuaternion(groupWorldQuat);
-                this.camera.quaternion.copy(groupWorldQuat.invert().multiply(worldQuat));
             }
         }
 
