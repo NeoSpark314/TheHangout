@@ -290,7 +290,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
             this.previousShadowMapEnabled = renderer.shadowMap.enabled;
             this.previousShadowMapType = renderer.shadowMap.type;
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.type = THREE.PCFShadowMap;
         }
 
         this.hemiLight = new THREE.HemisphereLight(0xdff5ff, 0x7ca35a, 1.1);

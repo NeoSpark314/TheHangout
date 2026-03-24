@@ -135,7 +135,7 @@ export class SimpleRacingTrackBuilder {
             this.previousShadowMapType = renderer.shadowMap.type;
             this.previousShadowMapAutoUpdate = renderer.shadowMap.autoUpdate;
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.type = THREE.PCFShadowMap;
             renderer.shadowMap.autoUpdate = true;
         }
 

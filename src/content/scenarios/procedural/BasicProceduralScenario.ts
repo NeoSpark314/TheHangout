@@ -659,7 +659,7 @@ export class BasicProceduralScenario implements IScenarioModule {
             if (renderer) {
                 this.previousShadowMapEnabled = renderer.shadowMap.enabled;
                 renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.shadowMap.type = THREE.PCFShadowMap;
             }
         }
 
