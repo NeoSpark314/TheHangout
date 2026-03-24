@@ -15,6 +15,7 @@ export interface IHandState {
 
 export interface ITrackingState {
     head: {
+        localPose?: IPose;
         pose: IPose;
         yaw: number;
     };

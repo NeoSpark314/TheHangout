@@ -55,6 +55,21 @@ describe('DesktopTrackingProvider', () => {
         expect(forward.y).toBeLessThan(0);
     });
 
+    it('treats yaw intent as local head rotation without changing the simulated root basis', () => {
+        const context = createTestContext(0.35);
+        const provider = new DesktopTrackingProvider(context);
+        provider.activate();
+
+        eventBus.emit(EVENTS.INTENT_LOOK, {
+            yawDeltaRad: -0.4,
+            pitchDeltaRad: 0
+        });
+        provider.update(1 / 60);
+
+        expect(provider.getState().head.yaw).toBeCloseTo(0.75, 5);
+        expect(context.localPlayer!.xrOrigin.quaternion.y).toBeCloseTo(Math.sin(0.35 / 2), 5);
+    });
+
     it('builds avatar tracking quaternions in the canonical +Z-forward avatar basis', () => {
         const context = createTestContext(0.7);
         const provider = new DesktopTrackingProvider(context);

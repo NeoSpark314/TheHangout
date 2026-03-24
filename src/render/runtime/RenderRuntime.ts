@@ -168,7 +168,24 @@ export class RenderRuntime {
             this.cameraGroup.quaternion.set(lp.xrOrigin.quaternion.x, lp.xrOrigin.quaternion.y, lp.xrOrigin.quaternion.z, lp.xrOrigin.quaternion.w);
 
             if (!this.isXRPresenting()) {
-                const trackingHeadPose = this.context.runtime.tracking?.getState()?.head?.pose;
+                const trackingHead = this.context.runtime.tracking?.getState()?.head;
+                const localHeadPose = trackingHead?.localPose;
+                if (localHeadPose) {
+                    this.camera.position.set(
+                        localHeadPose.position.x,
+                        localHeadPose.position.y,
+                        localHeadPose.position.z
+                    );
+                    this.camera.quaternion.set(
+                        localHeadPose.quaternion.x,
+                        localHeadPose.quaternion.y,
+                        localHeadPose.quaternion.z,
+                        localHeadPose.quaternion.w
+                    );
+                    return;
+                }
+
+                const trackingHeadPose = trackingHead?.pose;
                 const headPose = trackingHeadPose || lp.getAvatarHeadWorldPose?.();
                 if (!headPose) return;
                 const worldPos = new THREE.Vector3(headPose.position.x, headPose.position.y, headPose.position.z);

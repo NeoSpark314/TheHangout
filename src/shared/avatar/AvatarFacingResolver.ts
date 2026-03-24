@@ -40,12 +40,6 @@ export class AvatarFacingResolver {
             this.reset(initialYaw);
         }
 
-        if (context.mode === 'desktop') {
-            this.bodyWorldYaw = rootYaw;
-            this.lastMoveWorldYaw = rootYaw;
-            return this.bodyWorldYaw;
-        }
-
         if (context.mode === 'xr-seated' || context.mode === 'mounted-seated') {
             this.bodyWorldYaw = this.normalizeAngle(context.mountWorldYaw ?? context.seatWorldYaw ?? rootYaw);
             this.lastMoveWorldYaw = this.bodyWorldYaw;

@@ -21,8 +21,6 @@ export class MountRuntime implements IUpdatable {
     private readonly localStateListeners = new Set<(status: ILocalMountStatus) => void>();
     private lastStateSignature = '';
     private movementUnmountStartMs: number | null = null;
-    private lastMountedViewYaw: number | null = null;
-    private relativeViewYawOffset = 0;
 
     constructor(private context: AppContext) { }
 
@@ -65,20 +63,7 @@ export class MountRuntime implements IUpdatable {
 
         const seat = this.localMount.getSeatPose();
         const viewPose = this.localMount.getViewPose?.() ?? seat;
-        let targetYaw = viewPose.yaw;
-
-        if (this.localMount.preserveRelativeViewYaw) {
-            if (!this.context.runtime.render?.isXRPresenting()) {
-                const currentViewYaw = this.getCurrentViewYaw();
-                if (typeof currentViewYaw === 'number' && this.lastMountedViewYaw !== null) {
-                    this.relativeViewYawOffset = this.normalizeAngle(currentViewYaw - this.lastMountedViewYaw);
-                }
-            }
-            targetYaw = this.normalizeAngle(viewPose.yaw + this.relativeViewYawOffset);
-            this.lastMountedViewYaw = viewPose.yaw;
-        }
-
-        localPlayer.moveOriginTo(seat.position, targetYaw);
+        localPlayer.moveOriginTo(seat.position, viewPose.yaw);
     }
 
     public requestLocalMount(binding: ILocalMountBinding): boolean {
@@ -101,11 +86,9 @@ export class MountRuntime implements IUpdatable {
         this.localMount = binding;
         this.pendingMount = null;
         this.movementUnmountStartMs = null;
-        this.relativeViewYawOffset = 0;
         this.setLocalState('mounted', 'granted');
         const seat = binding.getSeatPose();
         const viewPose = binding.getViewPose?.() ?? seat;
-        this.lastMountedViewYaw = viewPose.yaw;
         localPlayer.teleportTo(seat.position, viewPose.yaw, { targetSpace: 'player' });
         return true;
     }
@@ -113,8 +96,6 @@ export class MountRuntime implements IUpdatable {
     public rejectLocalMount(): void {
         this.pendingMount = null;
         this.movementUnmountStartMs = null;
-        this.lastMountedViewYaw = null;
-        this.relativeViewYawOffset = 0;
         this.setLocalState('rejected', 'rejected');
     }
 
@@ -135,8 +116,6 @@ export class MountRuntime implements IUpdatable {
         this.localMount = null;
         this.pendingMount = null;
         this.movementUnmountStartMs = null;
-        this.lastMountedViewYaw = null;
-        this.relativeViewYawOffset = 0;
 
         const localPlayer = this.context.localPlayer;
         if (!localPlayer) {
@@ -217,33 +196,5 @@ export class MountRuntime implements IUpdatable {
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
-    }
-
-    private getCurrentViewYaw(): number | null {
-        const trackingYaw = this.context.runtime.tracking?.getState?.()?.head?.yaw;
-        if (typeof trackingYaw === 'number' && Number.isFinite(trackingYaw)) {
-            return trackingYaw;
-        }
-
-        const camera = this.context.runtime.render?.camera;
-        if (camera) {
-            const quaternion = new THREE.Quaternion();
-            camera.getWorldQuaternion(quaternion);
-            return new THREE.Euler().setFromQuaternion(quaternion, 'YXZ').y;
-        }
-
-        const origin = this.context.localPlayer?.xrOrigin?.quaternion;
-        if (origin) {
-            return new THREE.Euler().setFromQuaternion(
-                new THREE.Quaternion(origin.x, origin.y, origin.z, origin.w),
-                'YXZ'
-            ).y;
-        }
-
-        return null;
-    }
-
-    private normalizeAngle(angle: number): number {
-        return Math.atan2(Math.sin(angle), Math.cos(angle));
     }
 }

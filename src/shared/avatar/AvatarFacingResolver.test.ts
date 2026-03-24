@@ -114,4 +114,18 @@ describe('AvatarFacingResolver', () => {
 
         expect(yaw).toBeCloseTo(mountYaw, 4);
     });
+
+    it('allows desktop body yaw to react to head yaw instead of locking to root yaw', () => {
+        const resolver = new AvatarFacingResolver();
+        let yaw = 0;
+        for (let i = 0; i < 20; i += 1) {
+            yaw = resolver.resolve(
+                createFrame(THREE.MathUtils.degToRad(70), 0),
+                createContext('desktop'),
+                1 / 60
+            );
+        }
+
+        expect(yaw).toBeGreaterThan(0.1);
+    });
 });

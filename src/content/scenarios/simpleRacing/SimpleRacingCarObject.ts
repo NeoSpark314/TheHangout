@@ -458,7 +458,6 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             getSeatPose: () => this.getSeatPose(),
             getBodyYawPose: () => this.getBodyYawPose(),
             getViewPose: () => this.getViewPose(),
-            preserveRelativeViewYaw: true,
             getExitPose: () => this.getExitPose(),
             canUnmountNow: (reason) => reason !== 'movement'
         };

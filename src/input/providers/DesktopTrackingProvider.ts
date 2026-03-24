@@ -29,13 +29,13 @@ export class DesktopTrackingProvider implements ITrackingProvider {
     private assistedReach: { left: number | null; right: number | null } = { left: null, right: null };
 
     private pitch = 0;
+    private yaw = 0;
     private assistedForwardBase = 0.22;
     private assistedCameraPos = new THREE.Vector3();
     private assistedCameraQuat = new THREE.Quaternion();
 
     private _lookHandler = (payload: ILookIntentPayload) => {
-        // We only care about Y (pitch) here.
-        // Horizontal look (yaw) is handled by MovementSkill rotating the origin.
+        this.yaw -= payload.yawDeltaRad;
         if (this.context.runtime.render.isXRPresenting()) return;
         this.pitch -= payload.pitchDeltaRad;
         this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
@@ -61,6 +61,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.rightStretch.set(0, 0, 0);
         this.assistedReach.left = null;
         this.assistedReach.right = null;
+        this.yaw = 0;
     }
 
     private updateHandTarget(hand: 'left' | 'right'): void {
@@ -85,6 +86,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         const headHeight = this.getHeadHeight();
         return {
             head: {
+                localPose: {
+                    position: { x: 0, y: headHeight, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                },
                 pose: {
                     position: { x: 0, y: headHeight, z: 0 },
                     quaternion: { x: 0, y: 0, z: 0, w: 1 },
@@ -116,7 +121,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
 
         // Calculate Head-Local Pose (height + pitch)
         const localHeadPos = new THREE.Vector3(0, headHeight, 0);
-        const localHeadQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, 0, 0, 'YXZ'));
+        const localHeadQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
 
         // Combine to World Space
         const worldHeadPos = localHeadPos.clone().applyQuaternion(originQuat).add(originPos);
@@ -143,6 +148,10 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         };
 
         this.state.head = {
+            localPose: {
+                position: { x: localHeadPos.x, y: localHeadPos.y, z: localHeadPos.z },
+                quaternion: { x: localHeadQuat.x, y: localHeadQuat.y, z: localHeadQuat.z, w: localHeadQuat.w }
+            },
             pose: {
                 position: { x: worldHeadPos.x, y: worldHeadPos.y, z: worldHeadPos.z },
                 quaternion: { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w },

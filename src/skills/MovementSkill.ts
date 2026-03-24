@@ -35,7 +35,8 @@ export class MovementSkill extends Skill {
             this._currentMove = payload.direction;
         };
         const onLook = (payload: ILookIntentPayload) => {
-            // Horizontal look turns the body (origin)
+            if (!player.appContext.runtime.render.isXRPresenting()) return;
+            // In XR, look-based turning is explicit origin turning. Desktop simulates a local HMD in the tracking provider.
             this.yaw -= payload.yawDeltaRad;
             this._explicitTurnDeltaYaw -= payload.yawDeltaRad;
         };

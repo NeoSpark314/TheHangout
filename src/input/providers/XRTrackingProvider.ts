@@ -61,6 +61,10 @@ export class XRTrackingProvider implements ITrackingProvider {
     private createInitialState(): ITrackingState {
         return {
             head: {
+                localPose: {
+                    position: { x: 0, y: 1.7, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                },
                 pose: {
                     position: { x: 0, y: 1.7, z: 0 },
                     quaternion: { x: 0, y: 0, z: 0, w: 1 },
@@ -108,6 +112,10 @@ export class XRTrackingProvider implements ITrackingProvider {
             seated: false
         };
         this.state.head = {
+            localPose: {
+                position: { x: render.camera.position.x, y: render.camera.position.y, z: render.camera.position.z },
+                quaternion: { x: render.camera.quaternion.x, y: render.camera.quaternion.y, z: render.camera.quaternion.z, w: render.camera.quaternion.w }
+            },
             pose: {
                 position: viewerPose.position,
                 quaternion: viewerPose.quaternion
