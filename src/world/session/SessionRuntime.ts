@@ -223,14 +223,19 @@ export class SessionRuntime implements IUpdatable {
     }
 
     public getObjectModuleDefinition(moduleId: string) {
-        return this.objectModuleRegistry.get(moduleId);
+        return this.resolveObjectModuleDefinition(moduleId);
     }
 
     public spawnObjectInstance(id: string, config: IObjectSpawnConfig = {}): ISpawnedObjectInstance | null {
         let instance = this.objectModuleRegistry.spawn(id, this.context, config);
+        if (!instance && this.resolveObjectModuleDefinition(id)) {
+            instance = this.objectModuleRegistry.spawn(id, this.context, config);
+        }
         if (!instance) {
             this.refreshActiveObjectModules();
-            instance = this.objectModuleRegistry.spawn(id, this.context, config);
+            if (this.resolveObjectModuleDefinition(id)) {
+                instance = this.objectModuleRegistry.spawn(id, this.context, config);
+            }
         }
         if (!instance) {
             console.warn(
@@ -356,6 +361,26 @@ export class SessionRuntime implements IUpdatable {
 
     private refreshActiveObjectModules(): void {
         this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
+    }
+
+    private resolveObjectModuleDefinition(moduleId: string) {
+        const existing = this.objectModuleRegistry.get(moduleId);
+        if (existing) {
+            return existing;
+        }
+
+        for (const plugin of this.scenarioRegistry.list()) {
+            const scenario = this.instantiateScenario(plugin);
+            const modules = scenario.getObjectModules?.() ?? [];
+            const match = modules.find((module) => module.id === moduleId);
+            if (!match) {
+                continue;
+            }
+            this.objectModuleRegistry.register(match);
+            return match;
+        }
+
+        return undefined;
     }
 
     private clearScenarioOwnedState(): void {

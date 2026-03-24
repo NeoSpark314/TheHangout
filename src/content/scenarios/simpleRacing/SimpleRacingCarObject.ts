@@ -102,6 +102,30 @@ interface ISimpleRacingCarImpactEvent {
     intensity: number;
 }
 
+interface ISimpleRacingCarDriveState {
+    facingYaw: number;
+    linearSpeed: number;
+    angularSpeed: number;
+    steer: number;
+    throttle: number;
+    driftIntensity: number;
+}
+
+interface ISimpleRacingCarPresentationState {
+    facingYaw: number;
+    steer: number;
+    speed: number;
+    acceleration: number;
+    wheelSpin: number;
+}
+
+interface ISimpleRacingCarAudioState {
+    engineVolume: number;
+    engineRate: number;
+    skidVolume: number;
+    skidRate: number;
+}
+
 class RacingCarSeatEntity implements IEntity, IHoldable, IInteractable {
     public readonly type = 'SIMPLE_RACING_CAR_SEAT';
     public readonly isHoldable = true;
@@ -158,17 +182,10 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private readonly mountReplication: AuthoritativeSingleMountReplicator;
     private readonly spawnPosition: THREE.Vector3;
     private readonly spawnYaw: number;
-    private facingYaw: number;
-    private presentFacingYaw: number;
-    private linearSpeed = 0;
-    private angularSpeed = 0;
-    private accelerationVisual = 0;
-    private steerVisual = 0;
-    private presentSteerVisual = 0;
-    private speedVisual = 0;
-    private wheelSpin = 0;
-    private throttleVisual = 0;
-    private driftIntensity = 0;
+    private readonly driveState: ISimpleRacingCarDriveState;
+    private readonly visualState: ISimpleRacingCarPresentationState;
+    private readonly presentState: Pick<ISimpleRacingCarPresentationState, 'facingYaw' | 'steer'>;
+    private readonly audioState: ISimpleRacingCarAudioState;
     private bodyNode: THREE.Object3D | null = null;
     private wheelFL: THREE.Object3D | null = null;
     private wheelFR: THREE.Object3D | null = null;
@@ -176,10 +193,6 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private wheelBR: THREE.Object3D | null = null;
     private engineEmitter: IAudioEmitterHandle | null = null;
     private skidEmitter: IAudioEmitterHandle | null = null;
-    private engineVolume = 0;
-    private engineRate = 1;
-    private skidVolume = 0;
-    private skidRate = 1;
     private lastVisualSyncAtMs = 0;
     private lastImpactSoundAtMs = 0;
 
@@ -208,8 +221,31 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         this.root = root;
         this.spawnPosition = new THREE.Vector3(position.x, position.y, position.z);
         this.spawnYaw = spawnYaw;
-        this.facingYaw = spawnYaw;
-        this.presentFacingYaw = spawnYaw;
+        this.driveState = {
+            facingYaw: spawnYaw,
+            linearSpeed: 0,
+            angularSpeed: 0,
+            steer: 0,
+            throttle: 0,
+            driftIntensity: 0
+        };
+        this.visualState = {
+            facingYaw: spawnYaw,
+            steer: 0,
+            speed: 0,
+            acceleration: 0,
+            wheelSpin: 0
+        };
+        this.presentState = {
+            facingYaw: spawnYaw,
+            steer: 0
+        };
+        this.audioState = {
+            engineVolume: 0,
+            engineRate: 1,
+            skidVolume: 0,
+            skidRate: 1
+        };
 
         this.visualRig.position.set(position.x, position.y + CAR_VISUAL_HEIGHT_OFFSET, position.z);
 
@@ -284,13 +320,13 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     public override captureReplicationSnapshot(): unknown {
         return {
             occupiedBy: this.mountReplication.getOccupiedBy(),
-            facingYaw: this.facingYaw,
-            steer: this.steerVisual,
-            speed: this.speedVisual,
-            acceleration: this.accelerationVisual,
-            wheelSpin: this.wheelSpin,
-            throttle: this.throttleVisual,
-            driftIntensity: this.driftIntensity
+            facingYaw: this.visualState.facingYaw,
+            steer: this.visualState.steer,
+            speed: this.visualState.speed,
+            acceleration: this.visualState.acceleration,
+            wheelSpin: this.visualState.wheelSpin,
+            throttle: this.driveState.throttle,
+            driftIntensity: this.driveState.driftIntensity
         } satisfies ISimpleRacingCarSnapshot;
     }
 
@@ -346,8 +382,8 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             maxDistance: 40,
             rolloffFactor: 1
         });
-        this.engineVolume = 0;
-        this.engineRate = 1;
+        this.audioState.engineVolume = 0;
+        this.audioState.engineRate = 1;
         this.addCleanup(() => {
             this.engineEmitter?.dispose();
             this.engineEmitter = null;
@@ -364,8 +400,8 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             maxDistance: 34,
             rolloffFactor: 1
         });
-        this.skidVolume = 0;
-        this.skidRate = 1;
+        this.audioState.skidVolume = 0;
+        this.audioState.skidRate = 1;
         this.addCleanup(() => {
             this.skidEmitter?.dispose();
             this.skidEmitter = null;
@@ -427,42 +463,44 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         const input = this.runtimeContext.input.getMovementVector();
         const steeringInput = -input.x;
         const throttleInput = input.y;
-        this.throttleVisual = throttleInput;
+        this.driveState.throttle = throttleInput;
 
-        let direction = Math.sign(this.linearSpeed);
+        let direction = Math.sign(this.driveState.linearSpeed);
         if (direction === 0) {
             direction = Math.abs(throttleInput) > 0.1 ? Math.sign(throttleInput) : 1;
         }
 
-        const steeringGrip = THREE.MathUtils.clamp(Math.abs(this.linearSpeed), 0.2, 1.0);
+        const steeringGrip = THREE.MathUtils.clamp(Math.abs(this.driveState.linearSpeed), 0.2, 1.0);
         const targetAngular = -steeringInput * steeringGrip * CAR_STEER_RATE * direction;
-        this.angularSpeed = THREE.MathUtils.lerp(this.angularSpeed, targetAngular, delta * CAR_STEER_RESPONSE);
-        this.facingYaw += this.angularSpeed * delta;
+        this.driveState.angularSpeed = THREE.MathUtils.lerp(this.driveState.angularSpeed, targetAngular, delta * CAR_STEER_RESPONSE);
+        this.driveState.facingYaw += this.driveState.angularSpeed * delta;
 
-        if (throttleInput < 0 && this.linearSpeed > 0.01) {
-            this.linearSpeed = THREE.MathUtils.lerp(this.linearSpeed, 0, delta * 8);
+        if (throttleInput < 0 && this.driveState.linearSpeed > 0.01) {
+            this.driveState.linearSpeed = THREE.MathUtils.lerp(this.driveState.linearSpeed, 0, delta * 8);
         } else if (throttleInput < 0) {
-            this.linearSpeed = THREE.MathUtils.lerp(this.linearSpeed, throttleInput / 2, delta * 2);
+            this.driveState.linearSpeed = THREE.MathUtils.lerp(this.driveState.linearSpeed, throttleInput / 2, delta * 2);
         } else {
-            this.linearSpeed = THREE.MathUtils.lerp(this.linearSpeed, throttleInput, delta * 6);
+            this.driveState.linearSpeed = THREE.MathUtils.lerp(this.driveState.linearSpeed, throttleInput, delta * 6);
         }
-        this.linearSpeed *= Math.max(0, 1 - CAR_LINEAR_DAMP * delta);
+        this.driveState.linearSpeed *= Math.max(0, 1 - CAR_LINEAR_DAMP * delta);
 
-        const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw).setY(0).normalize();
-        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw).setY(0).normalize();
-        const drive = this.linearSpeed * CAR_DRIVE_ANGULAR_ACCEL * delta;
-        this.steerVisual = steeringInput;
-        this.accelerationVisual = THREE.MathUtils.lerp(
-            this.accelerationVisual,
-            this.linearSpeed + (0.25 * this.linearSpeed * Math.abs(this.linearSpeed)),
+        const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.driveState.facingYaw).setY(0).normalize();
+        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.driveState.facingYaw).setY(0).normalize();
+        const drive = this.driveState.linearSpeed * CAR_DRIVE_ANGULAR_ACCEL * delta;
+        this.driveState.steer = steeringInput;
+        this.visualState.facingYaw = this.driveState.facingYaw;
+        this.visualState.steer = this.driveState.steer;
+        this.visualState.acceleration = THREE.MathUtils.lerp(
+            this.visualState.acceleration,
+            this.driveState.linearSpeed + (0.25 * this.driveState.linearSpeed * Math.abs(this.driveState.linearSpeed)),
             delta
         );
-        this.speedVisual = this.linearSpeed;
-        this.wheelSpin += this.accelerationVisual;
+        this.visualState.speed = this.driveState.linearSpeed;
+        this.visualState.wheelSpin += this.visualState.acceleration;
         const planarSpeed = Math.hypot(velocity.x, velocity.z);
         const forwardSpeed = (velocity.x * forward.x) + (velocity.z * forward.z);
         const lateralSpeed = (velocity.x * right.x) + (velocity.z * right.z);
-        this.driftIntensity = Math.abs(lateralSpeed) * 0.6 + Math.max(0, planarSpeed - Math.abs(forwardSpeed));
+        this.driveState.driftIntensity = Math.abs(lateralSpeed) * 0.6 + Math.max(0, planarSpeed - Math.abs(forwardSpeed));
 
         this.propHandle.setMotion({
             angularVelocity: {
@@ -478,13 +516,13 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if ((now - this.lastVisualSyncAtMs) >= CAR_VISUAL_SYNC_INTERVAL_MS) {
             this.propHandle.syncNow(false);
             this.emitSyncEvent(CAR_EVENT_VISUAL_STATE, {
-                facingYaw: this.facingYaw,
-                steer: this.steerVisual,
-                speed: this.speedVisual,
-                acceleration: this.accelerationVisual,
-                wheelSpin: this.wheelSpin,
-                throttle: this.throttleVisual,
-                driftIntensity: this.driftIntensity
+                facingYaw: this.visualState.facingYaw,
+                steer: this.visualState.steer,
+                speed: this.visualState.speed,
+                acceleration: this.visualState.acceleration,
+                wheelSpin: this.visualState.wheelSpin,
+                throttle: this.driveState.throttle,
+                driftIntensity: this.driveState.driftIntensity
             }, { localEcho: false });
             this.lastVisualSyncAtMs = now;
         }
@@ -503,9 +541,9 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             );
         }
 
-        this.presentFacingYaw = dampAngle(this.presentFacingYaw, this.facingYaw, CAR_FACING_YAW_DAMP, delta);
-        this.presentSteerVisual = THREE.MathUtils.damp(this.presentSteerVisual, this.steerVisual, CAR_STEER_VISUAL_DAMP, delta);
-        this.visualRig.quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.presentFacingYaw);
+        this.presentState.facingYaw = dampAngle(this.presentState.facingYaw, this.visualState.facingYaw, CAR_FACING_YAW_DAMP, delta);
+        this.presentState.steer = THREE.MathUtils.damp(this.presentState.steer, this.visualState.steer, CAR_STEER_VISUAL_DAMP, delta);
+        this.visualRig.quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.presentState.facingYaw);
         this.updateAudio(delta);
 
         const planarSpeed = velocity ? Math.hypot(velocity.x, velocity.z) : 0;
@@ -513,48 +551,48 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             ? (planarSpeed / CAR_RADIUS) * delta
             : 0;
         const targetSpeedVisual = THREE.MathUtils.clamp(planarSpeed / CAR_SPEED_SCALE, -1, 1);
-        this.speedVisual = THREE.MathUtils.damp(this.speedVisual, targetSpeedVisual, 8, delta);
-        this.accelerationVisual = THREE.MathUtils.damp(this.accelerationVisual, targetSpeedVisual, 10, delta);
+        this.visualState.speed = THREE.MathUtils.damp(this.visualState.speed, targetSpeedVisual, 8, delta);
+        this.visualState.acceleration = THREE.MathUtils.damp(this.visualState.acceleration, targetSpeedVisual, 10, delta);
         if (wheelSpinDelta > 0) {
-            this.wheelSpin += wheelSpinDelta;
+            this.visualState.wheelSpin += wheelSpinDelta;
         }
 
         if (this.bodyNode) {
             this.bodyNode.rotation.x = THREE.MathUtils.damp(
                 this.bodyNode.rotation.x,
-                -(this.speedVisual - this.accelerationVisual) / 6,
+                -(this.visualState.speed - this.visualState.acceleration) / 6,
                 10,
                 delta
             );
             this.bodyNode.rotation.z = THREE.MathUtils.damp(
                 this.bodyNode.rotation.z,
-                -(this.presentSteerVisual / 5) * this.speedVisual,
+                -(this.presentState.steer / 5) * this.visualState.speed,
                 5,
                 delta
             );
             this.bodyNode.position.y = THREE.MathUtils.damp(this.bodyNode.position.y, CAR_BODY_FLOAT_HEIGHT, 5, delta);
         }
 
-        const steerAngle = this.presentSteerVisual / 1.5;
+        const steerAngle = this.presentState.steer / 1.5;
         if (this.wheelFL) this.wheelFL.rotation.y = THREE.MathUtils.damp(this.wheelFL.rotation.y, steerAngle, 10, delta);
         if (this.wheelFR) this.wheelFR.rotation.y = THREE.MathUtils.damp(this.wheelFR.rotation.y, steerAngle, 10, delta);
 
         for (const wheel of [this.wheelFL, this.wheelFR, this.wheelBL, this.wheelBR]) {
             if (!wheel) continue;
-            wheel.rotation.x = this.wheelSpin;
+            wheel.rotation.x = this.visualState.wheelSpin;
         }
     }
 
     private applyVisualState(value: unknown): void {
         if (!value || typeof value !== 'object') return;
         const payload = value as Partial<ISimpleRacingCarVisualState>;
-        if (typeof payload.facingYaw === 'number') this.facingYaw = payload.facingYaw;
-        if (typeof payload.steer === 'number') this.steerVisual = payload.steer;
-        if (typeof payload.speed === 'number') this.speedVisual = payload.speed;
-        if (typeof payload.acceleration === 'number') this.accelerationVisual = payload.acceleration;
-        if (typeof payload.wheelSpin === 'number') this.wheelSpin = payload.wheelSpin;
-        if (typeof payload.throttle === 'number') this.throttleVisual = payload.throttle;
-        if (typeof payload.driftIntensity === 'number') this.driftIntensity = payload.driftIntensity;
+        if (typeof payload.facingYaw === 'number') this.visualState.facingYaw = payload.facingYaw;
+        if (typeof payload.steer === 'number') this.visualState.steer = payload.steer;
+        if (typeof payload.speed === 'number') this.visualState.speed = payload.speed;
+        if (typeof payload.acceleration === 'number') this.visualState.acceleration = payload.acceleration;
+        if (typeof payload.wheelSpin === 'number') this.visualState.wheelSpin = payload.wheelSpin;
+        if (typeof payload.throttle === 'number') this.driveState.throttle = payload.throttle;
+        if (typeof payload.driftIntensity === 'number') this.driveState.driftIntensity = payload.driftIntensity;
     }
 
     private updateAudio(delta: number): void {
@@ -562,8 +600,8 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         this.engineEmitter?.setPosition(audioPosition);
         this.skidEmitter?.setPosition(audioPosition);
 
-        const speedFactor = THREE.MathUtils.clamp(Math.abs(this.speedVisual), 0, 1);
-        const throttleFactor = THREE.MathUtils.clamp(Math.abs(this.throttleVisual), 0, 1);
+        const speedFactor = THREE.MathUtils.clamp(Math.abs(this.visualState.speed), 0, 1);
+        const throttleFactor = THREE.MathUtils.clamp(Math.abs(this.driveState.throttle), 0, 1);
         const targetEngineVolume = remap(
             speedFactor + (throttleFactor * 0.5),
             0,
@@ -571,26 +609,26 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             CAR_ENGINE_BASE_VOLUME,
             CAR_ENGINE_MAX_VOLUME
         );
-        this.engineVolume = THREE.MathUtils.lerp(this.engineVolume, targetEngineVolume, delta * CAR_ENGINE_LERP_RATE);
-        this.engineEmitter?.setVolume(this.engineVolume);
+        this.audioState.engineVolume = THREE.MathUtils.lerp(this.audioState.engineVolume, targetEngineVolume, delta * CAR_ENGINE_LERP_RATE);
+        this.engineEmitter?.setVolume(this.audioState.engineVolume);
 
         let targetEngineRate = remap(speedFactor, 0, 1, CAR_ENGINE_BASE_RATE, CAR_ENGINE_MAX_RATE);
         if (throttleFactor > 0.1) {
             targetEngineRate += 0.2;
         }
-        this.engineRate = THREE.MathUtils.lerp(this.engineRate, targetEngineRate, delta * CAR_ENGINE_RATE_LERP);
-        this.engineEmitter?.setPlaybackRate(this.engineRate);
+        this.audioState.engineRate = THREE.MathUtils.lerp(this.audioState.engineRate, targetEngineRate, delta * CAR_ENGINE_RATE_LERP);
+        this.engineEmitter?.setPlaybackRate(this.audioState.engineRate);
 
-        const clampedDrift = THREE.MathUtils.clamp(this.driftIntensity, CAR_SKID_MIN_DRIFT, CAR_SKID_MAX_DRIFT);
-        const targetSkidVolume = this.driftIntensity > CAR_SKID_MIN_DRIFT
+        const clampedDrift = THREE.MathUtils.clamp(this.driveState.driftIntensity, CAR_SKID_MIN_DRIFT, CAR_SKID_MAX_DRIFT);
+        const targetSkidVolume = this.driveState.driftIntensity > CAR_SKID_MIN_DRIFT
             ? remap(clampedDrift, CAR_SKID_MIN_DRIFT, CAR_SKID_MAX_DRIFT, CAR_SKID_MIN_VOLUME, CAR_SKID_MAX_VOLUME)
             : 0;
-        this.skidVolume = THREE.MathUtils.lerp(this.skidVolume, targetSkidVolume, delta * CAR_SKID_VOLUME_LERP);
-        this.skidEmitter?.setVolume(this.skidVolume);
+        this.audioState.skidVolume = THREE.MathUtils.lerp(this.audioState.skidVolume, targetSkidVolume, delta * CAR_SKID_VOLUME_LERP);
+        this.skidEmitter?.setVolume(this.audioState.skidVolume);
 
-        const targetSkidRate = THREE.MathUtils.clamp(Math.abs(this.speedVisual), CAR_SKID_MIN_RATE, CAR_SKID_MAX_RATE);
-        this.skidRate = THREE.MathUtils.lerp(this.skidRate, targetSkidRate, 0.1);
-        this.skidEmitter?.setPlaybackRate(this.skidRate);
+        const targetSkidRate = THREE.MathUtils.clamp(Math.abs(this.visualState.speed), CAR_SKID_MIN_RATE, CAR_SKID_MAX_RATE);
+        this.audioState.skidRate = THREE.MathUtils.lerp(this.audioState.skidRate, targetSkidRate, 0.1);
+        this.skidEmitter?.setPlaybackRate(this.audioState.skidRate);
     }
 
     private handleCollisionStarted(event: { entityAId: string | null; entityBId: string | null }): void {
@@ -664,28 +702,28 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
 
     private getSeatPose(): { position: THREE.Vector3; yaw: number } {
         const base = this.getCarBasePosition();
-        const offset = CAR_SEAT_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        const offset = CAR_SEAT_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.driveState.facingYaw);
         return {
             position: base.add(offset),
-            yaw: this.facingYaw
+            yaw: this.driveState.facingYaw
         };
     }
 
     private getBodyYawPose(): { position: THREE.Vector3; yaw: number } {
         const base = this.getCarBasePosition();
-        const offset = CAR_BODY_YAW_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        const offset = CAR_BODY_YAW_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.driveState.facingYaw);
         return {
             position: base.add(offset),
-            yaw: this.facingYaw
+            yaw: this.driveState.facingYaw
         };
     }
 
     private getViewPose(): { position: THREE.Vector3; yaw: number } {
         const base = this.getCarBasePosition();
-        const offset = CAR_VIEW_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        const offset = CAR_VIEW_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.driveState.facingYaw);
         return {
             position: base.add(offset),
-            yaw: this.facingYaw
+            yaw: this.driveState.facingYaw
         };
     }
 
@@ -709,21 +747,23 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if (!this.propHandle) return;
         if (!this.propHandle.requestControl()) return;
 
-        this.facingYaw = this.spawnYaw;
-        this.presentFacingYaw = this.spawnYaw;
-        this.linearSpeed = 0;
-        this.angularSpeed = 0;
-        this.accelerationVisual = 0;
-        this.steerVisual = 0;
-        this.presentSteerVisual = 0;
-        this.speedVisual = 0;
-        this.wheelSpin = 0;
-        this.throttleVisual = 0;
-        this.driftIntensity = 0;
-        this.engineVolume = 0;
-        this.engineRate = 1;
-        this.skidVolume = 0;
-        this.skidRate = 1;
+        this.driveState.facingYaw = this.spawnYaw;
+        this.driveState.linearSpeed = 0;
+        this.driveState.angularSpeed = 0;
+        this.driveState.steer = 0;
+        this.driveState.throttle = 0;
+        this.driveState.driftIntensity = 0;
+        this.visualState.facingYaw = this.spawnYaw;
+        this.visualState.steer = 0;
+        this.visualState.speed = 0;
+        this.visualState.acceleration = 0;
+        this.visualState.wheelSpin = 0;
+        this.presentState.facingYaw = this.spawnYaw;
+        this.presentState.steer = 0;
+        this.audioState.engineVolume = 0;
+        this.audioState.engineRate = 1;
+        this.audioState.skidVolume = 0;
+        this.audioState.skidRate = 1;
         this.propHandle.setPose({
             position: { x: this.spawnPosition.x, y: this.spawnPosition.y, z: this.spawnPosition.z },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
@@ -733,13 +773,13 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             forceSync: true
         });
         this.emitSyncEvent(CAR_EVENT_VISUAL_STATE, {
-            facingYaw: this.facingYaw,
-            steer: this.steerVisual,
-            speed: this.speedVisual,
-            acceleration: this.accelerationVisual,
-            wheelSpin: this.wheelSpin,
-            throttle: this.throttleVisual,
-            driftIntensity: this.driftIntensity
+            facingYaw: this.visualState.facingYaw,
+            steer: this.visualState.steer,
+            speed: this.visualState.speed,
+            acceleration: this.visualState.acceleration,
+            wheelSpin: this.visualState.wheelSpin,
+            throttle: this.driveState.throttle,
+            driftIntensity: this.driveState.driftIntensity
         }, { localEcho: false });
     }
 }
