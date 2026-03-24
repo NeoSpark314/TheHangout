@@ -4,7 +4,7 @@ import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from 
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import { SimpleRacingCarObject } from './SimpleRacingCarObject';
 import { SimpleRacingTrackBuilder } from './SimpleRacingTrackBuilder';
-import { computeSimpleRacingSpawn, computeSimpleRacingTrackBounds } from './SimpleRacingTrackData';
+import { computeSimpleRacingSpawn } from './SimpleRacingTrackData';
 
 const SIMPLE_RACING_CAR_INSTANCE_ID = 'simple-racing-car-0';
 
@@ -35,27 +35,25 @@ export class SimpleRacingScenario implements IScenarioModule {
     public update(_delta: number): void { }
 
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
-        const bounds = computeSimpleRacingTrackBounds();
-        const ringRadiusX = bounds.halfWidth + 6;
-        const ringRadiusZ = bounds.halfDepth + 6;
-        const spawnRing = [
-            { x: bounds.centerX + ringRadiusX, z: bounds.centerZ + ringRadiusZ * 0.25 },
-            { x: bounds.centerX + ringRadiusX * 0.6, z: bounds.centerZ + ringRadiusZ },
-            { x: bounds.centerX - ringRadiusX * 0.6, z: bounds.centerZ + ringRadiusZ },
-            { x: bounds.centerX - ringRadiusX, z: bounds.centerZ + ringRadiusZ * 0.25 },
-            { x: bounds.centerX - ringRadiusX, z: bounds.centerZ - ringRadiusZ * 0.25 },
-            { x: bounds.centerX - ringRadiusX * 0.6, z: bounds.centerZ - ringRadiusZ },
-            { x: bounds.centerX + ringRadiusX * 0.6, z: bounds.centerZ - ringRadiusZ },
-            { x: bounds.centerX + ringRadiusX, z: bounds.centerZ - ringRadiusZ * 0.25 }
+        const start = computeSimpleRacingSpawn();
+        const spawnGrid = [
+            { x: -3.2, z: -3.8 },
+            { x: 0, z: -3.8 },
+            { x: 3.2, z: -3.8 },
+            { x: -3.2, z: -6.8 },
+            { x: 0, z: -6.8 },
+            { x: 3.2, z: -6.8 },
+            { x: -3.2, z: -9.8 },
+            { x: 3.2, z: -9.8 }
         ];
-        const spawn = spawnRing[index % spawnRing.length];
+        const offset = spawnGrid[index % spawnGrid.length];
         return {
             position: {
-                x: spawn.x,
+                x: start.position.x + offset.x,
                 y: 0.2,
-                z: spawn.z
+                z: start.position.z + offset.z
             },
-            yaw: Math.atan2(bounds.centerX - spawn.x, bounds.centerZ - spawn.z)
+            yaw: start.yaw
         };
     }
 
