@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IVector3 } from '../../shared/contracts/IMath';
+import type { ISharedPropPhysicsTuning } from '../contracts/IObjectRuntimeContext';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import type { IObjectSpawnContext } from '../contracts/IObjectModule';
 import type { IObjectReplicationMeta } from '../contracts/IReplicatedObjectInstance';
@@ -16,6 +17,7 @@ interface IReplicatedPhysicsPropBaseInit {
     url?: string;
     entityId?: string;
     grabbable?: boolean;
+    physicsTuning?: ISharedPropPhysicsTuning;
     scale?: number;
     dualGrabScalable?: boolean;
     replicationProfileId?: PhysicsReplicationProfileId;

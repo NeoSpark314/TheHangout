@@ -143,8 +143,8 @@ export class SimpleRacingTrackBuilder {
         this.sunLight.target.position.set(0, 0, 0);
         this.sunLight.castShadow = true;
         this.sunLight.shadow.mapSize.set(2048, 2048);
-        this.sunLight.shadow.bias = -0.00015;
-        this.sunLight.shadow.normalBias = 0.02;
+        this.sunLight.shadow.bias = -0.0004;
+        this.sunLight.shadow.normalBias = 0.04;
         this.sunLight.shadow.camera.near = 1;
         this.sunLight.shadow.camera.far = 120;
         this.sunLight.shadow.camera.left = -55;

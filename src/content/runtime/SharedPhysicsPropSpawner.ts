@@ -30,6 +30,7 @@ export function spawnSharedPhysicsProp(
             moduleId,
             init.ownerId,
             init.grabbable,
+            init.physicsTuning,
             init.replicationProfileId ?? init.profile
         );
     } else {
@@ -42,6 +43,7 @@ export function spawnSharedPhysicsProp(
             moduleId,
             init.ownerId,
             init.grabbable,
+            init.physicsTuning,
             init.url,
             init.scale,
             init.dualGrabScalable,

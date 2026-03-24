@@ -9,6 +9,7 @@ import type {
     IPhysicsBodyHandle,
     IPhysicsColliderHandle,
     ISharedPropHandle,
+    ISharedPropPhysicsTuning,
     ISharedPropImpulseOptions,
     ISharedPropSpawnOptions,
     ISharedPropRaycastHit
@@ -177,6 +178,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         moduleId?: string,
         ownerId?: string | null,
         grabbable?: boolean,
+        physicsTuning?: ISharedPropPhysicsTuning,
         url?: string,
         scale?: number,
         dualGrabScalable?: boolean,
@@ -192,6 +194,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             moduleId,
             ownerId,
             grabbable,
+            physicsTuning,
             url,
             scale,
             dualGrabScalable,
@@ -207,6 +210,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         moduleId?: string,
         ownerId?: string | null,
         grabbable?: boolean,
+        physicsTuning?: ISharedPropPhysicsTuning,
         replicationProfileId?: string
     ): PhysicsPropEntity | null {
         return EntityFactory.createSphereGrabbable(
@@ -218,6 +222,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             moduleId,
             ownerId,
             grabbable,
+            physicsTuning,
             replicationProfileId as any
         );
     }

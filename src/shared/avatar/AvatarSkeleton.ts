@@ -110,13 +110,14 @@ export interface IAvatarTrackingFrame {
     seated: boolean;
 }
 
-export type AvatarMotionMode = 'desktop' | 'xr-standing' | 'xr-seated';
+export type AvatarMotionMode = 'desktop' | 'xr-standing' | 'xr-seated' | 'mounted-seated';
 
 export interface IAvatarMotionContext {
     mode: AvatarMotionMode;
     locomotionWorldVelocity: IVector3;
     explicitTurnDeltaYaw: number;
     seatWorldYaw?: number;
+    mountWorldYaw?: number;
     playerHeightM?: number;
 }
 

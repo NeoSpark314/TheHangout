@@ -12,6 +12,7 @@ import { EntityType } from '../../shared/contracts/IEntityState';
 import { IHoldable } from '../../shared/contracts/IHoldable';
 import { IInteractable } from '../../shared/contracts/IInteractable';
 import type {
+    ISharedPropPhysicsTuning,
     IPhysicsBodyHandle,
     IPhysicsColliderHandle
 } from '../../content/contracts/IObjectRuntimeContext';
@@ -189,6 +190,7 @@ export class PhysicsRuntime {
         moduleId?: string,
         ownerId?: string | null,
         grabbable: boolean = true,
+        physicsTuning?: ISharedPropPhysicsTuning,
         url?: string,
         scale?: number,
         dualGrabScalable?: boolean,
@@ -221,16 +223,19 @@ export class PhysicsRuntime {
         const hz = halfExtents?.z ?? (size / 2);
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
-            .setLinearDamping(replicationProfile.body.linearDamping)
-            .setAngularDamping(replicationProfile.body.angularDamping)
-            .setCanSleep(true)
-            .setSleeping(true);
+            .setLinearDamping(physicsTuning?.linearDamping ?? replicationProfile.body.linearDamping)
+            .setAngularDamping(physicsTuning?.angularDamping ?? replicationProfile.body.angularDamping)
+            .setCanSleep(physicsTuning?.canSleep ?? true)
+            .setSleeping(physicsTuning?.startSleeping ?? true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+        if (typeof physicsTuning?.gravityScale === 'number') {
+            rigidBody.setGravityScale(physicsTuning.gravityScale, true);
+        }
         const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
-            .setRestitution(replicationProfile.material.restitution)
-            .setFriction(replicationProfile.material.friction)
-            .setDensity(replicationProfile.material.density)
+            .setRestitution(physicsTuning?.restitution ?? replicationProfile.material.restitution)
+            .setFriction(physicsTuning?.friction ?? replicationProfile.material.friction)
+            .setDensity(physicsTuning?.density ?? replicationProfile.material.density)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
@@ -269,6 +274,7 @@ export class PhysicsRuntime {
         moduleId?: string,
         ownerId?: string | null,
         grabbable: boolean = true,
+        physicsTuning?: ISharedPropPhysicsTuning,
         replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
@@ -279,16 +285,19 @@ export class PhysicsRuntime {
 
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(position.x, position.y, position.z)
-            .setLinearDamping(replicationProfile.body.linearDamping)
-            .setAngularDamping(replicationProfile.body.angularDamping)
-            .setCanSleep(true)
-            .setSleeping(true);
+            .setLinearDamping(physicsTuning?.linearDamping ?? replicationProfile.body.linearDamping)
+            .setAngularDamping(physicsTuning?.angularDamping ?? replicationProfile.body.angularDamping)
+            .setCanSleep(physicsTuning?.canSleep ?? true)
+            .setSleeping(physicsTuning?.startSleeping ?? true);
 
         const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+        if (typeof physicsTuning?.gravityScale === 'number') {
+            rigidBody.setGravityScale(physicsTuning.gravityScale, true);
+        }
         const colliderDesc = RAPIER.ColliderDesc.ball(radius)
-            .setRestitution(replicationProfile.material.restitution)
-            .setFriction(replicationProfile.material.friction)
-            .setDensity(replicationProfile.material.density)
+            .setRestitution(physicsTuning?.restitution ?? replicationProfile.material.restitution)
+            .setFriction(physicsTuning?.friction ?? replicationProfile.material.friction)
+            .setDensity(physicsTuning?.density ?? replicationProfile.material.density)
             .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 

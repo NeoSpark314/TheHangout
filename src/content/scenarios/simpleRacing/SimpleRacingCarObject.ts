@@ -5,6 +5,7 @@ import type { IInteractable } from '../../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../../shared/contracts/IInteractionEvent';
 import type { IVector3 } from '../../../shared/contracts/IMath';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../../contracts/IObjectModule';
+import type { ISharedPropPhysicsTuning } from '../../contracts/IObjectRuntimeContext';
 import type { ILocalMountBinding } from '../../contracts/IMounting';
 import type { IObjectReplicationMeta } from '../../contracts/IReplicatedObjectInstance';
 import { BaseReplicatedPhysicsPropObjectInstance } from '../../runtime/BaseReplicatedPhysicsPropObjectInstance';
@@ -29,31 +30,40 @@ const CAR_MOUNT_EVENTS: IAuthoritativeSingleMountEventMap = {
 };
 
 const CAR_RADIUS = 0.52;
-const CAR_SEAT_OFFSET = new THREE.Vector3(0, 0.65, 0.05);
+const CAR_SEAT_OFFSET = new THREE.Vector3(0, 0.62, 0.02);
+const CAR_BODY_YAW_OFFSET = new THREE.Vector3(0, 0, 0);
+const CAR_VIEW_OFFSET = new THREE.Vector3(0, 0.68, 0.08);
 const CAR_EXIT_OFFSET = new THREE.Vector3(1.35, 0.15, 0);
 const CAR_VISUAL_HEIGHT_OFFSET = -CAR_RADIUS;
+const CAR_VISUAL_GROUND_BIAS = -0.08;
 const CAR_MOUNT_ZONE_OFFSET = new THREE.Vector3(0, 0.45, 0.02);
 const CAR_MOUNT_ZONE_SIZE = new THREE.Vector3(1.45, 0.95, 2.35);
 const CAR_RESET_FALL_Y = -6;
 const CAR_MAX_DRIVE_DISTANCE = 140;
-const CAR_ACCELERATION = 22;
-const CAR_BRAKE_DECEL = 30;
-const CAR_REVERSE_ACCELERATION = 10;
-const CAR_FORWARD_SPEED = 13.5;
-const CAR_REVERSE_SPEED = 4.5;
-const CAR_LATERAL_DAMPING = 7.5;
-const CAR_TURN_RATE = 3.6;
-const CAR_STEER_RESPONSE = 8.5;
-const CAR_IDLE_DAMPING = 4.2;
+const CAR_STEER_RATE = 4.0;
+const CAR_STEER_RESPONSE = 4.0;
+const CAR_LINEAR_DAMP = 0.1;
+const CAR_SPEED_SCALE = 12.5;
+const CAR_DRIVE_ANGULAR_ACCEL = 100;
 const CAR_VISUAL_SYNC_INTERVAL_MS = 90;
-const CAR_WHEEL_SPIN_FACTOR = 5.5;
 const CAR_BODY_FLOAT_HEIGHT = 0.2;
+const CAR_PHYSICS_TUNING: ISharedPropPhysicsTuning = {
+    linearDamping: 0.1,
+    angularDamping: 4.0,
+    friction: 5.0,
+    restitution: 0.1,
+    density: 1700,
+    gravityScale: 1.5,
+    canSleep: true,
+    startSleeping: true
+};
 
 interface ISimpleRacingCarSnapshot {
     occupiedBy: string | null;
     facingYaw: number;
     steer: number;
     speed: number;
+    acceleration: number;
     wheelSpin: number;
 }
 
@@ -61,6 +71,7 @@ interface ISimpleRacingCarVisualState {
     facingYaw: number;
     steer: number;
     speed: number;
+    acceleration: number;
     wheelSpin: number;
 }
 
@@ -121,6 +132,9 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private readonly spawnPosition: THREE.Vector3;
     private readonly spawnYaw: number;
     private facingYaw: number;
+    private linearSpeed = 0;
+    private angularSpeed = 0;
+    private accelerationVisual = 0;
     private steerVisual = 0;
     private speedVisual = 0;
     private wheelSpin = 0;
@@ -148,6 +162,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             entityId,
             ownerId: null,
             grabbable: false,
+            physicsTuning: CAR_PHYSICS_TUNING,
             replicationProfileId: 'default-prop'
         });
 
@@ -226,6 +241,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             facingYaw: this.facingYaw,
             steer: this.steerVisual,
             speed: this.speedVisual,
+            acceleration: this.accelerationVisual,
             wheelSpin: this.wheelSpin
         } satisfies ISimpleRacingCarSnapshot;
     }
@@ -265,7 +281,6 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         });
 
         this.bindVisualNodes(model);
-        this.alignModelToGround(model);
         this.visualRig.add(model);
     }
 
@@ -303,33 +318,6 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         });
     }
 
-    private alignModelToGround(model: THREE.Object3D): void {
-        model.updateMatrixWorld(true);
-
-        const referenceY = this.getWheelGroundReferenceY() ?? this.getObjectMinY(model);
-        if (!Number.isFinite(referenceY)) return;
-
-        model.position.y -= referenceY;
-        model.updateMatrixWorld(true);
-    }
-
-    private getWheelGroundReferenceY(): number | null {
-        const wheels = [this.wheelFL, this.wheelFR, this.wheelBL, this.wheelBR].filter((wheel): wheel is THREE.Object3D => !!wheel);
-        if (wheels.length === 0) return null;
-
-        let minY = Number.POSITIVE_INFINITY;
-        for (const wheel of wheels) {
-            minY = Math.min(minY, this.getObjectMinY(wheel));
-        }
-
-        return Number.isFinite(minY) ? minY : null;
-    }
-
-    private getObjectMinY(object: THREE.Object3D): number {
-        const bounds = new THREE.Box3().setFromObject(object);
-        return bounds.min.y;
-    }
-
     private updateDriving(delta: number, localPlayerId: string | null): void {
         if (!localPlayerId || this.mountReplication.getOccupiedBy() !== localPlayerId || !this.runtimeContext.isMountedLocal(this.id) || !this.propHandle) {
             return;
@@ -347,41 +335,49 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         }
 
         const velocity = this.propHandle.getLinearVelocity() ?? { x: 0, y: 0, z: 0 };
+        const angularVelocity = this.propHandle.getAngularVelocity() ?? { x: 0, y: 0, z: 0 };
         const input = this.runtimeContext.input.getMovementVector();
-        const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
-        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
-        const planarVelocity = new THREE.Vector3(velocity.x, 0, velocity.z);
+        const steeringInput = -input.x;
+        const throttleInput = input.y;
 
-        const forwardSpeed = planarVelocity.dot(forward);
-        const lateralSpeed = planarVelocity.dot(right);
-        const desiredSpeed = input.y >= 0 ? input.y * CAR_FORWARD_SPEED : input.y * CAR_REVERSE_SPEED;
-
-        let nextForwardSpeed = forwardSpeed;
-        if (input.y > 0.01) {
-            nextForwardSpeed = moveTowards(forwardSpeed, desiredSpeed, CAR_ACCELERATION * delta);
-        } else if (input.y < -0.01) {
-            if (forwardSpeed > 0.1) {
-                nextForwardSpeed = moveTowards(forwardSpeed, 0, CAR_BRAKE_DECEL * delta);
-            } else {
-                nextForwardSpeed = moveTowards(forwardSpeed, desiredSpeed, CAR_REVERSE_ACCELERATION * delta);
-            }
-        } else {
-            nextForwardSpeed = moveTowards(forwardSpeed, 0, CAR_IDLE_DAMPING * delta);
+        let direction = Math.sign(this.linearSpeed);
+        if (direction === 0) {
+            direction = Math.abs(throttleInput) > 0.1 ? Math.sign(throttleInput) : 1;
         }
 
-        const nextLateralSpeed = moveTowards(lateralSpeed, 0, CAR_LATERAL_DAMPING * delta * Math.max(1, Math.abs(forwardSpeed)));
-        const speedRatio = THREE.MathUtils.clamp(Math.abs(nextForwardSpeed) / CAR_FORWARD_SPEED, 0.2, 1.0);
-        const direction = nextForwardSpeed >= 0 ? 1 : -1;
-        const targetSteer = input.x;
-        this.steerVisual = THREE.MathUtils.damp(this.steerVisual, targetSteer, CAR_STEER_RESPONSE, delta);
-        this.facingYaw += (-this.steerVisual * CAR_TURN_RATE * speedRatio * direction) * delta;
+        const steeringGrip = THREE.MathUtils.clamp(Math.abs(this.linearSpeed), 0.2, 1.0);
+        const targetAngular = -steeringInput * steeringGrip * CAR_STEER_RATE * direction;
+        this.angularSpeed = THREE.MathUtils.lerp(this.angularSpeed, targetAngular, delta * CAR_STEER_RESPONSE);
+        this.facingYaw += this.angularSpeed * delta;
 
-        const nextVelocity = forward.multiplyScalar(nextForwardSpeed).add(right.multiplyScalar(nextLateralSpeed));
-        this.speedVisual = nextForwardSpeed;
-        this.wheelSpin += nextForwardSpeed * CAR_WHEEL_SPIN_FACTOR * delta;
+        if (throttleInput < 0 && this.linearSpeed > 0.01) {
+            this.linearSpeed = THREE.MathUtils.lerp(this.linearSpeed, 0, delta * 8);
+        } else if (throttleInput < 0) {
+            this.linearSpeed = THREE.MathUtils.lerp(this.linearSpeed, throttleInput / 2, delta * 2);
+        } else {
+            this.linearSpeed = THREE.MathUtils.lerp(this.linearSpeed, throttleInput, delta * 6);
+        }
+        this.linearSpeed *= Math.max(0, 1 - CAR_LINEAR_DAMP * delta);
+
+        const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw).setY(0).normalize();
+        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw).setY(0).normalize();
+        const drive = this.linearSpeed * CAR_DRIVE_ANGULAR_ACCEL * delta;
+        this.steerVisual = steeringInput;
+        this.accelerationVisual = THREE.MathUtils.lerp(
+            this.accelerationVisual,
+            this.linearSpeed + (0.25 * this.linearSpeed * Math.abs(this.linearSpeed)),
+            delta
+        );
+        this.speedVisual = this.linearSpeed;
+        this.wheelSpin += this.accelerationVisual;
 
         this.propHandle.setMotion({
-            linearVelocity: { x: nextVelocity.x, y: velocity.y, z: nextVelocity.z },
+            angularVelocity: {
+                x: angularVelocity.x + (right.x * drive),
+                y: angularVelocity.y,
+                z: angularVelocity.z + (right.z * drive)
+            },
+            linearVelocity: { x: velocity.x, y: velocity.y, z: velocity.z },
             wakeUp: true
         });
 
@@ -392,6 +388,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
                 facingYaw: this.facingYaw,
                 steer: this.steerVisual,
                 speed: this.speedVisual,
+                acceleration: this.accelerationVisual,
                 wheelSpin: this.wheelSpin
             }, { localEcho: false });
             this.lastVisualSyncAtMs = now;
@@ -401,11 +398,11 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private updateVisualRig(delta: number): void {
         const position = this.propHandle?.getPosition();
         if (position) {
-            this.visualRig.position.set(position.x, position.y + CAR_VISUAL_HEIGHT_OFFSET, position.z);
+            this.visualRig.position.set(position.x, position.y + CAR_VISUAL_HEIGHT_OFFSET + CAR_VISUAL_GROUND_BIAS, position.z);
         } else {
             this.visualRig.position.set(
                 this.spawnPosition.x,
-                this.spawnPosition.y + CAR_VISUAL_HEIGHT_OFFSET,
+                this.spawnPosition.y + CAR_VISUAL_HEIGHT_OFFSET + CAR_VISUAL_GROUND_BIAS,
                 this.spawnPosition.z
             );
         }
@@ -415,26 +412,26 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if (this.bodyNode) {
             this.bodyNode.rotation.x = THREE.MathUtils.damp(
                 this.bodyNode.rotation.x,
-                -(this.speedVisual / CAR_FORWARD_SPEED) * 0.12,
-                8,
+                -(this.speedVisual - this.accelerationVisual) / 6,
+                10,
                 delta
             );
             this.bodyNode.rotation.z = THREE.MathUtils.damp(
                 this.bodyNode.rotation.z,
-                -(this.steerVisual * this.speedVisual / CAR_FORWARD_SPEED) * 0.28,
-                7,
+                -(this.steerVisual / 5) * this.speedVisual,
+                5,
                 delta
             );
             this.bodyNode.position.y = THREE.MathUtils.damp(this.bodyNode.position.y, CAR_BODY_FLOAT_HEIGHT, 5, delta);
         }
 
-        const steerAngle = -this.steerVisual * 0.5;
+        const steerAngle = -this.steerVisual / 1.5;
         if (this.wheelFL) this.wheelFL.rotation.y = THREE.MathUtils.damp(this.wheelFL.rotation.y, steerAngle, 10, delta);
         if (this.wheelFR) this.wheelFR.rotation.y = THREE.MathUtils.damp(this.wheelFR.rotation.y, steerAngle, 10, delta);
 
         for (const wheel of [this.wheelFL, this.wheelFR, this.wheelBL, this.wheelBR]) {
             if (!wheel) continue;
-            wheel.rotation.x += this.speedVisual * CAR_WHEEL_SPIN_FACTOR * delta;
+            wheel.rotation.x += this.accelerationVisual;
         }
     }
 
@@ -444,6 +441,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if (typeof payload.facingYaw === 'number') this.facingYaw = payload.facingYaw;
         if (typeof payload.steer === 'number') this.steerVisual = payload.steer;
         if (typeof payload.speed === 'number') this.speedVisual = payload.speed;
+        if (typeof payload.acceleration === 'number') this.accelerationVisual = payload.acceleration;
         if (typeof payload.wheelSpin === 'number') this.wheelSpin = payload.wheelSpin;
     }
 
@@ -458,17 +456,34 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             ownerInstanceId: this.id,
             mountPointId: 'driver',
             getSeatPose: () => this.getSeatPose(),
+            getBodyYawPose: () => this.getBodyYawPose(),
+            getViewPose: () => this.getViewPose(),
             getExitPose: () => this.getExitPose(),
             canUnmountNow: (reason) => reason !== 'movement'
         };
     }
 
     private getSeatPose(): { position: THREE.Vector3; yaw: number } {
-        const position = this.propHandle?.getPosition();
-        const base = position
-            ? new THREE.Vector3(position.x, position.y, position.z)
-            : this.spawnPosition.clone();
+        const base = this.getCarBasePosition();
         const offset = CAR_SEAT_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        return {
+            position: base.add(offset),
+            yaw: this.facingYaw
+        };
+    }
+
+    private getBodyYawPose(): { position: THREE.Vector3; yaw: number } {
+        const base = this.getCarBasePosition();
+        const offset = CAR_BODY_YAW_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        return {
+            position: base.add(offset),
+            yaw: this.facingYaw
+        };
+    }
+
+    private getViewPose(): { position: THREE.Vector3; yaw: number } {
+        const base = this.getCarBasePosition();
+        const offset = CAR_VIEW_OFFSET.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
         return {
             position: base.add(offset),
             yaw: this.facingYaw
@@ -484,11 +499,21 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         };
     }
 
+    private getCarBasePosition(): THREE.Vector3 {
+        const position = this.propHandle?.getPosition();
+        return position
+            ? new THREE.Vector3(position.x, position.y, position.z)
+            : this.spawnPosition.clone();
+    }
+
     private resetCar(): void {
         if (!this.propHandle) return;
         if (!this.propHandle.requestControl()) return;
 
         this.facingYaw = this.spawnYaw;
+        this.linearSpeed = 0;
+        this.angularSpeed = 0;
+        this.accelerationVisual = 0;
         this.steerVisual = 0;
         this.speedVisual = 0;
         this.wheelSpin = 0;
@@ -504,6 +529,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             facingYaw: this.facingYaw,
             steer: this.steerVisual,
             speed: this.speedVisual,
+            acceleration: this.accelerationVisual,
             wheelSpin: this.wheelSpin
         }, { localEcho: false });
     }
@@ -521,10 +547,6 @@ export class SimpleRacingCarObject implements IObjectModule {
     }
 }
 
-function moveTowards(current: number, target: number, maxDelta: number): number {
-    if (Math.abs(target - current) <= maxDelta) return target;
-    return current + Math.sign(target - current) * maxDelta;
-}
 
 function nowMs(): number {
     return (typeof performance !== 'undefined' && typeof performance.now === 'function')

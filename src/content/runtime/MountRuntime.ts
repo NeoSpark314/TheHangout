@@ -142,6 +142,16 @@ export class MountRuntime implements IUpdatable {
         return this.localMount ? this.localMount.getSeatPose() : null;
     }
 
+    public getLocalBodyYawPose(): { position: THREE.Vector3; yaw: number } | null {
+        if (!this.localMount) return null;
+        return this.localMount.getBodyYawPose?.() ?? this.localMount.getSeatPose();
+    }
+
+    public getLocalViewPose(): { position: THREE.Vector3; yaw: number } | null {
+        if (!this.localMount) return null;
+        return this.localMount.getViewPose?.() ?? this.localMount.getSeatPose();
+    }
+
     public getLocalMountStatus(): ILocalMountStatus {
         return this.snapshotLocalState();
     }

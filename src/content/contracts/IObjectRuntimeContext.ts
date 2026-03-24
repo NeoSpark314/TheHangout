@@ -57,6 +57,17 @@ export interface ISharedPropInteractionConfig {
     getPreferredHeldQuaternionSpace?: (handle: ISharedPropHandle) => 'grip' | 'aim' | undefined;
 }
 
+export interface ISharedPropPhysicsTuning {
+    linearDamping?: number;
+    angularDamping?: number;
+    friction?: number;
+    restitution?: number;
+    density?: number;
+    gravityScale?: number;
+    canSleep?: boolean;
+    startSleeping?: boolean;
+}
+
 interface ISharedPropSpawnBase {
     position: IVector3;
     mesh: THREE.Object3D;
@@ -64,6 +75,7 @@ interface ISharedPropSpawnBase {
     url?: string;
     entityId?: string;
     grabbable?: boolean;
+    physicsTuning?: ISharedPropPhysicsTuning;
     scale?: number;
     dualGrabScalable?: boolean;
     profile?: PhysicsReplicationProfileId;

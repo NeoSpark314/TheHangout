@@ -33,8 +33,9 @@ export class AvatarFacingResolver {
         const headYaw = this.yawFromHeadPose(frame);
 
         if (!this.initialized) {
-            const initialYaw = context.mode === 'xr-seated' && typeof context.seatWorldYaw === 'number'
-                ? context.seatWorldYaw
+            const initialYaw = (context.mode === 'xr-seated' || context.mode === 'mounted-seated')
+                && typeof (context.mountWorldYaw ?? context.seatWorldYaw) === 'number'
+                ? (context.mountWorldYaw ?? context.seatWorldYaw)!
                 : rootYaw;
             this.reset(initialYaw);
         }
@@ -45,8 +46,8 @@ export class AvatarFacingResolver {
             return this.bodyWorldYaw;
         }
 
-        if (context.mode === 'xr-seated') {
-            this.bodyWorldYaw = this.normalizeAngle(context.seatWorldYaw ?? rootYaw);
+        if (context.mode === 'xr-seated' || context.mode === 'mounted-seated') {
+            this.bodyWorldYaw = this.normalizeAngle(context.mountWorldYaw ?? context.seatWorldYaw ?? rootYaw);
             this.lastMoveWorldYaw = this.bodyWorldYaw;
             this.moveActiveSeconds = 0;
             this.moveIdleSeconds = MOVE_RELEASE_TIME;

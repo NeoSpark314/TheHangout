@@ -286,6 +286,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         const render = player.appContext.runtime.render;
         const isXR = render.isXRPresenting();
         const seatPose = player.appContext.runtime.mount.getLocalSeatPose();
+        const bodyYawPose = player.appContext.runtime.mount.getLocalBodyYawPose();
         const movement = this.getSkill('movement') as MovementSkill | undefined;
         const explicitTurnDeltaYaw = movement?.consumeExplicitTurnDeltaYaw() ?? 0;
         const currentAvatarRootPosition = new THREE.Vector3(
@@ -301,9 +302,9 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
         this.suppressVelocityForFrame = false;
 
         return {
-            mode: isXR
-                ? (seatPose ? 'xr-seated' : 'xr-standing')
-                : 'desktop',
+            mode: seatPose
+                ? 'mounted-seated'
+                : (isXR ? 'xr-standing' : 'desktop'),
             locomotionWorldVelocity: {
                 x: locomotionVelocity.x,
                 y: locomotionVelocity.y,
@@ -311,6 +312,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
             },
             explicitTurnDeltaYaw,
             seatWorldYaw: seatPose?.yaw,
+            mountWorldYaw: bodyYawPose?.yaw ?? seatPose?.yaw,
             playerHeightM: player.avatarConfigSnapshot.playerHeightM
         };
     }

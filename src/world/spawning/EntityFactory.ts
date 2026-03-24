@@ -7,6 +7,7 @@ import { PenToolEntity } from '../entities/PenToolEntity';
 import { PenView } from '../../render/views/PenView';
 import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
+import type { ISharedPropPhysicsTuning } from '../../content/contracts/IObjectRuntimeContext';
 import { NullView } from '../../render/views/NullView';
 import { EntityType } from '../../shared/contracts/IEntityState';
 import { IEntity } from '../../shared/contracts/IEntity';
@@ -38,6 +39,7 @@ export class EntityFactory {
                 config.moduleId,
                 config.ownerId,
                 config.grabbable,
+                config.physicsTuning,
                 config.url,
                 config.scale,
                 config.dualGrabScalable,
@@ -123,6 +125,7 @@ export class EntityFactory {
         moduleId?: string,
         ownerId?: string | null,
         grabbable?: boolean,
+        physicsTuning?: ISharedPropPhysicsTuning,
         url?: string,
         scale?: number,
         dualGrabScalable?: boolean,
@@ -154,6 +157,7 @@ export class EntityFactory {
             moduleId,
             ownerId,
             grabbable,
+            physicsTuning,
             url,
             scale,
             dualGrabScalable,
@@ -170,6 +174,7 @@ export class EntityFactory {
         moduleId?: string,
         ownerId?: string | null,
         grabbable?: boolean,
+        physicsTuning?: ISharedPropPhysicsTuning,
         replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         const runtime = context.runtime;
@@ -195,6 +200,7 @@ export class EntityFactory {
             moduleId,
             ownerId,
             grabbable,
+            physicsTuning,
             replicationProfileId
         );
     }

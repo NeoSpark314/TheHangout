@@ -102,4 +102,16 @@ describe('AvatarFacingResolver', () => {
 
         expect(yaw).toBeCloseTo(seatYaw, 4);
     });
+
+    it('anchors mounted seated body yaw to the mount yaw', () => {
+        const resolver = new AvatarFacingResolver();
+        const mountYaw = THREE.MathUtils.degToRad(-45);
+        const yaw = resolver.resolve(
+            createFrame(THREE.MathUtils.degToRad(20)),
+            createContext('mounted-seated', { mountWorldYaw: mountYaw }),
+            1 / 60
+        );
+
+        expect(yaw).toBeCloseTo(mountYaw, 4);
+    });
 });
