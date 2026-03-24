@@ -16,7 +16,10 @@ import type {
     IPhysicsBodyHandle,
     IPhysicsColliderHandle
 } from '../../content/contracts/IObjectRuntimeContext';
-import type { IScenarioStaticHeightfieldOptions } from '../../content/contracts/IScenarioContext';
+import type {
+    IScenarioStaticColliderMaterial,
+    IScenarioStaticHeightfieldOptions
+} from '../../content/contracts/IScenarioContext';
 import { resolvePhysicsReplicationProfile, type PhysicsReplicationProfileId } from './PhysicsReplicationProfiles';
 
 export interface IPhysicsDebugBody {
@@ -598,7 +601,8 @@ export class PhysicsRuntime {
         hy: number,
         hz: number,
         position: IVector3,
-        rotation?: { x: number; y: number; z: number; w: number }
+        rotation?: { x: number; y: number; z: number; w: number },
+        material?: IScenarioStaticColliderMaterial
     ): IPhysicsColliderHandle | null {
         if (!this.world) return null;
         const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z);
@@ -607,7 +611,10 @@ export class PhysicsRuntime {
         }
         const body = this.world.createRigidBody(bodyDesc);
         const collider = this.world.createCollider(
-            RAPIER.ColliderDesc.cuboid(hx, hy, hz).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
+            RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+                .setFriction(material?.friction ?? 1.0)
+                .setRestitution(material?.restitution ?? 0.0)
+                .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
             body
         );
         this.registerDebugBody(`static-cuboid-${this.nextPhysicsId++}`, body, collider);
@@ -653,6 +660,8 @@ export class PhysicsRuntime {
         
         // If nrows/ncols are point counts (e.g. 65), then scale should be total size 
         const colliderDesc = RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, scale);
+        colliderDesc.setFriction(options.material?.friction ?? 1.0);
+        colliderDesc.setRestitution(options.material?.restitution ?? 0.0);
         const collider = this.world.createCollider(colliderDesc, body);
         
         this.registerDebugBody(`static-heightfield-${this.nextPhysicsId++}`, body, collider);

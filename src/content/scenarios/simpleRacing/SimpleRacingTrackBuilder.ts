@@ -18,6 +18,10 @@ const TRACK_MODEL_BY_PIECE: Record<TSimpleRacingCell[2], TSimpleRacingModelKey> 
     'track-bump': 'trackBump',
     'track-finish': 'trackFinish'
 };
+const TRACK_WALL_MATERIAL = {
+    friction: 0.0,
+    restitution: 0.0
+} as const;
 
 export class SimpleRacingTrackBuilder {
     private readonly root = new THREE.Group();
@@ -247,11 +251,12 @@ export class SimpleRacingTrackBuilder {
                 for (const side of [-1, 1]) {
                     const localX = side * wallX;
                     const position = rotateLocalXZ(centerX, centerZ, localX, 0, yaw);
-                    this.addBody(context, {
-                        position: { x: position.x, y: wallY, z: position.z },
-                        halfExtents: { x: wallHalfThickness, y: wallHalfHeight, z: halfLen },
-                        rotation: quaternionFromYaw(yaw)
-                    });
+                this.addBody(context, {
+                    position: { x: position.x, y: wallY, z: position.z },
+                    halfExtents: { x: wallHalfThickness, y: wallHalfHeight, z: halfLen },
+                    rotation: quaternionFromYaw(yaw),
+                    material: TRACK_WALL_MATERIAL
+                });
                 }
                 continue;
             }
@@ -309,7 +314,8 @@ export class SimpleRacingTrackBuilder {
                     z: centerZ + (radius * Math.sin(midAngle))
                 },
                 halfExtents: { x: wallHalfThickness, y: wallHalfHeight, z: segmentHalfLen },
-                rotation: quaternionFromYaw(-midAngle)
+                rotation: quaternionFromYaw(-midAngle),
+                material: TRACK_WALL_MATERIAL
             });
         }
     }
@@ -320,6 +326,7 @@ export class SimpleRacingTrackBuilder {
             position: { x: number; y: number; z: number };
             halfExtents: { x: number; y: number; z: number };
             rotation: { x: number; y: number; z: number; w: number };
+            material?: { friction?: number; restitution?: number };
         }
     ): void {
         const body = context.physics.createStaticBox(options);

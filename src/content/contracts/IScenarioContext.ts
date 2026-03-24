@@ -28,11 +28,17 @@ export interface IScenarioStaticBodyHandle {
     destroy(): void;
 }
 
+export interface IScenarioStaticColliderMaterial {
+    friction?: number;
+    restitution?: number;
+}
+
 export interface IScenarioStaticBoxOptions {
     id?: string;
     position: IVector3;
     halfExtents: IVector3;
     rotation?: IQuaternion;
+    material?: IScenarioStaticColliderMaterial;
 }
 
 export interface IScenarioStaticHeightfieldOptions {
@@ -41,6 +47,7 @@ export interface IScenarioStaticHeightfieldOptions {
     ncols: number;
     heights: Float32Array;
     scale: IVector3;
+    material?: IScenarioStaticColliderMaterial;
 }
 
 export interface IScenarioContext {

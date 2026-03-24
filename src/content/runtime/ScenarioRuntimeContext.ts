@@ -229,7 +229,8 @@ export class ScenarioRuntimeContext implements IScenarioContext {
                     options.halfExtents.y,
                     options.halfExtents.z,
                     options.position,
-                    options.rotation
+                    options.rotation,
+                    options.material
                 );
                 if (!collider) return null;
                 const id = options.id || `scenario-static-body-${this.nextStaticBodyId++}`;

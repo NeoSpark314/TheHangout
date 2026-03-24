@@ -47,6 +47,8 @@ const CAR_LINEAR_DAMP = 0.1;
 const CAR_SPEED_SCALE = 12.5;
 const CAR_DRIVE_ANGULAR_ACCEL = 100;
 const CAR_VISUAL_SYNC_INTERVAL_MS = 90;
+const CAR_FACING_YAW_DAMP = 14.0;
+const CAR_STEER_VISUAL_DAMP = 12.0;
 const CAR_BODY_FLOAT_HEIGHT = 0.35;
 const CAR_ENGINE_BASE_VOLUME = 0.05;
 const CAR_ENGINE_MAX_VOLUME = 0.5;
@@ -157,10 +159,12 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private readonly spawnPosition: THREE.Vector3;
     private readonly spawnYaw: number;
     private facingYaw: number;
+    private presentFacingYaw: number;
     private linearSpeed = 0;
     private angularSpeed = 0;
     private accelerationVisual = 0;
     private steerVisual = 0;
+    private presentSteerVisual = 0;
     private speedVisual = 0;
     private wheelSpin = 0;
     private throttleVisual = 0;
@@ -205,6 +209,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         this.spawnPosition = new THREE.Vector3(position.x, position.y, position.z);
         this.spawnYaw = spawnYaw;
         this.facingYaw = spawnYaw;
+        this.presentFacingYaw = spawnYaw;
 
         this.visualRig.position.set(position.x, position.y + CAR_VISUAL_HEIGHT_OFFSET, position.z);
 
@@ -487,6 +492,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
 
     private updateVisualRig(delta: number): void {
         const position = this.propHandle?.getPosition();
+        const velocity = this.propHandle?.getLinearVelocity();
         if (position) {
             this.visualRig.position.set(position.x, position.y + CAR_VISUAL_HEIGHT_OFFSET + CAR_VISUAL_GROUND_BIAS, position.z);
         } else {
@@ -497,8 +503,21 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             );
         }
 
-        this.visualRig.quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        this.presentFacingYaw = dampAngle(this.presentFacingYaw, this.facingYaw, CAR_FACING_YAW_DAMP, delta);
+        this.presentSteerVisual = THREE.MathUtils.damp(this.presentSteerVisual, this.steerVisual, CAR_STEER_VISUAL_DAMP, delta);
+        this.visualRig.quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.presentFacingYaw);
         this.updateAudio(delta);
+
+        const planarSpeed = velocity ? Math.hypot(velocity.x, velocity.z) : 0;
+        const wheelSpinDelta = planarSpeed > 0.001
+            ? (planarSpeed / CAR_RADIUS) * delta
+            : 0;
+        const targetSpeedVisual = THREE.MathUtils.clamp(planarSpeed / CAR_SPEED_SCALE, -1, 1);
+        this.speedVisual = THREE.MathUtils.damp(this.speedVisual, targetSpeedVisual, 8, delta);
+        this.accelerationVisual = THREE.MathUtils.damp(this.accelerationVisual, targetSpeedVisual, 10, delta);
+        if (wheelSpinDelta > 0) {
+            this.wheelSpin += wheelSpinDelta;
+        }
 
         if (this.bodyNode) {
             this.bodyNode.rotation.x = THREE.MathUtils.damp(
@@ -509,20 +528,20 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             );
             this.bodyNode.rotation.z = THREE.MathUtils.damp(
                 this.bodyNode.rotation.z,
-                -(this.steerVisual / 5) * this.speedVisual,
+                -(this.presentSteerVisual / 5) * this.speedVisual,
                 5,
                 delta
             );
             this.bodyNode.position.y = THREE.MathUtils.damp(this.bodyNode.position.y, CAR_BODY_FLOAT_HEIGHT, 5, delta);
         }
 
-        const steerAngle = this.steerVisual / 1.5;
+        const steerAngle = this.presentSteerVisual / 1.5;
         if (this.wheelFL) this.wheelFL.rotation.y = THREE.MathUtils.damp(this.wheelFL.rotation.y, steerAngle, 10, delta);
         if (this.wheelFR) this.wheelFR.rotation.y = THREE.MathUtils.damp(this.wheelFR.rotation.y, steerAngle, 10, delta);
 
         for (const wheel of [this.wheelFL, this.wheelFR, this.wheelBL, this.wheelBR]) {
             if (!wheel) continue;
-            wheel.rotation.x -= this.accelerationVisual;
+            wheel.rotation.x = this.wheelSpin;
         }
     }
 
@@ -691,10 +710,12 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if (!this.propHandle.requestControl()) return;
 
         this.facingYaw = this.spawnYaw;
+        this.presentFacingYaw = this.spawnYaw;
         this.linearSpeed = 0;
         this.angularSpeed = 0;
         this.accelerationVisual = 0;
         this.steerVisual = 0;
+        this.presentSteerVisual = 0;
         this.speedVisual = 0;
         this.wheelSpin = 0;
         this.throttleVisual = 0;
@@ -744,4 +765,9 @@ function nowMs(): number {
 
 function remap(value: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
     return outMin + ((outMax - outMin) * ((value - inMin) / (inMax - inMin)));
+}
+
+function dampAngle(current: number, target: number, lambda: number, delta: number): number {
+    const deltaAngle = THREE.MathUtils.euclideanModulo((target - current) + Math.PI, Math.PI * 2) - Math.PI;
+    return current + (deltaAngle * (1 - Math.exp(-lambda * delta)));
 }
