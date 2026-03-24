@@ -5,7 +5,7 @@ import type { IInteractable } from '../../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../../shared/contracts/IInteractionEvent';
 import type { IVector3 } from '../../../shared/contracts/IMath';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../../contracts/IObjectModule';
-import type { ISharedPropPhysicsTuning } from '../../contracts/IObjectRuntimeContext';
+import type { IAudioEmitterHandle, ISharedPropPhysicsTuning } from '../../contracts/IObjectRuntimeContext';
 import type { ILocalMountBinding } from '../../contracts/IMounting';
 import type { IObjectReplicationMeta } from '../../contracts/IReplicatedObjectInstance';
 import { BaseReplicatedPhysicsPropObjectInstance } from '../../runtime/BaseReplicatedPhysicsPropObjectInstance';
@@ -29,7 +29,7 @@ const CAR_MOUNT_EVENTS: IAuthoritativeSingleMountEventMap = {
     mountRejected: CAR_EVENT_MOUNT_REJECTED
 };
 
-const CAR_RADIUS = 0.52;
+const CAR_RADIUS = 0.78;
 const CAR_SEAT_OFFSET = new THREE.Vector3(0, 0.5, 0.6);
 const CAR_BODY_YAW_OFFSET = new THREE.Vector3(0, 0, 0);
 const CAR_VIEW_OFFSET = new THREE.Vector3(0, 1.0, 0.6);
@@ -46,7 +46,22 @@ const CAR_LINEAR_DAMP = 0.1;
 const CAR_SPEED_SCALE = 12.5;
 const CAR_DRIVE_ANGULAR_ACCEL = 100;
 const CAR_VISUAL_SYNC_INTERVAL_MS = 90;
-const CAR_BODY_FLOAT_HEIGHT = 0.2;
+const CAR_BODY_FLOAT_HEIGHT = 0.35;
+const CAR_ENGINE_BASE_VOLUME = 0.05;
+const CAR_ENGINE_MAX_VOLUME = 0.5;
+const CAR_ENGINE_LERP_RATE = 5.0;
+const CAR_ENGINE_BASE_RATE = 0.5;
+const CAR_ENGINE_MAX_RATE = 3.0;
+const CAR_ENGINE_RATE_LERP = 2.0;
+const CAR_SKID_MIN_DRIFT = 2.0;
+const CAR_SKID_MAX_DRIFT = 3.0;
+const CAR_SKID_MIN_VOLUME = 0.1;
+const CAR_SKID_MAX_VOLUME = 0.6;
+const CAR_SKID_VOLUME_LERP = 10.0;
+const CAR_SKID_MIN_RATE = 1.0;
+const CAR_SKID_MAX_RATE = 3.0;
+const CAR_IMPACT_SPEED_THRESHOLD = 1.75;
+const CAR_IMPACT_COOLDOWN_MS = 180;
 const CAR_PHYSICS_TUNING: ISharedPropPhysicsTuning = {
     linearDamping: 0.1,
     angularDamping: 4.0,
@@ -138,12 +153,21 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private steerVisual = 0;
     private speedVisual = 0;
     private wheelSpin = 0;
+    private throttleVisual = 0;
+    private driftIntensity = 0;
     private bodyNode: THREE.Object3D | null = null;
     private wheelFL: THREE.Object3D | null = null;
     private wheelFR: THREE.Object3D | null = null;
     private wheelBL: THREE.Object3D | null = null;
     private wheelBR: THREE.Object3D | null = null;
+    private engineEmitter: IAudioEmitterHandle | null = null;
+    private skidEmitter: IAudioEmitterHandle | null = null;
+    private engineVolume = 0;
+    private engineRate = 1;
+    private skidVolume = 0;
+    private skidRate = 1;
     private lastVisualSyncAtMs = 0;
+    private lastImpactSoundAtMs = 0;
 
     constructor(context: IObjectSpawnContext, config: IObjectSpawnConfig) {
         const root = new THREE.Group();
@@ -201,7 +225,9 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             }
         });
 
+        this.runtimeContext.events.onCollisionStarted((event) => this.handleCollisionStarted(event));
         void this.loadVisuals();
+        void this.initializeAudio();
     }
 
     public override getPrimaryEntity(): IEntity {
@@ -284,6 +310,46 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         this.visualRig.add(model);
     }
 
+    private async initializeAudio(): Promise<void> {
+        if (!this.runtimeContext.scene.isRenderingAvailable()) return;
+
+        this.engineEmitter = await this.runtimeContext.audio.createEmitter({
+            url: SIMPLE_RACING_ASSETS.audio.engine,
+            loop: true,
+            autoplay: true,
+            position: this.getAudioPosition(),
+            volume: 0,
+            playbackRate: 1,
+            refDistance: 2.5,
+            maxDistance: 40,
+            rolloffFactor: 1
+        });
+        this.engineVolume = 0;
+        this.engineRate = 1;
+        this.addCleanup(() => {
+            this.engineEmitter?.dispose();
+            this.engineEmitter = null;
+        });
+
+        this.skidEmitter = await this.runtimeContext.audio.createEmitter({
+            url: SIMPLE_RACING_ASSETS.audio.skid,
+            loop: true,
+            autoplay: true,
+            position: this.getAudioPosition(),
+            volume: 0,
+            playbackRate: 1,
+            refDistance: 2.5,
+            maxDistance: 34,
+            rolloffFactor: 1
+        });
+        this.skidVolume = 0;
+        this.skidRate = 1;
+        this.addCleanup(() => {
+            this.skidEmitter?.dispose();
+            this.skidEmitter = null;
+        });
+    }
+
     private createMountZone(): THREE.Mesh {
         const geometry = new THREE.BoxGeometry(
             CAR_MOUNT_ZONE_SIZE.x,
@@ -339,6 +405,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         const input = this.runtimeContext.input.getMovementVector();
         const steeringInput = -input.x;
         const throttleInput = input.y;
+        this.throttleVisual = throttleInput;
 
         let direction = Math.sign(this.linearSpeed);
         if (direction === 0) {
@@ -370,6 +437,10 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         );
         this.speedVisual = this.linearSpeed;
         this.wheelSpin += this.accelerationVisual;
+        const planarSpeed = Math.hypot(velocity.x, velocity.z);
+        const forwardSpeed = (velocity.x * forward.x) + (velocity.z * forward.z);
+        const lateralSpeed = (velocity.x * right.x) + (velocity.z * right.z);
+        this.driftIntensity = Math.abs(lateralSpeed) * 0.6 + Math.max(0, planarSpeed - Math.abs(forwardSpeed));
 
         this.propHandle.setMotion({
             angularVelocity: {
@@ -408,6 +479,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         }
 
         this.visualRig.quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.facingYaw);
+        this.updateAudio(delta);
 
         if (this.bodyNode) {
             this.bodyNode.rotation.x = THREE.MathUtils.damp(
@@ -425,13 +497,13 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             this.bodyNode.position.y = THREE.MathUtils.damp(this.bodyNode.position.y, CAR_BODY_FLOAT_HEIGHT, 5, delta);
         }
 
-        const steerAngle = -this.steerVisual / 1.5;
+        const steerAngle = this.steerVisual / 1.5;
         if (this.wheelFL) this.wheelFL.rotation.y = THREE.MathUtils.damp(this.wheelFL.rotation.y, steerAngle, 10, delta);
         if (this.wheelFR) this.wheelFR.rotation.y = THREE.MathUtils.damp(this.wheelFR.rotation.y, steerAngle, 10, delta);
 
         for (const wheel of [this.wheelFL, this.wheelFR, this.wheelBL, this.wheelBR]) {
             if (!wheel) continue;
-            wheel.rotation.x += this.accelerationVisual;
+            wheel.rotation.x -= this.accelerationVisual;
         }
     }
 
@@ -443,6 +515,82 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if (typeof payload.speed === 'number') this.speedVisual = payload.speed;
         if (typeof payload.acceleration === 'number') this.accelerationVisual = payload.acceleration;
         if (typeof payload.wheelSpin === 'number') this.wheelSpin = payload.wheelSpin;
+    }
+
+    private updateAudio(delta: number): void {
+        const audioPosition = this.getAudioPosition();
+        this.engineEmitter?.setPosition(audioPosition);
+        this.skidEmitter?.setPosition(audioPosition);
+
+        const speedFactor = THREE.MathUtils.clamp(Math.abs(this.speedVisual), 0, 1);
+        const throttleFactor = THREE.MathUtils.clamp(Math.abs(this.throttleVisual), 0, 1);
+        const targetEngineVolume = remap(
+            speedFactor + (throttleFactor * 0.5),
+            0,
+            1.5,
+            CAR_ENGINE_BASE_VOLUME,
+            CAR_ENGINE_MAX_VOLUME
+        );
+        this.engineVolume = THREE.MathUtils.lerp(this.engineVolume, targetEngineVolume, delta * CAR_ENGINE_LERP_RATE);
+        this.engineEmitter?.setVolume(this.engineVolume);
+
+        let targetEngineRate = remap(speedFactor, 0, 1, CAR_ENGINE_BASE_RATE, CAR_ENGINE_MAX_RATE);
+        if (throttleFactor > 0.1) {
+            targetEngineRate += 0.2;
+        }
+        this.engineRate = THREE.MathUtils.lerp(this.engineRate, targetEngineRate, delta * CAR_ENGINE_RATE_LERP);
+        this.engineEmitter?.setPlaybackRate(this.engineRate);
+
+        const clampedDrift = THREE.MathUtils.clamp(this.driftIntensity, CAR_SKID_MIN_DRIFT, CAR_SKID_MAX_DRIFT);
+        const targetSkidVolume = this.driftIntensity > CAR_SKID_MIN_DRIFT
+            ? remap(clampedDrift, CAR_SKID_MIN_DRIFT, CAR_SKID_MAX_DRIFT, CAR_SKID_MIN_VOLUME, CAR_SKID_MAX_VOLUME)
+            : 0;
+        this.skidVolume = THREE.MathUtils.lerp(this.skidVolume, targetSkidVolume, delta * CAR_SKID_VOLUME_LERP);
+        this.skidEmitter?.setVolume(this.skidVolume);
+
+        const targetSkidRate = THREE.MathUtils.clamp(Math.abs(this.speedVisual), CAR_SKID_MIN_RATE, CAR_SKID_MAX_RATE);
+        this.skidRate = THREE.MathUtils.lerp(this.skidRate, targetSkidRate, 0.1);
+        this.skidEmitter?.setPlaybackRate(this.skidRate);
+    }
+
+    private handleCollisionStarted(event: { entityAId: string | null; entityBId: string | null }): void {
+        if (!this.propHandle) return;
+        const entityId = this.propHandle.entityId;
+        if (event.entityAId !== entityId && event.entityBId !== entityId) return;
+
+        const velocity = this.propHandle.getLinearVelocity();
+        if (!velocity) return;
+
+        const impactSpeed = Math.hypot(velocity.x, velocity.y, velocity.z);
+        if (impactSpeed < CAR_IMPACT_SPEED_THRESHOLD) return;
+
+        const now = nowMs();
+        if ((now - this.lastImpactSoundAtMs) < CAR_IMPACT_COOLDOWN_MS) return;
+        this.lastImpactSoundAtMs = now;
+
+        void this.playImpactSound(impactSpeed);
+    }
+
+    private async playImpactSound(impactSpeed: number): Promise<void> {
+        const emitter = await this.runtimeContext.audio.createEmitter({
+            url: SIMPLE_RACING_ASSETS.audio.impact,
+            autoplay: true,
+            position: this.getAudioPosition(),
+            volume: THREE.MathUtils.clamp(remap(impactSpeed, 0, 6, 0.01, 1.0), 0.01, 1.0),
+            playbackRate: 1,
+            refDistance: 2.5,
+            maxDistance: 36,
+            rolloffFactor: 1.05
+        });
+        window.setTimeout(() => emitter.dispose(), 2000);
+    }
+
+    private getAudioPosition(): IVector3 {
+        const position = this.propHandle?.getPosition();
+        if (position) {
+            return { x: position.x, y: position.y + 0.1, z: position.z };
+        }
+        return { x: this.spawnPosition.x, y: this.spawnPosition.y + 0.1, z: this.spawnPosition.z };
     }
 
     private releaseDrivingAuthorityIfLocal(): void {
@@ -517,6 +665,12 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         this.steerVisual = 0;
         this.speedVisual = 0;
         this.wheelSpin = 0;
+        this.throttleVisual = 0;
+        this.driftIntensity = 0;
+        this.engineVolume = 0;
+        this.engineRate = 1;
+        this.skidVolume = 0;
+        this.skidRate = 1;
         this.propHandle.setPose({
             position: { x: this.spawnPosition.x, y: this.spawnPosition.y, z: this.spawnPosition.z },
             quaternion: { x: 0, y: 0, z: 0, w: 1 },
@@ -552,4 +706,8 @@ function nowMs(): number {
     return (typeof performance !== 'undefined' && typeof performance.now === 'function')
         ? performance.now()
         : Date.now();
+}
+
+function remap(value: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
+    return outMin + ((outMax - outMin) * ((value - inMin) / (inMax - inMin)));
 }

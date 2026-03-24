@@ -68,6 +68,9 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         };
 
         this.audio = {
+            createEmitter: (options: Parameters<IObjectRuntimeContext['audio']['createEmitter']>[0]) => {
+                return this.app.runtime.audio.createEmitter(options);
+            },
             playDrumPadHit: (options: { frequency: number; intensity: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playDrumPadHit(options);
             },

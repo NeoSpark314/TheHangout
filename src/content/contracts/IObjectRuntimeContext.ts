@@ -149,6 +149,17 @@ export interface ITriggerZoneHandle {
 }
 
 export interface IAudioApi {
+    createEmitter(options: {
+        url: string;
+        loop?: boolean;
+        autoplay?: boolean;
+        position?: IVector3;
+        volume?: number;
+        playbackRate?: number;
+        refDistance?: number;
+        maxDistance?: number;
+        rolloffFactor?: number;
+    }): Promise<IAudioEmitterHandle>;
     playDrumPadHit(options: { frequency: number; intensity: number; position?: { x: number; y: number; z: number } }): void;
     playSequencerBeat(options: {
         beat: 'kick' | 'snare' | 'hat' | 'bass';
@@ -171,6 +182,17 @@ export interface IAudioApi {
         intensity?: number;
         position?: { x: number; y: number; z: number };
     }): void;
+}
+
+export interface IAudioEmitterHandle {
+    isReady(): boolean;
+    isPlaying(): boolean;
+    play(): void;
+    stop(): void;
+    setPosition(position: IVector3): void;
+    setVolume(volume: number): void;
+    setPlaybackRate(rate: number): void;
+    dispose(): void;
 }
 
 export interface IObjectRuntimeContext {

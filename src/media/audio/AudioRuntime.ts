@@ -4,8 +4,124 @@ import { SoundSynth } from './SoundSynth';
 import { AppContext } from '../../app/AppContext';
 import { IVector3 } from '../../shared/contracts/IMath';
 import { SfxRenderCache } from './SfxRenderCache';
+import * as THREE from 'three';
+import type { IAudioEmitterHandle } from '../../content/contracts/IObjectRuntimeContext';
 
 export type SequencerBeatType = 'kick' | 'snare' | 'hat' | 'bass';
+
+interface ICreateSpatialEmitterOptions {
+    url: string;
+    loop?: boolean;
+    autoplay?: boolean;
+    position?: IVector3;
+    volume?: number;
+    playbackRate?: number;
+    refDistance?: number;
+    maxDistance?: number;
+    rolloffFactor?: number;
+}
+
+class NullAudioEmitterHandle implements IAudioEmitterHandle {
+    public isReady(): boolean { return false; }
+    public isPlaying(): boolean { return false; }
+    public play(): void { }
+    public stop(): void { }
+    public setPosition(_position: IVector3): void { }
+    public setVolume(_volume: number): void { }
+    public setPlaybackRate(_rate: number): void { }
+    public dispose(): void { }
+}
+
+class SpatialAudioEmitterHandle implements IAudioEmitterHandle {
+    private disposed = false;
+    private ready = false;
+    private queuedPlay = false;
+
+    constructor(
+        private readonly runtime: AudioRuntime,
+        private readonly anchor: THREE.Object3D,
+        private readonly audio: THREE.PositionalAudio,
+        private readonly options: Required<Pick<ICreateSpatialEmitterOptions, 'loop' | 'autoplay' | 'volume' | 'playbackRate'>>
+    ) { }
+
+    public async initialize(bufferPromise: Promise<AudioBuffer>): Promise<void> {
+        try {
+            const buffer = await bufferPromise;
+            if (this.disposed) return;
+
+            this.audio.setBuffer(buffer);
+            this.audio.setLoop(this.options.loop);
+            this.audio.setVolume(this.options.volume);
+            this.audio.setPlaybackRate(this.options.playbackRate);
+            this.ready = true;
+
+            if (this.options.autoplay || this.queuedPlay) {
+                this.play();
+            }
+        } catch (error) {
+            console.error('[AudioRuntime] Failed to initialize spatial emitter:', error);
+            this.dispose();
+        }
+    }
+
+    public isReady(): boolean {
+        return this.ready && !this.disposed;
+    }
+
+    public isPlaying(): boolean {
+        return !this.disposed && this.audio.isPlaying;
+    }
+
+    public play(): void {
+        if (this.disposed) return;
+        if (!this.ready) {
+            this.queuedPlay = true;
+            return;
+        }
+        this.queuedPlay = false;
+        if (this.audio.isPlaying) return;
+        this.audio.play();
+    }
+
+    public stop(): void {
+        this.queuedPlay = false;
+        if (this.disposed || !this.audio.isPlaying) return;
+        this.audio.stop();
+    }
+
+    public setPosition(position: IVector3): void {
+        if (this.disposed) return;
+        this.anchor.position.set(position.x, position.y, position.z);
+    }
+
+    public setVolume(volume: number): void {
+        if (this.disposed) return;
+        this.audio.setVolume(Math.max(0, volume));
+    }
+
+    public setPlaybackRate(rate: number): void {
+        if (this.disposed) return;
+        this.audio.setPlaybackRate(Math.max(0.01, rate));
+    }
+
+    public dispose(): void {
+        if (this.disposed) return;
+        this.disposed = true;
+        this.queuedPlay = false;
+
+        try {
+            if (this.audio.isPlaying) {
+                this.audio.stop();
+            }
+            this.audio.disconnect();
+        } catch {
+            // Ignore cleanup failures from partially initialized audio nodes.
+        }
+
+        this.anchor.remove(this.audio);
+        this.runtime.detachEmitterAnchor(this.anchor);
+    }
+}
 
 export class AudioRuntime {
     public ctx: AudioContext | null = null;
@@ -20,6 +136,9 @@ export class AudioRuntime {
     private readonly melodyTimbreVersion = 3;
     private readonly arpTimbreVersion = 2;
     private readonly fxTimbreVersion = 1;
+    private readonly audioLoader = new THREE.AudioLoader();
+    private readonly sampleBufferCache = new Map<string, Promise<AudioBuffer>>();
+    private readonly activeEmitterAnchors = new Set<THREE.Object3D>();
 
     constructor(private context: AppContext) {
         this.setupListeners();
@@ -75,6 +194,39 @@ export class AudioRuntime {
 
     public update(delta: number): void {
         // Spatial logic
+    }
+
+    public async createEmitter(options: ICreateSpatialEmitterOptions): Promise<IAudioEmitterHandle> {
+        const render = this.context.runtime.render;
+        const listener = render?.audioListener ?? null;
+        const scene = render?.scene ?? null;
+        if (!listener || !scene) {
+            return new NullAudioEmitterHandle();
+        }
+
+        const anchor = new THREE.Object3D();
+        anchor.name = 'SpatialAudioEmitter';
+        if (options.position) {
+            anchor.position.set(options.position.x, options.position.y, options.position.z);
+        }
+        scene.add(anchor);
+        this.activeEmitterAnchors.add(anchor);
+
+        const audio = new THREE.PositionalAudio(listener);
+        audio.setRefDistance(options.refDistance ?? 1.25);
+        audio.setMaxDistance(options.maxDistance ?? 32);
+        audio.setRolloffFactor(options.rolloffFactor ?? 1.1);
+        audio.setDistanceModel('inverse');
+        anchor.add(audio);
+
+        const handle = new SpatialAudioEmitterHandle(this, anchor, audio, {
+            loop: options.loop ?? false,
+            autoplay: options.autoplay ?? false,
+            volume: options.volume ?? 1,
+            playbackRate: options.playbackRate ?? 1
+        });
+        await handle.initialize(this.loadSampleBuffer(options.url));
+        return handle;
     }
 
     /**
@@ -318,5 +470,26 @@ export class AudioRuntime {
                 destination.disconnect();
             }
         };
+    }
+
+    private loadSampleBuffer(url: string): Promise<AudioBuffer> {
+        const existing = this.sampleBufferCache.get(url);
+        if (existing) {
+            return existing;
+        }
+
+        const promise = this.audioLoader.loadAsync(url).catch((error) => {
+            this.sampleBufferCache.delete(url);
+            throw error;
+        });
+        this.sampleBufferCache.set(url, promise);
+        return promise;
+    }
+
+    public detachEmitterAnchor(anchor: THREE.Object3D): void {
+        if (!this.activeEmitterAnchors.delete(anchor)) {
+            return;
+        }
+        anchor.parent?.remove(anchor);
     }
 }

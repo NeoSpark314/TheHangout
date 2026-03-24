@@ -109,6 +109,9 @@ export class ScenarioRuntimeContext implements IScenarioContext {
         };
 
         this.audio = {
+            createEmitter: (options: Parameters<IAudioApi['createEmitter']>[0]) => {
+                return this.app.runtime.audio.createEmitter(options);
+            },
             playDrumPadHit: (options: Parameters<IAudioApi['playDrumPadHit']>[0]) => {
                 this.app.runtime.audio?.playDrumPadHit(options);
             },
