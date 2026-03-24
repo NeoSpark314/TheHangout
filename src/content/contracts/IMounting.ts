@@ -19,6 +19,7 @@ export interface ILocalMountBinding {
     getSeatPose: () => { position: THREE.Vector3; yaw: number };
     getBodyYawPose?: () => { position: THREE.Vector3; yaw: number };
     getViewPose?: () => { position: THREE.Vector3; yaw: number };
+    preserveRelativeViewYaw?: boolean;
     getExitPose?: () => { position: THREE.Vector3; yaw: number };
     canUnmountNow?: (reason: 'movement' | 'released' | 'external') => boolean;
 }
