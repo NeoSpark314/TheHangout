@@ -30,9 +30,9 @@ const CAR_MOUNT_EVENTS: IAuthoritativeSingleMountEventMap = {
 };
 
 const CAR_RADIUS = 0.52;
-const CAR_SEAT_OFFSET = new THREE.Vector3(0, 0.62, 0.02);
+const CAR_SEAT_OFFSET = new THREE.Vector3(0, 0.5, 0.6);
 const CAR_BODY_YAW_OFFSET = new THREE.Vector3(0, 0, 0);
-const CAR_VIEW_OFFSET = new THREE.Vector3(0, 0.68, 0.08);
+const CAR_VIEW_OFFSET = new THREE.Vector3(0, 1.0, 0.6);
 const CAR_EXIT_OFFSET = new THREE.Vector3(1.35, 0.15, 0);
 const CAR_VISUAL_HEIGHT_OFFSET = -CAR_RADIUS;
 const CAR_VISUAL_GROUND_BIAS = -0.08;

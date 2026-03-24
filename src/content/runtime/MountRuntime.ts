@@ -21,6 +21,8 @@ export class MountRuntime implements IUpdatable {
     private readonly localStateListeners = new Set<(status: ILocalMountStatus) => void>();
     private lastStateSignature = '';
     private movementUnmountStartMs: number | null = null;
+    private mountedLocalHeadPositionAtGrant = new THREE.Vector3();
+    private mountedLocalHeadYawAtGrant = 0;
 
     constructor(private context: AppContext) { }
 
@@ -63,7 +65,11 @@ export class MountRuntime implements IUpdatable {
 
         const seat = this.localMount.getSeatPose();
         const viewPose = this.localMount.getViewPose?.() ?? seat;
-        localPlayer.moveOriginTo(seat.position, viewPose.yaw);
+        const originYaw = viewPose.yaw - this.mountedLocalHeadYawAtGrant;
+        const originPosition = viewPose.position.clone().sub(
+            this.mountedLocalHeadPositionAtGrant.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, originYaw)
+        );
+        localPlayer.moveOriginTo(originPosition, originYaw);
     }
 
     public requestLocalMount(binding: ILocalMountBinding): boolean {
@@ -86,10 +92,11 @@ export class MountRuntime implements IUpdatable {
         this.localMount = binding;
         this.pendingMount = null;
         this.movementUnmountStartMs = null;
+        this.captureMountedLocalHeadBaseline();
         this.setLocalState('mounted', 'granted');
         const seat = binding.getSeatPose();
         const viewPose = binding.getViewPose?.() ?? seat;
-        localPlayer.teleportTo(seat.position, viewPose.yaw, { targetSpace: 'player' });
+        localPlayer.teleportTo(viewPose.position, viewPose.yaw, { targetSpace: 'head' });
         return true;
     }
 
@@ -116,6 +123,8 @@ export class MountRuntime implements IUpdatable {
         this.localMount = null;
         this.pendingMount = null;
         this.movementUnmountStartMs = null;
+        this.mountedLocalHeadPositionAtGrant.set(0, 0, 0);
+        this.mountedLocalHeadYawAtGrant = 0;
 
         const localPlayer = this.context.localPlayer;
         if (!localPlayer) {
@@ -196,5 +205,29 @@ export class MountRuntime implements IUpdatable {
         return (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
+    }
+
+    private captureMountedLocalHeadBaseline(): void {
+        const localPose = this.context.runtime.tracking?.getState?.().head?.localPose;
+        if (!localPose) {
+            this.mountedLocalHeadPositionAtGrant.set(0, 0, 0);
+            this.mountedLocalHeadYawAtGrant = 0;
+            return;
+        }
+
+        this.mountedLocalHeadPositionAtGrant.set(
+            localPose.position.x,
+            localPose.position.y,
+            localPose.position.z
+        );
+        this.mountedLocalHeadYawAtGrant = new THREE.Euler().setFromQuaternion(
+            new THREE.Quaternion(
+                localPose.quaternion.x,
+                localPose.quaternion.y,
+                localPose.quaternion.z,
+                localPose.quaternion.w
+            ),
+            'YXZ'
+        ).y;
     }
 }

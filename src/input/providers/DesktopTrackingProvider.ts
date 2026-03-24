@@ -126,6 +126,9 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         // Combine to World Space
         const worldHeadPos = localHeadPos.clone().applyQuaternion(originQuat).add(originPos);
         const worldHeadQuat = originQuat.clone().multiply(localHeadQuat);
+        const worldHandYawQuat = originQuat.clone().multiply(
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
+        );
         const avatarRootQuat = convertRawWorldQuaternionToAvatarWorldQuaternion(lp.xrOrigin.quaternion);
         const avatarHeadQuat = convertRawWorldQuaternionToAvatarWorldQuaternion({
             x: worldHeadQuat.x,
@@ -169,12 +172,13 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         const leftBaseOffset = new THREE.Vector3(-HAND_X_SPACING, -HAND_Y_OFFSET, HAND_Z_OFFSET);
         const rightBaseOffset = new THREE.Vector3(HAND_X_SPACING, -HAND_Y_OFFSET, HAND_Z_OFFSET);
 
-        const leftBaseWorld = leftBaseOffset.clone().applyQuaternion(worldHeadQuat).add(worldHeadPos);
-        const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(worldHeadQuat).add(worldHeadPos);
+        const leftBaseWorld = leftBaseOffset.clone().applyQuaternion(worldHandYawQuat).add(worldHeadPos);
+        const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(worldHandYawQuat).add(worldHeadPos);
 
-        // Apply stretch in the direction the HEAD is looking (worldHeadQuat)
-        let leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
-        let rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHeadQuat));
+        // Apply default stretch in the yaw-only hand frame so neutral desktop hands
+        // stay level while still following left/right head turning.
+        let leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHandYawQuat));
+        let rightTargetWorld = rightBaseWorld.clone().add(this.rightStretch.clone().applyQuaternion(worldHandYawQuat));
 
         // Assisted non-VR reach follows the exact rendered camera center line.
         // Using the actual camera transform avoids any discrepancy between the
@@ -193,7 +197,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         }
 
         this.state.hands.left.pose.position = { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z };
-        this.state.hands.left.pose.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.left.pose.quaternion = { x: worldHandYawQuat.x, y: worldHandYawQuat.y, z: worldHandYawQuat.z, w: worldHandYawQuat.w };
         this.state.hands.left.pointerPose.position = { ...this.state.hands.left.pose.position };
         this.state.hands.left.pointerPose.quaternion = { ...this.state.hands.left.pose.quaternion };
         this.state.hands.left.joints.forEach(j => {
@@ -202,7 +206,7 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         });
 
         this.state.hands.right.pose.position = { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z };
-        this.state.hands.right.pose.quaternion = { x: worldHeadQuat.x, y: worldHeadQuat.y, z: worldHeadQuat.z, w: worldHeadQuat.w };
+        this.state.hands.right.pose.quaternion = { x: worldHandYawQuat.x, y: worldHandYawQuat.y, z: worldHandYawQuat.z, w: worldHandYawQuat.w };
         this.state.hands.right.pointerPose.position = { ...this.state.hands.right.pose.position };
         this.state.hands.right.pointerPose.quaternion = { ...this.state.hands.right.pose.quaternion };
         this.state.hands.right.joints.forEach(j => {
@@ -210,13 +214,19 @@ export class DesktopTrackingProvider implements ITrackingProvider {
             j.pose.quaternion = { ...this.state.hands.right.pose.quaternion };
         });
 
+        const avatarHandQuat = convertRawWorldQuaternionToAvatarWorldQuaternion({
+            x: worldHandYawQuat.x,
+            y: worldHandYawQuat.y,
+            z: worldHandYawQuat.z,
+            w: worldHandYawQuat.w
+        });
         trackingFrame.effectors.leftHand = {
             position: { x: leftTargetWorld.x, y: leftTargetWorld.y, z: leftTargetWorld.z },
-            quaternion: avatarHeadQuat
+            quaternion: avatarHandQuat
         };
         trackingFrame.effectors.rightHand = {
             position: { x: rightTargetWorld.x, y: rightTargetWorld.y, z: rightTargetWorld.z },
-            quaternion: avatarHeadQuat
+            quaternion: avatarHandQuat
         };
         trackingFrame.tracked.leftHand = true;
         trackingFrame.tracked.rightHand = true;

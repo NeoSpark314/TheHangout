@@ -120,6 +120,30 @@ describe('DesktopTrackingProvider', () => {
         expect(Math.abs(leftHand.z - beforeLeft.z)).toBeGreaterThan(0.2);
     });
 
+    it('keeps default desktop hands level when only head pitch changes', () => {
+        const context = createTestContext();
+        const provider = new DesktopTrackingProvider(context);
+        provider.activate();
+
+        provider.update(1 / 60);
+        const beforeLeft = { ...provider.getState().hands.left.pose.position };
+
+        eventBus.emit(EVENTS.INTENT_LOOK, {
+            yawDeltaRad: 0,
+            pitchDeltaRad: -0.35
+        });
+        provider.update(1 / 60);
+
+        const afterLeft = provider.getState().hands.left.pose.position;
+        const handQuat = provider.getState().hands.left.pose.quaternion;
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(
+            new THREE.Quaternion(handQuat.x, handQuat.y, handQuat.z, handQuat.w)
+        );
+
+        expect(afterLeft.y - beforeLeft.y).toBeCloseTo(0, 5);
+        expect(up.y).toBeCloseTo(1, 5);
+    });
+
     it('uses estimated standing eye height from the configured player height', () => {
         const context = createTestContext(0, 1.6);
         const provider = new DesktopTrackingProvider(context);
