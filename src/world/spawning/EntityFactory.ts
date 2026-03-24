@@ -37,6 +37,7 @@ export class EntityFactory {
                 config.halfExtents,
                 config.moduleId,
                 config.ownerId,
+                config.grabbable,
                 config.url,
                 config.scale,
                 config.dualGrabScalable,
@@ -121,6 +122,7 @@ export class EntityFactory {
         halfExtents?: IVector3,
         moduleId?: string,
         ownerId?: string | null,
+        grabbable?: boolean,
         url?: string,
         scale?: number,
         dualGrabScalable?: boolean,
@@ -151,6 +153,7 @@ export class EntityFactory {
             halfExtents,
             moduleId,
             ownerId,
+            grabbable,
             url,
             scale,
             dualGrabScalable,
@@ -166,6 +169,7 @@ export class EntityFactory {
         mesh: THREE.Mesh,
         moduleId?: string,
         ownerId?: string | null,
+        grabbable?: boolean,
         replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         const runtime = context.runtime;
@@ -190,6 +194,7 @@ export class EntityFactory {
             view,
             moduleId,
             ownerId,
+            grabbable,
             replicationProfileId
         );
     }

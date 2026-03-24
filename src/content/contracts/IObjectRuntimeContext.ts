@@ -26,6 +26,23 @@ export interface ISharedPropHandle {
     isSleeping(): boolean;
     getPosition(): IVector3 | null;
     getLinearVelocity(): IVector3 | null;
+    getAngularVelocity(): IVector3 | null;
+    requestControl(options?: { allowSpeculativeHostClaim?: boolean }): boolean;
+    releaseControl(velocity?: IVector3): void;
+    setMotion(options: {
+        linearVelocity?: IVector3;
+        angularVelocity?: IVector3;
+        wakeUp?: boolean;
+        forceSync?: boolean;
+    }): boolean;
+    setPose(options: {
+        position: IVector3;
+        quaternion: IQuaternion;
+        linearVelocity?: IVector3;
+        angularVelocity?: IVector3;
+        wakeUp?: boolean;
+        forceSync?: boolean;
+    }): boolean;
     setBaseHalfExtents(halfExtents: IVector3): void;
     setUniformScale(scale: number): void;
     syncNow(forceFullState?: boolean): void;
@@ -46,6 +63,7 @@ interface ISharedPropSpawnBase {
     ownerId?: string | null;
     url?: string;
     entityId?: string;
+    grabbable?: boolean;
     scale?: number;
     dualGrabScalable?: boolean;
     profile?: PhysicsReplicationProfileId;
@@ -154,10 +172,16 @@ export interface IObjectRuntimeContext {
 
     assets: {
         getNormalizedModel(url: string, targetSize?: number): Promise<THREE.Group>;
+        loadGLTF(url: string): Promise<THREE.Group>;
         loadTexture(url: string): Promise<THREE.Texture>;
     };
 
     audio: IAudioApi;
+
+    input: {
+        getMovementVector(): { x: number; y: number };
+        isInteractHeld(): boolean;
+    };
 
     tracking: {
         getState(): ITrackingState;
@@ -200,6 +224,15 @@ export interface IObjectRuntimeContext {
         getFirstByModuleId(moduleId: string): ISpawnedObjectInstance | undefined;
         remove(instanceId: string): void;
     };
+
+    getLocalMountStatus(): import('./IMounting').ILocalMountStatus;
+    requestLocalMount(options: import('./IMounting').ILocalMountBinding): boolean;
+    grantLocalMount(options: import('./IMounting').ILocalMountBinding): boolean;
+    rejectLocalMount(): void;
+    releaseLocalMount(ownerInstanceId?: string, reason?: import('./IMounting').TLocalMountStateReason): void;
+    mountLocal(options: import('./IMounting').ILocalMountBinding): boolean;
+    unmountLocal(ownerInstanceId?: string, reason?: import('./IMounting').TLocalMountStateReason): void;
+    isMountedLocal(ownerInstanceId?: string): boolean;
 
     onCleanup(cleanup: () => void): void;
 }

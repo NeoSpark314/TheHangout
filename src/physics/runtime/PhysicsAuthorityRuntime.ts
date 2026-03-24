@@ -15,6 +15,7 @@ interface ILocalAuthorityState {
 }
 
 export type PhysicsAuthorityReason =
+    | 'control-claim'
     | 'grab-claim'
     | 'impulse-claim'
     | 'touch-lease'

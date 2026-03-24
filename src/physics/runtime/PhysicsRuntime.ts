@@ -188,6 +188,7 @@ export class PhysicsRuntime {
         halfExtents?: IVector3,
         moduleId?: string,
         ownerId?: string | null,
+        grabbable: boolean = true,
         url?: string,
         scale?: number,
         dualGrabScalable?: boolean,
@@ -234,7 +235,7 @@ export class PhysicsRuntime {
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
         const physicsEntity = new PhysicsPropEntity(this.context, entityId, this.context.isHost, rigidBody, {
-            grabbable: true,
+            grabbable,
             spawnPosition: position,
             view: finalView,
             grabRadius: Math.max(hx, hy, hz),
@@ -267,6 +268,7 @@ export class PhysicsRuntime {
         view?: IView<any>,
         moduleId?: string,
         ownerId?: string | null,
+        grabbable: boolean = true,
         replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
@@ -291,7 +293,7 @@ export class PhysicsRuntime {
         const collider = this.world.createCollider(colliderDesc, rigidBody);
 
         const physicsEntity = new PhysicsPropEntity(this.context, entityId, this.context.isHost, rigidBody, {
-            grabbable: true,
+            grabbable,
             spawnPosition: position,
             view: finalView,
             grabRadius: radius,

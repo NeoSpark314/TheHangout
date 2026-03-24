@@ -232,6 +232,64 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         this.context.runtime.physicsAuthority.releaseEntityOwnership(this, velocity, reason);
     }
 
+    public getAngularVelocity(): IVector3 {
+        const velocity = this.rigidBody.angvel();
+        return { x: velocity.x, y: velocity.y, z: velocity.z };
+    }
+
+    public setControlledMotion(options: {
+        linearVelocity?: IVector3;
+        angularVelocity?: IVector3;
+        wakeUp?: boolean;
+        forceSync?: boolean;
+    }): boolean {
+        if (!this.isAuthority) return false;
+
+        if (options.wakeUp !== false) {
+            this.rigidBody.wakeUp();
+        }
+
+        if (options.linearVelocity) {
+            this.rigidBody.setLinvel(options.linearVelocity, true);
+        }
+
+        if (options.angularVelocity) {
+            this.rigidBody.setAngvel(options.angularVelocity, true);
+        }
+
+        if (options.forceSync) {
+            this.context.runtime.network?.syncEntityNow(this.id, true);
+        }
+
+        return true;
+    }
+
+    public setControlledPose(options: {
+        position: IVector3;
+        quaternion: IQuaternion;
+        linearVelocity?: IVector3;
+        angularVelocity?: IVector3;
+        wakeUp?: boolean;
+        forceSync?: boolean;
+    }): boolean {
+        if (!this.isAuthority) return false;
+
+        this.rigidBody.setTranslation(options.position, true);
+        this.rigidBody.setRotation(options.quaternion, true);
+        this.rigidBody.setLinvel(options.linearVelocity ?? { x: 0, y: 0, z: 0 }, true);
+        this.rigidBody.setAngvel(options.angularVelocity ?? { x: 0, y: 0, z: 0 }, true);
+
+        if (options.wakeUp !== false) {
+            this.rigidBody.wakeUp();
+        }
+
+        if (options.forceSync) {
+            this.context.runtime.network?.syncEntityNow(this.id, true);
+        }
+
+        return true;
+    }
+
     // --- IInteractable ---
     public onHoverEnter(playerId: string): void {
         this.hoverSources.add(playerId);

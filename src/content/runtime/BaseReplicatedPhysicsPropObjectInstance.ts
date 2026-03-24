@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { IEntity } from '../../shared/contracts/IEntity';
 import type { IVector3 } from '../../shared/contracts/IMath';
 import { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import type { IObjectSpawnContext } from '../contracts/IObjectModule';
@@ -14,6 +15,7 @@ interface IReplicatedPhysicsPropBaseInit {
     ownerId?: string | null;
     url?: string;
     entityId?: string;
+    grabbable?: boolean;
     scale?: number;
     dualGrabScalable?: boolean;
     replicationProfileId?: PhysicsReplicationProfileId;
@@ -75,7 +77,7 @@ export abstract class BaseReplicatedPhysicsPropObjectInstance extends BaseReplic
         }
     }
 
-    public getPrimaryEntity(): PhysicsPropEntity | null {
+    public getPrimaryEntity(): IEntity | null {
         return this.propEntity;
     }
 

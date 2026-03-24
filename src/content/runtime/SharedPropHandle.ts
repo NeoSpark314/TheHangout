@@ -47,6 +47,41 @@ export class SharedPropHandle implements ISharedPropHandle {
         return { x: velocity.x, y: velocity.y, z: velocity.z };
     }
 
+    public getAngularVelocity(): IVector3 | null {
+        return this.getEntity()?.getAngularVelocity() ?? null;
+    }
+
+    public requestControl(options?: { allowSpeculativeHostClaim?: boolean }): boolean {
+        return this.getEntity()?.requestImmediatePhysicsAuthority({
+            allowSpeculativeHostClaim: options?.allowSpeculativeHostClaim,
+            reason: 'control-claim'
+        }) ?? false;
+    }
+
+    public releaseControl(velocity?: IVector3): void {
+        this.getEntity()?.releasePhysicsOwnership(velocity);
+    }
+
+    public setMotion(options: {
+        linearVelocity?: IVector3;
+        angularVelocity?: IVector3;
+        wakeUp?: boolean;
+        forceSync?: boolean;
+    }): boolean {
+        return this.getEntity()?.setControlledMotion(options) ?? false;
+    }
+
+    public setPose(options: {
+        position: IVector3;
+        quaternion: { x: number; y: number; z: number; w: number };
+        linearVelocity?: IVector3;
+        angularVelocity?: IVector3;
+        wakeUp?: boolean;
+        forceSync?: boolean;
+    }): boolean {
+        return this.getEntity()?.setControlledPose(options) ?? false;
+    }
+
     public setBaseHalfExtents(halfExtents: IVector3): void {
         this.getEntity()?.setBaseHalfExtents(halfExtents);
     }

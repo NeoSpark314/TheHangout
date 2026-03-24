@@ -29,6 +29,7 @@ export function spawnSharedPhysicsProp(
             init.mesh as any,
             moduleId,
             init.ownerId,
+            init.grabbable,
             init.replicationProfileId ?? init.profile
         );
     } else {
@@ -40,6 +41,7 @@ export function spawnSharedPhysicsProp(
             init.halfExtents,
             moduleId,
             init.ownerId,
+            init.grabbable,
             init.url,
             init.scale,
             init.dualGrabScalable,

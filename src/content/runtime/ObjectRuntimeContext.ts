@@ -33,6 +33,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
     public readonly scene;
     public readonly assets;
     public readonly audio;
+    public readonly input;
     public readonly tracking;
     public readonly players;
     public readonly actions;
@@ -59,6 +60,8 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         this.assets = {
             getNormalizedModel: (url: string, targetSize?: number) =>
                 this.app.runtime.assets.getNormalizedModel(url, targetSize),
+            loadGLTF: (url: string) =>
+                this.app.runtime.assets.loadGLTF(url),
             loadTexture: (url: string) =>
                 this.app.runtime.assets.loadTexture(url)
         };
@@ -79,6 +82,11 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             playFxSweep: (options: { down?: boolean; intensity?: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playFxSweep(options);
             }
+        };
+
+        this.input = {
+            getMovementVector: () => this.app.runtime.input?.getMovementVector?.() ?? { x: 0, y: 0 },
+            isInteractHeld: () => this.app.runtime.input?.nonVRInteraction?.isInteractionHeld?.() ?? false
         };
 
         this.tracking = {
@@ -168,6 +176,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         halfExtents?: { x: number; y: number; z: number },
         moduleId?: string,
         ownerId?: string | null,
+        grabbable?: boolean,
         url?: string,
         scale?: number,
         dualGrabScalable?: boolean,
@@ -182,6 +191,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             halfExtents,
             moduleId,
             ownerId,
+            grabbable,
             url,
             scale,
             dualGrabScalable,
@@ -196,6 +206,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         mesh: any,
         moduleId?: string,
         ownerId?: string | null,
+        grabbable?: boolean,
         replicationProfileId?: string
     ): PhysicsPropEntity | null {
         return EntityFactory.createSphereGrabbable(
@@ -206,6 +217,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             mesh,
             moduleId,
             ownerId,
+            grabbable,
             replicationProfileId as any
         );
     }

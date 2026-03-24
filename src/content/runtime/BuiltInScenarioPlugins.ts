@@ -3,12 +3,14 @@ import { DefaultHangoutScenarioPlugin } from '../scenarios/defaultHangout/Defaul
 import { TargetTossScenarioPlugin } from '../scenarios/targetToss/TargetTossScenario';
 import { WideCircleScenarioPlugin } from '../scenarios/wideCircle/WideCircleScenario';
 import { NatureParkScenarioPlugin } from '../scenarios/procedural/BasicProceduralScenario';
+import { SimpleRacingScenarioPlugin } from '../scenarios/simpleRacing/SimpleRacingScenario';
 
 export const BUILT_IN_SCENARIO_PLUGINS: IScenarioPlugin[] = [
     DefaultHangoutScenarioPlugin,
     TargetTossScenarioPlugin,
     WideCircleScenarioPlugin,
-    NatureParkScenarioPlugin
+    NatureParkScenarioPlugin,
+    SimpleRacingScenarioPlugin
 ];
 
 export const DEFAULT_SCENARIO_PLUGIN_ID = DefaultHangoutScenarioPlugin.id;
