@@ -95,6 +95,31 @@ describe('DesktopTrackingProvider', () => {
         expect(avatarForward.distanceTo(rawForward)).toBeLessThan(1e-6);
     });
 
+    it('anchors desktop hands to the simulated headset frame', () => {
+        const context = createTestContext();
+        const provider = new DesktopTrackingProvider(context);
+        provider.activate();
+
+        provider.update(1 / 60);
+        const beforeLeft = { ...provider.getState().hands.left.pose.position };
+        const beforeRight = { ...provider.getState().hands.right.pose.position };
+
+        eventBus.emit(EVENTS.INTENT_LOOK, {
+            yawDeltaRad: -Math.PI / 2,
+            pitchDeltaRad: 0
+        });
+        provider.update(1 / 60);
+
+        const leftHand = provider.getState().hands.left.pose.position;
+        const rightHand = provider.getState().hands.right.pose.position;
+
+        expect(Math.abs(leftHand.z)).toBeGreaterThan(0.15);
+        expect(Math.abs(rightHand.z)).toBeGreaterThan(0.15);
+        expect(leftHand.z).toBeGreaterThan(0);
+        expect(rightHand.z).toBeLessThan(0);
+        expect(Math.abs(leftHand.z - beforeLeft.z)).toBeGreaterThan(0.2);
+    });
+
     it('uses estimated standing eye height from the configured player height', () => {
         const context = createTestContext(0, 1.6);
         const provider = new DesktopTrackingProvider(context);

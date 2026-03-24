@@ -163,14 +163,14 @@ export class DesktopTrackingProvider implements ITrackingProvider {
         this.leftStretch.lerp(this.targetLeftStretch, delta * LERP_SPEED);
         this.rightStretch.lerp(this.targetRightStretch, delta * LERP_SPEED);
 
-        // 3. Update Hand Poses relative to physical body (Origin)
-        // Base hand positions (Lowered Y relative to head-local)
-        // Note: we apply origin rotation to these offsets
-        const leftBaseOffset = new THREE.Vector3(-HAND_X_SPACING, headHeight - HAND_Y_OFFSET, HAND_Z_OFFSET);
-        const rightBaseOffset = new THREE.Vector3(HAND_X_SPACING, headHeight - HAND_Y_OFFSET, HAND_Z_OFFSET);
+        // 3. Update hand poses relative to the simulated headset.
+        // Desktop is modeled as a virtual HMD, so neutral hands should follow
+        // the head frame rather than stay locked to the body root.
+        const leftBaseOffset = new THREE.Vector3(-HAND_X_SPACING, -HAND_Y_OFFSET, HAND_Z_OFFSET);
+        const rightBaseOffset = new THREE.Vector3(HAND_X_SPACING, -HAND_Y_OFFSET, HAND_Z_OFFSET);
 
-        const leftBaseWorld = leftBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
-        const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(originQuat).add(originPos);
+        const leftBaseWorld = leftBaseOffset.clone().applyQuaternion(worldHeadQuat).add(worldHeadPos);
+        const rightBaseWorld = rightBaseOffset.clone().applyQuaternion(worldHeadQuat).add(worldHeadPos);
 
         // Apply stretch in the direction the HEAD is looking (worldHeadQuat)
         let leftTargetWorld = leftBaseWorld.clone().add(this.leftStretch.clone().applyQuaternion(worldHeadQuat));
