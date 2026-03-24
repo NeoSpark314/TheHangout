@@ -21,6 +21,7 @@ const CAR_EVENT_MOUNT_REQUEST = 'mount-request';
 const CAR_EVENT_MOUNT_RELEASE_REQUEST = 'mount-release-request';
 const CAR_EVENT_MOUNT_REJECTED = 'mount-rejected';
 const CAR_EVENT_VISUAL_STATE = 'visual-state';
+const CAR_EVENT_IMPACT = 'impact';
 
 const CAR_MOUNT_EVENTS: IAuthoritativeSingleMountEventMap = {
     occupancy: CAR_EVENT_OCCUPANCY,
@@ -80,6 +81,8 @@ interface ISimpleRacingCarSnapshot {
     speed: number;
     acceleration: number;
     wheelSpin: number;
+    throttle: number;
+    driftIntensity: number;
 }
 
 interface ISimpleRacingCarVisualState {
@@ -88,6 +91,13 @@ interface ISimpleRacingCarVisualState {
     speed: number;
     acceleration: number;
     wheelSpin: number;
+    throttle: number;
+    driftIntensity: number;
+}
+
+interface ISimpleRacingCarImpactEvent {
+    position: IVector3;
+    intensity: number;
 }
 
 class RacingCarSeatEntity implements IEntity, IHoldable, IInteractable {
@@ -258,6 +268,11 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
 
         if (eventType === CAR_EVENT_VISUAL_STATE) {
             this.applyVisualState(data);
+            return;
+        }
+
+        if (eventType === CAR_EVENT_IMPACT) {
+            void this.playImpactFromEvent(data);
         }
     }
 
@@ -268,7 +283,9 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             steer: this.steerVisual,
             speed: this.speedVisual,
             acceleration: this.accelerationVisual,
-            wheelSpin: this.wheelSpin
+            wheelSpin: this.wheelSpin,
+            throttle: this.throttleVisual,
+            driftIntensity: this.driftIntensity
         } satisfies ISimpleRacingCarSnapshot;
     }
 
@@ -460,7 +477,9 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
                 steer: this.steerVisual,
                 speed: this.speedVisual,
                 acceleration: this.accelerationVisual,
-                wheelSpin: this.wheelSpin
+                wheelSpin: this.wheelSpin,
+                throttle: this.throttleVisual,
+                driftIntensity: this.driftIntensity
             }, { localEcho: false });
             this.lastVisualSyncAtMs = now;
         }
@@ -515,6 +534,8 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if (typeof payload.speed === 'number') this.speedVisual = payload.speed;
         if (typeof payload.acceleration === 'number') this.accelerationVisual = payload.acceleration;
         if (typeof payload.wheelSpin === 'number') this.wheelSpin = payload.wheelSpin;
+        if (typeof payload.throttle === 'number') this.throttleVisual = payload.throttle;
+        if (typeof payload.driftIntensity === 'number') this.driftIntensity = payload.driftIntensity;
     }
 
     private updateAudio(delta: number): void {
@@ -568,15 +589,26 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         if ((now - this.lastImpactSoundAtMs) < CAR_IMPACT_COOLDOWN_MS) return;
         this.lastImpactSoundAtMs = now;
 
-        void this.playImpactSound(impactSpeed);
+        this.emitSyncEvent(CAR_EVENT_IMPACT, {
+            position: this.getAudioPosition(),
+            intensity: impactSpeed
+        } satisfies ISimpleRacingCarImpactEvent);
     }
 
-    private async playImpactSound(impactSpeed: number): Promise<void> {
+    private async playImpactFromEvent(value: unknown): Promise<void> {
+        if (!value || typeof value !== 'object') return;
+        const payload = value as Partial<ISimpleRacingCarImpactEvent>;
+        const position = payload.position;
+        if (!position || typeof position.x !== 'number' || typeof position.y !== 'number' || typeof position.z !== 'number') {
+            return;
+        }
+        const intensity = typeof payload.intensity === 'number' ? payload.intensity : 0;
+
         const emitter = await this.runtimeContext.audio.createEmitter({
             url: SIMPLE_RACING_ASSETS.audio.impact,
             autoplay: true,
-            position: this.getAudioPosition(),
-            volume: THREE.MathUtils.clamp(remap(impactSpeed, 0, 6, 0.01, 1.0), 0.01, 1.0),
+            position,
+            volume: THREE.MathUtils.clamp(remap(intensity, 0, 6, 0.01, 1.0), 0.01, 1.0),
             playbackRate: 1,
             refDistance: 2.5,
             maxDistance: 36,
@@ -684,7 +716,9 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             steer: this.steerVisual,
             speed: this.speedVisual,
             acceleration: this.accelerationVisual,
-            wheelSpin: this.wheelSpin
+            wheelSpin: this.wheelSpin,
+            throttle: this.throttleVisual,
+            driftIntensity: this.driftIntensity
         }, { localEcho: false });
     }
 }
