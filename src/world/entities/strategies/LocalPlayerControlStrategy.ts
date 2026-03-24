@@ -24,6 +24,11 @@ export interface ILocalPlayerTeleportOptions {
     targetSpace?: 'player' | 'head';
 }
 
+function convertRawWorldYawToAvatarWorldYaw(rawYaw: number | undefined): number | undefined {
+    if (typeof rawYaw !== 'number') return undefined;
+    return Math.atan2(Math.sin(rawYaw + Math.PI), Math.cos(rawYaw + Math.PI));
+}
+
 export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy {
     public readonly mode = 'local';
 
@@ -64,13 +69,15 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     }
 
     public update(player: PlayerAvatarEntity, delta: number, frame?: XRFrame): void {
-        const runtime = player.appContext.runtime;
-        const render = runtime.render;
-
         const movementSkill = this.getSkill('movement');
         if (movementSkill && (movementSkill.isAlwaysActive || movementSkill === this.activeSkill)) {
-            movementSkill.update(delta, player, runtime);
+            movementSkill.update(delta, player, player.appContext.runtime);
         }
+    }
+
+    public lateUpdate(player: PlayerAvatarEntity, delta: number, frame?: XRFrame): void {
+        const runtime = player.appContext.runtime;
+        const render = runtime.render;
 
         if (render.cameraGroup) {
             // Apply grounding if not mounted
@@ -311,8 +318,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
                 z: locomotionVelocity.z
             },
             explicitTurnDeltaYaw,
-            seatWorldYaw: seatPose?.yaw,
-            mountWorldYaw: bodyYawPose?.yaw ?? seatPose?.yaw,
+            seatWorldYaw: convertRawWorldYawToAvatarWorldYaw(seatPose?.yaw),
+            mountWorldYaw: convertRawWorldYawToAvatarWorldYaw(bodyYawPose?.yaw ?? seatPose?.yaw),
             playerHeightM: player.avatarConfigSnapshot.playerHeightM
         };
     }

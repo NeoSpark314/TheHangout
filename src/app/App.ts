@@ -41,6 +41,7 @@ import { ConfigRegistry } from '../shared/config/ConfigRegistry';
 import type { AvatarPoseOverride } from './AppContext';
 import type { AvatarRenderMode } from '../shared/contracts/IAvatar';
 import { normalizeAvatarConfig } from '../shared/contracts/IAvatar';
+import { LocalPlayerLateUpdateSystem } from '../world/entities/LocalPlayerLateUpdateSystem';
 
 /**
  * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
@@ -207,6 +208,7 @@ export class App {
         this.addGameplaySystem(this.physicsPresentationSystem);
         this.addGameplaySystem(runtime.session);
         this.addGameplaySystem(runtime.mount);
+        this.addGameplaySystem(new LocalPlayerLateUpdateSystem(this.context));
         this.addGameplaySystem(runtime.social);
         this.addGameplaySystem(runtime.particles);
         this.addGameplaySystem(runtime.worldTransition);

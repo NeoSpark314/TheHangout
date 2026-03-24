@@ -31,6 +31,10 @@ function createContext(mode: IAvatarMotionContext['mode'], overrides: Partial<IA
     };
 }
 
+function normalizeAngle(angle: number): number {
+    return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
 describe('AvatarFacingResolver', () => {
     it('keeps the body stable for small XR idle head turns', () => {
         const resolver = new AvatarFacingResolver();
@@ -100,12 +104,12 @@ describe('AvatarFacingResolver', () => {
             1 / 60
         );
 
-        expect(yaw).toBeCloseTo(seatYaw, 4);
+        expect(yaw).toBeCloseTo(normalizeAngle(seatYaw), 4);
     });
 
     it('anchors mounted seated body yaw to the mount yaw', () => {
         const resolver = new AvatarFacingResolver();
-        const mountYaw = THREE.MathUtils.degToRad(-45);
+        const mountYaw = normalizeAngle(THREE.MathUtils.degToRad(-45) + Math.PI);
         const yaw = resolver.resolve(
             createFrame(THREE.MathUtils.degToRad(20)),
             createContext('mounted-seated', { mountWorldYaw: mountYaw }),

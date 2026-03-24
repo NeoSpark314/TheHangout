@@ -120,6 +120,10 @@ export class PlayerAvatarEntity extends ReplicatedEntity {
         this.controlStrategy?.update(this, delta, frame);
     }
 
+    public lateUpdate(delta: number, frame?: XRFrame): void {
+        this.controlStrategy?.lateUpdate?.(this, delta, frame);
+    }
+
     public getNetworkState(fullSync: boolean = false): IPlayerEntityState | null {
         return this.controlStrategy?.getNetworkState(this, fullSync) || null;
     }

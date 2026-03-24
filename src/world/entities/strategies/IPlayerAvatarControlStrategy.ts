@@ -13,6 +13,7 @@ export interface IPlayerAvatarControlStrategy {
     attach(player: PlayerAvatarEntity): void;
     detach(player: PlayerAvatarEntity): void;
     update(player: PlayerAvatarEntity, delta: number, frame?: XRFrame): void;
+    lateUpdate?(player: PlayerAvatarEntity, delta: number, frame?: XRFrame): void;
     applyNetworkState?(player: PlayerAvatarEntity, state: IPlayerEntityState): void;
     getNetworkState(player: PlayerAvatarEntity, fullSync?: boolean): IPlayerEntityState | null;
     onAudioChunk?(player: PlayerAvatarEntity, payload: IAudioChunkPayload): void;
