@@ -40,6 +40,24 @@ export class HeadlessSession {
         const entityMgr = new EntityRegistry(this.context);
         this.context.setRuntime('entity', entityMgr);
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
+        this.context.setRuntime('audio', {
+            createEmitter: () => ({
+                play: () => {},
+                stop: () => {},
+                setPosition: () => {},
+                destroy: () => {},
+                dispose: () => {}
+            }),
+            playDrumPadHit: () => {},
+            playSequencerBeat: () => {},
+            playMelodyNote: () => {},
+            playArpNote: () => {},
+            playFxSweep: () => {}
+        } as any);
+        this.context.setRuntime('assets', {
+            getNormalizedModel: async () => ({ isGroup: true }),
+            loadTexture: async () => ({ isTexture: true })
+        } as any);
 
         this.context.setRuntime('physicsAuthority', new PhysicsAuthorityRuntime(this.context));
         const physicsMgr = new PhysicsRuntime(this.context);

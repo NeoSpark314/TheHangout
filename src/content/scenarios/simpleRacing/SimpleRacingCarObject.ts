@@ -706,7 +706,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             maxDistance: 36,
             rolloffFactor: 1.05
         });
-        window.setTimeout(() => emitter.dispose(), 2000);
+        setTimeout(() => emitter.dispose(), 2000);
     }
 
     private getAudioPosition(): IVector3 {
