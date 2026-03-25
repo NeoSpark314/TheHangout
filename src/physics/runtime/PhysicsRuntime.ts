@@ -65,6 +65,16 @@ type PhysicsInteractionTarget = IHoldable & IInteractable;
 type RuntimePhysicsBodyHandle = IPhysicsBodyHandle & { readonly rigidBody: RAPIER.RigidBody };
 type RuntimePhysicsColliderHandle = IPhysicsColliderHandle & { readonly collider: RAPIER.Collider };
 
+function toRapierCombineRule(rule: IScenarioStaticColliderMaterial['frictionCombineRule']): RAPIER.CoefficientCombineRule | null {
+    switch (rule) {
+        case 'average': return RAPIER.CoefficientCombineRule.Average;
+        case 'min': return RAPIER.CoefficientCombineRule.Min;
+        case 'multiply': return RAPIER.CoefficientCombineRule.Multiply;
+        case 'max': return RAPIER.CoefficientCombineRule.Max;
+        default: return null;
+    }
+}
+
 export class PhysicsRuntime {
     public world: RAPIER.World | null = null;
     private nextPhysicsId: number = 0;
@@ -610,13 +620,19 @@ export class PhysicsRuntime {
             bodyDesc.setRotation(rotation);
         }
         const body = this.world.createRigidBody(bodyDesc);
-        const collider = this.world.createCollider(
-            RAPIER.ColliderDesc.cuboid(hx, hy, hz)
-                .setFriction(material?.friction ?? 1.0)
-                .setRestitution(material?.restitution ?? 0.0)
-                .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),
-            body
-        );
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+            .setFriction(material?.friction ?? 1.0)
+            .setRestitution(material?.restitution ?? 0.0)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+        const frictionCombineRule = toRapierCombineRule(material?.frictionCombineRule);
+        if (frictionCombineRule !== null) {
+            colliderDesc.setFrictionCombineRule(frictionCombineRule);
+        }
+        const restitutionCombineRule = toRapierCombineRule(material?.restitutionCombineRule);
+        if (restitutionCombineRule !== null) {
+            colliderDesc.setRestitutionCombineRule(restitutionCombineRule);
+        }
+        const collider = this.world.createCollider(colliderDesc, body);
         this.registerDebugBody(`static-cuboid-${this.nextPhysicsId++}`, body, collider);
         return this.createColliderHandle(collider);
     }
@@ -662,6 +678,14 @@ export class PhysicsRuntime {
         const colliderDesc = RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, scale);
         colliderDesc.setFriction(options.material?.friction ?? 1.0);
         colliderDesc.setRestitution(options.material?.restitution ?? 0.0);
+        const frictionCombineRule = toRapierCombineRule(options.material?.frictionCombineRule);
+        if (frictionCombineRule !== null) {
+            colliderDesc.setFrictionCombineRule(frictionCombineRule);
+        }
+        const restitutionCombineRule = toRapierCombineRule(options.material?.restitutionCombineRule);
+        if (restitutionCombineRule !== null) {
+            colliderDesc.setRestitutionCombineRule(restitutionCombineRule);
+        }
         const collider = this.world.createCollider(colliderDesc, body);
         
         this.registerDebugBody(`static-heightfield-${this.nextPhysicsId++}`, body, collider);

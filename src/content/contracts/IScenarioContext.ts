@@ -38,6 +38,8 @@ export interface IScenarioStaticBodyHandle {
 export interface IScenarioStaticColliderMaterial {
     friction?: number;
     restitution?: number;
+    frictionCombineRule?: 'average' | 'min' | 'multiply' | 'max';
+    restitutionCombineRule?: 'average' | 'min' | 'multiply' | 'max';
 }
 
 export interface IScenarioStaticBoxOptions {

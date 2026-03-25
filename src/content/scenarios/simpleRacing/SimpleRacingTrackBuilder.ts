@@ -20,7 +20,8 @@ const TRACK_MODEL_BY_PIECE: Record<TSimpleRacingCell[2], TSimpleRacingModelKey> 
 };
 const TRACK_WALL_MATERIAL = {
     friction: 0.0,
-    restitution: 0.0
+    restitution: 0.0,
+    frictionCombineRule: 'min'
 } as const;
 
 export class SimpleRacingTrackBuilder {
