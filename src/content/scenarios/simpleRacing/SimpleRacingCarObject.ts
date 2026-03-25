@@ -184,6 +184,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private readonly mountReplication: AuthoritativeSingleMountReplicator;
     private readonly spawnPosition: THREE.Vector3;
     private readonly spawnYaw: number;
+    private readonly modelUrl: string;
     private readonly driveState: ISimpleRacingCarDriveState;
     private readonly visualState: ISimpleRacingCarPresentationState;
     private readonly presentState: Pick<ISimpleRacingCarPresentationState, 'facingYaw' | 'steer'>;
@@ -204,6 +205,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         root.name = 'simple-racing-car';
         const position = config.position ?? { x: 0, y: 0.7, z: 0 };
         const spawnYaw = typeof config.rotationY === 'number' ? config.rotationY : 0;
+        const modelUrl = config.url || SIMPLE_RACING_ASSETS.models.carRed;
         const entityId = (typeof config.entityId === 'string' && config.entityId.length > 0)
             ? config.entityId
             : (typeof config.id === 'string' && config.id.length > 0 ? `${config.id}:body` : undefined);
@@ -215,6 +217,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             mesh: root,
             entityId,
             ownerId: null,
+            url: modelUrl,
             grabbable: false,
             physicsTuning: CAR_PHYSICS_TUNING,
             replicationProfileId: 'default-prop'
@@ -224,6 +227,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         this.root = root;
         this.spawnPosition = new THREE.Vector3(position.x, position.y, position.z);
         this.spawnYaw = spawnYaw;
+        this.modelUrl = modelUrl;
         this.driveState = {
             facingYaw: spawnYaw,
             linearSpeed: 0,
@@ -358,7 +362,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
 
     private async loadVisuals(): Promise<void> {
         if (!this.runtimeContext.scene.isRenderingAvailable()) return;
-        const model = await this.runtimeContext.assets.loadGLTF(SIMPLE_RACING_ASSETS.models.car);
+        const model = await this.runtimeContext.assets.loadGLTF(this.modelUrl);
         model.rotation.y = Math.PI;
         model.traverse((child) => {
             const mesh = child as THREE.Mesh;

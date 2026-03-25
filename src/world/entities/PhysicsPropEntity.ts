@@ -503,6 +503,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             b: this.heldBy,
             ownerId: this.ownerId,
             m: this.moduleId,
+            url: (this as any).url,
             he: this.baseHalfExtents
                 ? [this.baseHalfExtents.x, this.baseHalfExtents.y, this.baseHalfExtents.z]
                 : (this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined),

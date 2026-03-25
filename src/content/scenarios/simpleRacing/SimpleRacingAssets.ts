@@ -7,7 +7,10 @@ export const SIMPLE_RACING_ASSETS = {
         decorationEmpty: 'scenarios/simpleRacing/models/decoration-empty.glb',
         decorationForest: 'scenarios/simpleRacing/models/decoration-forest.glb',
         decorationTents: 'scenarios/simpleRacing/models/decoration-tents.glb',
-        car: 'scenarios/simpleRacing/models/vehicle-truck-red.glb'
+        carRed: 'scenarios/simpleRacing/models/vehicle-truck-red.glb',
+        carGreen: 'scenarios/simpleRacing/models/vehicle-truck-green.glb',
+        carPurple: 'scenarios/simpleRacing/models/vehicle-truck-purple.glb',
+        carYellow: 'scenarios/simpleRacing/models/vehicle-truck-yellow.glb'
     },
     audio: {
         engine: 'scenarios/simpleRacing/audio/engine.ogg',
@@ -20,3 +23,9 @@ export const SIMPLE_RACING_ASSETS = {
 } as const;
 
 export type TSimpleRacingModelKey = keyof typeof SIMPLE_RACING_ASSETS.models;
+export const SIMPLE_RACING_CAR_MODEL_URLS = [
+    SIMPLE_RACING_ASSETS.models.carRed,
+    SIMPLE_RACING_ASSETS.models.carGreen,
+    SIMPLE_RACING_ASSETS.models.carPurple,
+    SIMPLE_RACING_ASSETS.models.carYellow
+] as const;
