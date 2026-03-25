@@ -108,6 +108,7 @@ export class PhysicsRuntime {
         ncols: number;
         heights: Float32Array;
         scale: IVector3;
+        bodyHandle: number;
     } | null = null;
 
     constructor(private context: AppContext) { }
@@ -711,7 +712,7 @@ export class PhysicsRuntime {
         this.registerDebugBody(`static-heightfield-${this.nextPhysicsId++}`, body, collider);
 
         // Store metadata for software sampling (grounding)
-        this.terrainMetadata = { nrows, ncols, heights, scale };
+        this.terrainMetadata = { nrows, ncols, heights, scale, bodyHandle: body.handle };
 
         return this.createColliderHandle(collider);
     }
@@ -770,6 +771,10 @@ export class PhysicsRuntime {
 
     private removeRigidBodyNow(rigidBody: RAPIER.RigidBody | null | undefined): void {
         if (!this.world || !rigidBody) return;
+
+        if (this.terrainMetadata?.bodyHandle === rigidBody.handle) {
+            this.terrainMetadata = null;
+        }
 
         const entry = this.debugBodies.get(rigidBody.handle);
         if (entry) {
