@@ -160,21 +160,23 @@ function isSeatAllReplicatedPayload(payload: unknown): payload is ISeatAllReplic
     return true;
 }
 
+const DEFAULT_HANGOUT_OBJECT_MODULES: IObjectModule[] = [
+    new DrawingSurfaceObject(),
+    new PenToolObject(),
+    new PewPewGunObject(),
+    new GrabbableCubeObject(),
+    new DrumPadArcObject(),
+    new ChairObject(),
+    new DebugBeaconObject(),
+    new SimpleSharedObject()
+];
+
 export class DefaultHangoutScenario implements IScenarioModule {
     public readonly id = 'default-hangout';
     public readonly displayName = 'Default Hangout';
     public readonly kind = 'social' as const;
     public readonly maxPlayers = 16;
-    private readonly objectModules: IObjectModule[] = [
-        new DrawingSurfaceObject(),
-        new PenToolObject(),
-        new PewPewGunObject(),
-        new GrabbableCubeObject(),
-        new DrumPadArcObject(),
-        new ChairObject(),
-        new DebugBeaconObject(),
-        new SimpleSharedObject()
-    ];
+    private readonly objectModules: IObjectModule[] = DEFAULT_HANGOUT_OBJECT_MODULES;
     private readonly actionProvider = new DefaultHangoutActionProvider();
     private readonly world = new DefaultHangoutWorld();
 
@@ -236,6 +238,7 @@ export const DefaultHangoutScenarioPlugin: IScenarioPlugin = {
         hasActions: true,
         hasPortableObjects: true
     },
+    objectModules: DEFAULT_HANGOUT_OBJECT_MODULES,
     create() {
         return new DefaultHangoutScenario();
     }

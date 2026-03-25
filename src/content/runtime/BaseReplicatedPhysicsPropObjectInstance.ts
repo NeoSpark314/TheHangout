@@ -14,7 +14,7 @@ interface IReplicatedPhysicsPropBaseInit {
     position: IVector3;
     mesh: THREE.Object3D;
     ownerId?: string | null;
-    url?: string;
+    assetUrl?: string;
     entityId?: string;
     grabbable?: boolean;
     physicsTuning?: ISharedPropPhysicsTuning;

@@ -6,12 +6,12 @@ import type { IScenarioReplicationEmitOptions } from './IReplicatedScenarioModul
 import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
 import type {
     IAudioApi,
+    IParticleBurstOptions,
     IParticleEmitterHandle,
     IParticleEmitterOptions,
     IPhysicsColliderHandle,
     ISharedPropHandle
 } from './IObjectRuntimeContext';
-import type { IParticleBurstOptions } from '../../render/effects/ParticleEffectSystem';
 
 export interface IScenarioPlayerHandle {
     readonly id: string;

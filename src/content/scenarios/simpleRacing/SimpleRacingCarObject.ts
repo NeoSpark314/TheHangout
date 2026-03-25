@@ -205,7 +205,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
         root.name = 'simple-racing-car';
         const position = config.position ?? { x: 0, y: 0.7, z: 0 };
         const spawnYaw = typeof config.rotationY === 'number' ? config.rotationY : 0;
-        const modelUrl = config.url || SIMPLE_RACING_ASSETS.models.carRed;
+        const modelUrl = config.assetUrl || config.url || SIMPLE_RACING_ASSETS.models.carRed;
         const entityId = (typeof config.entityId === 'string' && config.entityId.length > 0)
             ? config.entityId
             : (typeof config.id === 'string' && config.id.length > 0 ? `${config.id}:body` : undefined);
@@ -217,7 +217,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             mesh: root,
             entityId,
             ownerId: null,
-            url: modelUrl,
+            assetUrl: modelUrl,
             grabbable: false,
             physicsTuning: CAR_PHYSICS_TUNING,
             replicationProfileId: 'default-prop'

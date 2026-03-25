@@ -1,21 +1,13 @@
 import * as THREE from 'three';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import type {
+    IParticleBurstOptions,
     IParticleCurveKeyframe,
     IParticleEmissionOptions,
     IParticleEmitterHandle,
     IParticleEmitterOptions,
     IParticleRange
 } from '../../content/contracts/IObjectRuntimeContext';
-
-export interface IParticleBurstOptions {
-    position: { x: number; y: number; z: number };
-    color?: number | string;
-    count?: number;
-    speed?: number;
-    lifetime?: number;
-    size?: number; // point size scalar in world-like units
-}
 
 class NullParticleEmitterHandle implements IParticleEmitterHandle {
     public emit(_options: IParticleEmissionOptions): void { }

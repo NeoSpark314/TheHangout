@@ -30,6 +30,7 @@ import type { IScenarioPlugin } from '../../content/contracts/IScenarioPlugin';
 import type { IObjectModule } from '../../content/contracts/IObjectModule';
 import { ChairObject } from '../../content/objects/ChairObject';
 import { GrabbableCubeObject } from '../../content/objects/GrabbableCubeObject';
+import { SimpleSharedObject } from '../../content/objects/SimpleSharedObject';
 import { ThrowableBallObject } from '../../content/objects/ThrowableBallObject';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
 
@@ -90,6 +91,7 @@ class TestScenario implements IScenarioModule {
     private readonly objects: IObjectModule[] = [
         new ChairObject(),
         new GrabbableCubeObject(),
+        new SimpleSharedObject(),
         new ThrowableBallObject()
     ];
 
@@ -127,6 +129,12 @@ const TEST_SCENARIO_PLUGIN: IScenarioPlugin = {
         usesPhysics: true,
         hasPortableObjects: true
     },
+    objectModules: [
+        new ChairObject(),
+        new GrabbableCubeObject(),
+        new SimpleSharedObject(),
+        new ThrowableBallObject()
+    ],
     create() {
         return new TestScenario();
     }

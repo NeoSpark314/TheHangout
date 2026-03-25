@@ -1,3 +1,4 @@
+import type { IObjectModule } from './IObjectModule';
 import type { IScenarioModule } from './IScenarioModule';
 
 export interface IScenarioPluginCapabilities {
@@ -15,5 +16,6 @@ export interface IScenarioPlugin {
     kind?: 'social' | 'minigame' | 'exploration' | 'puzzle';
     maxPlayers?: number;
     capabilities?: IScenarioPluginCapabilities;
+    objectModules?: ReadonlyArray<IObjectModule>;
     create(): IScenarioModule;
 }

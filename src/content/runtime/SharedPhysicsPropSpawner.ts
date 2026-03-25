@@ -44,7 +44,7 @@ export function spawnSharedPhysicsProp(
             init.ownerId,
             init.grabbable,
             init.physicsTuning,
-            init.url,
+            init.assetUrl,
             init.scale,
             init.dualGrabScalable,
             init.replicationProfileId ?? init.profile

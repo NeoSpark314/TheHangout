@@ -204,7 +204,7 @@ export class PhysicsRuntime {
         ownerId?: string | null,
         grabbable: boolean = true,
         physicsTuning?: ISharedPropPhysicsTuning,
-        url?: string,
+        assetUrl?: string,
         scale?: number,
         dualGrabScalable?: boolean,
         replicationProfileId?: PhysicsReplicationProfileId
@@ -260,7 +260,7 @@ export class PhysicsRuntime {
             halfExtents,
             moduleId,
             ownerId,
-            url,
+            assetUrl,
             initialScale: scale,
             dualGrabScalable,
             replicationProfileId,

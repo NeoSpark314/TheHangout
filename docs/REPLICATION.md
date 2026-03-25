@@ -45,7 +45,7 @@ Replicated objects use:
 
 Use object replication for semantic state that belongs to one spawned object:
 
-- URL/content state
+- asset/content state such as `assetUrl`
 - toggles and modes
 - drawing strokes
 - instrument control state
@@ -99,3 +99,5 @@ Key files:
 
 - Motion and ownership: physics/entity sync
 - Stable meaning and late-join restoration: semantic object/scenario replication
+- Continuous audio/particles: local playback from replicated gameplay state
+- One-off audio or effect triggers: semantic replicated events

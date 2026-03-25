@@ -30,6 +30,8 @@ Common optional hooks:
 - `onPlayerJoined(context, playerId)`
 - `onPlayerLeft(context, playerId)`
 
+Scenario plugin metadata may also expose `objectModules` directly. This is the preferred registration path for network discovery because it lets the session layer index reusable object modules without constructing scenario instances just to inspect them.
+
 ## What Scenarios Should Own
 
 Keep scenario-specific state and flow in the scenario:
@@ -69,6 +71,7 @@ Important supported patterns:
 - reset shared props through `context.props.reset(...)`
 - enumerate and label players through `context.players`
 - emit semantic scenario replication through `context.events.emitScenario(...)`
+- define reusable scenario object modules on the plugin metadata when they are needed for remote discovery
 
 Do not use:
 
@@ -123,6 +126,32 @@ Use scenario actions for explicit host-authoritative commands:
 
 Scenarios expose actions through `IScenarioActionProvider`. Guests request actions; the host validates and executes them.
 
+## Mounted Object Poses
+
+The local mount contract supports three distinct pose concepts:
+
+- `getSeatPose()`
+  - the mounted player root/origin placement
+  - this is the primary seat location used while mounted
+- `getBodyYawPose()`
+  - the body-facing anchor for seated avatar orientation
+  - use this when body yaw should follow a stable mount or vehicle heading
+- `getViewPose()`
+  - the view/head alignment anchor
+  - use this when the mounted forward direction or initial view alignment should differ slightly from the seat root
+
+Head-space mount alignment:
+
+- Mount entry aligns the local player in `head` space once.
+- This places the actual headset/view at the mount view anchor regardless of the user’s current room-scale offset.
+- After mount entry, ongoing mount updates preserve local head movement relative to that aligned baseline.
+
+Rule of thumb:
+
+- move the seat with `getSeatPose()`
+- align torso/body yaw with `getBodyYawPose()`
+- align initial first-person view with `getViewPose()`
+
 ## Replication Boundary
 
 Use replicated scenarios for semantic scenario-owned state:
@@ -140,6 +169,20 @@ Do not use scenario replication for:
 - state that clearly belongs to one spawned object
 
 For those, use the existing entity and object systems.
+
+## Scenario Object Modules
+
+If a scenario owns reusable world objects:
+
+- define them as `IObjectModule`s
+- expose them on the scenario plugin via `objectModules`
+- spawn them through `context.objects.spawn(...)`
+
+Per-instance content configuration:
+
+- pass per-object config through `IObjectSpawnConfig`
+- use `assetUrl` when the same module should load different models or content assets per instance
+- keep high-frequency motion in entity/physics replication and semantic state in object replication
 
 ## Rule Of Thumb
 

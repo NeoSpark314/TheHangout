@@ -192,7 +192,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         ownerId?: string | null,
         grabbable?: boolean,
         physicsTuning?: ISharedPropPhysicsTuning,
-        url?: string,
+        assetUrl?: string,
         scale?: number,
         dualGrabScalable?: boolean,
         replicationProfileId?: string
@@ -208,7 +208,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             ownerId,
             grabbable,
             physicsTuning,
-            url,
+            assetUrl,
             scale,
             dualGrabScalable,
             replicationProfileId as any

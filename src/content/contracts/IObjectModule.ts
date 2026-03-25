@@ -12,6 +12,7 @@ export interface IObjectSpawnConfig {
     isAuthority?: boolean;
     size?: number;
     color?: number;
+    assetUrl?: string;
     url?: string;
     halfExtents?: IVector3;
     scale?: number;

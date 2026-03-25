@@ -23,6 +23,8 @@ import type {
     ITargetTossStateSyncPayload
 } from './TargetTossTypes';
 
+const TARGET_TOSS_OBJECT_MODULES: IObjectModule[] = [new ThrowableBallObject()];
+
 export class TargetTossScenario implements IReplicatedScenarioModule {
     public readonly id = 'target-toss';
     public readonly displayName = 'Target Toss';
@@ -35,7 +37,7 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         defaultLocalEcho: true
     };
 
-    private readonly objectModules: IObjectModule[] = [new ThrowableBallObject()];
+    private readonly objectModules: IObjectModule[] = TARGET_TOSS_OBJECT_MODULES;
     private readonly actionProvider = new TargetTossActionProvider(this);
     private readonly root = new THREE.Group();
     private readonly targets: ITargetRuntime[] = [];
@@ -599,6 +601,7 @@ export const TargetTossScenarioPlugin: IScenarioPlugin = {
         hasActions: true,
         hasPortableObjects: true
     },
+    objectModules: TARGET_TOSS_OBJECT_MODULES,
     create() {
         return new TargetTossScenario();
     }

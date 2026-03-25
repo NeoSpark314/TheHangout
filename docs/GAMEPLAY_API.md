@@ -62,12 +62,32 @@ Runtime handle surface:
 - `isAuthority()`
 - `getOwnerId()`
 - `getHeldBy()`
+- `requestControl(...)`
+- `releaseControl(...)`
 - `getPosition()`
 - `getLinearVelocity()`
+- `getAngularVelocity()`
+- `isSleeping()`
+- `setMotion(...)`
+- `setPose(...)`
 - `setBaseHalfExtents(...)`
 - `setUniformScale(...)`
 - `syncNow(...)`
 - `destroy()`
+
+Authority model:
+
+- Use shared props for continuous motion that should feel local for the controlling peer.
+- Acquire temporary control with `requestControl(...)` before driving a prop intentionally.
+- Release with `releaseControl(...)` when direct control ends.
+- Use `setMotion(...)` for continuous controlled velocity changes.
+- Use `setPose(...)` for resets, teleports, or recoveries.
+- Keep the motion local and continuous, but replicate the minimum semantic state needed for remote playback.
+
+Per-instance asset/model selection:
+
+- Use `assetUrl` in shared prop or object spawn config when a spawned object needs a specific model or content asset.
+- `assetUrl` is the stable replicated field for module-backed prop visuals.
 
 ## Triggers
 
@@ -104,7 +124,31 @@ Use this for:
 
 Do not mutate shared scenario rules directly from guests.
 
+## Spatial Audio
+
+Use `context.audio.createEmitter(...)` for long-lived local spatial sounds.
+
+Recommended split:
+
+- Continuous sounds like engine loops, hum, ambience, or skid should be played locally on every client from replicated gameplay state.
+- Discrete sounds like impacts or one-off announcements should be replicated as semantic events, then played locally as one-shots.
+
+Do not try to network actual audio playback streams.
+
+## Particles
+
+Use:
+
+- `context.particles.spawnBurst(...)` for simple one-off bursts
+- `context.particles.createEmitter(...)` for persistent local effects like smoke, dust, exhaust, or ambient loops
+
+Recommended split:
+
+- Keep particle simulation and rendering local.
+- Replicate only the small semantic or presentation state that drives the effect.
+- Do not replicate individual particles.
+
 ## Intentionally Excluded From V1
 
-- Mounts are still supported internally, but they are not part of the public gameplay API.
+- Mounts are supported through the shared mount contract, but their pose semantics are documented in [SCENARIO_API.md](./SCENARIO_API.md) because they are primarily scenario/world integration points.
 - Low-level physics/runtime/network access remains engine-internal.

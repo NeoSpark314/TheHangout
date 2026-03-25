@@ -53,7 +53,7 @@ export interface IPhysicsEntityState extends IBaseEntityState {
     v: Vec3Arr; // velocity
     b: string | null; // heldBy (playerId)
     m?: string; // module ID (optional, for spawned objects)
-    url?: string; // content/model URL for module-backed props (optional)
+    assetUrl?: string; // content/model URL for module-backed props (optional)
     he?: Vec3Arr; // half extents (optional)
     s?: number; // uniform scale (optional)
 }

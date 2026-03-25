@@ -72,7 +72,7 @@ interface ISharedPropSpawnBase {
     position: IVector3;
     mesh: THREE.Object3D;
     ownerId?: string | null;
-    url?: string;
+    assetUrl?: string;
     entityId?: string;
     grabbable?: boolean;
     physicsTuning?: ISharedPropPhysicsTuning;
@@ -235,6 +235,15 @@ export interface IParticleEmitterHandle {
     dispose(): void;
 }
 
+export interface IParticleBurstOptions {
+    position: IVector3;
+    color?: number | string;
+    count?: number;
+    speed?: number;
+    lifetime?: number;
+    size?: number;
+}
+
 export interface IObjectRuntimeContext {
     instanceId: string;
 
@@ -254,7 +263,7 @@ export interface IObjectRuntimeContext {
 
     particles: {
         createEmitter(options: IParticleEmitterOptions): Promise<IParticleEmitterHandle>;
-        spawnBurst(options: import('../../render/effects/ParticleEffectSystem').IParticleBurstOptions): void;
+        spawnBurst(options: IParticleBurstOptions): void;
     };
 
     input: {

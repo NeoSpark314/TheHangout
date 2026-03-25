@@ -15,13 +15,15 @@ const SIMPLE_RACING_CAR_SPAWNS = [
     { id: 'simple-racing-car-3', rightOffset: 2.4, backOffset: -3.0, modelUrl: SIMPLE_RACING_CAR_MODEL_URLS[3] }
 ] as const;
 
+const SIMPLE_RACING_OBJECT_MODULES: IObjectModule[] = [new SimpleRacingCarObject()];
+
 export class SimpleRacingScenario implements IScenarioModule {
     public readonly id = 'simple-racing';
     public readonly displayName = 'Simple Racing';
     public readonly kind = 'minigame' as const;
     public readonly maxPlayers = 8;
 
-    private readonly objectModules: IObjectModule[] = [new SimpleRacingCarObject()];
+    private readonly objectModules: IObjectModule[] = SIMPLE_RACING_OBJECT_MODULES;
     private readonly track = new SimpleRacingTrackBuilder();
 
     public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
@@ -40,7 +42,7 @@ export class SimpleRacingScenario implements IScenarioModule {
                 entityId: `${car.id}:body`,
                 position: { x: position.x, y: position.y, z: position.z },
                 rotationY: spawn.yaw,
-                url: car.modelUrl
+                assetUrl: car.modelUrl
             });
         }
     }
@@ -90,6 +92,7 @@ export const SimpleRacingScenarioPlugin: IScenarioPlugin = {
         usesAudio: true,
         hasPortableObjects: false
     },
+    objectModules: SIMPLE_RACING_OBJECT_MODULES,
     create() {
         return new SimpleRacingScenario();
     }

@@ -20,7 +20,7 @@ function createLoadingPlaceholder(): { mesh: THREE.Mesh; geo: THREE.BufferGeomet
 }
 
 export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstance {
-    private url: string | null = null;
+    private assetUrl: string | null = null;
     private group: THREE.Group;
     private loaded = false;
     private _destroyed = false;
@@ -42,7 +42,9 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
             mesh: group as any,
             halfExtents: DEFAULT_HALF_EXTENTS,
             ownerId,
-            url: typeof config.url === 'string' ? config.url : undefined,
+            assetUrl: typeof config.assetUrl === 'string'
+                ? config.assetUrl
+                : (typeof config.url === 'string' ? config.url : undefined),
             entityId,
             scale: typeof config.scale === 'number' ? config.scale : undefined,
             dualGrabScalable: true,
@@ -58,22 +60,22 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
         // Only show a loading placeholder if we have a url to load.
         // When spawned via EntityRegistry.discover() the url is absent from the
         // entity state packet, so we defer the placeholder to applyReplicationSnapshot.
-        if (config.url && context.scene.isRenderingAvailable()) {
+        if ((config.assetUrl || config.url) && context.scene.isRenderingAvailable()) {
             const { mesh, geo, mat } = createLoadingPlaceholder();
             this.group.add(mesh);
             this.addCleanup(() => { geo.dispose(); mat.dispose(); });
         }
 
-        if (this.propEntity && config.url) {
-            const urlStr = config.url as string;
-            this.loadUrl(urlStr);
+        const initialAssetUrl = (typeof config.assetUrl === 'string' ? config.assetUrl : config.url) as string | undefined;
+        if (this.propEntity && initialAssetUrl) {
+            this.loadUrl(initialAssetUrl);
 
             // Only the authoritative peer emits the url sync event.
             // Use propEntity.isAuthority as the single source of truth.
             if (this.propEntity.isAuthority) {
                 setTimeout(() => {
                     if (this._destroyed) return;
-                    this.emitSyncEvent('set-url', { url: urlStr });
+                    this.emitSyncEvent('set-url', { assetUrl: initialAssetUrl });
                 }, 0);
             }
         }
@@ -85,16 +87,16 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
     }
 
     private loadUrl(newUrl: string): void {
-        this.url = newUrl;
-        if (!this.url || this.loaded) return;
+        this.assetUrl = newUrl;
+        if (!this.assetUrl || this.loaded) return;
         this.loaded = true;
 
         if (!this.context.scene.isRenderingAvailable()) return;
 
-        if (isModel(this.url)) {
-            this.loadAsModel(this.url);
+        if (isModel(this.assetUrl)) {
+            this.loadAsModel(this.assetUrl);
         } else {
-            this.loadAsImage(this.url);
+            this.loadAsImage(this.assetUrl);
         }
     }
 
@@ -169,14 +171,14 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
     public captureReplicationSnapshot(): unknown {
         const baseHalfExtents = this.propEntity?.getBaseHalfExtents?.() || this.propEntity?.halfExtents;
         return {
-            url: this.url,
+            assetUrl: this.assetUrl,
             halfExtents: baseHalfExtents
         };
     }
 
     public applyReplicationSnapshot(snapshot: unknown): void {
         if (!snapshot || typeof snapshot !== 'object') return;
-        const payload = snapshot as { url?: string; halfExtents?: { x?: number; y?: number; z?: number } };
+        const payload = snapshot as { assetUrl?: string; url?: string; halfExtents?: { x?: number; y?: number; z?: number } };
 
         const he = payload.halfExtents;
         if (he && typeof he.x === 'number' && typeof he.y === 'number' && typeof he.z === 'number') {
@@ -184,7 +186,8 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
         }
 
         // Only show loader and start the download if not already in progress.
-        if (!this.loaded && payload.url) {
+        const assetUrl = payload.assetUrl ?? payload.url;
+        if (!this.loaded && assetUrl) {
             if (this.context.scene.isRenderingAvailable()) {
                 const { mesh, geo, mat } = createLoadingPlaceholder();
                 if (this.propEntity?.id) {
@@ -193,7 +196,7 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
                 this.group.add(mesh);
                 this.addCleanup(() => { geo.dispose(); mat.dispose(); });
             }
-            this.loadUrl(payload.url);
+            this.loadUrl(assetUrl);
         }
     }
 
@@ -205,9 +208,10 @@ export class SimpleSharedInstance extends BaseReplicatedPhysicsPropObjectInstanc
 
     public onReplicationEvent(eventType: string, data: unknown, _meta: IObjectReplicationMeta): void {
         if (eventType === 'set-url' && data && typeof data === 'object') {
-            const payload = data as { url?: string };
-            if (payload.url) {
-                this.loadUrl(payload.url);
+            const payload = data as { assetUrl?: string; url?: string };
+            const assetUrl = payload.assetUrl ?? payload.url;
+            if (assetUrl) {
+                this.loadUrl(assetUrl);
             }
         }
     }

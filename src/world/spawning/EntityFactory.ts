@@ -40,7 +40,7 @@ export class EntityFactory {
                 config.ownerId,
                 config.grabbable,
                 config.physicsTuning,
-                config.url,
+                config.assetUrl,
                 config.scale,
                 config.dualGrabScalable,
                 config.replicationProfileId
@@ -126,7 +126,7 @@ export class EntityFactory {
         ownerId?: string | null,
         grabbable?: boolean,
         physicsTuning?: ISharedPropPhysicsTuning,
-        url?: string,
+        assetUrl?: string,
         scale?: number,
         dualGrabScalable?: boolean,
         replicationProfileId?: PhysicsReplicationProfileId
@@ -158,7 +158,7 @@ export class EntityFactory {
             ownerId,
             grabbable,
             physicsTuning,
-            url,
+            assetUrl,
             scale,
             dualGrabScalable,
             replicationProfileId

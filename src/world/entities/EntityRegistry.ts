@@ -50,7 +50,7 @@ export class EntityRegistry implements IUpdatable {
                 position: config.p ? { x: config.p[0], y: config.p[1], z: config.p[2] } : undefined,
                 isAuthority: false,
                 ownerId: config.ownerId,
-                url: config.url,
+                assetUrl: config.assetUrl ?? config.url,
                 scale: config.scale ?? config.s
             };
 

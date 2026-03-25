@@ -3,6 +3,7 @@ import { AppContext, ISessionConfig } from '../../app/AppContext';
 import { IUpdatable } from '../../shared/contracts/IUpdatable';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectSpawnConfig } from '../../content/contracts/IObjectModule';
+import type { IObjectModule } from '../../content/contracts/IObjectModule';
 import type { IObjectReplicationEmitOptions } from '../../content/contracts/IReplicatedObjectInstance';
 import type { IScenarioReplicationEmitOptions, IReplicatedScenarioModule } from '../../content/contracts/IReplicatedScenarioModule';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
@@ -26,6 +27,7 @@ export class SessionRuntime implements IUpdatable {
     private isInitialized: boolean = false;
     private readonly objectInstanceRegistry: ObjectInstanceRegistry;
     private readonly objectModuleRegistry = new ObjectModuleRegistry();
+    private readonly knownObjectModules = new Map<string, IObjectModule>();
     private readonly scenarioRegistry = new ScenarioPluginRegistry();
     private readonly scenarioReplicationHost: ScenarioReplicationHost;
     private readonly triggerZoneRegistry: TriggerZoneRegistry;
@@ -48,6 +50,7 @@ export class SessionRuntime implements IUpdatable {
 
         for (const plugin of scenarioPlugins) {
             this.scenarioRegistry.register(plugin);
+            this.indexScenarioObjectModules(plugin);
         }
 
         this.activeScenarioPlugin = this.resolveInitialScenarioPlugin(defaultScenarioId);
@@ -228,12 +231,12 @@ export class SessionRuntime implements IUpdatable {
 
     public spawnObjectInstance(id: string, config: IObjectSpawnConfig = {}): ISpawnedObjectInstance | null {
         let instance = this.objectModuleRegistry.spawn(id, this.context, config);
-        if (!instance && this.resolveObjectModuleDefinition(id)) {
+        if (!instance && this.ensureObjectModuleRegistered(id)) {
             instance = this.objectModuleRegistry.spawn(id, this.context, config);
         }
         if (!instance) {
             this.refreshActiveObjectModules();
-            if (this.resolveObjectModuleDefinition(id)) {
+            if (this.ensureObjectModuleRegistered(id)) {
                 instance = this.objectModuleRegistry.spawn(id, this.context, config);
             }
         }
@@ -270,6 +273,7 @@ export class SessionRuntime implements IUpdatable {
 
     public registerScenario(plugin: IScenarioPlugin): void {
         this.scenarioRegistry.register(plugin);
+        this.indexScenarioObjectModules(plugin);
     }
 
     public getAvailableScenarios(): IScenarioPlugin[] {
@@ -361,26 +365,34 @@ export class SessionRuntime implements IUpdatable {
 
     private refreshActiveObjectModules(): void {
         this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
+        for (const [moduleId, module] of this.knownObjectModules.entries()) {
+            if (!this.objectModuleRegistry.get(moduleId)) {
+                this.objectModuleRegistry.register(module);
+            }
+        }
+    }
+
+    private ensureObjectModuleRegistered(moduleId: string): boolean {
+        if (this.objectModuleRegistry.get(moduleId)) {
+            return true;
+        }
+        const module = this.knownObjectModules.get(moduleId);
+        if (!module) {
+            return false;
+        }
+        this.objectModuleRegistry.register(module);
+        return true;
     }
 
     private resolveObjectModuleDefinition(moduleId: string) {
-        const existing = this.objectModuleRegistry.get(moduleId);
-        if (existing) {
-            return existing;
-        }
+        return this.objectModuleRegistry.get(moduleId) ?? this.knownObjectModules.get(moduleId);
+    }
 
-        for (const plugin of this.scenarioRegistry.list()) {
-            const scenario = this.instantiateScenario(plugin);
-            const modules = scenario.getObjectModules?.() ?? [];
-            const match = modules.find((module) => module.id === moduleId);
-            if (!match) {
-                continue;
-            }
-            this.objectModuleRegistry.register(match);
-            return match;
+    private indexScenarioObjectModules(plugin: IScenarioPlugin): void {
+        const modules = plugin.objectModules ?? this.instantiateScenario(plugin).getObjectModules?.() ?? [];
+        for (const module of modules) {
+            this.knownObjectModules.set(module.id, module);
         }
-
-        return undefined;
     }
 
     private clearScenarioOwnedState(): void {

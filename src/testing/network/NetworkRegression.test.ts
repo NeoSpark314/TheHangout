@@ -254,6 +254,27 @@ describe.sequential('Headless Network Regression', () => {
         expect(remoteGuestOnHost.avatarConfigSnapshot.renderMode).toBe('vrm-auto');
         expect(remoteGuestOnHost.avatarConfigSnapshot.vrmUrl).toBe('https://cdn.example.com/guest-avatar.vrm');
     });
+
+    it('propagates per-instance assetUrl through remote object discovery', async () => {
+        const harness = await HeadlessNetworkHarness.create();
+        activeHarness = harness;
+        const guest = harness.requireGuest();
+        const assetUrl = 'https://cdn.example.com/content/simple-shared.glb';
+
+        harness.spawnHostObject('simple-shared-object', {
+            id: 'shared-asset-object',
+            entityId: 'shared-asset-object:body',
+            position: { x: 0, y: 1.15, z: 0 },
+            assetUrl
+        });
+
+        harness.waitUntil(() => !!guest.getPhysicsProp('shared-asset-object:body'));
+
+        const guestProp = guest.getPhysicsProp('shared-asset-object:body') as PhysicsPropEntity;
+        const guestState = guestProp.getNetworkState(false) as { assetUrl?: string };
+
+        expect(guestState.assetUrl).toBe(assetUrl);
+    });
 });
 
 function distance3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {

@@ -130,9 +130,9 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
         if (typeof options.initialScale === 'number' && Number.isFinite(options.initialScale)) {
             this.uniformScale = Math.max(this.minScale, Math.min(this.maxScale, options.initialScale));
         }
-        if (options.url) {
+        if (options.assetUrl) {
             // Some objects might use this directly if they don't have a separate Instance class
-            (this as any).url = options.url;
+            (this as any).assetUrl = options.assetUrl;
         }
 
         const pos = this.rigidBody.translation();
@@ -503,7 +503,7 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             b: this.heldBy,
             ownerId: this.ownerId,
             m: this.moduleId,
-            url: (this as any).url,
+            assetUrl: (this as any).assetUrl,
             he: this.baseHalfExtents
                 ? [this.baseHalfExtents.x, this.baseHalfExtents.y, this.baseHalfExtents.z]
                 : (this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined),
