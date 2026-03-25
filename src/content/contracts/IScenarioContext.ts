@@ -4,7 +4,14 @@ import type { IPose, IQuaternion, IVector3 } from '../../shared/contracts/IMath'
 import type { IObjectSpawnConfig } from './IObjectModule';
 import type { IScenarioReplicationEmitOptions } from './IReplicatedScenarioModule';
 import type { ISpawnedObjectInstance } from './ISpawnedObjectInstance';
-import type { IAudioApi, IPhysicsColliderHandle, ISharedPropHandle } from './IObjectRuntimeContext';
+import type {
+    IAudioApi,
+    IParticleEmitterHandle,
+    IParticleEmitterOptions,
+    IPhysicsColliderHandle,
+    ISharedPropHandle
+} from './IObjectRuntimeContext';
+import type { IParticleBurstOptions } from '../../render/effects/ParticleEffectSystem';
 
 export interface IScenarioPlayerHandle {
     readonly id: string;
@@ -68,6 +75,11 @@ export interface IScenarioContext {
     };
 
     audio: IAudioApi;
+
+    particles: {
+        createEmitter(options: IParticleEmitterOptions): Promise<IParticleEmitterHandle>;
+        spawnBurst(options: IParticleBurstOptions): void;
+    };
 
     players: {
         getLocal(): IScenarioPlayerHandle | null;

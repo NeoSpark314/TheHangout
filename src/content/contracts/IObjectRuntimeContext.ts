@@ -195,6 +195,46 @@ export interface IAudioEmitterHandle {
     dispose(): void;
 }
 
+export interface IParticleCurveKeyframe {
+    t: number;
+    value: number;
+}
+
+export interface IParticleRange {
+    min: number;
+    max: number;
+}
+
+export interface IParticleEmitterOptions {
+    textureUrl?: string;
+    color?: number | string;
+    capacity?: number;
+    blending?: 'normal' | 'additive';
+    depthWrite?: boolean;
+    gravity?: IVector3;
+    drag?: number;
+    size?: IParticleRange;
+    lifetime?: IParticleRange;
+    alphaOverLife?: IParticleCurveKeyframe[];
+    sizeOverLife?: IParticleCurveKeyframe[];
+}
+
+export interface IParticleEmissionOptions {
+    position: IVector3;
+    count?: number;
+    velocityMin?: IVector3;
+    velocityMax?: IVector3;
+    positionJitter?: IVector3;
+    size?: IParticleRange;
+    lifetime?: IParticleRange;
+    color?: number | string;
+}
+
+export interface IParticleEmitterHandle {
+    emit(options: IParticleEmissionOptions): void;
+    dispose(): void;
+}
+
 export interface IObjectRuntimeContext {
     instanceId: string;
 
@@ -211,6 +251,11 @@ export interface IObjectRuntimeContext {
     };
 
     audio: IAudioApi;
+
+    particles: {
+        createEmitter(options: IParticleEmitterOptions): Promise<IParticleEmitterHandle>;
+        spawnBurst(options: import('../../render/effects/ParticleEffectSystem').IParticleBurstOptions): void;
+    };
 
     input: {
         getMovementVector(): { x: number; y: number };

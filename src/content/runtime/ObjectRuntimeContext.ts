@@ -34,6 +34,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
     public readonly scene;
     public readonly assets;
     public readonly audio;
+    public readonly particles;
     public readonly input;
     public readonly tracking;
     public readonly players;
@@ -85,6 +86,15 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             },
             playFxSweep: (options: { down?: boolean; intensity?: number; position?: { x: number; y: number; z: number } }) => {
                 this.app.runtime.audio?.playFxSweep(options);
+            }
+        };
+
+        this.particles = {
+            createEmitter: (options: Parameters<IObjectRuntimeContext['particles']['createEmitter']>[0]) => {
+                return this.app.runtime.particles.createEmitter(options);
+            },
+            spawnBurst: (options: Parameters<IObjectRuntimeContext['particles']['spawnBurst']>[0]) => {
+                this.app.runtime.particles.spawnBurst(options);
             }
         };
 

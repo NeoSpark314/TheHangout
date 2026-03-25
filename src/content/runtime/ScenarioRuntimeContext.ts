@@ -72,6 +72,7 @@ export class ScenarioRuntimeContext implements IScenarioContext {
     public readonly scene;
     public readonly assets;
     public readonly audio;
+    public readonly particles;
     public readonly players;
     public readonly objects;
     public readonly props;
@@ -126,6 +127,15 @@ export class ScenarioRuntimeContext implements IScenarioContext {
             },
             playFxSweep: (options: Parameters<IAudioApi['playFxSweep']>[0]) => {
                 this.app.runtime.audio?.playFxSweep(options);
+            }
+        };
+
+        this.particles = {
+            createEmitter: (options: Parameters<IScenarioContext['particles']['createEmitter']>[0]) => {
+                return this.app.runtime.particles.createEmitter(options);
+            },
+            spawnBurst: (options: Parameters<IScenarioContext['particles']['spawnBurst']>[0]) => {
+                this.app.runtime.particles.spawnBurst(options);
             }
         };
 

@@ -5,7 +5,7 @@ import type { IInteractable } from '../../../shared/contracts/IInteractable';
 import type { IInteractionEvent } from '../../../shared/contracts/IInteractionEvent';
 import type { IVector3 } from '../../../shared/contracts/IMath';
 import type { IObjectModule, IObjectSpawnConfig, IObjectSpawnContext } from '../../contracts/IObjectModule';
-import type { IAudioEmitterHandle, ISharedPropPhysicsTuning } from '../../contracts/IObjectRuntimeContext';
+import type { IAudioEmitterHandle, IParticleEmitterHandle, ISharedPropPhysicsTuning } from '../../contracts/IObjectRuntimeContext';
 import type { ILocalMountBinding } from '../../contracts/IMounting';
 import type { IObjectReplicationMeta } from '../../contracts/IReplicatedObjectInstance';
 import { BaseReplicatedPhysicsPropObjectInstance } from '../../runtime/BaseReplicatedPhysicsPropObjectInstance';
@@ -65,6 +65,8 @@ const CAR_SKID_MIN_RATE = 1.0;
 const CAR_SKID_MAX_RATE = 3.0;
 const CAR_IMPACT_SPEED_THRESHOLD = 1.75;
 const CAR_IMPACT_COOLDOWN_MS = 180;
+const CAR_SMOKE_MIN_DRIFT = 0.25;
+const CAR_SMOKE_MIN_SPEED = 0.15;
 const CAR_PHYSICS_TUNING: ISharedPropPhysicsTuning = {
     linearDamping: 0.1,
     angularDamping: 4.0,
@@ -193,6 +195,7 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
     private wheelBR: THREE.Object3D | null = null;
     private engineEmitter: IAudioEmitterHandle | null = null;
     private skidEmitter: IAudioEmitterHandle | null = null;
+    private smokeEmitter: IParticleEmitterHandle | null = null;
     private lastVisualSyncAtMs = 0;
     private lastImpactSoundAtMs = 0;
 
@@ -406,6 +409,32 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             this.skidEmitter?.dispose();
             this.skidEmitter = null;
         });
+
+        this.smokeEmitter = await this.runtimeContext.particles.createEmitter({
+            textureUrl: SIMPLE_RACING_ASSETS.sprites.smoke,
+            color: 0x5e5f6b,
+            capacity: 64,
+            blending: 'normal',
+            depthWrite: false,
+            gravity: { x: 0, y: 0, z: 0 },
+            drag: 0.983,
+            size: { min: 0.25, max: 0.5 },
+            lifetime: { min: 0.5, max: 0.5 },
+            alphaOverLife: [
+                { t: 0, value: 0 },
+                { t: 0.5, value: 1 },
+                { t: 1, value: 0 }
+            ],
+            sizeOverLife: [
+                { t: 0, value: 0.5 },
+                { t: 0.5, value: 1.0 },
+                { t: 1, value: 0.2 }
+            ]
+        });
+        this.addCleanup(() => {
+            this.smokeEmitter?.dispose();
+            this.smokeEmitter = null;
+        });
     }
 
     private createMountZone(): THREE.Mesh {
@@ -581,6 +610,8 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             if (!wheel) continue;
             wheel.rotation.x = this.visualState.wheelSpin;
         }
+
+        this.updateSmoke();
     }
 
     private applyVisualState(value: unknown): void {
@@ -680,6 +711,32 @@ export class SimpleRacingCarInstance extends BaseReplicatedPhysicsPropObjectInst
             return { x: position.x, y: position.y + 0.1, z: position.z };
         }
         return { x: this.spawnPosition.x, y: this.spawnPosition.y + 0.1, z: this.spawnPosition.z };
+    }
+
+    private updateSmoke(): void {
+        if (!this.smokeEmitter) return;
+        if (this.driveState.driftIntensity <= CAR_SMOKE_MIN_DRIFT || Math.abs(this.visualState.speed) <= CAR_SMOKE_MIN_SPEED) {
+            return;
+        }
+
+        this.emitSmokeAtWheel(this.wheelBL);
+        this.emitSmokeAtWheel(this.wheelBR);
+    }
+
+    private emitSmokeAtWheel(wheel: THREE.Object3D | null): void {
+        if (!wheel || !this.smokeEmitter) return;
+
+        const worldPosition = new THREE.Vector3();
+        wheel.getWorldPosition(worldPosition);
+        worldPosition.y = this.visualRig.position.y + 0.05;
+
+        this.smokeEmitter.emit({
+            position: { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z },
+            count: 1,
+            positionJitter: { x: 0.02, y: 0, z: 0.02 },
+            velocityMin: { x: -0.1, y: 0, z: -0.1 },
+            velocityMax: { x: 0.1, y: 0.1, z: 0.1 }
+        });
     }
 
     private releaseDrivingAuthorityIfLocal(): void {
