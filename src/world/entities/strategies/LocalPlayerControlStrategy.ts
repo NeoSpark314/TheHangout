@@ -81,7 +81,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
 
         if (render.cameraGroup) {
             // Apply grounding if not mounted
-            if (!runtime.mount.isMountedLocal()) {
+            if (!runtime.skills.mount.isMountedLocal()) {
                 const headWorldPos = this.getHeadWorldPosition(player);
                 
                 // Sample height at the absolute world position of the head
@@ -292,8 +292,8 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     private buildMotionContext(player: PlayerAvatarEntity, trackingFrame: IAvatarTrackingFrame, delta: number): IAvatarMotionContext {
         const render = player.appContext.runtime.render;
         const isXR = render.isXRPresenting();
-        const seatPose = player.appContext.runtime.mount.getLocalSeatPose();
-        const bodyYawPose = player.appContext.runtime.mount.getLocalBodyYawPose();
+        const seatPose = player.appContext.runtime.skills.mount.getLocalSeatPose();
+        const bodyYawPose = player.appContext.runtime.skills.mount.getLocalBodyYawPose();
         const movement = this.getSkill('movement') as MovementSkill | undefined;
         const explicitTurnDeltaYaw = movement?.consumeExplicitTurnDeltaYaw() ?? 0;
         const currentAvatarRootPosition = new THREE.Vector3(
@@ -325,7 +325,7 @@ export class LocalPlayerControlStrategy implements IPlayerAvatarControlStrategy 
     }
 
     private resolveTrackingFrame(player: PlayerAvatarEntity, frame?: IAvatarTrackingFrame): IAvatarTrackingFrame {
-        const seated = player.appContext.runtime.mount.isMountedLocal();
+        const seated = player.appContext.runtime.skills.mount.isMountedLocal();
         if (frame) {
             return {
                 ...frame,

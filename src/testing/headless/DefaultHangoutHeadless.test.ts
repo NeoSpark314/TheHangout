@@ -19,7 +19,7 @@ class DefaultHangoutHeadlessHarness {
             this.session.context.runtime.entity.update(delta);
             this.session.context.runtime.physics.step(delta);
             this.session.context.runtime.session.update(delta);
-            this.session.context.runtime.mount.update();
+            this.session.context.runtime.skills.mount.update();
         }
     }
 

@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import type { AppContext } from '../../app/AppContext';
-import type { IUpdatable } from '../../shared/contracts/IUpdatable';
+import type { AppContext } from '../app/AppContext';
+import type { IUpdatable } from '../shared/contracts/IUpdatable';
 import type {
     ILocalMountBinding,
     ILocalMountStatus,
     TLocalMountState,
     TLocalMountStateReason
-} from '../contracts/IMounting';
+} from '../content/contracts/IMounting';
 
-export class MountRuntime implements IUpdatable {
+export class MountSkill implements IUpdatable {
     private static readonly REQUEST_TIMEOUT_MS = 3000;
     private static readonly MOVEMENT_UNMOUNT_THRESHOLD = 0.45;
     private static readonly MOVEMENT_UNMOUNT_HOLD_MS = 220;
@@ -27,7 +27,7 @@ export class MountRuntime implements IUpdatable {
     constructor(private context: AppContext) { }
 
     public update(): void {
-        if (this.localState === 'requesting' && (this.nowMs() - this.localStateSinceMs) > MountRuntime.REQUEST_TIMEOUT_MS) {
+        if (this.localState === 'requesting' && (this.nowMs() - this.localStateSinceMs) > MountSkill.REQUEST_TIMEOUT_MS) {
             this.pendingMount = null;
             this.setLocalState('rejected', 'timeout');
             this.context.runtime.notify.warn('Mount request timed out.', {
@@ -46,12 +46,12 @@ export class MountRuntime implements IUpdatable {
         const move = this.context.runtime.input?.getMovementVector?.();
         if (move) {
             const mag = Math.hypot(move.x, move.y);
-            if (mag >= MountRuntime.MOVEMENT_UNMOUNT_THRESHOLD) {
+            if (mag >= MountSkill.MOVEMENT_UNMOUNT_THRESHOLD) {
                 if (this.movementUnmountStartMs === null) {
                     this.movementUnmountStartMs = this.nowMs();
                 }
                 const heldMs = this.nowMs() - this.movementUnmountStartMs;
-                if (heldMs >= MountRuntime.MOVEMENT_UNMOUNT_HOLD_MS) {
+                if (heldMs >= MountSkill.MOVEMENT_UNMOUNT_HOLD_MS) {
                     const canUnmount = this.localMount.canUnmountNow?.('movement') ?? true;
                     if (canUnmount) {
                         this.unmountLocal(this.localMount.ownerInstanceId, 'movement');

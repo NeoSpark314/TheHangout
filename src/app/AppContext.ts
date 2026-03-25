@@ -10,11 +10,11 @@ import type { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
 import type { HudRuntime } from '../ui/hud/HudRuntime';
 import type { VoiceRuntime } from '../media/voice/VoiceRuntime';
 import type { AudioRuntime } from '../media/audio/AudioRuntime';
-import type { InteractionSystem } from '../world/systems/InteractionSystem';
+import type { InteractionSkill } from '../skills/InteractionSkill';
 import type { AnimationSystem } from '../render/systems/AnimationSystem';
 import type { AssetRuntime } from '../assets/runtime/AssetRuntime';
-import type { DrawingRuntime } from '../content/runtime/DrawingRuntime';
-import type { MountRuntime } from '../content/runtime/MountRuntime';
+import type { DrawingSkill } from '../skills/DrawingSkill';
+import type { MountSkill } from '../skills/MountSkill';
 import type { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import type { VrUiRuntime } from '../ui/vr/VrUiRuntime';
 import type { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
@@ -68,12 +68,16 @@ export interface IEngineRuntime {
     replicationDebug: ReplicationDebugRuntime;
 }
 
+export interface ISkillsRuntime {
+    interaction: InteractionSkill;
+    drawing: DrawingSkill;
+    mount: MountSkill;
+}
+
 export interface IGameSessionRuntime {
     player: PlayerPresenceService;
     session: ScenarioManager;
-    interaction: InteractionSystem;
-    drawing: DrawingRuntime;
-    mount: MountRuntime;
+    skills: ISkillsRuntime;
     vrUi: VrUiRuntime;
     social: SocialFeature;
     remoteDesktop: RemoteDesktopFeature;

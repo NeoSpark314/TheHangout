@@ -381,7 +381,7 @@ export class ScenarioManager implements IUpdatable {
     }
 
     private clearScenarioOwnedState(): void {
-        this.context.runtime.drawing?.clear?.();
+        this.context.runtime.skills.drawing?.clear?.();
         this.objectInstanceRegistry.removeAll();
         this.context.runtime.physics?.flushPendingRemovals?.();
     }

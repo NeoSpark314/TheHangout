@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { IInteractable } from '../../shared/contracts/IInteractable';
-import { AppContext } from '../../app/AppContext';
-import { isHoldable, isInteractable } from '../../shared/utils/TypeGuards';
-import { EntityType } from '../../shared/contracts/IEntityState';
+import { IInteractable } from '../shared/contracts/IInteractable';
+import { AppContext } from '../app/AppContext';
+import { isHoldable, isInteractable } from '../shared/utils/TypeGuards';
+import { EntityType } from '../shared/contracts/IEntityState';
 
-export class InteractionSystem {
+export class InteractionSkill {
     constructor(private context: AppContext) {
     }
 

@@ -97,7 +97,7 @@ export class GrabSkill extends Skill {
             if (handState.active) {
                 const pos = handState.pointerPose.position || handState.pose.position;
                 const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-                const currentNearest = player.appContext.runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
+                const currentNearest = player.appContext.runtime.skills.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 nearest = currentNearest?.interactable || null;
                 nearestContactPoint = currentNearest?.contactPoint || null;
             }
@@ -349,7 +349,7 @@ export class GrabSkill extends Skill {
                 if (handState.active) {
                     const pos = handState.pointerPose.position || handState.pose.position;
                     const queryPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-                    result = runtime.interaction.findNearestInteractable(queryPos, this.grabRadius);
+                    result = runtime.skills.interaction.findNearestInteractable(queryPos, this.grabRadius);
                 }
                 this._updateHighlight(player.id, hand, result?.interactable || null, runtime);
             }

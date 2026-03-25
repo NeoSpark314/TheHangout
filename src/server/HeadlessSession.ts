@@ -6,8 +6,9 @@ import { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRunt
 import { ScenarioManager } from '../world/session/ScenarioManager';
 import { DedicatedSessionTransport } from './DedicatedSessionTransport';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
-import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
-import { MountRuntime } from '../content/runtime/MountRuntime';
+import { DrawingSkill } from '../skills/DrawingSkill';
+import { MountSkill } from '../skills/MountSkill';
+import { InteractionSkill } from '../skills/InteractionSkill';
 import { EntityType } from '../shared/contracts/IEntityState';
 import { RuntimeDiagnostics } from '../app/diagnostics/RuntimeDiagnostics';
 import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
@@ -50,8 +51,11 @@ export class HeadlessSession {
             DEFAULT_SCENARIO_PLUGIN_ID
         );
         this.context.setRuntime('session', sessionMgr);
-        this.context.setRuntime('drawing', new DrawingRuntime(this.context));
-        this.context.setRuntime('mount', new MountRuntime(this.context));
+        this.context.setRuntime('skills', {
+            drawing: new DrawingSkill(this.context),
+            mount: new MountSkill(this.context),
+            interaction: new InteractionSkill(this.context)
+        });
         this.context.setRuntime('scenarioActions', new ScenarioActionRuntime(this.context));
 
         this.context.setRuntime('network', this.network as any);
@@ -63,7 +67,7 @@ export class HeadlessSession {
             update: (delta) => physicsMgr.step(delta)
         });
         this.engine.addSystem(sessionMgr);
-        this.engine.addSystem(this.context.runtime.mount);
+        this.engine.addSystem(this.context.runtime.skills.mount);
     }
 
     public async start(): Promise<void> {

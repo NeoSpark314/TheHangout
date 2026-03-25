@@ -1,7 +1,7 @@
-import type { AppContext } from '../../app/AppContext';
-import type { IDrawSegmentPayload } from '../../shared/contracts/IDrawing';
-import type { ISpawnedObjectInstance } from '../contracts/ISpawnedObjectInstance';
-import type { IDrawingSurfaceInstance } from '../objects/DrawingSurfaceObject';
+import type { AppContext } from '../app/AppContext';
+import type { IDrawSegmentPayload } from '../shared/contracts/IDrawing';
+import type { ISpawnedObjectInstance } from '../content/contracts/ISpawnedObjectInstance';
+import type { IDrawingSurfaceInstance } from '../content/objects/DrawingSurfaceObject';
 
 function isDrawingSurfaceInstance(instance: ISpawnedObjectInstance | undefined): instance is IDrawingSurfaceInstance {
     if (!instance) return false;
@@ -16,7 +16,7 @@ function isDrawingSurfaceInstance(instance: ISpawnedObjectInstance | undefined):
  * (`drawing-surface`) so it can be enabled/disabled by scenario and synced
  * through the generic object-instance replication path.
  */
-export class DrawingRuntime {
+export class DrawingSkill {
     constructor(private context: AppContext) { }
 
     public addSegment(segment: IDrawSegmentPayload): void {

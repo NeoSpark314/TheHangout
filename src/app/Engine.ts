@@ -12,10 +12,10 @@ import { HudRuntime } from '../ui/hud/HudRuntime';
 import { InputRuntime } from '../input/controllers/InputRuntime';
 import { ScenarioManager } from '../world/session/ScenarioManager';
 import { AudioRuntime } from '../media/audio/AudioRuntime';
-import { InteractionSystem } from '../world/systems/InteractionSystem';
+import { InteractionSkill } from '../skills/InteractionSkill';
 import { AssetRuntime } from '../assets/runtime/AssetRuntime';
-import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
-import { MountRuntime } from '../content/runtime/MountRuntime';
+import { DrawingSkill } from '../skills/DrawingSkill';
+import { MountSkill } from '../skills/MountSkill';
 import { TrackingRuntime } from '../input/providers/TrackingRuntime';
 import { XRTrackingProvider } from '../input/providers/XRTrackingProvider';
 import { DesktopTrackingProvider } from '../input/providers/DesktopTrackingProvider';
@@ -131,11 +131,13 @@ export class Engine {
         ));
         this.context.setRuntime('audio', new AudioRuntime(this.context));
         this.context.setRuntime('assets', new AssetRuntime(this.context));
-        this.context.setRuntime('drawing', new DrawingRuntime(this.context));
-        this.context.setRuntime('mount', new MountRuntime(this.context));
         this.context.setRuntime('scenarioActions', new ScenarioActionRuntime(this.context));
         this.context.setRuntime('animation', new AnimationSystem());
-        this.context.setRuntime('interaction', new InteractionSystem(this.context));
+        this.context.setRuntime('skills', {
+            drawing: new DrawingSkill(this.context),
+            mount: new MountSkill(this.context),
+            interaction: new InteractionSkill(this.context)
+        });
         this.context.setRuntime('vrUi', new VrUiRuntime(this.context));
         this.context.setRuntime('debugRender', new DebugRenderRuntime(this.context));
         this.context.setRuntime('particles', new ParticleEffectSystem(this.context.runtime.render.scene));
@@ -207,7 +209,7 @@ export class Engine {
         }
         this.addGameplaySystem(this.physicsPresentationSystem);
         this.addGameplaySystem(runtime.session);
-        this.addGameplaySystem(runtime.mount);
+        this.addGameplaySystem(runtime.skills.mount);
         this.addGameplaySystem(new LocalPlayerLateUpdateSystem(this.context));
         this.addGameplaySystem(runtime.social);
         this.addGameplaySystem(runtime.particles);

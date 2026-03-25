@@ -90,7 +90,7 @@ export class PenToolEntity extends PhysicsPropEntity {
                         endPos: [tipPos.x, tipPos.y, tipPos.z],
                         color: this.color
                     };
-                    this.context.runtime.drawing.addSegment(segment);
+                    this.context.runtime.skills.drawing.addSegment(segment);
                     this.lastDrawPosition = { x: tipPos.x, y: tipPos.y, z: tipPos.z };
                 }
             } else {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import type { ILocalMountBinding } from '../contracts/IMounting';
-import { MountRuntime } from './MountRuntime';
+import type { ILocalMountBinding } from '../content/contracts/IMounting';
+import { MountSkill } from './MountSkill';
 
 function createBinding(
     getSeatYaw: () => number,
@@ -21,13 +21,13 @@ function createBinding(
     };
 }
 
-describe('MountRuntime', () => {
+describe('MountSkill', () => {
     it('preserves the aligned local head yaw baseline while the mount turns', () => {
         let seatYaw = 1.0;
         let viewYaw = 1.0;
         const teleportTo = vi.fn();
         const moveOriginTo = vi.fn();
-        const runtime = new MountRuntime({
+        const runtime = new MountSkill({
             localPlayer: {
                 teleportTo,
                 moveOriginTo,
@@ -80,7 +80,7 @@ describe('MountRuntime', () => {
         let seatYaw = 0.75;
         let viewYaw = 1.25;
         const moveOriginTo = vi.fn();
-        const runtime = new MountRuntime({
+        const runtime = new MountSkill({
             localPlayer: {
                 teleportTo: vi.fn(),
                 moveOriginTo,

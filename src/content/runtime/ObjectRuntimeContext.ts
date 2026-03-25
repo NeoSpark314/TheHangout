@@ -279,35 +279,35 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
     }
 
     public getLocalMountStatus(): ILocalMountStatus {
-        return this.app.runtime.mount.getLocalMountStatus();
+        return this.app.runtime.skills.mount.getLocalMountStatus();
     }
 
     public requestLocalMount(options: ILocalMountBinding): boolean {
-        return this.app.runtime.mount.requestLocalMount(options);
+        return this.app.runtime.skills.mount.requestLocalMount(options);
     }
 
     public grantLocalMount(options: ILocalMountBinding): boolean {
-        return this.app.runtime.mount.grantLocalMount(options);
+        return this.app.runtime.skills.mount.grantLocalMount(options);
     }
 
     public rejectLocalMount(): void {
-        this.app.runtime.mount.rejectLocalMount();
+        this.app.runtime.skills.mount.rejectLocalMount();
     }
 
     public releaseLocalMount(ownerInstanceId?: string, reason?: TLocalMountStateReason): void {
-        this.app.runtime.mount.releaseLocalMount(ownerInstanceId, reason);
+        this.app.runtime.skills.mount.releaseLocalMount(ownerInstanceId, reason);
     }
 
     public mountLocal(options: ILocalMountBinding): boolean {
-        return this.app.runtime.mount.mountLocal(options);
+        return this.app.runtime.skills.mount.mountLocal(options);
     }
 
     public unmountLocal(ownerInstanceId?: string, reason?: TLocalMountStateReason): void {
-        this.app.runtime.mount.unmountLocal(ownerInstanceId, reason);
+        this.app.runtime.skills.mount.unmountLocal(ownerInstanceId, reason);
     }
 
     public isMountedLocal(ownerInstanceId?: string): boolean {
-        return this.app.runtime.mount.isMountedLocal(ownerInstanceId);
+        return this.app.runtime.skills.mount.isMountedLocal(ownerInstanceId);
     }
 
     public notifySystem(payload: ISystemNotificationPayload): void {

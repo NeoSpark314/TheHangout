@@ -173,7 +173,7 @@ describe.sequential('Headless Network Regression', () => {
             value: 1
         });
 
-        harness.waitUntil(() => guest.context.runtime.mount.getLocalMountStatus().state === 'mounted', 60);
+        harness.waitUntil(() => guest.context.runtime.skills.mount.getLocalMountStatus().state === 'mounted', 60);
 
         expect(hostChair.mountReplication.getOccupiedBy()).toBe(harness.guestId);
         expect(guestChair.mountReplication.getOccupiedBy()).toBe(harness.guestId);
@@ -186,7 +186,7 @@ describe.sequential('Headless Network Regression', () => {
             value: 1
         });
 
-        harness.waitUntil(() => guest.context.runtime.mount.getLocalMountStatus().state === 'idle', 60);
+        harness.waitUntil(() => guest.context.runtime.skills.mount.getLocalMountStatus().state === 'idle', 60);
 
         expect(hostChair.mountReplication.getOccupiedBy()).toBeNull();
         expect(guestChair.mountReplication.getOccupiedBy()).toBeNull();

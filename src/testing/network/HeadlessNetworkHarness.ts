@@ -16,10 +16,10 @@ import { PlayerPresenceService } from '../../world/session/PlayerPresenceService
 import { FeatureReplicationService } from '../../network/replication/FeatureReplicationService';
 import { ReplicationDebugRuntime } from '../../network/replication/ReplicationDebugRuntime';
 import { ScenarioActionRuntime } from '../../content/runtime/ScenarioActionRuntime';
-import { MountRuntime } from '../../content/runtime/MountRuntime';
-import { DrawingRuntime } from '../../content/runtime/DrawingRuntime';
+import { MountSkill } from '../../skills/MountSkill';
+import { DrawingSkill } from '../../skills/DrawingSkill';
 import { AnimationSystem } from '../../render/systems/AnimationSystem';
-import { InteractionSystem } from '../../world/systems/InteractionSystem';
+import { InteractionSkill } from '../../skills/InteractionSkill';
 import { NetworkRuntime } from '../../network/transport/NetworkRuntime';
 import { convertRawWorldQuaternionToAvatarWorldQuaternion } from '../../shared/avatar/AvatarTrackingSpace';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
@@ -272,10 +272,12 @@ class HeadlessPeerSession {
         this.context.setRuntime('audio', createHeadlessAudioRuntime() as any);
         this.context.setRuntime('assets', createHeadlessAssetRuntime() as any);
         this.context.setRuntime('remoteDesktop', createHeadlessRemoteDesktopRuntime() as any);
-        this.context.setRuntime('drawing', new DrawingRuntime(this.context));
-        this.context.setRuntime('mount', new MountRuntime(this.context));
         this.context.setRuntime('animation', new AnimationSystem());
-        this.context.setRuntime('interaction', new InteractionSystem(this.context));
+        this.context.setRuntime('skills', {
+            drawing: new DrawingSkill(this.context),
+            mount: new MountSkill(this.context),
+            interaction: new InteractionSkill(this.context)
+        });
         this.context.setRuntime('input', createHeadlessInputRuntime() as unknown as InputRuntime);
         const tracking = new TrackingRuntime(this.context);
         tracking.registerProvider(new HeadlessTrackingProvider(this.context));
@@ -315,7 +317,7 @@ class HeadlessPeerSession {
         this.context.runtime.entity.update(delta);
         this.physics.step(delta);
         this.session.update(delta);
-        this.context.runtime.mount.update();
+        this.context.runtime.skills.mount.update();
     }
 
     public spawnObject(moduleId: string, config: IObjectSpawnConfig): ISpawnedObjectInstance | null {
