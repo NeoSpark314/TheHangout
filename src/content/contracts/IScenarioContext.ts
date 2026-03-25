@@ -64,8 +64,23 @@ export interface IScenarioContext {
         add(object: THREE.Object3D): void;
         remove(object: THREE.Object3D): void;
         isRenderingAvailable(): boolean;
+
+        /**
+         * @warning Use with caution - breaks the abstract engine layer.
+         * Exposes the underlying THREE.js camera.
+         */
         getCamera(): THREE.Camera | null;
+
+        /**
+         * @warning Use with caution - breaks the abstract engine layer.
+         * Exposes the underlying THREE.js renderer.
+         */
         getRenderer(): THREE.WebGLRenderer | null;
+
+        /**
+         * @warning Use with caution - breaks the abstract engine layer.
+         * Exposes the underlying THREE.js Scene root.
+         */
         getRoot(): THREE.Scene | null;
         getGlobalUniforms(): { [key: string]: THREE.IUniform } | null;
     };
@@ -103,6 +118,10 @@ export interface IScenarioContext {
         remove(instanceId: string): void;
     };
 
+    /**
+     * @warning Props and Shared properties are somewhat gameplay-specific.
+     * In future iterations, this may move to a dedicated object-module capability.
+     */
     props: {
         get(entityId: string): ISharedPropHandle | null;
         reset(

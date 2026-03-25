@@ -4,7 +4,7 @@ import type { IObjectModule } from '../../content/contracts/IObjectModule';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../content/contracts/IScenarioModule';
 import type { IScenarioPlugin } from '../../content/contracts/IScenarioPlugin';
 import type { IScenarioContext } from '../../content/contracts/IScenarioContext';
-import { SessionRuntime } from './SessionRuntime';
+import { ScenarioManager } from './ScenarioManager';
 
 class TestObjectModule implements IObjectModule {
     public readonly id = 'test-object-module';
@@ -53,12 +53,12 @@ function createPlugin(options: { exposeMetadata: boolean }) {
     };
 }
 
-describe('SessionRuntime object module indexing', () => {
+describe('ScenarioManager object module indexing', () => {
     it('uses plugin metadata for object-module lookup without extra scenario construction', () => {
         const app = new AppContext();
         const { plugin, getCreateCalls } = createPlugin({ exposeMetadata: true });
 
-        const session = new SessionRuntime(app, [plugin], plugin.id);
+        const session = new ScenarioManager(app, [plugin], plugin.id);
 
         expect(getCreateCalls()).toBe(1);
         expect(session.getObjectModuleDefinition('test-object-module')).toBeTruthy();
@@ -69,7 +69,7 @@ describe('SessionRuntime object module indexing', () => {
         const app = new AppContext();
         const { plugin, getCreateCalls } = createPlugin({ exposeMetadata: false });
 
-        const session = new SessionRuntime(app, [plugin], plugin.id);
+        const session = new ScenarioManager(app, [plugin], plugin.id);
 
         expect(getCreateCalls()).toBe(2);
         expect(session.getObjectModuleDefinition('test-object-module')).toBeTruthy();

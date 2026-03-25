@@ -1,96 +1,358 @@
-import { EVENTS } from '../shared/constants/Constants';
 import { AppContext } from './AppContext';
+import { SimulationLoop } from './SimulationLoop';
+import { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
+import { NetworkRuntime } from '../network/transport/NetworkRuntime';
+import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
+import { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRuntime';
+import { RenderRuntime } from '../render/runtime/RenderRuntime';
+import { PlayerPresenceService } from '../world/session/PlayerPresenceService';
+import { EntityRegistry } from '../world/entities/EntityRegistry';
+import { VoiceRuntime } from '../media/voice/VoiceRuntime';
+import { HudRuntime } from '../ui/hud/HudRuntime';
+import { InputRuntime } from '../input/controllers/InputRuntime';
+import { ScenarioManager } from '../world/session/ScenarioManager';
+import { AudioRuntime } from '../media/audio/AudioRuntime';
+import { InteractionSystem } from '../world/systems/InteractionSystem';
+import { AssetRuntime } from '../assets/runtime/AssetRuntime';
+import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
+import { MountRuntime } from '../content/runtime/MountRuntime';
+import { TrackingRuntime } from '../input/providers/TrackingRuntime';
+import { XRTrackingProvider } from '../input/providers/XRTrackingProvider';
+import { DesktopTrackingProvider } from '../input/providers/DesktopTrackingProvider';
+import { AnimationSystem } from '../render/systems/AnimationSystem';
+import { PhysicsPresentationSystem } from '../physics/systems/PhysicsPresentationSystem';
+import { VrUiRuntime } from '../ui/vr/VrUiRuntime';
+import { DebugRenderRuntime } from '../render/debug/DebugRenderRuntime';
+import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
+import { ParticleEffectSystem } from '../render/effects/ParticleEffectSystem';
+import { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
+import { SocialFeature } from '../features/social/SocialFeature';
+import { RemoteDesktopFeature } from '../features/remoteDesktop/RemoteDesktopFeature';
+import { RuntimeDiagnostics } from './diagnostics/RuntimeDiagnostics';
+import { ReplicationDebugRuntime } from '../network/replication/ReplicationDebugRuntime';
+import { NotificationRuntime } from './notifications/NotificationRuntime';
+import eventBus from './events/EventBus';
+import { EVENTS } from '../shared/constants/Constants';
+import { EnvironmentBuilder } from '../assets/procedural/EnvironmentBuilder';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
+import { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
+import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../content/runtime/BuiltInScenarioPlugins';
+import { ConfigRegistry } from '../shared/config/ConfigRegistry';
+import type { AvatarPoseOverride } from './AppContext';
+import type { AvatarRenderMode } from '../shared/contracts/IAvatar';
+import { normalizeAvatarConfig } from '../shared/contracts/IAvatar';
+import { LocalPlayerLateUpdateSystem } from '../world/entities/LocalPlayerLateUpdateSystem';
 
 /**
- * The core simulation runner for the application.
- * Executes all registered systems (IUpdatable) each frame.
+ * Orchestrates the application lifecycle: Initialization, Bootstrapping, and Shutdown.
  */
 export class Engine {
-    private isRunning: boolean = false;
-    private lastTime: number = performance.now();
-    private updateSystems: IUpdatable[] = [];
-    private endFrameCallbacks: Array<(delta: number) => void> = [];
+    private loop: SimulationLoop;
+    public context: AppContext;
+    private gameplayStarted = false;
+    private gameplayStartPromise: Promise<void> | null = null;
+    private physicsPresentationSystem: PhysicsPresentationSystem | null = null;
+    private menuEnvironment: EnvironmentBuilder | null = null;
 
-    constructor(private context: AppContext) { }
-
-    /**
-     * Registers a runtime subsystem to be updated every frame.
-     * Order of registration determines execution order.
-     */
-    public addSystem(system: IUpdatable): void {
-        this.updateSystems.push(system);
+    constructor() {
+        this.context = new AppContext();
+        this.loop = new SimulationLoop(this.context);
+        this.context.ensureGameplayStarted = this.ensureGameplayStarted.bind(this);
     }
 
-    /**
-     * Registers a callback to execute at the end of the update frame,
-     * useful for cleanup tasks like clearing single-frame input flags.
-     */
-    public onEndFrame(callback: (delta: number) => void): void {
-        this.endFrameCallbacks.push(callback);
+    public async bootstrap(): Promise<void> {
+        console.log('[Engine] Bootstrapping...');
+
+        try {
+            await this.detectServerInfo();
+            this.initializeRuntime();
+            this.setupGlobalEventListeners();
+            this.initializeMenuEnvironment();
+
+            // Register engine systems in their final order.
+            // Heavy gameplay runtime stays dormant until a session is requested.
+            await this.initSystems();
+
+            // Start engine loop immediately for main-menu render/UI.
+            await this.loop.initialize();
+            this.loop.start();
+
+            console.log('[Engine] Bootstrap complete. Scene ready.');
+            eventBus.emit(EVENTS.SCENE_READY);
+        } catch (error) {
+            console.error('[Engine] Fatal error during bootstrap:', error);
+            throw error;
+        }
     }
 
-    /**
-     * Prepares the engine for simulation. Called by App during bootstrap.
-     */
-    public async initialize(): Promise<void> {
-        console.log('[Engine] Initializing...');
-    }
-
-    /**
-     * Starts the animation loop and begins updating registered systems.
-     */
-    public start(): void {
-        if (this.isRunning) return;
-        this.isRunning = true;
-        this.lastTime = performance.now();
-        console.log('[Engine] Engine started.');
-
-        if (this.context.runtime.render) {
-            this.context.runtime.render.setAnimationLoop((time, frame) => this.loop(time, frame));
-        } else if (typeof requestAnimationFrame !== 'undefined') {
-            const wrap = (time: number) => {
-                this.loop(time);
-                if (this.isRunning) requestAnimationFrame(wrap);
-            };
-            requestAnimationFrame(wrap);
-        } else {
-            // Node.js Headless mode fallback
-            const tickRateMs = 1000 / 60; // 60 Hz
-            const intervalLoop = setInterval(() => {
-                if (!this.isRunning) {
-                    clearInterval(intervalLoop);
-                    return;
+    private async detectServerInfo(): Promise<void> {
+        try {
+            const resp = await fetch('/api/server-info');
+            if (resp.ok) {
+                const info = await resp.json();
+                if (info.local) {
+                    this.context.isLocalServer = true;
+                    console.log('[Engine] Dedicated server detected — using local PeerJS signaling.');
                 }
-                this.loop(performance.now());
-            }, tickRateMs);
+            }
+        } catch (e) {
+            // Silence: server-info is optional
         }
     }
 
-    /**
-     * Stops the engine simulation loop.
-     */
-    public stop(): void {
-        this.isRunning = false;
+    private initializeRuntime(): void {
+        ConfigRegistry.register({
+            id: 'user_items',
+            title: 'Shared Item URLs',
+            description: 'Provide item URLs to spawn them in the world.',
+            type: 'key-value-list',
+            defaultTarget: 'https://play.thehangout.app/th-logo.png'
+        });
+
+        this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
+        this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
+        this.context.setRuntime('notify', new NotificationRuntime());
+        this.context.setRuntime('entity', new EntityRegistry(this.context));
+        this.context.setRuntime('replication', new FeatureReplicationService(this.context));
+        this.context.setRuntime('remoteDesktop', new RemoteDesktopFeature(this.context));
+        this.context.setRuntime('ui', new FlatUiRuntime(this.context));
+        this.context.setRuntime('network', new NetworkRuntime(this.context));
+        this.context.setRuntime('media', new VoiceRuntime(this.context));
+        this.context.setRuntime('render', new RenderRuntime(this.context));
+        this.context.setRuntime('physicsAuthority', new PhysicsAuthorityRuntime(this.context));
+        this.context.setRuntime('physics', new PhysicsRuntime(this.context));
+        this.context.setRuntime('player', new PlayerPresenceService(this.context));
+        this.context.setRuntime('input', new InputRuntime(this.context));
+        this.context.setRuntime('hud', new HudRuntime(this.context));
+        this.context.setRuntime('session', new ScenarioManager(
+            this.context,
+            BUILT_IN_SCENARIO_PLUGINS,
+            DEFAULT_SCENARIO_PLUGIN_ID
+        ));
+        this.context.setRuntime('audio', new AudioRuntime(this.context));
+        this.context.setRuntime('assets', new AssetRuntime(this.context));
+        this.context.setRuntime('drawing', new DrawingRuntime(this.context));
+        this.context.setRuntime('mount', new MountRuntime(this.context));
+        this.context.setRuntime('scenarioActions', new ScenarioActionRuntime(this.context));
+        this.context.setRuntime('animation', new AnimationSystem());
+        this.context.setRuntime('interaction', new InteractionSystem(this.context));
+        this.context.setRuntime('vrUi', new VrUiRuntime(this.context));
+        this.context.setRuntime('debugRender', new DebugRenderRuntime(this.context));
+        this.context.setRuntime('particles', new ParticleEffectSystem(this.context.runtime.render.scene));
+        this.context.setRuntime('social', new SocialFeature(this.context, this.context.runtime.particles));
+        this.context.setRuntime('worldTransition', new WorldTransitionRuntime(this.context));
+
+        // Tracking Initialization
+        const tracking = new TrackingRuntime(this.context);
+        tracking.registerProvider(new XRTrackingProvider(this.context));
+        tracking.registerProvider(new DesktopTrackingProvider(this.context));
+        tracking.setProvider('desktop'); // Default
+        this.context.setRuntime('tracking', tracking);
     }
 
-    private loop(currentTime: number, frame?: XRFrame): void {
-        if (!this.isRunning) return;
+    private setupGlobalEventListeners(): void {
+        const runtime = this.context.runtime;
+        this.exposeDebugHelpers();
 
-        const delta = (currentTime - this.lastTime) / 1000;
-        this.lastTime = currentTime;
-        this.context.deltaTime = delta;
+        // Audio Activation
+        const resumeAudio = () => {
+            runtime.audio.resume();
+            window.removeEventListener('pointerdown', resumeAudio);
+            window.removeEventListener('keydown', resumeAudio);
+        };
+        window.addEventListener('pointerdown', resumeAudio);
+        window.addEventListener('keydown', resumeAudio);
 
-        this.update(delta, frame);
+        // Tracking Provider Switching
+        eventBus.on(EVENTS.XR_SESSION_STARTED, () => {
+            runtime.tracking.setProvider('xr');
+        });
+        eventBus.on(EVENTS.XR_SESSION_ENDED, () => {
+            runtime.tracking.setProvider('desktop');
+        });
+
+        // HUD/Camera integration
+        if (runtime.render && runtime.hud) {
+            runtime.render.camera.add(runtime.hud.group);
+        }
+
+        // Network/Player Initialization
+        eventBus.on(EVENTS.HOST_READY, (id: string) => this.initPlayerOnce(id));
+        eventBus.on(EVENTS.SESSION_CONNECTED, (localId: string) => {
+            if (!this.context.isHost && localId) {
+                this.initPlayerOnce(localId);
+            }
+        });
+        eventBus.on(EVENTS.SESSION_LEFT, () => {
+            this.playerInitialized = false;
+            this.context.localPlayer = null;
+            this.context.runtime.animation.clearLocalPlayer();
+        });
     }
 
-    private update(delta: number, frame?: XRFrame): void {
-        for (const system of this.updateSystems) {
-            system.update(delta, frame);
+    private async initSystems(): Promise<void> {
+        const runtime = this.context.runtime;
+        this.physicsPresentationSystem = new PhysicsPresentationSystem(this.context);
+
+        // Register systems to Engine in the exact desired execution order
+        this.addAlwaysSystem(runtime.network);
+        this.addAlwaysSystem(runtime.input);
+        this.addGameplaySystem(runtime.entity);
+
+        // Physics needs a small wrapper because its update method is called 'step' and only takes delta
+        if (runtime.physics) {
+            this.addGameplaySystem({
+                update: (delta) => runtime.physics!.step(delta)
+            });
+        }
+        this.addGameplaySystem(this.physicsPresentationSystem);
+        this.addGameplaySystem(runtime.session);
+        this.addGameplaySystem(runtime.mount);
+        this.addGameplaySystem(new LocalPlayerLateUpdateSystem(this.context));
+        this.addGameplaySystem(runtime.social);
+        this.addGameplaySystem(runtime.particles);
+        this.addGameplaySystem(runtime.worldTransition);
+        this.addGameplaySystem(runtime.remoteDesktop);
+        this.addAlwaysSystem(runtime.ui);
+        this.addAlwaysSystem(runtime.hud);
+        this.addGameplaySystem(runtime.vrUi);
+        this.addGameplaySystem(runtime.debugRender);
+
+        if (runtime.render) {
+            this.loop.addSystem({
+                update: (delta) => {
+                    if (this.gameplayStarted) return;
+                    this.menuEnvironment?.update(delta);
+                }
+            });
+            this.loop.addSystem({
+                update: (delta) => {
+                    runtime.render!.update(delta, this.context.localPlayer);
+                    runtime.render!.render();
+                }
+            });
         }
 
-        for (const callback of this.endFrameCallbacks) {
-            callback(delta);
+        // Tasks at the end of the frame
+        if (runtime.input) {
+            this.loop.onEndFrame(() => runtime.input!.clearJustPressed());
         }
+    }
+
+    private exposeDebugHelpers(): void {
+        if (typeof window === 'undefined') return;
+        const context = this.context;
+        const debugApi = {
+            setAvatarPoseOverride: (mode: AvatarPoseOverride) => {
+                context.avatarPoseOverride = mode;
+                context.runtime.diagnostics.record('info', 'system', `Avatar pose override=${mode}`);
+            },
+            getAvatarPoseOverride: () => context.avatarPoseOverride,
+            setAvatarRenderOverride: (mode: AvatarRenderMode | 'none' | null) => {
+                context.avatarRenderOverride = mode === 'none' || mode == null ? null : mode;
+                const active = context.avatarRenderOverride ?? 'none';
+                context.runtime.diagnostics.record('info', 'system', `Avatar render override=${active}`);
+            },
+            getAvatarRenderOverride: () => context.avatarRenderOverride,
+            setAvatarRenderMode: (mode: AvatarRenderMode) => {
+                context.avatarConfig = normalizeAvatarConfig({
+                    ...context.avatarConfig,
+                    renderMode: mode
+                });
+                context.localPlayer?.setAvatarConfig(context.avatarConfig);
+                context.runtime.diagnostics.record('info', 'system', `Avatar render mode=${context.avatarConfig.renderMode}`);
+            },
+            getAvatarRenderMode: () => context.avatarConfig.renderMode,
+            setReplicationDebugMode: (mode: 'off' | 'stats' | 'trace') => {
+                context.runtime.replicationDebug.setMode(mode);
+                context.runtime.diagnostics.record('info', 'replication', `Replication debug mode=${mode}`);
+            },
+            setReplicationDebugFeatureFilter: (featureId: string | null) => {
+                context.runtime.replicationDebug.setFeatureFilter(featureId);
+                const active = context.runtime.replicationDebug.getFeatureFilter() || 'none';
+                context.runtime.diagnostics.record('info', 'replication', `Replication debug filter=${active}`);
+            },
+            clearReplicationDebug: () => {
+                context.runtime.replicationDebug.clear();
+            },
+            getReplicationDebugStats: (limit: number = 20) => {
+                return context.runtime.replicationDebug.listFeatureStats(limit);
+            },
+            getReplicationDebugTraces: (limit: number = 50) => {
+                return context.runtime.replicationDebug.getRecentTraces(limit);
+            }
+        };
+
+        (window as unknown as { __hangoutDebug?: unknown }).__hangoutDebug = debugApi;
+    }
+
+    private async ensureGameplayStarted(): Promise<void> {
+        if (this.gameplayStarted) return;
+        if (this.gameplayStartPromise) {
+            await this.gameplayStartPromise;
+            return;
+        }
+
+        const runtime = this.context.runtime;
+        this.gameplayStartPromise = (async () => {
+            this.menuEnvironment?.clearProcedural();
+            this.menuEnvironment = null;
+
+            await runtime.physics.init();
+
+            if (runtime.render && runtime.session) {
+                runtime.session.init(runtime.render.scene);
+            }
+
+            runtime.vrUi?.init();
+            runtime.debugRender?.init();
+            this.gameplayStarted = true;
+            console.log('[Engine] Gameplay runtime initialized.');
+        })();
+
+        try {
+            await this.gameplayStartPromise;
+        } finally {
+            this.gameplayStartPromise = null;
+        }
+    }
+
+    private initializeMenuEnvironment(): void {
+        const scene = this.context.runtime.render?.scene;
+        if (!scene) return;
+
+        this.menuEnvironment = new EnvironmentBuilder(scene, () => Math.random());
+        this.menuEnvironment.applyConfig(this.context.sessionConfig);
+    }
+
+    private addGameplaySystem(system: IUpdatable | null | undefined): void {
+        if (!system) return;
+        this.loop.addSystem({
+            update: (delta, frame) => {
+                if (!this.gameplayStarted) return;
+                system.update(delta, frame);
+            }
+        });
+    }
+
+    private addAlwaysSystem(system: IUpdatable | null | undefined): void {
+        if (!system) return;
+        this.loop.addSystem(system);
+    }
+
+    private playerInitialized = false;
+    private initPlayerOnce(id: string): void {
+        if (this.playerInitialized || !id) return;
+
+        const runtime = this.context.runtime;
+        if (!this.context.isHost && runtime.session.assignedSpawnIndex === undefined) {
+            console.warn('[Engine] Delaying guest player initialization until assignedSpawnIndex is available.');
+            return;
+        }
+
+        this.playerInitialized = true;
+        runtime.render.switchToPlayerView();
+
+        runtime.player.init(id);
     }
 }

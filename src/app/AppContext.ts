@@ -5,7 +5,7 @@ import type { NetworkRuntime } from '../network/transport/NetworkRuntime';
 import type { InputRuntime } from '../input/controllers/InputRuntime';
 import type { RenderRuntime } from '../render/runtime/RenderRuntime';
 import type { PlayerPresenceService } from '../world/session/PlayerPresenceService';
-import type { SessionRuntime } from '../world/session/SessionRuntime';
+import type { ScenarioManager } from '../world/session/ScenarioManager';
 import type { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
 import type { HudRuntime } from '../ui/hud/HudRuntime';
 import type { VoiceRuntime } from '../media/voice/VoiceRuntime';
@@ -30,18 +30,23 @@ import type { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRun
 import type { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
 import { AvatarRenderMode, DEFAULT_AVATAR_COLOR, IAvatarConfig } from '../shared/contracts/IAvatar';
 
+export interface IScenarioConfig {
+    environment?: string;
+    skyColor?: string;
+    fogNear?: number;
+    fogFar?: number;
+    [key: string]: any;
+}
+
 export interface ISessionConfig {
     activeScenarioId: string;
-    environment: string;
-    skyColor: string;
-    fogNear: number;
-    fogFar: number;
     seed: number;
+    scenarioConfig?: IScenarioConfig;
 }
 
 export type AvatarPoseOverride = 'none' | 'vrm-tpose';
 
-export interface IRuntimeRegistry {
+export interface IEngineRuntime {
     entity: EntityRegistry;
     ui: FlatUiRuntime;
     network: NetworkRuntime;
@@ -49,28 +54,57 @@ export interface IRuntimeRegistry {
     render: RenderRuntime;
     physics: PhysicsRuntime;
     physicsAuthority: PhysicsAuthorityRuntime;
-    player: PlayerPresenceService;
     input: InputRuntime;
     hud: HudRuntime;
-    session: SessionRuntime;
     audio: AudioRuntime;
-    interaction: InteractionSystem;
-    animation: AnimationSystem;
     assets: AssetRuntime;
-    drawing: DrawingRuntime;
-    mount: MountRuntime;
+    animation: AnimationSystem;
     tracking: TrackingRuntime;
-    vrUi: VrUiRuntime;
     debugRender: DebugRenderRuntime;
     replication: FeatureReplicationService;
     particles: ParticleEffectSystem;
-    social: SocialFeature;
-    remoteDesktop: RemoteDesktopFeature;
     notify: NotificationRuntime;
     diagnostics: RuntimeDiagnostics;
     replicationDebug: ReplicationDebugRuntime;
+}
+
+export interface IGameSessionRuntime {
+    player: PlayerPresenceService;
+    session: ScenarioManager;
+    interaction: InteractionSystem;
+    drawing: DrawingRuntime;
+    mount: MountRuntime;
+    vrUi: VrUiRuntime;
+    social: SocialFeature;
+    remoteDesktop: RemoteDesktopFeature;
     scenarioActions: ScenarioActionRuntime;
     worldTransition: WorldTransitionRuntime;
+}
+
+export interface IRuntimeRegistry extends IEngineRuntime, IGameSessionRuntime {}
+
+export interface IEngineContext {
+    isHost: boolean;
+    isDedicatedHost: boolean;
+    isLocalServer: boolean;
+    sessionId: string | null;
+    voiceEnabled: boolean;
+    voiceAutoEnable: boolean;
+    deltaTime: number;
+    readonly runtime: IRuntimeRegistry;
+}
+
+export interface IGameSessionContext {
+    playerName: string;
+    avatarConfig: IAvatarConfig;
+    avatarRenderOverride: AvatarRenderMode | null;
+    avatarPoseOverride: AvatarPoseOverride;
+    renderLocalAvatar: boolean;
+    showTrackedInputGhost: boolean;
+    sessionConfig: ISessionConfig;
+    localPlayer: PlayerAvatarEntity | null;
+    isMenuOpen: boolean;
+    ensureGameplayStarted: (() => Promise<void>) | null;
 }
 
 /**
@@ -78,7 +112,7 @@ export interface IRuntimeRegistry {
  * It makes dependencies explicit
  * and improving testability and modularity across the application.
  */
-export class AppContext {
+export class AppContext implements IEngineContext, IGameSessionContext {
     public isHost: boolean = false;
     public isDedicatedHost: boolean = false;
     public isLocalServer: boolean = false;
@@ -98,11 +132,13 @@ export class AppContext {
     public voiceAutoEnable: boolean = true;
     public sessionConfig: ISessionConfig = {
         activeScenarioId: 'default-hangout',
-        environment: 'cyber-stube',
-        skyColor: '#0b0c10',
-        fogNear: 5,
-        fogFar: 1000,
-        seed: Math.floor(Math.random() * 2147483647)
+        seed: Math.floor(Math.random() * 2147483647),
+        scenarioConfig: {
+            environment: 'cyber-stube',
+            skyColor: '#0b0c10',
+            fogNear: 5,
+            fogFar: 1000
+        }
     };
 
     public localPlayer: PlayerAvatarEntity | null = null;

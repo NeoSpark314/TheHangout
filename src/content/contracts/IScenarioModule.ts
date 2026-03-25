@@ -1,4 +1,4 @@
-import type { ISessionConfig } from '../../app/AppContext';
+import type { IScenarioConfig } from '../../app/AppContext';
 import type { IUpdatable } from '../../shared/contracts/IUpdatable';
 import type { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import type { IObjectModule } from './IObjectModule';
@@ -29,7 +29,7 @@ export interface IScenarioModule extends IUpdatable {
     unload(context: IScenarioContext): void;
     getSpawnPoint(index: number): IScenarioSpawnPoint;
 
-    applyConfig?(context: IScenarioContext, config: ISessionConfig): void;
+    applyConfig?(context: IScenarioContext, config: IScenarioConfig): void;
     getDesktopLayout?(index: number, total: number): IDesktopScreenLayout;
     setHologramVisible?(visible: boolean): void;
     getObjectModules?(): IObjectModule[];

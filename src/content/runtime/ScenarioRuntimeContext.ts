@@ -22,7 +22,7 @@ import type { IScenarioReplicationEmitOptions } from '../contracts/IReplicatedSc
 import { resolveSharedPropHandle } from './SharedPropHandle';
 import type { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
-import type { SessionRuntime } from '../../world/session/SessionRuntime';
+import type { ScenarioManager } from '../../world/session/ScenarioManager';
 
 class ScenarioPlayerHandle implements IScenarioPlayerHandle {
     constructor(
@@ -84,7 +84,7 @@ export class ScenarioRuntimeContext implements IScenarioContext {
 
     constructor(
         private readonly app: AppContext,
-        private readonly session: SessionRuntime
+        private readonly session: ScenarioManager
     ) {
         this.scene = {
             add: (object: THREE.Object3D) => {

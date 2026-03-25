@@ -11,7 +11,7 @@ import { IAvatarTrackingFrame } from '../../shared/avatar/AvatarSkeleton';
 import { EntityRegistry } from '../../world/entities/EntityRegistry';
 import { PhysicsRuntime } from '../../physics/runtime/PhysicsRuntime';
 import { PhysicsAuthorityRuntime } from '../../physics/runtime/PhysicsAuthorityRuntime';
-import { SessionRuntime } from '../../world/session/SessionRuntime';
+import { ScenarioManager } from '../../world/session/ScenarioManager';
 import { PlayerPresenceService } from '../../world/session/PlayerPresenceService';
 import { FeatureReplicationService } from '../../network/replication/FeatureReplicationService';
 import { ReplicationDebugRuntime } from '../../network/replication/ReplicationDebugRuntime';
@@ -244,7 +244,7 @@ class HeadlessPeerSession {
     public readonly context = new AppContext();
     public readonly network: NetworkRuntime;
     public readonly physics: PhysicsRuntime;
-    public readonly session: SessionRuntime;
+    public readonly session: ScenarioManager;
     public readonly playerPresence: PlayerPresenceService;
     private initialized = false;
 
@@ -283,7 +283,7 @@ class HeadlessPeerSession {
         this.context.setRuntime('tracking', tracking);
         this.network = new NetworkRuntime(this.context);
         this.context.setRuntime('network', this.network);
-        this.session = new SessionRuntime(this.context, [TEST_SCENARIO_PLUGIN], TEST_SCENARIO_PLUGIN.id);
+        this.session = new ScenarioManager(this.context, [TEST_SCENARIO_PLUGIN], TEST_SCENARIO_PLUGIN.id);
         this.context.setRuntime('session', this.session);
         this.playerPresence = new PlayerPresenceService(this.context);
         this.context.setRuntime('player', this.playerPresence);

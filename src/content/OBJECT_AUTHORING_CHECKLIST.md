@@ -73,7 +73,7 @@ Low-level physics/runtime/network access is engine-internal and should not be pa
 
 ## 9) Spawn-path expectations
 
-- Scenario-owned objects should spawn through `SessionRuntime` object module APIs.
+- Scenario-owned objects should spawn through `ScenarioManager` object module APIs.
 - Portable UI spawns should use `spawnPortableObjectModule(...)`.
 - Non-networked objects should not be reconstructed from remote entity state.
 - Mountables remain supported internally, but mounts are intentionally not part of the public gameplay API in this pass.

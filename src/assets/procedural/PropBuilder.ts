@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISessionConfig } from '../../app/AppContext';
+import { IScenarioConfig } from '../../app/AppContext';
 import { IDesktopScreenLayout } from '../../shared/contracts/IDesktopScreenLayout';
 import { applyBoxEdgeGlow } from '../../render/materials/BoxEdgeGlow';
 import { createSynthBlockMaterial } from '../../render/materials/SynthBlockMaterial';
@@ -49,7 +49,7 @@ export class PropBuilder {
         this.random = randomFunc;
     }
 
-    public applyConfig(config: ISessionConfig): void {
+    public applyConfig(config: IScenarioConfig): void {
         if (!config) return;
 
         try {

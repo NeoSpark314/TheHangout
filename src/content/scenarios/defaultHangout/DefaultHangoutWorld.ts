@@ -1,4 +1,4 @@
-import type { ISessionConfig } from '../../../app/AppContext';
+import type { IScenarioConfig } from '../../../app/AppContext';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import { EnvironmentBuilder } from '../../../assets/procedural/EnvironmentBuilder';
 import { PropBuilder } from '../../../assets/procedural/PropBuilder';
@@ -67,7 +67,7 @@ export class DefaultHangoutWorld {
 
     }
 
-    public applyConfig(context: IScenarioContext, config: ISessionConfig): void {
+    public applyConfig(context: IScenarioContext, config: IScenarioConfig): void {
         if (!this.props || (context.scene.getRoot() && !this.environment)) {
             this.load(context);
         }

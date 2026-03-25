@@ -1,11 +1,11 @@
 import '../style.css';
-import { App } from './app/App';
+import { Engine } from './app/Engine';
 
 /**
  * Entry point of the application.
  */
-const app = new App();
+const engine = new Engine();
 
-app.bootstrap().catch((err) => {
+engine.bootstrap().catch((err) => {
   console.error('Failed to start application:', err);
 });

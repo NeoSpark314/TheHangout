@@ -1,9 +1,9 @@
 import { AppContext } from '../app/AppContext';
-import { Engine } from '../app/Engine';
+import { SimulationLoop } from '../app/SimulationLoop';
 import { EntityRegistry } from '../world/entities/EntityRegistry';
 import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
 import { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRuntime';
-import { SessionRuntime } from '../world/session/SessionRuntime';
+import { ScenarioManager } from '../world/session/ScenarioManager';
 import { DedicatedSessionTransport } from './DedicatedSessionTransport';
 import { FeatureReplicationService } from '../network/replication/FeatureReplicationService';
 import { DrawingRuntime } from '../content/runtime/DrawingRuntime';
@@ -17,7 +17,7 @@ import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../conten
 
 export class HeadlessSession {
     public context: AppContext;
-    public engine: Engine;
+    public engine: SimulationLoop;
     public network: DedicatedSessionTransport;
     public startTime: number = Date.now();
 
@@ -44,7 +44,7 @@ export class HeadlessSession {
         const physicsMgr = new PhysicsRuntime(this.context);
         this.context.setRuntime('physics', physicsMgr);
 
-        const sessionMgr = new SessionRuntime(
+        const sessionMgr = new ScenarioManager(
             this.context,
             BUILT_IN_SCENARIO_PLUGINS,
             DEFAULT_SCENARIO_PLUGIN_ID
@@ -56,7 +56,7 @@ export class HeadlessSession {
 
         this.context.setRuntime('network', this.network as any);
 
-        this.engine = new Engine(this.context);
+        this.engine = new SimulationLoop(this.context);
         this.engine.addSystem(this.network);
         this.engine.addSystem(entityMgr);
         this.engine.addSystem({

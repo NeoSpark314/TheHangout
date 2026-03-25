@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ISessionConfig } from '../../app/AppContext';
+import { IScenarioConfig } from '../../app/AppContext';
 import { createSynthBlockMaterial } from '../../render/materials/SynthBlockMaterial';
 
 export class EnvironmentBuilder {
@@ -26,7 +26,7 @@ export class EnvironmentBuilder {
         EnvironmentBuilder.decorationsVisible = visible;
     }
 
-    public applyConfig(config: ISessionConfig): void {
+    public applyConfig(config: IScenarioConfig): void {
         if (!config || !this.scene) return;
         this.ensureDecorationRoot();
 

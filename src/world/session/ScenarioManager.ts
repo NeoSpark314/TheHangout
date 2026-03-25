@@ -20,7 +20,7 @@ import { EVENTS } from '../../shared/constants/Constants';
 import type { ITriggerBoxOptions, ITriggerZoneHandle } from '../../content/contracts/IObjectRuntimeContext';
 import type { IScenarioContext } from '../../content/contracts/IScenarioContext';
 
-export class SessionRuntime implements IUpdatable {
+export class ScenarioManager implements IUpdatable {
     public scene: THREE.Scene | null = null;
     private _seed: number = 0;
     private hasGroundPhysics: boolean = false;
@@ -45,7 +45,7 @@ export class SessionRuntime implements IUpdatable {
         this.scenarioReplicationHost = new ScenarioReplicationHost(context);
         this.triggerZoneRegistry = new TriggerZoneRegistry(context);
         if (scenarioPlugins.length === 0) {
-            throw new Error('[SessionRuntime] At least one scenario plugin must be registered.');
+            throw new Error('[ScenarioManager] At least one scenario plugin must be registered.');
         }
 
         for (const plugin of scenarioPlugins) {
@@ -87,11 +87,11 @@ export class SessionRuntime implements IUpdatable {
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
             });
-            this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig);
+            this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
             this.attachScenarioReplicationIfNeeded();
             this.isInitialized = true;
         } catch (e) {
-            console.error('[SessionRuntime] init crashed:', e);
+            console.error('[ScenarioManager] init crashed:', e);
         }
     }
 
@@ -130,13 +130,13 @@ export class SessionRuntime implements IUpdatable {
 
         if (scenarioChanged) {
             if (!this.scenarioRegistry.has(nextConfig.activeScenarioId)) {
-                console.warn(`[SessionRuntime] Cannot apply config with unknown scenario: ${nextConfig.activeScenarioId}`);
+                console.warn(`[ScenarioManager] Cannot apply config with unknown scenario: ${nextConfig.activeScenarioId}`);
                 return false;
             }
 
             const previousEntityCount = this.context.runtime.entity.entities.size;
             console.info(
-                `[SessionRuntime] Switching scenario ${oldScenarioId} -> ${nextConfig.activeScenarioId}` +
+                `[ScenarioManager] Switching scenario ${oldScenarioId} -> ${nextConfig.activeScenarioId}` +
                 ` (reason=scenario_switch, entities_before=${previousEntityCount})`
             );
 
@@ -152,7 +152,7 @@ export class SessionRuntime implements IUpdatable {
                 },
                 () => {
                     console.info(
-                        `[SessionRuntime] Scenario switch completed` +
+                        `[ScenarioManager] Scenario switch completed` +
                         ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
                     );
                     this.emitSessionConfigApplied();
@@ -161,7 +161,7 @@ export class SessionRuntime implements IUpdatable {
             );
             if (!applied) {
                 console.info(
-                    `[SessionRuntime] Scenario switch failed` +
+                    `[ScenarioManager] Scenario switch failed` +
                     ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
                 );
             }
@@ -174,7 +174,7 @@ export class SessionRuntime implements IUpdatable {
             this._seed = this.context.sessionConfig.seed;
             const previousEntityCount = this.context.runtime.entity.entities.size;
             console.info(
-                `[SessionRuntime] Reloading scenario ${this.activeScenario.id}` +
+                `[ScenarioManager] Reloading scenario ${this.activeScenario.id}` +
                 ` (reason=reload, seed=${this.context.sessionConfig.seed}, entities_before=${previousEntityCount})`
             );
             if (this.isInitialized) {
@@ -190,11 +190,11 @@ export class SessionRuntime implements IUpdatable {
                     seed: this.context.sessionConfig.seed,
                     reason: 'reload'
                 });
-                this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig);
+                this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
                 this.attachScenarioReplicationIfNeeded();
             }
             console.info(
-                `[SessionRuntime] Scenario reload completed` +
+                `[ScenarioManager] Scenario reload completed` +
                 ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
             );
             this.emitSessionConfigApplied();
@@ -202,7 +202,7 @@ export class SessionRuntime implements IUpdatable {
             return true;
         }
 
-        this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig);
+        this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
         this.emitSessionConfigApplied();
         onApplied?.();
         return true;
@@ -242,7 +242,7 @@ export class SessionRuntime implements IUpdatable {
         }
         if (!instance) {
             console.warn(
-                `[SessionRuntime] Failed to spawn object module: ${id}`,
+                `[ScenarioManager] Failed to spawn object module: ${id}`,
                 { availableModules: this.objectModuleRegistry.listIds(), activeScenario: this.activeScenario.id }
             );
             return null;
@@ -261,11 +261,11 @@ export class SessionRuntime implements IUpdatable {
     public spawnPortableObjectModule(id: string, config: IObjectSpawnConfig = {}) {
         const module = this.objectModuleRegistry.get(id);
         if (!module) {
-            console.warn(`[SessionRuntime] Cannot spawn unknown object module: ${id}`);
+            console.warn(`[ScenarioManager] Cannot spawn unknown object module: ${id}`);
             return null;
         }
         if (module.portable === false) {
-            console.warn(`[SessionRuntime] Refusing portable spawn for non-portable module: ${id}`);
+            console.warn(`[ScenarioManager] Refusing portable spawn for non-portable module: ${id}`);
             return null;
         }
         return this.spawnObjectModule(id, config);
@@ -291,7 +291,7 @@ export class SessionRuntime implements IUpdatable {
     ): boolean {
         const nextPlugin = this.scenarioRegistry.get(id);
         if (!nextPlugin) {
-            console.warn(`[SessionRuntime] Cannot switch to unknown scenario: ${id}`);
+            console.warn(`[ScenarioManager] Cannot switch to unknown scenario: ${id}`);
             return false;
         }
 
@@ -419,7 +419,7 @@ export class SessionRuntime implements IUpdatable {
                 seed: options.seed ?? this.context.sessionConfig.seed,
                 reason: options.reason ?? 'scenario_switch'
             });
-            this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig);
+            this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
             this.attachScenarioReplicationIfNeeded();
         }
 

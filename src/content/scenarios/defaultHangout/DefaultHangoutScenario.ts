@@ -7,7 +7,7 @@ import { PenToolObject } from '../../objects/PenToolObject';
 import { PewPewGunObject } from '../../objects/PewPewGunObject';
 import { SimpleSharedObject } from '../../objects/SimpleSharedObject';
 import type { IObjectModule } from '../../contracts/IObjectModule';
-import type { ISessionConfig } from '../../../app/AppContext';
+import type { IScenarioConfig } from '../../../app/AppContext';
 import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScreenLayout';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
@@ -213,7 +213,7 @@ export class DefaultHangoutScenario implements IScenarioModule {
         return this.actionProvider;
     }
 
-    public applyConfig(context: IScenarioContext, config: ISessionConfig): void {
+    public applyConfig(context: IScenarioContext, config: IScenarioConfig): void {
         this.world.applyConfig(context, config);
     }
 
