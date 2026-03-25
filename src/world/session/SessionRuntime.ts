@@ -398,6 +398,7 @@ export class SessionRuntime implements IUpdatable {
     private clearScenarioOwnedState(): void {
         this.context.runtime.drawing?.clear?.();
         this.objectInstanceRegistry.removeAll();
+        this.context.runtime.physics?.flushPendingRemovals?.();
     }
 
     private completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): void {

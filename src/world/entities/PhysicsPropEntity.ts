@@ -773,7 +773,9 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
     }
 
     public destroy(): void {
+        if (this.isDestroyed) return;
         this.context.runtime.physicsAuthority.forgetEntity(this.id);
+        this.context.runtime.physics.scheduleRigidBodyRemoval(this.rigidBody);
         super.destroy();
         const render = this.context.runtime.render;
         if (render && this.view) {

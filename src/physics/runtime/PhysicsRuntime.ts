@@ -100,6 +100,7 @@ export class PhysicsRuntime {
     private lastCollisionSoundAtByPair: Map<string, number> = new Map();
     private pendingImpulseByEntity: Map<string, { impulse: IVector3; point: IVector3; expiresAtMs: number; options?: IInteractionImpulseOptions }> = new Map();
     private pendingImpulseLifetimeMs: number = 400;
+    private readonly pendingRigidBodyRemovals = new Set<number>();
     
     // Terrain heightfield storage for sampling
     private terrainMetadata: {
@@ -415,6 +416,7 @@ export class PhysicsRuntime {
 
     public step(delta: number): void {
         if (!this.world) return;
+        this.flushPendingRemovals();
         this.touchQueryHitsThisFrame = 0;
         this.accumulator += delta;
         while (this.accumulator >= this.fixedTimeStep) {
@@ -423,10 +425,28 @@ export class PhysicsRuntime {
             this.accumulator -= this.fixedTimeStep;
         }
 
+        this.flushPendingRemovals();
         this.processTouchOwnershipLeases();
         this.processProximityTouchLeases();
         this.processPendingImpulses();
         this.updateTouchQueryMetrics(delta);
+    }
+
+    public scheduleRigidBodyRemoval(rigidBodyHandle: IPhysicsBodyHandle | RAPIER.RigidBody | null | undefined): void {
+        const rigidBody = this.resolveRigidBody(rigidBodyHandle);
+        if (!rigidBody) return;
+        this.pendingRigidBodyRemovals.add(rigidBody.handle);
+    }
+
+    public flushPendingRemovals(): void {
+        if (!this.world || this.pendingRigidBodyRemovals.size === 0) return;
+        const handles = Array.from(this.pendingRigidBodyRemovals.values());
+        this.pendingRigidBodyRemovals.clear();
+        for (const handle of handles) {
+            const rigidBody = this.world.getRigidBody(handle);
+            if (!rigidBody) continue;
+            this.removeRigidBodyNow(rigidBody);
+        }
     }
 
     public getDebugBodies(): IPhysicsDebugBody[] {
@@ -744,6 +764,11 @@ export class PhysicsRuntime {
 
     public removeRigidBody(rigidBodyHandle: IPhysicsBodyHandle | RAPIER.RigidBody | null | undefined): void {
         const rigidBody = this.resolveRigidBody(rigidBodyHandle);
+        this.pendingRigidBodyRemovals.delete(rigidBody?.handle ?? -1);
+        this.removeRigidBodyNow(rigidBody);
+    }
+
+    private removeRigidBodyNow(rigidBody: RAPIER.RigidBody | null | undefined): void {
         if (!this.world || !rigidBody) return;
 
         const entry = this.debugBodies.get(rigidBody.handle);
