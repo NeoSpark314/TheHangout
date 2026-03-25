@@ -93,15 +93,12 @@ export class DefaultHangoutWorld {
         this.props = null;
     }
 
-    public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
-        if (this.props) {
-            return this.props.getDesktopLayout(index, total);
+    public getFeatureLayout(featureId: string, index: number, total: number): IDesktopScreenLayout | null {
+        if (featureId === 'remote-desktop' && this.props) {
+            return this.props.getFeatureLayout(featureId, index, total);
         }
 
-        return {
-            position: [0, 1.5 + index * 0.1, -2.4],
-            billboard: true
-        };
+        return null;
     }
 
     public setHologramVisible(visible: boolean): void {

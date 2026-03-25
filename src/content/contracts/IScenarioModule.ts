@@ -30,8 +30,7 @@ export interface IScenarioModule extends IUpdatable {
     getSpawnPoint(index: number): IScenarioSpawnPoint;
 
     applyConfig?(context: IScenarioContext, config: IScenarioConfig): void;
-    getDesktopLayout?(index: number, total: number): IDesktopScreenLayout;
-    setHologramVisible?(visible: boolean): void;
+    getFeatureLayout?(featureId: string, index: number, total: number): IDesktopScreenLayout | null;
     getObjectModules?(): IObjectModule[];
     getActionProvider?(): IScenarioActionProvider;
     onPlayerJoined?(context: IScenarioContext, playerId: string): void;

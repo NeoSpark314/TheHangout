@@ -345,14 +345,17 @@ export class PropBuilder {
         }
     }
 
-    public getDesktopLayout(index: number, _total: number): IDesktopScreenLayout {
-        // Logic for the CyperStube session: large billboard on the table
-        // We increase the gap to 1.5 to prevent vertical overlap when multiple sources are active
-        return {
-            position: [0, 1.8 + index * 1.5, 0],
-            scale: [1.5, 1.5, 1.5],
-            billboard: true
-        };
+    public getFeatureLayout(featureId: string, index: number, total: number): IDesktopScreenLayout | null {
+        if (featureId === 'remote-desktop') {
+            // Logic for the CyperStube session: large billboard on the table
+            // We increase the gap to 1.5 to prevent vertical overlap when multiple sources are active
+            return {
+                position: [0, 1.8 + index * 1.5, 0],
+                scale: [1.5, 1.5, 1.5],
+                billboard: true
+            };
+        }
+        return null;
     }
 
     public setHologramVisible(visible: boolean): void {

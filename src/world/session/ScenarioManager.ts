@@ -319,21 +319,6 @@ export class ScenarioManager implements IUpdatable {
         return true;
     }
 
-    public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
-        if (this.activeScenario.getDesktopLayout) {
-            return this.activeScenario.getDesktopLayout(index, total);
-        }
-        // Fallback
-        return {
-            position: [0, 1.5 + index * 0.1, -2.4],
-            billboard: true
-        };
-    }
-
-    public toggleHologram(visible: boolean): void {
-        this.activeScenario.setHologramVisible?.(visible);
-    }
-
     public getObjectInstance(instanceId: string): ISpawnedObjectInstance | undefined {
         return this.objectInstanceRegistry.get(instanceId);
     }

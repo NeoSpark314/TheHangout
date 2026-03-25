@@ -12,6 +12,7 @@ import {
 } from '../../shared/contracts/INetworkPacket';
 import { EVENTS, PACKET_TYPES } from '../../shared/constants/Constants';
 import { AppLocalStorage } from '../../shared/storage/AppLocalStorage';
+import { isHangoutScenario } from '../../content/contracts/IHangoutScenario';
 
 export interface IMyScreenConfig {
     name: string;
@@ -361,14 +362,26 @@ export class RemoteDesktopFeature implements IUpdatable {
         const sortedActive = Array.from(this.activeByKey).sort();
         const total = sortedActive.length;
 
+        const activeScenario = this.context.runtime.session.getActiveScenario();
+
         // Hide/Show duck based on screen count
-        this.context.runtime.session.toggleHologram(total === 0);
+        if (isHangoutScenario(activeScenario)) {
+            activeScenario.setHologramVisible(total === 0);
+        }
 
         sortedActive.forEach((key, index) => {
             const surface = this.surfacesByKey.get(key);
             if (!surface) return;
 
-            const layout = this.context.runtime.session.getDesktopLayout(index, total);
+            let layout = activeScenario.getFeatureLayout?.('remote-desktop', index, total);
+            if (!layout) {
+                // Fallback for scenarios that don't specify layout configurations for remote-desktop
+                layout = {
+                    position: [0, 1.5 + index * 0.1, -2.4],
+                    billboard: true
+                };
+            }
+
             surface.group.position.set(layout.position[0], layout.position[1], layout.position[2]);
 
             if (layout.rotation) {

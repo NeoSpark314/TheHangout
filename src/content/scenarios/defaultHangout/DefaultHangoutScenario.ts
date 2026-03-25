@@ -12,6 +12,7 @@ import type { IDesktopScreenLayout } from '../../../shared/contracts/IDesktopScr
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../contracts/IScenarioModule';
 import type { IScenarioPlugin } from '../../contracts/IScenarioPlugin';
 import type { IScenarioContext } from '../../contracts/IScenarioContext';
+import type { IHangoutScenario } from '../../contracts/IHangoutScenario';
 import { DefaultHangoutWorld } from './DefaultHangoutWorld';
 import type {
     IScenarioActionDefinition,
@@ -171,7 +172,7 @@ const DEFAULT_HANGOUT_OBJECT_MODULES: IObjectModule[] = [
     new SimpleSharedObject()
 ];
 
-export class DefaultHangoutScenario implements IScenarioModule {
+export class DefaultHangoutScenario implements IHangoutScenario {
     public readonly id = 'default-hangout';
     public readonly displayName = 'Default Hangout';
     public readonly kind = 'social' as const;
@@ -217,8 +218,8 @@ export class DefaultHangoutScenario implements IScenarioModule {
         this.world.applyConfig(context, config);
     }
 
-    public getDesktopLayout(index: number, total: number): IDesktopScreenLayout {
-        return this.world.getDesktopLayout(index, total);
+    public getFeatureLayout(featureId: string, index: number, total: number): IDesktopScreenLayout | null {
+        return this.world.getFeatureLayout(featureId, index, total);
     }
 
     public setHologramVisible(visible: boolean): void {
