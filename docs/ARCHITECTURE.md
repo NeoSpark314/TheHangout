@@ -1,4 +1,4 @@
-﻿# Architecture
+# Architecture
 
 This is the current high-level map of The Hangout.
 
@@ -22,9 +22,9 @@ This is the current high-level map of The Hangout.
 
 ## Core Model
 
-- `App.ts` is the composition root.
+- `Engine.ts` is the composition root.
 - `AppContext` is the shared runtime registry and state container.
-- `SessionRuntime` owns the active scenario, `ScenarioRuntimeContext`, spawned object instances, and trigger updates.
+- `ScenarioManager` owns the active scenario, `ScenarioRuntimeContext`, spawned object instances, and trigger updates.
 - `EntityRegistry` owns live world entities.
 - `PhysicsRuntime` owns Rapier bodies and queries.
 - `PhysicsAuthorityRuntime` owns ownership, handoff, and speculative local authority policy.
@@ -71,9 +71,9 @@ Important headless rule:
 
 ## Code Landmarks
 
-- [App.ts](../src/app/App.ts)
+- [Engine.ts](../src/app/Engine.ts)
 - [AppContext.ts](../src/app/AppContext.ts)
-- [SessionRuntime.ts](../src/world/session/SessionRuntime.ts)
+- [ScenarioManager.ts](../src/world/session/ScenarioManager.ts)
 - [ObjectRuntimeContext.ts](../src/content/runtime/ObjectRuntimeContext.ts)
 - [ScenarioRuntimeContext.ts](../src/content/runtime/ScenarioRuntimeContext.ts)
 - [PhysicsRuntime.ts](../src/physics/runtime/PhysicsRuntime.ts)

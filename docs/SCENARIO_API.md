@@ -1,4 +1,4 @@
-﻿# Scenario API
+# Scenario API
 
 This is the current scenario authoring model.
 
@@ -9,7 +9,7 @@ A scenario has two layers:
 - `IScenarioPlugin`: registration metadata and factory
 - `IScenarioModule`: the live runtime instance
 
-`SessionRuntime` instantiates the active scenario and provides it with a `ScenarioContext`.
+`ScenarioManager` instantiates the active scenario and provides it with a `ScenarioContext`.
 
 ## Live Scenario Contract
 
@@ -23,7 +23,7 @@ Required:
 Common optional hooks:
 
 - `applyConfig(context, config)`
-- `getDesktopLayout(index, total)`
+- `getFeatureLayout(featureId, index, total)`
 - `setHologramVisible(visible)`
 - `getObjectModules()`
 - `getActionProvider()`
@@ -47,7 +47,7 @@ Promote only reusable world things into object modules.
 
 ## ScenarioContext
 
-Scenarios should work through `ScenarioContext`, not `AppContext`, `SessionRuntime`, or raw runtime registries.
+Scenarios should work through `ScenarioContext`, not `AppContext`, `ScenarioManager`, or raw runtime registries.
 
 Main groups:
 
@@ -76,7 +76,7 @@ Important supported patterns:
 Do not use:
 
 - `AppContext`
-- `SessionRuntime`
+- `ScenarioManager`
 - `context.runtime.*`
 - raw entity scans
 - direct physics prop mutation
