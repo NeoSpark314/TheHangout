@@ -68,34 +68,29 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.root.name = 'target-toss-scenario';
     }
 
-    public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+    public loadWorld(context: IScenarioContext, _options: IScenarioLoadOptions): void {
         this.context = context;
         context.physics.ensureGround();
         this.createTargets();
         this.createRackCollider();
         this.spawnSharedBalls();
-        this.createVisuals();
 
         if (context.actions.isHost()) {
             this.reconcilePlayers();
             this.state.throwsTaken = 0;
         }
+    }
 
+    public loadVisuals(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.context = context;
+        this.createVisuals();
         this.refreshScoreboardVisual();
     }
 
-    public unload(_context: IScenarioContext): void {
-
+    public unloadVisuals(_context: IScenarioContext): void {
         this.scoreboard?.dispose();
         this.scoreboard = null;
         this.disposeScorePopups();
-
-        this.targets.forEach((target) => {
-            target.collider?.destroy();
-        });
-        this.targets.length = 0;
-        this.rackCollider?.destroy();
-        this.rackCollider = null;
 
         if (this.root.parent) {
             this.root.removeFromParent();
@@ -142,6 +137,15 @@ export class TargetTossScenario implements IReplicatedScenarioModule {
         this.previousFog = null;
         this.previousShadowMapEnabled = null;
         this.previousShadowMapType = null;
+    }
+
+    public unloadWorld(_context: IScenarioContext): void {
+        this.targets.forEach((target) => {
+            target.collider?.destroy();
+        });
+        this.targets.length = 0;
+        this.rackCollider?.destroy();
+        this.rackCollider = null;
         this.countedBallIds.clear();
         this.scoredBallIds.clear();
         this.resetQueuedAtMs = null;

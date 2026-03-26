@@ -181,13 +181,21 @@ export class DefaultHangoutScenario implements IHangoutScenario {
     private readonly actionProvider = new DefaultHangoutActionProvider();
     private readonly world = new DefaultHangoutWorld();
 
-    public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
-        this.world.load(context);
+    public loadWorld(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.world.loadWorld(context);
+    }
+
+    public loadVisuals(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.world.loadVisuals(context);
         this.world.setHologramVisible(true);
     }
 
-    public unload(_context: IScenarioContext): void {
-        this.world.unload();
+    public unloadVisuals(_context: IScenarioContext): void {
+        this.world.unloadVisuals();
+    }
+
+    public unloadWorld(_context: IScenarioContext): void {
+        this.world.unloadWorld();
     }
 
     public update(delta: number): void {

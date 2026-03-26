@@ -95,7 +95,7 @@ class TestScenario implements IScenarioModule {
         new ThrowableBallObject()
     ];
 
-    public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+    public loadWorld(context: IScenarioContext, _options: IScenarioLoadOptions): void {
         if (!context.objects.get('test-chair')) {
             context.objects.spawn('chair', {
                 id: 'test-chair',
@@ -106,7 +106,7 @@ class TestScenario implements IScenarioModule {
         context.physics.ensureGround(12);
     }
 
-    public unload(_context: IScenarioContext): void { }
+    public unloadWorld(_context: IScenarioContext): void { }
     public update(_delta: number): void { }
     public getSpawnPoint(index: number): IScenarioSpawnPoint {
         return {

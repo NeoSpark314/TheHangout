@@ -10,26 +10,32 @@ export class WideCircleScenario implements IScenarioModule {
     public readonly maxPlayers = 16;
 
     private visuals: WideCircleVisuals | null = null;
+    private visualSeed = 1;
 
-    public load(context: IScenarioContext, options: IScenarioLoadOptions): void {
+    public loadWorld(context: IScenarioContext, options: IScenarioLoadOptions): void {
         context.physics.ensureGround();
-        const seed = options.seed ?? 1;
+        this.visualSeed = options.seed ?? 1;
+    }
+
+    public loadVisuals(context: IScenarioContext, _options: IScenarioLoadOptions): void {
         if (this.visuals) {
             this.visuals.destroy();
             this.visuals = null;
         }
         const scene = context.scene.getRoot();
         if (scene) {
-            this.visuals = new WideCircleVisuals(scene, seed);
+            this.visuals = new WideCircleVisuals(scene, this.visualSeed);
         }
     }
 
-    public unload(_context: IScenarioContext): void {
+    public unloadVisuals(_context: IScenarioContext): void {
         if (this.visuals) {
             this.visuals.destroy();
             this.visuals = null;
         }
     }
+
+    public unloadWorld(_context: IScenarioContext): void { }
 
     public update(delta: number): void {
         this.visuals?.update(delta);

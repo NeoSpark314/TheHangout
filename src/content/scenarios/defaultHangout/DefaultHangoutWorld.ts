@@ -7,6 +7,7 @@ import type { IScenarioContext } from '../../contracts/IScenarioContext';
 export class DefaultHangoutWorld {
     private environment: EnvironmentBuilder | null = null;
     private props: PropBuilder | null = null;
+    private lastConfig: IScenarioConfig = {};
     private readonly drawingSurfaceId = 'default-drawing-surface';
     private readonly defaultPenId = 'default-pen';
     private readonly defaultGunId = 'default-pew-pew-gun';
@@ -14,7 +15,7 @@ export class DefaultHangoutWorld {
     private readonly defaultChairId = 'default-chair';
     private readonly defaultCubeColors = [0xff0055, 0x00ff88, 0x5500ff, 0xff8800, 0x00ccff, 0xffff00];
 
-    public load(context: IScenarioContext): void {
+    public loadWorld(context: IScenarioContext): void {
         if (!context.objects.get(this.drawingSurfaceId)) {
             context.objects.spawn('drawing-surface', { id: this.drawingSurfaceId });
         }
@@ -44,14 +45,8 @@ export class DefaultHangoutWorld {
         this.ensureDefaultCubes(context);
 
         context.physics.ensureGround();
-        const scene = context.scene.getRoot();
-
-        if (scene && !this.environment) {
-            this.environment = new EnvironmentBuilder(scene, () => context.random.float());
-        }
-
         if (!this.props) {
-            this.props = new PropBuilder(scene, () => context.random.float(), {
+            this.props = new PropBuilder(null, () => context.random.float(), {
                 assets: {
                     getNormalizedModel: (url, targetSize) => context.assets.getNormalizedModel(url, targetSize)
                 },
@@ -64,20 +59,33 @@ export class DefaultHangoutWorld {
                 }
             });
         }
+    }
 
+    public loadVisuals(context: IScenarioContext): void {
+        const scene = context.scene.getRoot();
+        if (scene && !this.environment) {
+            this.environment = new EnvironmentBuilder(scene, () => context.random.float());
+        }
+
+        this.props?.setScene(scene);
+        this.applyConfig(context, this.lastConfig);
     }
 
     public applyConfig(context: IScenarioContext, config: IScenarioConfig): void {
-        if (!this.props || (context.scene.getRoot() && !this.environment)) {
-            this.load(context);
+        this.lastConfig = config || {};
+        if (!this.props) {
+            this.loadWorld(context);
+        }
+        if (context.scene.getRoot() && !this.environment) {
+            this.loadVisuals(context);
         }
 
         if (!this.props) {
             return;
         }
 
-        this.environment?.applyConfig(config);
-        this.props.applyConfig(config);
+        this.environment?.applyConfig(this.lastConfig);
+        this.props.applyConfig(this.lastConfig);
     }
 
     public update(delta: number): void {
@@ -85,13 +93,15 @@ export class DefaultHangoutWorld {
         this.props?.update(delta);
     }
 
-    public unload(): void {
+    public unloadVisuals(): void {
         this.environment?.clearProcedural();
         this.environment = null;
 
         this.props?.dispose();
         this.props = null;
     }
+
+    public unloadWorld(): void { }
 
     public getFeatureLayout(featureId: string, index: number, total: number): IDesktopScreenLayout | null {
         if (featureId === 'remote-desktop' && this.props) {

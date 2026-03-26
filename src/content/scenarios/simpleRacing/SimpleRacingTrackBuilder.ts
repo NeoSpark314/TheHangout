@@ -42,24 +42,19 @@ export class SimpleRacingTrackBuilder {
         this.root.name = 'simple-racing-track';
     }
 
-    public load(context: IScenarioContext): void {
+    public loadWorld(context: IScenarioContext): void {
         this.disposed = false;
         context.physics.ensureGround();
         this.createGameplayColliders(context);
-
-        if (context.scene.isRenderingAvailable()) {
-            this.loadVisuals(context).catch((error) => {
-                console.error('[SimpleRacingTrackBuilder] Failed to load visuals:', error);
-            });
-        }
     }
 
-    public unload(context: IScenarioContext): void {
-        this.disposed = true;
-        while (this.gameplayBodies.length > 0) {
-            this.gameplayBodies.pop()?.destroy();
-        }
+    public loadVisuals(context: IScenarioContext): void {
+        this.loadVisualAssets(context).catch((error) => {
+            console.error('[SimpleRacingTrackBuilder] Failed to load visuals:', error);
+        });
+    }
 
+    public unloadVisuals(context: IScenarioContext): void {
         const scene = context.scene.getRoot();
         if (scene) {
             scene.background = this.previousBackground;
@@ -100,7 +95,14 @@ export class SimpleRacingTrackBuilder {
         this.visualsLoaded = false;
     }
 
-    private async loadVisuals(context: IScenarioContext): Promise<void> {
+    public unloadWorld(_context: IScenarioContext): void {
+        this.disposed = true;
+        while (this.gameplayBodies.length > 0) {
+            this.gameplayBodies.pop()?.destroy();
+        }
+    }
+
+    private async loadVisualAssets(context: IScenarioContext): Promise<void> {
         if (this.visualsLoaded || this.disposed) return;
 
         const modelEntries = Object.entries(SIMPLE_RACING_ASSETS.models) as Array<[TSimpleRacingModelKey, string]>;

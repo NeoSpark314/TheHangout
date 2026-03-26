@@ -84,12 +84,26 @@ export class BasicProceduralScenario implements IScenarioModule {
     private context: IScenarioContext | null = null;
     private previousShadowMapEnabled: boolean | null = null;
     private isUnloaded = false;
+    private visualSeed = 42;
 
     constructor(private readonly configUrl: string) { }
 
-    public async load(context: IScenarioContext, options: IScenarioLoadOptions): Promise<void> {
+    public loadWorld(context: IScenarioContext, options: IScenarioLoadOptions): void {
         this.context = context;
+        this.isUnloaded = false;
+        this.visualSeed = options.seed ?? 42;
+        context.physics.ensureGround();
+    }
 
+    public loadVisuals(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.context = context;
+        this.isUnloaded = false;
+        this.loadVisualWorld().catch((err) => {
+            console.error('[BasicProceduralScenario] Failed to load visual world:', err);
+        });
+    }
+
+    private async loadVisualWorld(): Promise<void> {
         try {
             const response = await fetch(this.configUrl);
             this.metadata = await response.json();
@@ -104,17 +118,17 @@ export class BasicProceduralScenario implements IScenarioModule {
         this.displayName = this.metadata.displayName;
 
         // Use session seed if provided, fallback to config seed, then 42
-        const seed = options.seed ?? this.metadata.terrain?.seed ?? 42;
+        const seed = this.visualSeed ?? this.metadata.terrain?.seed ?? 42;
 
         // Load ground texture if specified
         if (this.metadata.environment.groundTexture) {
-            context.physics.ensureGround();
+            this.context?.physics.ensureGround();
             // In a real implementation, we'd apply the texture to the ground mesh,
             // but for now we just use the default ground.
         }
 
         // Apply environment visuals
-        const scene = context.scene.getRoot();
+        const scene = this.context?.scene.getRoot() ?? null;
         if (scene) {
             if (this.metadata.environment.skyColor) {
                 scene.background = new THREE.Color(this.metadata.environment.skyColor);
@@ -130,7 +144,7 @@ export class BasicProceduralScenario implements IScenarioModule {
             if (this.metadata.terrain) {
                 this.generateTerrain(scene, seed);
             } else {
-                context.physics.ensureGround();
+                this.context?.physics.ensureGround();
             }
 
             scene.add(this.root);
@@ -174,10 +188,8 @@ export class BasicProceduralScenario implements IScenarioModule {
         this.buildLayout(seed);
     }
 
-    public unload(_context: IScenarioContext): void {
+    public unloadVisuals(_context: IScenarioContext): void {
         this.isUnloaded = true;
-        this.colliders.forEach(c => c.destroy());
-        this.colliders = [];
         this.lights.forEach(l => l.removeFromParent());
         this.lights = [];
         this.instancedMeshes.forEach(im => {
@@ -206,6 +218,16 @@ export class BasicProceduralScenario implements IScenarioModule {
         const renderer = this.context?.scene.getRenderer();
         if (renderer && this.previousShadowMapEnabled !== null) {
             renderer.shadowMap.enabled = this.previousShadowMapEnabled;
+        }
+    }
+
+    public unloadWorld(_context: IScenarioContext): void {
+        this.isUnloaded = true;
+        this.colliders.forEach(c => c.destroy());
+        this.colliders = [];
+        if (this.terrainBody) {
+            _context.physics.removeBody(this.terrainBody);
+            this.terrainBody = null;
         }
     }
 

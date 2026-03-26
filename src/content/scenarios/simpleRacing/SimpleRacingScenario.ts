@@ -26,9 +26,9 @@ export class SimpleRacingScenario implements IScenarioModule {
     private readonly objectModules: IObjectModule[] = SIMPLE_RACING_OBJECT_MODULES;
     private readonly track = new SimpleRacingTrackBuilder();
 
-    public load(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+    public loadWorld(context: IScenarioContext, _options: IScenarioLoadOptions): void {
         const spawn = computeSimpleRacingSpawn();
-        this.track.load(context);
+        this.track.loadWorld(context);
         const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(THREE.Object3D.DEFAULT_UP, spawn.yaw);
         const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, spawn.yaw);
         const spawnCenter = new THREE.Vector3(spawn.position.x, spawn.position.y, spawn.position.z);
@@ -47,8 +47,16 @@ export class SimpleRacingScenario implements IScenarioModule {
         }
     }
 
-    public unload(context: IScenarioContext): void {
-        this.track.unload(context);
+    public loadVisuals(context: IScenarioContext, _options: IScenarioLoadOptions): void {
+        this.track.loadVisuals(context);
+    }
+
+    public unloadVisuals(context: IScenarioContext): void {
+        this.track.unloadVisuals(context);
+    }
+
+    public unloadWorld(context: IScenarioContext): void {
+        this.track.unloadWorld(context);
     }
 
     public update(_delta: number): void { }

@@ -38,7 +38,7 @@ This map follows the principles in [ENGINE_PHILOSOPHY.md](./ENGINE_PHILOSOPHY.md
 
 - `Engine.ts` is the composition root.
 - `AppContext` is the shared runtime registry and state container.
-- `ScenarioManager` owns the active scenario, `ScenarioRuntimeContext`, spawned object instances, and trigger updates.
+- `ScenarioManager` owns the active scenario, `ScenarioRuntimeContext`, spawned object instances, trigger updates, and the world-first then visuals lifecycle order.
 - `EntityRegistry` owns live world entities.
 - `PhysicsRuntime` owns Rapier bodies and queries.
 - `PhysicsAuthorityRuntime` owns ownership, handoff, and speculative local authority policy.
@@ -73,8 +73,8 @@ Object code should stay on the gameplay-facing object API. Scenario code should 
 Important headless rule:
 
 - dedicated/headless sessions still run authoritative gameplay physics
-- scenario world physics must not depend on render scene availability
-- only visual environment setup should be conditional on `context.scene.isRenderingAvailable()`
+- `loadWorld(...)` must establish scenario physics/world state without render scene availability
+- `loadVisuals(...)` is the render-only phase and only runs when rendering is available
 
 ## Main Entry Points
 

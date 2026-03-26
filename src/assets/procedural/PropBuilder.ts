@@ -49,6 +49,10 @@ export class PropBuilder {
         this.random = randomFunc;
     }
 
+    public setScene(scene: THREE.Scene | null): void {
+        this.scene = scene;
+    }
+
     public applyConfig(config: IScenarioConfig): void {
         if (!config) return;
 

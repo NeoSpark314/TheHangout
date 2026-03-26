@@ -25,8 +25,10 @@ export interface IScenarioModule extends IUpdatable {
     // Scenario transitions are intentionally synchronous and atomic for now.
     // If async loading is needed later, it should use a dedicated transition flow
     // with explicit locking/failure handling rather than implicit Promise returns.
-    load(context: IScenarioContext, options: IScenarioLoadOptions): void;
-    unload(context: IScenarioContext): void;
+    loadWorld(context: IScenarioContext, options: IScenarioLoadOptions): void;
+    unloadWorld(context: IScenarioContext): void;
+    loadVisuals?(context: IScenarioContext, options: IScenarioLoadOptions): void;
+    unloadVisuals?(context: IScenarioContext): void;
     getSpawnPoint(index: number): IScenarioSpawnPoint;
 
     applyConfig?(context: IScenarioContext, config: IScenarioConfig): void;

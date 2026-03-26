@@ -34,6 +34,7 @@ export class ScenarioManager implements IUpdatable {
     private activeScenarioPlugin: IScenarioPlugin;
     private activeScenario: IScenarioModule;
     private activeScenarioContext: ScenarioRuntimeContext;
+    private activeScenarioVisualsLoaded = false;
     public assignedSpawnIndex?: number;
 
     constructor(
@@ -82,7 +83,7 @@ export class ScenarioManager implements IUpdatable {
                 this.activeScenarioContext = this.createScenarioContext();
             }
             this.refreshActiveObjectModules();
-            this.activeScenario.load(this.activeScenarioContext, {
+            this.loadActiveScenario({
                 isHost: this.context.isHost,
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
@@ -179,13 +180,11 @@ export class ScenarioManager implements IUpdatable {
             );
             if (this.isInitialized) {
                 this.scenarioReplicationHost.detach();
-                this.activeScenario.unload(this.activeScenarioContext);
-                this.activeScenarioContext.runCleanupCallbacks();
-                this.clearScenarioOwnedState();
+                this.unloadActiveScenario();
                 this.activeScenario = this.instantiateScenario(this.activeScenarioPlugin);
                 this.activeScenarioContext = this.createScenarioContext();
                 this.refreshActiveObjectModules();
-                this.activeScenario.load(this.activeScenarioContext, {
+                this.loadActiveScenario({
                     isHost: this.context.isHost,
                     seed: this.context.sessionConfig.seed,
                     reason: 'reload'
@@ -388,9 +387,7 @@ export class ScenarioManager implements IUpdatable {
 
     private completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): void {
         this.scenarioReplicationHost.detach();
-        this.activeScenario.unload(this.activeScenarioContext);
-        this.activeScenarioContext.runCleanupCallbacks();
-        this.clearScenarioOwnedState();
+        this.unloadActiveScenario();
         this.activeScenarioPlugin = nextPlugin;
         this.activeScenario = this.instantiateScenario(nextPlugin);
         this.activeScenarioContext = this.createScenarioContext();
@@ -399,7 +396,7 @@ export class ScenarioManager implements IUpdatable {
         this.refreshActiveObjectModules();
 
         if (this.isInitialized) {
-            this.activeScenario.load(this.activeScenarioContext, {
+            this.loadActiveScenario({
                 isHost: this.context.isHost,
                 seed: options.seed ?? this.context.sessionConfig.seed,
                 reason: options.reason ?? 'scenario_switch'
@@ -417,6 +414,25 @@ export class ScenarioManager implements IUpdatable {
 
     private createScenarioContext(): ScenarioRuntimeContext {
         return new ScenarioRuntimeContext(this.context, this);
+    }
+
+    private loadActiveScenario(options: IScenarioLoadOptions): void {
+        this.activeScenario.loadWorld(this.activeScenarioContext, options);
+        this.activeScenarioVisualsLoaded = false;
+        if (this.activeScenarioContext.scene.isRenderingAvailable()) {
+            this.activeScenario.loadVisuals?.(this.activeScenarioContext, options);
+            this.activeScenarioVisualsLoaded = true;
+        }
+    }
+
+    private unloadActiveScenario(): void {
+        if (this.activeScenarioVisualsLoaded) {
+            this.activeScenario.unloadVisuals?.(this.activeScenarioContext);
+            this.activeScenarioVisualsLoaded = false;
+        }
+        this.activeScenario.unloadWorld(this.activeScenarioContext);
+        this.activeScenarioContext.runCleanupCallbacks();
+        this.clearScenarioOwnedState();
     }
 
     private attachScenarioReplicationIfNeeded(): void {

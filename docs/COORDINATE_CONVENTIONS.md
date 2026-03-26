@@ -138,7 +138,7 @@ Important current implementation detail:
 - the solver reconciles those positions with the canonical rig through the resolved root/body orientation
 - so `AvatarTrackingSpace.ts` is currently the central orientation-basis adapter, not a full position-space remapper
 
-That means future cleanup should continue to reduce duplicated convention logic, but the code today is not a pure "all raw data is fully converted once" pipeline yet.
+That means the code today is not a pure "all raw data is fully converted once" pipeline; `AvatarTrackingSpace.ts` is the main orientation-basis boundary, while some position handling still remains downstream in the solver.
 
 ## Canonical Rig Rules
 
