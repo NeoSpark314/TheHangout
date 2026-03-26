@@ -225,4 +225,35 @@ describe('ScenarioManager lifecycle split', () => {
         expect(app.sessionConfig.activeScenarioId).toBe(secondPlugin.id);
         expect(app.sessionConfig.scenarioEpoch).toBe(9);
     });
+
+    it('throws when scenario teardown leaves behind scenario-owned entities', () => {
+        const app = new AppContext();
+        app.setRuntime('render', { scene: new THREE.Scene() } as any);
+        app.setRuntime('entity', {
+            entities: new Map([
+                ['leaked-body', { id: 'leaked-body', type: 'PHYSICS_PROP', moduleId: 'test-object-module', isDestroyed: false }]
+            ]),
+            getEntity(id: string) {
+                return (this.entities as Map<string, unknown>).get(id);
+            },
+            removeEntity(id: string) {
+                (this.entities as Map<string, unknown>).delete(id);
+            }
+        } as any);
+        app.setRuntime('skills', { drawing: { clear: () => {} }, mount: {}, interaction: {} } as any);
+        app.setRuntime('physics', { flushPendingRemovals: () => {} } as any);
+        const plugin: IScenarioPlugin = {
+            id: 'test-scenario',
+            displayName: 'Test Scenario',
+            objectModules: [new TestObjectModule()],
+            create() {
+                return new TestScenario([new TestObjectModule()]);
+            }
+        };
+
+        const session = new ScenarioManager(app, [plugin], plugin.id);
+        session.init(new THREE.Scene());
+
+        expect(() => session.applySessionConfigUpdate({ seed: 2 })).toThrow(/Scenario teardown left runtime-owned state behind/);
+    });
 });

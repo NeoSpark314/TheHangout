@@ -126,6 +126,25 @@ Avoid patterns like:
 
 If a dedicated server is authoritative, missing headless physics will cause props to behave correctly while locally owned and then drift or fall through visible geometry when authority returns to the server.
 
+## World Boundary Invariants
+
+Scenario switches and reloads are world-boundary changes, not just content swaps.
+
+The engine enforces these invariants:
+
+- each active scenario world has a `scenarioEpoch`
+- authoritative entity snapshots belong to exactly one epoch
+- packets from another epoch are ignored
+- guest `player_input` may update existing world objects, but it must not discover or resurrect missing objects
+- scenario teardown must leave no scenario-owned object instances behind before the next scenario loads
+
+Practical implication for scenario authors:
+
+- do not rely on the next scenario to overwrite old state
+- ensure scenario-owned objects, static bodies, and local cleanup are owned by the current scenario lifecycle
+- treat `loadWorld(...)` as creating a fresh authoritative world for the current epoch
+- treat `unloadWorld(...)` and registered cleanup callbacks as fully retiring that world
+
 ## Scenario Actions
 
 Use scenario actions for explicit host-authoritative commands:

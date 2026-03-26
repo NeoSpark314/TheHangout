@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
-import { HeadlessNetworkHarness } from './HeadlessNetworkHarness';
+import {
+    BUILT_IN_NETWORK_TEST_DEFAULT_SCENARIO_ID,
+    BUILT_IN_NETWORK_TEST_SCENARIOS,
+    HeadlessNetworkHarness
+} from './HeadlessNetworkHarness';
 import type { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
 import { EntityType } from '../../shared/contracts/IEntityState';
 
@@ -345,10 +349,58 @@ describe.sequential('Headless Network Regression', () => {
         expect(harness.host.getPhysicsProp('rogue-cube')).toBeFalsy();
         expect(harness.host.getObject('rogue-cube')).toBeFalsy();
     });
+
+    it('cleans up mounted simple-racing cars when switching to default-hangout', async () => {
+        const harness = await HeadlessNetworkHarness.create({
+            scenarioPlugins: BUILT_IN_NETWORK_TEST_SCENARIOS,
+            defaultScenarioId: 'simple-racing'
+        });
+        activeHarness = harness;
+        const guest = harness.requireGuest();
+
+        harness.waitUntil(() => harness.host.context.sessionConfig.activeScenarioId === 'simple-racing');
+        harness.waitUntil(() => guest.context.sessionConfig.activeScenarioId === 'simple-racing');
+
+        const guestCar = waitForMountedCarInstance(guest, harness);
+        guestCar.handleInteraction({
+            type: 'trigger',
+            phase: 'start',
+            playerId: harness.guestId,
+            hand: 'right',
+            value: 1
+        });
+
+        harness.waitUntil(() => guest.context.runtime.skills.mount.getLocalMountStatus().state === 'mounted', 90);
+
+        harness.host.network.requestSessionConfigUpdate({
+            activeScenarioId: BUILT_IN_NETWORK_TEST_DEFAULT_SCENARIO_ID
+        });
+
+        harness.waitUntil(() => harness.host.context.sessionConfig.activeScenarioId === BUILT_IN_NETWORK_TEST_DEFAULT_SCENARIO_ID, 120);
+        harness.waitUntil(() => guest.context.sessionConfig.activeScenarioId === BUILT_IN_NETWORK_TEST_DEFAULT_SCENARIO_ID, 120);
+        harness.waitUntil(() => guest.context.runtime.skills.mount.getLocalMountStatus().state === 'idle', 120);
+
+        harness.stepFrames(10);
+
+        expect(harness.host.getPhysicsProp('simple-racing-car-3:body')).toBeFalsy();
+        expect(guest.getPhysicsProp('simple-racing-car-3:body')).toBeFalsy();
+        expect(harness.host.getObject('simple-racing-car-3')).toBeFalsy();
+        expect(harness.host.getObject('simple-racing-car-3:body')).toBeFalsy();
+        expect(guest.getObject('simple-racing-car-3')).toBeFalsy();
+        expect(guest.getObject('simple-racing-car-3:body')).toBeFalsy();
+    });
 });
 
 function distance3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
     return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+function waitForMountedCarInstance(
+    guest: ReturnType<HeadlessNetworkHarness['requireGuest']>,
+    harness: HeadlessNetworkHarness
+): any {
+    harness.waitUntil(() => !!guest.getObject('simple-racing-car-3') || !!guest.getObject('simple-racing-car-3:body'), 120);
+    return guest.getObject('simple-racing-car-3') || guest.getObject('simple-racing-car-3:body');
 }
 
 

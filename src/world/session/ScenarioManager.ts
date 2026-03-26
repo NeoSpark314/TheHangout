@@ -382,9 +382,17 @@ export class ScenarioManager implements IUpdatable {
     }
 
     private clearScenarioOwnedState(): void {
+        const removedInstances = this.objectInstanceRegistry.list().map((instance) => ({
+            id: instance.id,
+            primaryEntityId: instance.getPrimaryEntity?.()?.id ?? null,
+            ownedEntityIds: instance.getOwnedEntityIds?.() ?? []
+        }));
+        const scenarioModuleIds = new Set((this.activeScenario.getObjectModules?.() ?? []).map((module) => module.id));
+
         this.context.runtime.skills.drawing?.clear?.();
         this.objectInstanceRegistry.removeAll();
         this.context.runtime.physics?.flushPendingRemovals?.();
+        this.assertScenarioTeardownClean(removedInstances, scenarioModuleIds);
     }
 
     private completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): void {
@@ -473,6 +481,39 @@ export class ScenarioManager implements IUpdatable {
 
     private emitSessionConfigApplied(): void {
         eventBus.emit(EVENTS.SESSION_CONFIG_APPLIED);
+    }
+
+    private assertScenarioTeardownClean(
+        removedInstances: Array<{ id: string; primaryEntityId: string | null; ownedEntityIds: string[] }>,
+        scenarioModuleIds: Set<string>
+    ): void {
+        const lingeringInstances = this.objectInstanceRegistry.list();
+        const lingeringEntities = Array.from(this.context.runtime.entity.entities.values()).filter((entity) => {
+            if (entity.type === 'PLAYER_AVATAR') return false;
+
+            const candidate = entity as { moduleId?: string };
+            if (candidate.moduleId && scenarioModuleIds.has(candidate.moduleId)) {
+                return true;
+            }
+
+            return removedInstances.some((instance) =>
+                entity.id === instance.id ||
+                entity.id === instance.primaryEntityId ||
+                instance.ownedEntityIds.includes(entity.id) ||
+                entity.id.startsWith(`${instance.id}:`)
+            );
+        });
+
+        if (lingeringInstances.length === 0 && lingeringEntities.length === 0) {
+            return;
+        }
+
+        const message =
+            `[ScenarioManager] Scenario teardown left runtime-owned state behind ` +
+            `(scenario=${this.activeScenario.id}, instances=${lingeringInstances.map((instance) => instance.id).join(',') || 'none'}, ` +
+            `entities=${lingeringEntities.map((entity) => entity.id).join(',') || 'none'})`;
+
+        throw new Error(message);
     }
 
     private resolveNextSessionConfig(

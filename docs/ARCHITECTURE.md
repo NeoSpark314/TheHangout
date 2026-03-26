@@ -76,6 +76,18 @@ Important headless rule:
 - `loadWorld(...)` must establish scenario physics/world state without render scene availability
 - `loadVisuals(...)` is the render-only phase and only runs when rendering is available
 
+## Scenario Transition Invariants
+
+Scenario switching is a runtime boundary with explicit engine-level rules:
+
+- `ScenarioManager` tears down the previous scenario completely before loading the next one
+- scenario-owned object instances must not survive that teardown
+- host-authoritative world snapshots may discover world objects
+- guest intent packets may drive existing objects but must not create or rediscover missing ones
+- replicated world state is scoped by `scenarioEpoch`, so packets from an older world are rejected
+
+This is intentional. It keeps scenario authors from having to write scenario-specific cleanup code for transport, mount, or discovery edge cases.
+
 ## Main Entry Points
 
 - [README.md](../README.md)

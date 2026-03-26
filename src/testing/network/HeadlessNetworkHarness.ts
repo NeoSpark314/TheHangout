@@ -33,6 +33,7 @@ import { GrabbableCubeObject } from '../../content/objects/GrabbableCubeObject';
 import { SimpleSharedObject } from '../../content/objects/SimpleSharedObject';
 import { ThrowableBallObject } from '../../content/objects/ThrowableBallObject';
 import type { ISpawnedObjectInstance } from '../../content/contracts/ISpawnedObjectInstance';
+import { BUILT_IN_SCENARIO_PLUGINS, DEFAULT_SCENARIO_PLUGIN_ID } from '../../content/runtime/BuiltInScenarioPlugins';
 
 let canvasContextInstalled = false;
 let mockClockInstalled = false;
@@ -251,13 +252,18 @@ class HeadlessPeerSession {
     constructor(
         public readonly peerId: string,
         public readonly kind: PeerKind,
-        hostSessionId?: string
+        hostSessionId?: string,
+        options: {
+            scenarioPlugins?: IScenarioPlugin[];
+            defaultScenarioId?: string;
+        } = {}
     ) {
         ensureCanvasContextMock();
         this.context.isHost = kind === 'host';
         this.context.sessionId = kind === 'host' ? peerId : (hostSessionId || null);
         this.context.playerName = kind === 'host' ? 'Host' : 'Guest';
         this.context.avatarPoseOverride = 'none';
+        this.context.sessionConfig.activeScenarioId = options.defaultScenarioId ?? this.context.sessionConfig.activeScenarioId;
 
         this.context.setRuntime('diagnostics', new RuntimeDiagnostics());
         this.context.setRuntime('replicationDebug', new ReplicationDebugRuntime());
@@ -271,6 +277,7 @@ class HeadlessPeerSession {
         this.context.setRuntime('media', createHeadlessMediaRuntime() as any);
         this.context.setRuntime('audio', createHeadlessAudioRuntime() as any);
         this.context.setRuntime('assets', createHeadlessAssetRuntime() as any);
+        this.context.setRuntime('particles', createHeadlessParticlesRuntime() as any);
         this.context.setRuntime('remoteDesktop', createHeadlessRemoteDesktopRuntime() as any);
         this.context.setRuntime('animation', new AnimationSystem());
         this.context.setRuntime('skills', {
@@ -285,7 +292,9 @@ class HeadlessPeerSession {
         this.context.setRuntime('tracking', tracking);
         this.network = new NetworkRuntime(this.context);
         this.context.setRuntime('network', this.network);
-        this.session = new ScenarioManager(this.context, [TEST_SCENARIO_PLUGIN], TEST_SCENARIO_PLUGIN.id);
+        const scenarioPlugins = options.scenarioPlugins ?? [TEST_SCENARIO_PLUGIN];
+        const defaultScenarioId = options.defaultScenarioId ?? scenarioPlugins[0]?.id ?? TEST_SCENARIO_PLUGIN.id;
+        this.session = new ScenarioManager(this.context, scenarioPlugins, defaultScenarioId);
         this.context.setRuntime('session', this.session);
         this.playerPresence = new PlayerPresenceService(this.context);
         this.context.setRuntime('player', this.playerPresence);
@@ -340,20 +349,41 @@ class HeadlessPeerSession {
 
 export class HeadlessNetworkHarness {
     public readonly hostId = 'host-peer';
-    public readonly host = new HeadlessPeerSession(this.hostId, 'host');
+    public readonly host: HeadlessPeerSession;
     public guest: HeadlessPeerSession | null = null;
     public guestId: string | null = null;
     private hostConnection: MemoryConnection | null = null;
     private guestConnection: MemoryConnection | null = null;
+    private readonly options: {
+        scenarioPlugins: IScenarioPlugin[];
+        defaultScenarioId: string;
+    };
 
-    public static async create(): Promise<HeadlessNetworkHarness> {
-        const harness = new HeadlessNetworkHarness();
+    constructor(options: {
+        scenarioPlugins?: IScenarioPlugin[];
+        defaultScenarioId?: string;
+    } = {}) {
+        this.options = {
+            scenarioPlugins: options.scenarioPlugins ?? [TEST_SCENARIO_PLUGIN],
+            defaultScenarioId: options.defaultScenarioId ?? options.scenarioPlugins?.[0]?.id ?? TEST_SCENARIO_PLUGIN.id
+        };
+        this.host = new HeadlessPeerSession(this.hostId, 'host', undefined, this.options);
+    }
+
+    public static async create(options: {
+        scenarioPlugins?: IScenarioPlugin[];
+        defaultScenarioId?: string;
+    } = {}): Promise<HeadlessNetworkHarness> {
+        const harness = new HeadlessNetworkHarness(options);
         await harness.initialize();
         return harness;
     }
 
-    public static async createHostOnly(): Promise<HeadlessNetworkHarness> {
-        const harness = new HeadlessNetworkHarness();
+    public static async createHostOnly(options: {
+        scenarioPlugins?: IScenarioPlugin[];
+        defaultScenarioId?: string;
+    } = {}): Promise<HeadlessNetworkHarness> {
+        const harness = new HeadlessNetworkHarness(options);
         await harness.host.initialize();
         harness.stepFrames(10);
         return harness;
@@ -404,7 +434,7 @@ export class HeadlessNetworkHarness {
             throw new Error('Guest session is already connected.');
         }
 
-        const guest = new HeadlessPeerSession(peerId, 'guest', this.hostId);
+        const guest = new HeadlessPeerSession(peerId, 'guest', this.hostId, this.options);
         await guest.initialize();
 
         this.guestId = peerId;
@@ -457,11 +487,18 @@ function createHeadlessRenderRuntime(): Record<string, unknown> {
         cameraGroup,
         camera,
         renderer: {
-            domElement: document.createElement('canvas')
+            domElement: document.createElement('canvas'),
+            shadowMap: {
+                enabled: false,
+                type: 0,
+                autoUpdate: true,
+                needsUpdate: false
+            }
         },
         isXRPresenting: () => false,
         update: () => { },
-        render: () => { }
+        render: () => { },
+        getGlobalUniforms: () => null
     };
 }
 
@@ -475,6 +512,15 @@ function createHeadlessInputRuntime(): Record<string, unknown> {
 
 function createHeadlessAudioRuntime(): Record<string, unknown> {
     return {
+        createEmitter: async () => ({
+            play: () => { },
+            stop: () => { },
+            setPosition: () => { },
+            setVolume: () => { },
+            setPlaybackRate: () => { },
+            destroy: () => { },
+            dispose: () => { }
+        }),
         playDrumPadHit: () => { },
         playSequencerBeat: () => { },
         playMelodyNote: () => { },
@@ -496,6 +542,7 @@ function createHeadlessMediaRuntime(): Record<string, unknown> {
 function createHeadlessAssetRuntime(): Record<string, unknown> {
     return {
         getNormalizedModel: async () => new THREE.Group(),
+        loadGLTF: async () => new THREE.Group(),
         loadTexture: async () => new THREE.Texture()
     };
 }
@@ -512,6 +559,19 @@ function createHeadlessRemoteDesktopRuntime(): Record<string, unknown> {
         update: () => { }
     };
 }
+
+function createHeadlessParticlesRuntime(): Record<string, unknown> {
+    return {
+        createEmitter: async () => ({
+            emit: () => { },
+            dispose: () => { }
+        }),
+        spawnBurst: () => { }
+    };
+}
+
+export const BUILT_IN_NETWORK_TEST_SCENARIOS = BUILT_IN_SCENARIO_PLUGINS;
+export const BUILT_IN_NETWORK_TEST_DEFAULT_SCENARIO_ID = DEFAULT_SCENARIO_PLUGIN_ID;
 
 function yawFromQuaternion(quaternion: { x: number; y: number; z: number; w: number }): number {
     const euler = new THREE.Euler().setFromQuaternion(
