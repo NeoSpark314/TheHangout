@@ -854,6 +854,32 @@ export class FlatUiRuntime implements IUpdatable {
         }
     }
 
+    public closeMenu(): void {
+        this.cancelOverlayHideRequest();
+        this.cancelOverlayHideFinalize();
+        this.context.isMenuOpen = false;
+        this.controllerCursor.hide();
+        this.updateControllerCursorTarget(null);
+
+        if (this.overlay) {
+            this.overlay.style.opacity = '0';
+            this.hideElement(this.overlay);
+        }
+
+        if (this.desktopControls && !this.isMobile) {
+            this.showElement(this.desktopControls);
+        }
+
+        if (this.isMobile) {
+            this.mobileHudEnabled = true;
+            if (this.mobileHud) this.showElement(this.mobileHud);
+            if (this.mobileMenuBtn) this.showElement(this.mobileMenuBtn);
+            this.context.runtime.input?.initMobileJoysticks();
+            this.joysticksInitialized = true;
+            this.updateMobileHudState();
+        }
+    }
+
     private ensureAudioContextResumed(): void {
         if (this.context.runtime.render && this.context.runtime.render.audioListener) {
             if (this.context.runtime.render.audioListener.context.state === 'suspended') {

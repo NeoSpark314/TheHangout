@@ -700,6 +700,15 @@ export class VrUiRuntime implements IUpdatable {
         }
     }
 
+    public closeMenu(): void {
+        if (!this.context.isMenuOpen) return;
+
+        this.context.isMenuOpen = false;
+        this.tablet?.setVisible(false);
+        this.hide2DMenu();
+        this.tablet?.ui.markDirty();
+    }
+
     private show2DMenu(): void {
         if (!this.tablet) return;
         this.controllerCursor.reset();

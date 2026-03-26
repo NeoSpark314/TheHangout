@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AppContext } from '../../app/AppContext';
 import type { IObjectModule } from '../../content/contracts/IObjectModule';
 import type { IScenarioLoadOptions, IScenarioModule, IScenarioSpawnPoint } from '../../content/contracts/IScenarioModule';
@@ -255,5 +255,39 @@ describe('ScenarioManager lifecycle split', () => {
         session.init(new THREE.Scene());
 
         expect(() => session.applySessionConfigUpdate({ seed: 2 })).toThrow(/Scenario teardown left runtime-owned state behind/);
+    });
+
+    it('closes open menu UI before switching scenarios', () => {
+        const app = new AppContext();
+        app.isMenuOpen = true;
+        const closeFlatMenu = vi.fn();
+        const closeMenu = vi.fn();
+        app.setRuntime('ui', { closeMenu: closeFlatMenu } as any);
+        app.setRuntime('vrUi', { closeMenu } as any);
+        app.setRuntime('entity', { entities: new Map() } as any);
+        app.setRuntime('skills', { drawing: { clear: () => {} }, mount: {}, interaction: {} } as any);
+        app.setRuntime('physics', { flushPendingRemovals: () => {} } as any);
+        const firstPlugin: IScenarioPlugin = {
+            id: 'scenario-a',
+            displayName: 'Scenario A',
+            create() {
+                return new LifecycleScenario([]);
+            }
+        };
+        const secondPlugin: IScenarioPlugin = {
+            id: 'scenario-b',
+            displayName: 'Scenario B',
+            create() {
+                return new LifecycleScenario([]);
+            }
+        };
+
+        const session = new ScenarioManager(app, [firstPlugin, secondPlugin], firstPlugin.id);
+
+        session.switchScenario(secondPlugin.id);
+
+        expect(closeFlatMenu).toHaveBeenCalledTimes(1);
+        expect(closeMenu).toHaveBeenCalledTimes(1);
+        expect(app.isMenuOpen).toBe(false);
     });
 });

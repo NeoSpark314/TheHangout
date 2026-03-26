@@ -301,6 +301,8 @@ export class ScenarioManager implements IUpdatable {
             return true;
         }
 
+        this.closeMenuUiForScenarioTransition();
+
         if (this.isInitialized) {
             const transition = this.context.runtime.worldTransition;
             if (transition) {
@@ -481,6 +483,14 @@ export class ScenarioManager implements IUpdatable {
 
     private emitSessionConfigApplied(): void {
         eventBus.emit(EVENTS.SESSION_CONFIG_APPLIED);
+    }
+
+    private closeMenuUiForScenarioTransition(): void {
+        if (!this.context.isMenuOpen) return;
+
+        this.context.runtime.vrUi?.closeMenu?.();
+        this.context.runtime.ui?.closeMenu?.();
+        this.context.isMenuOpen = false;
     }
 
     private assertScenarioTeardownClean(
