@@ -1073,17 +1073,13 @@ export class FlatUiRuntime implements IUpdatable {
         }
     }
 
-    public toggleOverlay(): void {
+    public toggleMenu(): void {
         if (this.context.isMenuOpen) {
             this.hideOverlay();
             return;
         }
 
         this.showOverlay();
-    }
-
-    public toggleMenu(): void {
-        this.toggleOverlay();
     }
 
     private hideElement(element: HTMLElement): void {

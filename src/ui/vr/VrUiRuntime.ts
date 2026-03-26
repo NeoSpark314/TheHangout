@@ -679,10 +679,6 @@ export class VrUiRuntime implements IUpdatable {
         }
     }
 
-    public toggle2DMenu(): void {
-        this.toggleMenu();
-    }
-
     public closeMenu(): void {
         if (!this.context.isMenuOpen) return;
 
@@ -786,10 +782,6 @@ export class VrUiRuntime implements IUpdatable {
         if (controls && !this.context.runtime.render?.isXRPresenting()) {
             controls.classList.remove('is-hidden');
         }
-    }
-
-    public openMenuWithRecenter(): void {
-        this.openMenu({ recenter: true });
     }
 
     public openMenu(options: { recenter?: boolean } = {}): void {
@@ -1785,7 +1777,7 @@ export class VrUiRuntime implements IUpdatable {
                     });
 
                     if (this.context.isMenuOpen) {
-                        this.toggle2DMenu();
+                        this.toggleMenu();
                     }
                 });
 
