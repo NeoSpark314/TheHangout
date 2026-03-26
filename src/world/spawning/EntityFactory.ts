@@ -41,6 +41,7 @@ export class EntityFactory {
                 config.grabbable,
                 config.physicsTuning,
                 config.assetUrl,
+                config.color,
                 config.scale,
                 config.dualGrabScalable,
                 config.replicationProfileId
@@ -127,6 +128,7 @@ export class EntityFactory {
         grabbable?: boolean,
         physicsTuning?: ISharedPropPhysicsTuning,
         assetUrl?: string,
+        color?: number | string,
         scale?: number,
         dualGrabScalable?: boolean,
         replicationProfileId?: PhysicsReplicationProfileId
@@ -159,6 +161,7 @@ export class EntityFactory {
             grabbable,
             physicsTuning,
             assetUrl,
+            color,
             scale,
             dualGrabScalable,
             replicationProfileId
@@ -175,6 +178,7 @@ export class EntityFactory {
         ownerId?: string | null,
         grabbable?: boolean,
         physicsTuning?: ISharedPropPhysicsTuning,
+        color?: number | string,
         replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         const runtime = context.runtime;
@@ -201,6 +205,7 @@ export class EntityFactory {
             ownerId,
             grabbable,
             physicsTuning,
+            color,
             replicationProfileId
         );
     }

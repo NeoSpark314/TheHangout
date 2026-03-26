@@ -31,6 +31,7 @@ export function spawnSharedPhysicsProp(
             init.ownerId,
             init.grabbable,
             init.physicsTuning,
+            init.color,
             init.replicationProfileId ?? init.profile
         );
     } else {
@@ -45,6 +46,7 @@ export function spawnSharedPhysicsProp(
             init.grabbable,
             init.physicsTuning,
             init.assetUrl,
+            init.color,
             init.scale,
             init.dualGrabScalable,
             init.replicationProfileId ?? init.profile

@@ -193,6 +193,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         grabbable?: boolean,
         physicsTuning?: ISharedPropPhysicsTuning,
         assetUrl?: string,
+        color?: number | string,
         scale?: number,
         dualGrabScalable?: boolean,
         replicationProfileId?: string
@@ -209,6 +210,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             grabbable,
             physicsTuning,
             assetUrl,
+            color,
             scale,
             dualGrabScalable,
             replicationProfileId as any
@@ -224,6 +226,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
         ownerId?: string | null,
         grabbable?: boolean,
         physicsTuning?: ISharedPropPhysicsTuning,
+        color?: number | string,
         replicationProfileId?: string
     ): PhysicsPropEntity | null {
         return EntityFactory.createSphereGrabbable(
@@ -236,6 +239,7 @@ export class ObjectRuntimeContext implements IObjectRuntimeContext {
             ownerId,
             grabbable,
             physicsTuning,
+            color,
             replicationProfileId as any
         );
     }

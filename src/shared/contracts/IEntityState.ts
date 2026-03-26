@@ -56,6 +56,7 @@ export interface IPhysicsEntityState extends IBaseEntityState {
     assetUrl?: string; // content/model URL for module-backed props (optional)
     he?: Vec3Arr; // half extents (optional)
     s?: number; // uniform scale (optional)
+    c?: string | number; // display color for module-backed props (optional)
 }
 
 /**

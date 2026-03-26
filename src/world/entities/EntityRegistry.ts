@@ -51,6 +51,7 @@ export class EntityRegistry implements IUpdatable {
                 isAuthority: false,
                 ownerId: config.ownerId,
                 assetUrl: config.assetUrl ?? config.url,
+                color: config.c,
                 scale: config.scale ?? config.s
             };
 
@@ -67,6 +68,7 @@ export class EntityRegistry implements IUpdatable {
             ...config,
             moduleId,
             ownerId: config.ownerId,
+            color: config.color ?? config.c,
             scale: config.scale ?? config.s
         };
 

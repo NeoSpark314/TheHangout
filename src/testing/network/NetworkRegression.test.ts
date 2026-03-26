@@ -281,6 +281,27 @@ describe.sequential('Headless Network Regression', () => {
         expect(guestState.assetUrl).toBe(assetUrl);
     });
 
+    it('propagates per-instance color through remote object discovery', async () => {
+        const harness = await HeadlessNetworkHarness.create();
+        activeHarness = harness;
+        const guest = harness.requireGuest();
+        const color = 0xff0055;
+
+        harness.spawnHostObject('grabbable-cube', {
+            id: 'shared-color-cube',
+            position: { x: 0, y: 1.15, z: 0 },
+            size: 0.12,
+            color
+        });
+
+        harness.waitUntil(() => !!guest.getPhysicsProp('shared-color-cube'));
+
+        const guestProp = guest.getPhysicsProp('shared-color-cube') as PhysicsPropEntity;
+        const guestState = guestProp.getNetworkState(true) as { c?: number | string };
+
+        expect(guestState.c).toBe(color);
+    });
+
     it('rejects stale module-backed state packets after a scenario epoch change', async () => {
         const harness = await HeadlessNetworkHarness.create();
         activeHarness = harness;

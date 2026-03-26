@@ -207,6 +207,7 @@ export class PhysicsRuntime {
         grabbable: boolean = true,
         physicsTuning?: ISharedPropPhysicsTuning,
         assetUrl?: string,
+        color?: number | string,
         scale?: number,
         dualGrabScalable?: boolean,
         replicationProfileId?: PhysicsReplicationProfileId
@@ -263,6 +264,7 @@ export class PhysicsRuntime {
             moduleId,
             ownerId,
             assetUrl,
+            color,
             initialScale: scale,
             dualGrabScalable,
             replicationProfileId,
@@ -290,6 +292,7 @@ export class PhysicsRuntime {
         ownerId?: string | null,
         grabbable: boolean = true,
         physicsTuning?: ISharedPropPhysicsTuning,
+        color?: number | string,
         replicationProfileId?: PhysicsReplicationProfileId
     ): PhysicsPropEntity | null {
         if (!this.world) return null;
@@ -324,6 +327,7 @@ export class PhysicsRuntime {
             halfExtents: { x: radius, y: radius, z: radius },
             moduleId,
             ownerId,
+            color,
             replicationProfileId,
             shape: 'sphere'
         });

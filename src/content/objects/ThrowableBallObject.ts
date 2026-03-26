@@ -24,6 +24,7 @@ class ThrowableBallInstance extends BaseReplicatedPhysicsPropObjectInstance {
             mesh,
             ownerId,
             entityId,
+            color,
             replicationProfileId: 'throwable'
         });
     }

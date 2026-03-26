@@ -38,6 +38,7 @@ class TemplateReplicatedPhysicsPropInstance extends BaseReplicatedPhysicsPropObj
             halfExtents: { x: size / 2, y: size / 2, z: size / 2 },
             ownerId,
             entityId,
+            color: tint,
             replicationProfileId: 'default-prop'
         });
 

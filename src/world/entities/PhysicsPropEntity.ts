@@ -134,6 +134,9 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             // Some objects might use this directly if they don't have a separate Instance class
             (this as any).assetUrl = options.assetUrl;
         }
+        if (options.color !== undefined) {
+            (this as any).color = options.color;
+        }
 
         const pos = this.rigidBody.translation();
         const rot = this.rigidBody.rotation();
@@ -507,7 +510,8 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             he: this.baseHalfExtents
                 ? [this.baseHalfExtents.x, this.baseHalfExtents.y, this.baseHalfExtents.z]
                 : (this.halfExtents ? [this.halfExtents.x, this.halfExtents.y, this.halfExtents.z] : undefined),
-            s: this.dualGrabScalable ? this.uniformScale : undefined
+            s: this.dualGrabScalable ? this.uniformScale : undefined,
+            c: (this as any).color
         } as IPhysicsEntityState;
     }
 
@@ -524,6 +528,9 @@ export class PhysicsPropEntity extends ReplicatedEntity implements IInteractable
             if (!this.baseHalfExtents || this.hasSignificantExtentsDelta(this.baseHalfExtents, incomingBaseHalfExtents)) {
                 this.setBaseHalfExtents(incomingBaseHalfExtents);
             }
+        }
+        if (propState.c !== undefined) {
+            (this as any).color = propState.c;
         }
 
         const snapshot: INetworkSnapshot = {
