@@ -83,5 +83,6 @@ export type IEntityState = IPlayerEntityState | IPhysicsEntityState | IPenEntity
 export interface IStateUpdatePacket {
     id: string;
     type: EntityType;
+    scenarioEpoch: number;
     state: IEntityState;
 }

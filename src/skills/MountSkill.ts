@@ -110,6 +110,19 @@ export class MountSkill implements IUpdatable {
         this.unmountLocal(ownerInstanceId, reason);
     }
 
+    public discardLocalMountBinding(ownerInstanceId?: string, reason: TLocalMountStateReason = 'external'): void {
+        const localMatches = !ownerInstanceId || this.localMount?.ownerInstanceId === ownerInstanceId;
+        const pendingMatches = !ownerInstanceId || this.pendingMount?.ownerInstanceId === ownerInstanceId;
+        if (!localMatches && !pendingMatches) return;
+
+        this.localMount = localMatches ? null : this.localMount;
+        this.pendingMount = pendingMatches ? null : this.pendingMount;
+        this.movementUnmountStartMs = null;
+        this.mountedLocalHeadPositionAtGrant.set(0, 0, 0);
+        this.mountedLocalHeadYawAtGrant = 0;
+        this.setLocalState('idle', reason);
+    }
+
     public mountLocal(binding: ILocalMountBinding): boolean {
         return this.grantLocalMount(binding);
     }

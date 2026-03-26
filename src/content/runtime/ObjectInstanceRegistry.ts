@@ -41,6 +41,7 @@ export class ObjectInstanceRegistry {
         if (!instance) return;
 
         this.replicationHost.detach(instanceId);
+        this.context.runtime.skills.mount?.discardLocalMountBinding?.(instance.id, 'external');
 
         const primaryEntity = instance.getPrimaryEntity?.() ?? null;
         const ownedEntityIds = new Set<string>(instance.getOwnedEntityIds?.() ?? []);

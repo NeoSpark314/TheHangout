@@ -73,6 +73,7 @@ export class NetworkSynchronizer {
         const packet = [{
             id: entity.id,
             type: entity.type,
+            scenarioEpoch: this.context.sessionConfig.scenarioEpoch,
             state
         }];
 

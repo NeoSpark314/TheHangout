@@ -169,4 +169,60 @@ describe('ScenarioManager lifecycle split', () => {
 
         expect(calls).toEqual(['unloadVisuals', 'unloadWorld', 'loadWorld', 'loadVisuals']);
     });
+
+    it('increments scenario epoch on reload when no epoch is supplied', () => {
+        const app = new AppContext();
+        app.setRuntime('render', { scene: new THREE.Scene() } as any);
+        app.setRuntime('entity', { entities: new Map() } as any);
+        app.setRuntime('skills', { drawing: { clear: () => {} }, mount: {}, interaction: {} } as any);
+        app.setRuntime('physics', { flushPendingRemovals: () => {} } as any);
+        const plugin: IScenarioPlugin = {
+            id: 'lifecycle-scenario',
+            displayName: 'Lifecycle Scenario',
+            create() {
+                return new LifecycleScenario([]);
+            }
+        };
+
+        const session = new ScenarioManager(app, [plugin], plugin.id);
+        const initialEpoch = app.sessionConfig.scenarioEpoch;
+        session.init(new THREE.Scene());
+
+        session.applySessionConfigUpdate({ seed: 2 });
+
+        expect(app.sessionConfig.scenarioEpoch).toBe(initialEpoch + 1);
+    });
+
+    it('applies an incoming scenario epoch during scenario switch', () => {
+        const app = new AppContext();
+        app.setRuntime('render', { scene: new THREE.Scene() } as any);
+        app.setRuntime('entity', { entities: new Map() } as any);
+        app.setRuntime('skills', { drawing: { clear: () => {} }, mount: {}, interaction: {} } as any);
+        app.setRuntime('physics', { flushPendingRemovals: () => {} } as any);
+        const firstPlugin: IScenarioPlugin = {
+            id: 'scenario-a',
+            displayName: 'Scenario A',
+            create() {
+                return new LifecycleScenario([]);
+            }
+        };
+        const secondPlugin: IScenarioPlugin = {
+            id: 'scenario-b',
+            displayName: 'Scenario B',
+            create() {
+                return new LifecycleScenario([]);
+            }
+        };
+
+        const session = new ScenarioManager(app, [firstPlugin, secondPlugin], firstPlugin.id);
+        session.init(new THREE.Scene());
+
+        session.applySessionConfigUpdate({
+            activeScenarioId: secondPlugin.id,
+            scenarioEpoch: 9
+        });
+
+        expect(app.sessionConfig.activeScenarioId).toBe(secondPlugin.id);
+        expect(app.sessionConfig.scenarioEpoch).toBe(9);
+    });
 });

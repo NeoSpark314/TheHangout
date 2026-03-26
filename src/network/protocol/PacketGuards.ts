@@ -10,6 +10,7 @@ function isStateUpdatePacketArray(payload: unknown): boolean {
         if (!isObject(item)) return false;
         if (typeof item.id !== 'string') return false;
         if (!('type' in item)) return false;
+        if (typeof item.scenarioEpoch !== 'number') return false;
         if (!('state' in item)) return false;
     }
     return true;
@@ -45,6 +46,7 @@ function isSessionConfigPayload(payload: unknown): boolean {
     // Keep this permissive for compatibility with partial session updates.
     if (!isObject(payload)) return false;
     if ('assignedSpawnIndex' in payload && typeof payload.assignedSpawnIndex !== 'number') return false;
+    if ('scenarioEpoch' in payload && typeof payload.scenarioEpoch !== 'number') return false;
     return true;
 }
 

@@ -41,6 +41,7 @@ export interface IScenarioConfig {
 export interface ISessionConfig {
     activeScenarioId: string;
     seed: number;
+    scenarioEpoch: number;
     scenarioConfig?: IScenarioConfig;
 }
 
@@ -137,6 +138,7 @@ export class AppContext implements IEngineContext, IGameSessionContext {
     public sessionConfig: ISessionConfig = {
         activeScenarioId: 'default-hangout',
         seed: Math.floor(Math.random() * 2147483647),
+        scenarioEpoch: 1,
         scenarioConfig: {
             environment: 'cyber-stube',
             skyColor: '#0b0c10',

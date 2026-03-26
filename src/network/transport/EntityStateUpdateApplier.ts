@@ -16,11 +16,24 @@ export function applyEntityStateUpdates(
 ): void {
     const runtime = context.runtime;
     const localId = context.localPlayer?.id || 'local';
+    const activeScenarioEpoch = context.sessionConfig.scenarioEpoch;
     const nowMs = () => ((typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now());
 
     for (const stateData of entityStates) {
+        if (stateData.scenarioEpoch !== activeScenarioEpoch) {
+            continue;
+        }
+
         let entity = runtime.entity.getEntity(stateData.id);
         if (!entity) {
+            const isHostRejectingRemoteObjectRediscovery =
+                options.source === 'player_input' &&
+                options.authorityMode === 'host' &&
+                stateData.type !== EntityType.PLAYER_AVATAR;
+            if (isHostRejectingRemoteObjectRediscovery) {
+                continue;
+            }
+
             if (options.skipLocalPlayerSelfDiscover && context.localPlayer && stateData.id === context.localPlayer.id) {
                 continue;
             }

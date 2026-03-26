@@ -110,4 +110,38 @@ describe('MountSkill', () => {
 
         expect(moveOriginTo).toHaveBeenLastCalledWith(expect.any(THREE.Vector3), viewYaw);
     });
+
+    it('can discard a mounted binding without applying the exit teleport', () => {
+        const teleportTo = vi.fn();
+        const runtime = new MountSkill({
+            localPlayer: {
+                teleportTo,
+                moveOriginTo: vi.fn(),
+                xrOrigin: {
+                    position: { x: 0, y: 0, z: 0 },
+                    quaternion: { x: 0, y: 0, z: 0, w: 1 }
+                }
+            },
+            runtime: {
+                input: { getMovementVector: () => ({ x: 0, y: 0 }) },
+                notify: { warn: vi.fn() },
+                tracking: { getState: () => ({}) }
+            }
+        } as any);
+
+        runtime.grantLocalMount({
+            ...createBinding(() => 0, () => 0),
+            getExitPose: () => ({
+                position: new THREE.Vector3(9, 9, 9),
+                yaw: 2
+            })
+        });
+        teleportTo.mockClear();
+
+        runtime.discardLocalMountBinding('car-0', 'external');
+
+        expect(runtime.isMountedLocal()).toBe(false);
+        expect(runtime.getLocalMountStatus().state).toBe('idle');
+        expect(teleportTo).not.toHaveBeenCalled();
+    });
 });

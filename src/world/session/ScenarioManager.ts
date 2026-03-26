@@ -117,16 +117,18 @@ export class ScenarioManager implements IUpdatable {
         newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number },
         onApplied?: () => void
     ): boolean {
-        const oldSeed = this.context.sessionConfig.seed;
-        const oldScenarioId = this.context.sessionConfig.activeScenarioId;
+        const currentConfig = this.context.sessionConfig;
+        const oldSeed = currentConfig.seed;
+        const oldScenarioId = currentConfig.activeScenarioId;
 
         if (newConfig.assignedSpawnIndex !== undefined) {
             this.assignedSpawnIndex = newConfig.assignedSpawnIndex;
             delete newConfig.assignedSpawnIndex;
         }
 
-        const nextConfig = { ...this.context.sessionConfig, ...newConfig as ISessionConfig };
-
+        const scenarioChangeRequested = newConfig.activeScenarioId !== undefined && newConfig.activeScenarioId !== oldScenarioId;
+        const seedChanged = newConfig.seed !== undefined && newConfig.seed !== oldSeed;
+        const nextConfig = this.resolveNextSessionConfig(newConfig, { scenarioChanged: scenarioChangeRequested, seedChanged });
         const scenarioChanged = nextConfig.activeScenarioId !== oldScenarioId;
 
         if (scenarioChanged) {
@@ -171,7 +173,7 @@ export class ScenarioManager implements IUpdatable {
 
         this.context.sessionConfig = nextConfig;
 
-        if (newConfig.seed !== undefined && newConfig.seed !== oldSeed) {
+        if (seedChanged) {
             this._seed = this.context.sessionConfig.seed;
             const previousEntityCount = this.context.runtime.entity.entities.size;
             console.info(
@@ -471,6 +473,31 @@ export class ScenarioManager implements IUpdatable {
 
     private emitSessionConfigApplied(): void {
         eventBus.emit(EVENTS.SESSION_CONFIG_APPLIED);
+    }
+
+    private resolveNextSessionConfig(
+        newConfig: Partial<ISessionConfig>,
+        options: { scenarioChanged: boolean; seedChanged: boolean }
+    ): ISessionConfig {
+        const currentConfig = this.context.sessionConfig;
+        const nextConfig: ISessionConfig = {
+            ...currentConfig,
+            ...newConfig
+        };
+
+        const incomingEpoch = newConfig.scenarioEpoch;
+        if (typeof incomingEpoch === 'number') {
+            nextConfig.scenarioEpoch = incomingEpoch;
+            return nextConfig;
+        }
+
+        if (options.scenarioChanged || options.seedChanged) {
+            nextConfig.scenarioEpoch = currentConfig.scenarioEpoch + 1;
+            return nextConfig;
+        }
+
+        nextConfig.scenarioEpoch = currentConfig.scenarioEpoch;
+        return nextConfig;
     }
 }
 

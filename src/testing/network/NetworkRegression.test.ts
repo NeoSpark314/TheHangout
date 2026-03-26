@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { PhysicsPropEntity } from '../../world/entities/PhysicsPropEntity';
 import { HeadlessNetworkHarness } from './HeadlessNetworkHarness';
 import type { PlayerAvatarEntity } from '../../world/entities/PlayerAvatarEntity';
+import { EntityType } from '../../shared/contracts/IEntityState';
 
 let activeHarness: HeadlessNetworkHarness | null = null;
 
@@ -274,6 +275,75 @@ describe.sequential('Headless Network Regression', () => {
         const guestState = guestProp.getNetworkState(false) as { assetUrl?: string };
 
         expect(guestState.assetUrl).toBe(assetUrl);
+    });
+
+    it('rejects stale module-backed state packets after a scenario epoch change', async () => {
+        const harness = await HeadlessNetworkHarness.create();
+        activeHarness = harness;
+        const guest = harness.requireGuest();
+
+        harness.spawnHostObject('grabbable-cube', {
+            id: 'stale-epoch-cube',
+            position: { x: 0, y: 1.15, z: 0 },
+            size: 0.12
+        });
+
+        harness.waitUntil(() => !!guest.getPhysicsProp('stale-epoch-cube'));
+
+        const oldEpoch = guest.context.sessionConfig.scenarioEpoch;
+        harness.host.network.requestSessionConfigUpdate({ seed: 2 });
+        harness.waitUntil(() => guest.context.sessionConfig.scenarioEpoch === oldEpoch + 1);
+        harness.waitUntil(() => !guest.getPhysicsProp('stale-epoch-cube'));
+
+        guest.network.applyStateUpdate([{
+            id: 'stale-epoch-cube',
+            type: EntityType.PHYSICS_PROP,
+            scenarioEpoch: oldEpoch,
+            state: {
+                id: 'stale-epoch-cube',
+                type: EntityType.PHYSICS_PROP,
+                ownerId: null,
+                p: [0, 1.15, 0],
+                q: [0, 0, 0, 1],
+                v: [0, 0, 0],
+                b: null,
+                m: 'grabbable-cube',
+                he: [0.06, 0.06, 0.06]
+            }
+        }]);
+
+        harness.stepFrames(2);
+
+        expect(guest.getPhysicsProp('stale-epoch-cube')).toBeFalsy();
+        expect(guest.getObject('stale-epoch-cube')).toBeFalsy();
+    });
+
+    it('does not let guest player input rediscover missing world objects on the host', async () => {
+        const harness = await HeadlessNetworkHarness.create();
+        activeHarness = harness;
+
+        const activeEpoch = harness.host.context.sessionConfig.scenarioEpoch;
+        harness.host.network.handleHostPlayerInput(harness.guestId as string, [{
+            id: 'rogue-cube',
+            type: EntityType.PHYSICS_PROP,
+            scenarioEpoch: activeEpoch,
+            state: {
+                id: 'rogue-cube',
+                type: EntityType.PHYSICS_PROP,
+                ownerId: harness.guestId,
+                p: [0, 1.15, 0],
+                q: [0, 0, 0, 1],
+                v: [0, 0, 0],
+                b: harness.guestId,
+                m: 'grabbable-cube',
+                he: [0.06, 0.06, 0.06]
+            }
+        }]);
+
+        harness.stepFrames(2);
+
+        expect(harness.host.getPhysicsProp('rogue-cube')).toBeFalsy();
+        expect(harness.host.getObject('rogue-cube')).toBeFalsy();
     });
 });
 

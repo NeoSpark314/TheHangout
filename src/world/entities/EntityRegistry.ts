@@ -134,6 +134,7 @@ export class EntityRegistry implements IUpdatable {
 
     public getAuthoritativeStates(fullSync: boolean = false): IStateUpdatePacket[] {
         const states: IStateUpdatePacket[] = [];
+        const scenarioEpoch = this.context.sessionConfig.scenarioEpoch;
         for (const entity of this.entities.values()) {
             const networkable = entity as unknown as INetworkable<Partial<IEntityState>>;
             if (entity.isAuthority && !entity.isDestroyed && networkable.getNetworkState) {
@@ -142,6 +143,7 @@ export class EntityRegistry implements IUpdatable {
                     states.push({
                         id: entity.id,
                         type: entity.type as EntityType,
+                        scenarioEpoch,
                         state: state as IEntityState
                     });
                 }
@@ -152,6 +154,7 @@ export class EntityRegistry implements IUpdatable {
 
     public getWorldSnapshot(): IStateUpdatePacket[] {
         const states: IStateUpdatePacket[] = [];
+        const scenarioEpoch = this.context.sessionConfig.scenarioEpoch;
         for (const entity of this.entities.values()) {
             const networkable = entity as unknown as INetworkable<Partial<IEntityState>>;
             if (!entity.isDestroyed && networkable.getNetworkState) {
@@ -160,6 +163,7 @@ export class EntityRegistry implements IUpdatable {
                     states.push({
                         id: entity.id,
                         type: entity.type as EntityType,
+                        scenarioEpoch,
                         state: state as IEntityState
                     });
                 }
