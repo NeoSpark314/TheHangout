@@ -76,6 +76,23 @@ The Hangout is built on top of a small set of open source libraries:
 - [Vitest](https://vitest.dev/) for testing
 - [Express](https://expressjs.com/) and [ws](https://github.com/websockets/ws) for the dedicated server and WebSocket transport
 
+## Coverage Strategy
+
+Coverage is used here as an architectural signal, not as a target by itself.
+
+- Prioritize deterministic runtime coordination, authority rules, lifecycle boundaries, and replication behavior.
+- Prefer integration-style runtime tests at clear seams over mocking every internal method.
+- Avoid brittle coverage-driven tests for rendering internals, WebXR helpers, cosmetic effects, or DOM styling unless they protect a real regression.
+- Keep renderer-heavy and browser-heavy paths under lighter coverage until feature work or bugs justify deeper tests.
+
+Use the engine-focused report when you want a current baseline for core runtime code:
+
+```bash
+npm run test:coverage
+```
+
+The HTML report is written to `coverage/engine/index.html`.
+
 ## Credits & Assets
 
 - **[Quaternius](https://quaternius.com/)**: For the amazing [Stylized Nature Mega Kit](https://quaternius.com/packs/stylizednaturemegakit.html).
