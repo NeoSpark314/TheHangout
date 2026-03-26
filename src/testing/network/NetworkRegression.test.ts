@@ -424,6 +424,7 @@ describe.sequential('Headless Network Regression', () => {
         expect(guest.getObject('simple-racing-car-3')).toBeFalsy();
         expect(guest.getObject('simple-racing-car-3:body')).toBeFalsy();
     });
+
 });
 
 function distance3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
