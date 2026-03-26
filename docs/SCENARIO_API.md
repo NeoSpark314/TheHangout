@@ -2,6 +2,13 @@
 
 This is the current scenario authoring model.
 
+Related docs:
+
+- [ENGINE_PHILOSOPHY.md](./ENGINE_PHILOSOPHY.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [GAMEPLAY_API.md](./GAMEPLAY_API.md)
+- [REPLICATION.md](./REPLICATION.md)
+
 ## Scenario Shape
 
 A scenario has two layers:
@@ -143,7 +150,7 @@ The local mount contract supports three distinct pose concepts:
 Head-space mount alignment:
 
 - Mount entry aligns the local player in `head` space once.
-- This places the actual headset/view at the mount view anchor regardless of the user’s current room-scale offset.
+- This places the actual headset/view at the mount view anchor regardless of the user's current room-scale offset.
 - After mount entry, ongoing mount updates preserve local head movement relative to that aligned baseline.
 
 Rule of thumb:
@@ -187,7 +194,7 @@ Per-instance content configuration:
 ## Rule Of Thumb
 
 - If it is reusable and has clear world identity, make it an object module.
-- If it is one scenario’s rules or temporary shared state, keep it in the scenario.
+- If it is one scenario's rules or temporary shared state, keep it in the scenario.
 - If it is local environment setup for one scenario, use `ScenarioContext.scene` and `ScenarioContext.physics`.
 
 ## Future Tightening

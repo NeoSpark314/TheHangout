@@ -1,6 +1,14 @@
 # The Opinionated Collab Engine Philosophy
 
 To ensure all scenarios feel consistently grounded, cooperative, and interactive, this engine is strictly organized around **9 Core Pillars**. This philosophical model drives where code lives and what dependencies are allowed.
+
+Companion docs:
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [GAMEPLAY_API.md](./GAMEPLAY_API.md)
+- [SCENARIO_API.md](./SCENARIO_API.md)
+- [REPLICATION.md](./REPLICATION.md)
+
 ## Core Meta-Principle: VR-First Spatial Design
 The Hangout is built from the ground up to be a **Virtual Reality first** experience. All underlying interactions, UI elements, and gameplay mechanics must assume a fully spatial 3D environment with 6DoF tracked controllers and full physical agency. 
 
@@ -19,7 +27,8 @@ The systems that govern the "Session" and the "Users" regardless of what world t
 6. **Features:** The overarching *experience* tools and their respective User Interfaces (UI).
    - *Concept:* Features are high-level functionalities accessible at any time. Because a Feature completely "owns" its interface, its UI code is bundled directly with its core mechanics rather than being scattered across the engine.
    - *Current Examples:* `RemoteDesktopFeature` (screen sharing), `SocialFeature` (player lists/avatars), `NotificationRuntime` (toast popups).
-   - *Rule:* Features can overlay any Scenario. To integrate cleanly, they must use generic routers (like asking the scenario for a `getFeatureLayout`) to determine where their 3D UI should be placed. If a scenario doesn't provide a specific layout, the Feature provides its own default fallback.
+   - *Rule:* Features can overlay any Scenario. To integrate cleanly, they must use generic routers such as `getFeatureLayout(...)` to determine where their 3D UI should be placed. If a scenario doesn't provide a specific layout, the Feature provides its own default fallback.
+   - *Boundary:* Shared UI primitives and runtimes can still live under `ui/`, but feature-specific UI behavior should stay with the feature.
 
 7. **Skills:** The *verbs*. What every participant is inherently capable of doing in the 3D world.
    - *Examples:* Grabbing/Interacting, Drawing (spawning ink), Mounting/Sitting, Throwing.

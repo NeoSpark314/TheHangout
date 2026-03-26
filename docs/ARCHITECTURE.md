@@ -2,6 +2,13 @@
 
 This is the current high-level map of The Hangout.
 
+Related docs:
+
+- [ENGINE_PHILOSOPHY.md](./ENGINE_PHILOSOPHY.md)
+- [GAMEPLAY_API.md](./GAMEPLAY_API.md)
+- [SCENARIO_API.md](./SCENARIO_API.md)
+- [REPLICATION.md](./REPLICATION.md)
+
 ## Runtime Structure
 
 | Domain | Role |
@@ -13,12 +20,19 @@ This is the current high-level map of The Hangout.
 | `render/` | Three.js runtime, views, avatar rendering, effects, debug rendering |
 | `physics/` | Rapier runtime and physics authority policy |
 | `input/` | Tracking providers and input-to-intent translation |
-| `ui/` | Flat UI, VR UI, HUD |
+| `skills/` | Player capabilities such as grabbing, drawing, movement, mounting, and UI pointing |
+| `ui/` | Shared UI infrastructure such as flat UI, VR UI, HUD, and reusable presentation/runtime plumbing |
 | `media/` | Voice and spatial audio |
-| `features/` | Cross-cutting features such as social and remote desktop |
+| `features/` | Cross-cutting session features such as social and remote desktop, including their feature-specific UI |
 | `assets/` | Asset loading and procedural builders |
 | `content/` | Scenarios, object modules, gameplay-facing runtime APIs |
 | `server/` | Dedicated/headless session hosting |
+
+This map follows the principles in [ENGINE_PHILOSOPHY.md](./ENGINE_PHILOSOPHY.md):
+
+- `skills/` are a first-class runtime layer because they define persistent player verbs across scenarios.
+- `features/` own their product-specific behavior and UI.
+- `ui/` remains the shared presentation/runtime layer used by features and other engine systems.
 
 ## Core Model
 
@@ -65,6 +79,7 @@ Important headless rule:
 ## Main Entry Points
 
 - [README.md](../README.md)
+- [ENGINE_PHILOSOPHY.md](./ENGINE_PHILOSOPHY.md)
 - [GAMEPLAY_API.md](./GAMEPLAY_API.md)
 - [SCENARIO_API.md](./SCENARIO_API.md)
 - [REPLICATION.md](./REPLICATION.md)

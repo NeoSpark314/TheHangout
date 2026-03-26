@@ -2,6 +2,13 @@
 
 This is the current replication model.
 
+Related docs:
+
+- [ENGINE_PHILOSOPHY.md](./ENGINE_PHILOSOPHY.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [GAMEPLAY_API.md](./GAMEPLAY_API.md)
+- [SCENARIO_API.md](./SCENARIO_API.md)
+
 ## Two Replication Lanes
 
 ### 1. Continuous entity state
