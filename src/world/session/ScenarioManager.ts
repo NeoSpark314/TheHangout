@@ -32,9 +32,10 @@ export class ScenarioManager implements IUpdatable {
     private readonly scenarioReplicationHost: ScenarioReplicationHost;
     private readonly triggerZoneRegistry: TriggerZoneRegistry;
     private activeScenarioPlugin: IScenarioPlugin;
-    private activeScenario: IScenarioModule;
-    private activeScenarioContext: ScenarioRuntimeContext;
+    private activeScenario: IScenarioModule | null = null;
+    private activeScenarioContext: ScenarioRuntimeContext | null = null;
     private activeScenarioVisualsLoaded = false;
+    private scenarioLoadPromise: Promise<void> | null = null;
     public assignedSpawnIndex?: number;
 
     constructor(
@@ -55,9 +56,6 @@ export class ScenarioManager implements IUpdatable {
         }
 
         this.activeScenarioPlugin = this.resolveInitialScenarioPlugin(defaultScenarioId);
-        this.activeScenario = this.instantiateScenario(this.activeScenarioPlugin);
-        this.activeScenarioContext = this.createScenarioContext();
-        this.refreshActiveObjectModules();
     }
 
     private random(): number {
@@ -72,23 +70,21 @@ export class ScenarioManager implements IUpdatable {
         return this.random();
     }
 
-    public init(scene: THREE.Scene | null): void {
+    public async init(scene: THREE.Scene | null): Promise<void> {
         try {
             this.scene = scene;
             this._seed = this.context.sessionConfig.seed;
             const configuredPlugin = this.scenarioRegistry.get(this.context.sessionConfig.activeScenarioId);
             if (configuredPlugin && configuredPlugin.id !== this.activeScenarioPlugin.id) {
                 this.activeScenarioPlugin = configuredPlugin;
-                this.activeScenario = this.instantiateScenario(configuredPlugin);
-                this.activeScenarioContext = this.createScenarioContext();
             }
-            this.refreshActiveObjectModules();
+            await this.ensureScenarioReady(this.activeScenarioPlugin);
             this.loadActiveScenario({
                 isHost: this.context.isHost,
                 seed: this.context.sessionConfig.seed,
                 reason: 'session_start'
             });
-            this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
+            this.requireActiveScenario().applyConfig?.(this.requireActiveScenarioContext(), this.context.sessionConfig.scenarioConfig || {});
             this.attachScenarioReplicationIfNeeded();
             this.isInitialized = true;
         } catch (e) {
@@ -104,7 +100,7 @@ export class ScenarioManager implements IUpdatable {
     }
 
     public update(delta: number): void {
-        this.activeScenario.update(delta);
+        this.activeScenario?.update(delta);
         this.triggerZoneRegistry.update();
         this.objectInstanceRegistry.update(delta);
     }
@@ -113,10 +109,10 @@ export class ScenarioManager implements IUpdatable {
         return this.triggerZoneRegistry.createBox(options);
     }
 
-    public applySessionConfigUpdate(
+    public async applySessionConfigUpdate(
         newConfig: Partial<ISessionConfig> & { assignedSpawnIndex?: number },
         onApplied?: () => void
-    ): boolean {
+    ): Promise<boolean> {
         const currentConfig = this.context.sessionConfig;
         const oldSeed = currentConfig.seed;
         const oldScenarioId = currentConfig.activeScenarioId;
@@ -147,25 +143,27 @@ export class ScenarioManager implements IUpdatable {
             // admin/client payload cannot leave the runtime advertising a scenario
             // that never actually became active.
             this.context.sessionConfig = nextConfig;
-            const applied = this.switchScenario(
+            const applied = await this.switchScenario(
                 this.context.sessionConfig.activeScenarioId,
                 {
                     seed: this.context.sessionConfig.seed,
                     reason: 'scenario_switch'
                 },
                 () => {
+                    const activeScenario = this.requireActiveScenario();
                     console.info(
                         `[ScenarioManager] Scenario switch completed` +
-                        ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+                        ` (active=${activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
                     );
                     this.emitSessionConfigApplied();
                     onApplied?.();
                 }
             );
             if (!applied) {
+                const activeScenarioId = this.activeScenario?.id ?? this.activeScenarioPlugin.id;
                 console.info(
                     `[ScenarioManager] Scenario switch failed` +
-                    ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+                    ` (active=${activeScenarioId}, entities_after=${this.context.runtime.entity.entities.size})`
                 );
             }
             return applied;
@@ -176,41 +174,41 @@ export class ScenarioManager implements IUpdatable {
         if (seedChanged) {
             this._seed = this.context.sessionConfig.seed;
             const previousEntityCount = this.context.runtime.entity.entities.size;
+            const activeScenario = this.requireActiveScenario();
             console.info(
-                `[ScenarioManager] Reloading scenario ${this.activeScenario.id}` +
+                `[ScenarioManager] Reloading scenario ${activeScenario.id}` +
                 ` (reason=reload, seed=${this.context.sessionConfig.seed}, entities_before=${previousEntityCount})`
             );
             if (this.isInitialized) {
                 this.scenarioReplicationHost.detach();
                 this.unloadActiveScenario();
-                this.activeScenario = this.instantiateScenario(this.activeScenarioPlugin);
-                this.activeScenarioContext = this.createScenarioContext();
-                this.refreshActiveObjectModules();
+                await this.ensureScenarioReady(this.activeScenarioPlugin, { forceReload: true });
                 this.loadActiveScenario({
                     isHost: this.context.isHost,
                     seed: this.context.sessionConfig.seed,
                     reason: 'reload'
                 });
-                this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
+                this.requireActiveScenario().applyConfig?.(this.requireActiveScenarioContext(), this.context.sessionConfig.scenarioConfig || {});
                 this.attachScenarioReplicationIfNeeded();
             }
+            const reloadedScenario = this.requireActiveScenario();
             console.info(
                 `[ScenarioManager] Scenario reload completed` +
-                ` (active=${this.activeScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
+                ` (active=${reloadedScenario.id}, entities_after=${this.context.runtime.entity.entities.size})`
             );
             this.emitSessionConfigApplied();
             onApplied?.();
             return true;
         }
 
-        this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
+        this.requireActiveScenario().applyConfig?.(this.requireActiveScenarioContext(), this.context.sessionConfig.scenarioConfig || {});
         this.emitSessionConfigApplied();
         onApplied?.();
         return true;
     }
 
     public getSpawnPoint(index: number): { position: THREE.Vector3, yaw: number } {
-        const spawn = this.activeScenario.getSpawnPoint(index);
+        const spawn = this.requireActiveScenario().getSpawnPoint(index);
 
         return {
             position: new THREE.Vector3(spawn.position.x, spawn.position.y, spawn.position.z),
@@ -219,11 +217,11 @@ export class ScenarioManager implements IUpdatable {
     }
 
     public getActiveScenario(): IScenarioModule {
-        return this.activeScenario;
+        return this.requireActiveScenario();
     }
 
     public getActiveScenarioContext(): IScenarioContext {
-        return this.activeScenarioContext;
+        return this.requireActiveScenarioContext();
     }
 
     public getObjectModuleDefinition(moduleId: string) {
@@ -242,9 +240,10 @@ export class ScenarioManager implements IUpdatable {
             }
         }
         if (!instance) {
+            const activeScenarioId = this.activeScenario?.id ?? this.activeScenarioPlugin.id;
             console.warn(
                 `[ScenarioManager] Failed to spawn object module: ${id}`,
-                { availableModules: this.objectModuleRegistry.listIds(), activeScenario: this.activeScenario.id }
+                { availableModules: this.objectModuleRegistry.listIds(), activeScenario: activeScenarioId }
             );
             return null;
         }
@@ -285,11 +284,11 @@ export class ScenarioManager implements IUpdatable {
         return this.scenarioRegistry.listIds();
     }
 
-    public switchScenario(
+    public async switchScenario(
         id: string,
         options: Partial<IScenarioLoadOptions> = {},
         onSwitched?: () => void
-    ): boolean {
+    ): Promise<boolean> {
         const nextPlugin = this.scenarioRegistry.get(id);
         if (!nextPlugin) {
             console.warn(`[ScenarioManager] Cannot switch to unknown scenario: ${id}`);
@@ -306,16 +305,20 @@ export class ScenarioManager implements IUpdatable {
         if (this.isInitialized) {
             const transition = this.context.runtime.worldTransition;
             if (transition) {
-                transition.transitionScenario(() => {
-                    this.completeScenarioSwitch(nextPlugin, options);
-                    onSwitched?.();
+                await new Promise<void>((resolve, reject) => {
+                    transition.transitionScenario(() => {
+                        void this.completeScenarioSwitch(nextPlugin, options).then(() => {
+                            onSwitched?.();
+                            resolve();
+                        }).catch(reject);
+                    });
                 });
             } else {
-                this.completeScenarioSwitch(nextPlugin, options);
+                await this.completeScenarioSwitch(nextPlugin, options);
                 onSwitched?.();
             }
         } else {
-            this.completeScenarioSwitch(nextPlugin, options);
+            await this.completeScenarioSwitch(nextPlugin, options);
             onSwitched?.();
         }
 
@@ -352,7 +355,7 @@ export class ScenarioManager implements IUpdatable {
     }
 
     private refreshActiveObjectModules(): void {
-        this.objectModuleRegistry.replaceAll(this.activeScenario.getObjectModules?.() || []);
+        this.objectModuleRegistry.replaceAll(this.activeScenario?.getObjectModules?.() || []);
         for (const [moduleId, module] of this.knownObjectModules.entries()) {
             if (!this.objectModuleRegistry.get(moduleId)) {
                 this.objectModuleRegistry.register(module);
@@ -377,7 +380,7 @@ export class ScenarioManager implements IUpdatable {
     }
 
     private indexScenarioObjectModules(plugin: IScenarioPlugin): void {
-        const modules = plugin.objectModules ?? this.instantiateScenario(plugin).getObjectModules?.() ?? [];
+        const modules = plugin.objectModules ?? [];
         for (const module of modules) {
             this.knownObjectModules.set(module.id, module);
         }
@@ -389,7 +392,7 @@ export class ScenarioManager implements IUpdatable {
             primaryEntityId: instance.getPrimaryEntity?.()?.id ?? null,
             ownedEntityIds: instance.getOwnedEntityIds?.() ?? []
         }));
-        const scenarioModuleIds = new Set((this.activeScenario.getObjectModules?.() ?? []).map((module) => module.id));
+        const scenarioModuleIds = new Set((this.activeScenario?.getObjectModules?.() ?? []).map((module) => module.id));
 
         this.context.runtime.skills.drawing?.clear?.();
         this.objectInstanceRegistry.removeAll();
@@ -397,15 +400,15 @@ export class ScenarioManager implements IUpdatable {
         this.assertScenarioTeardownClean(removedInstances, scenarioModuleIds);
     }
 
-    private completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): void {
+    private async completeScenarioSwitch(nextPlugin: IScenarioPlugin, options: Partial<IScenarioLoadOptions>): Promise<void> {
         this.scenarioReplicationHost.detach();
         this.unloadActiveScenario();
+        this.activeScenario = null;
+        this.activeScenarioContext = null;
         this.activeScenarioPlugin = nextPlugin;
-        this.activeScenario = this.instantiateScenario(nextPlugin);
-        this.activeScenarioContext = this.createScenarioContext();
         this.context.sessionConfig = { ...this.context.sessionConfig, activeScenarioId: nextPlugin.id };
         this._seed = options.seed ?? this.context.sessionConfig.seed;
-        this.refreshActiveObjectModules();
+        await this.ensureScenarioReady(nextPlugin, { forceReload: true });
 
         if (this.isInitialized) {
             this.loadActiveScenario({
@@ -413,15 +416,11 @@ export class ScenarioManager implements IUpdatable {
                 seed: options.seed ?? this.context.sessionConfig.seed,
                 reason: options.reason ?? 'scenario_switch'
             });
-            this.activeScenario.applyConfig?.(this.activeScenarioContext, this.context.sessionConfig.scenarioConfig || {});
+            this.requireActiveScenario().applyConfig?.(this.requireActiveScenarioContext(), this.context.sessionConfig.scenarioConfig || {});
             this.attachScenarioReplicationIfNeeded();
         }
 
         this.repositionLocalPlayerForActiveScenario();
-    }
-
-    private instantiateScenario(plugin: IScenarioPlugin): IScenarioModule {
-        return plugin.create();
     }
 
     private createScenarioContext(): ScenarioRuntimeContext {
@@ -429,15 +428,20 @@ export class ScenarioManager implements IUpdatable {
     }
 
     private loadActiveScenario(options: IScenarioLoadOptions): void {
-        this.activeScenario.loadWorld(this.activeScenarioContext, options);
+        const activeScenario = this.requireActiveScenario();
+        const activeScenarioContext = this.requireActiveScenarioContext();
+        activeScenario.loadWorld(activeScenarioContext, options);
         this.activeScenarioVisualsLoaded = false;
-        if (this.activeScenarioContext.scene.isRenderingAvailable()) {
-            this.activeScenario.loadVisuals?.(this.activeScenarioContext, options);
+        if (activeScenarioContext.scene.isRenderingAvailable()) {
+            activeScenario.loadVisuals?.(activeScenarioContext, options);
             this.activeScenarioVisualsLoaded = true;
         }
     }
 
     private unloadActiveScenario(): void {
+        if (!this.activeScenario || !this.activeScenarioContext) {
+            return;
+        }
         if (this.activeScenarioVisualsLoaded) {
             this.activeScenario.unloadVisuals?.(this.activeScenarioContext);
             this.activeScenarioVisualsLoaded = false;
@@ -448,7 +452,7 @@ export class ScenarioManager implements IUpdatable {
     }
 
     private attachScenarioReplicationIfNeeded(): void {
-        if (isReplicatedScenarioModule(this.activeScenario)) {
+        if (this.activeScenario && isReplicatedScenarioModule(this.activeScenario)) {
             this.scenarioReplicationHost.attach(this.activeScenario);
             return;
         }
@@ -474,7 +478,7 @@ export class ScenarioManager implements IUpdatable {
 
     private repositionLocalPlayerForActiveScenario(): void {
         const localPlayer = this.context.localPlayer;
-        if (!localPlayer || !localPlayer.teleportTo) return;
+        if (!localPlayer || !localPlayer.teleportTo || !this.activeScenario) return;
 
         const spawnIndex = this.context.isHost ? 0 : (this.assignedSpawnIndex ?? 0);
         const spawn = this.getSpawnPoint(spawnIndex);
@@ -518,7 +522,7 @@ export class ScenarioManager implements IUpdatable {
 
         const message =
             `[ScenarioManager] Scenario teardown left runtime-owned state behind ` +
-            `(scenario=${this.activeScenario.id}, instances=${lingeringInstances.map((instance) => instance.id).join(',') || 'none'}, ` +
+            `(scenario=${this.activeScenario?.id || this.activeScenarioPlugin.id}, instances=${lingeringInstances.map((instance) => instance.id).join(',') || 'none'}, ` +
             `entities=${lingeringEntities.map((entity) => entity.id).join(',') || 'none'})`;
 
         throw new Error(message);
@@ -547,6 +551,52 @@ export class ScenarioManager implements IUpdatable {
 
         nextConfig.scenarioEpoch = currentConfig.scenarioEpoch;
         return nextConfig;
+    }
+
+    private async ensureScenarioReady(
+        plugin: IScenarioPlugin,
+        options: { forceReload?: boolean } = {}
+    ): Promise<void> {
+        if (!options.forceReload && this.activeScenario && this.activeScenarioPlugin.id === plugin.id) {
+            return;
+        }
+
+        if (this.scenarioLoadPromise) {
+            await this.scenarioLoadPromise;
+            if (!options.forceReload && this.activeScenario && this.activeScenarioPlugin.id === plugin.id) {
+                return;
+            }
+        }
+
+        this.scenarioLoadPromise = (async () => {
+            const scenario = await plugin.create();
+            this.activeScenario = scenario;
+            this.activeScenarioContext = this.createScenarioContext();
+            for (const module of scenario.getObjectModules?.() ?? []) {
+                this.knownObjectModules.set(module.id, module);
+            }
+            this.refreshActiveObjectModules();
+        })();
+
+        try {
+            await this.scenarioLoadPromise;
+        } finally {
+            this.scenarioLoadPromise = null;
+        }
+    }
+
+    private requireActiveScenario(): IScenarioModule {
+        if (!this.activeScenario) {
+            throw new Error('[ScenarioManager] Active scenario is not loaded yet.');
+        }
+        return this.activeScenario;
+    }
+
+    private requireActiveScenarioContext(): ScenarioRuntimeContext {
+        if (!this.activeScenarioContext) {
+            throw new Error('[ScenarioManager] Active scenario context is not ready yet.');
+        }
+        return this.activeScenarioContext;
     }
 }
 

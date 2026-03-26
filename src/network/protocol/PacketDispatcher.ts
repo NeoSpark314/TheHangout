@@ -37,7 +37,12 @@ export class NetworkDispatcher<TPacketMap extends PacketMapBase = PacketMapBase>
                     (typeof envelope.senderId === 'string' && envelope.senderId.length > 0)
                         ? envelope.senderId
                         : senderId;
-                handler.handle(effectiveSenderId, envelope.payload);
+                const result = handler.handle(effectiveSenderId, envelope.payload);
+                if (result && typeof (result as PromiseLike<void>).then === 'function') {
+                    void (result as Promise<void>).catch((error) => {
+                        console.error('[NetworkDispatcher] Async handler failed:', error);
+                    });
+                }
             }
         } catch (e) {
             console.error('[NetworkDispatcher] Failed to dispatch packet:', e);

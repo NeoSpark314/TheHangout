@@ -307,7 +307,7 @@ class HeadlessPeerSession {
     public async initialize(): Promise<void> {
         if (this.initialized) return;
         await this.physics.init();
-        this.session.init(this.context.runtime.render.scene);
+        await this.session.init(this.context.runtime.render.scene);
         if (this.kind === 'host') {
             this.initializeLocalPlayer();
         }

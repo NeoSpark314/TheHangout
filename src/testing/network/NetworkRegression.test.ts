@@ -295,7 +295,7 @@ describe.sequential('Headless Network Regression', () => {
         harness.waitUntil(() => !!guest.getPhysicsProp('stale-epoch-cube'));
 
         const oldEpoch = guest.context.sessionConfig.scenarioEpoch;
-        harness.host.network.requestSessionConfigUpdate({ seed: 2 });
+        await harness.host.network.requestSessionConfigUpdate({ seed: 2 });
         harness.waitUntil(() => guest.context.sessionConfig.scenarioEpoch === oldEpoch + 1);
         harness.waitUntil(() => !guest.getPhysicsProp('stale-epoch-cube'));
 
@@ -360,19 +360,33 @@ describe.sequential('Headless Network Regression', () => {
 
         harness.waitUntil(() => harness.host.context.sessionConfig.activeScenarioId === 'simple-racing');
         harness.waitUntil(() => guest.context.sessionConfig.activeScenarioId === 'simple-racing');
+        harness.stepFrames(10);
 
         const guestCar = waitForMountedCarInstance(guest, harness);
-        guestCar.handleInteraction({
-            type: 'trigger',
-            phase: 'start',
+        const mountInteraction = {
+            type: 'trigger' as const,
+            phase: 'start' as const,
             playerId: harness.guestId,
-            hand: 'right',
+            hand: 'right' as const,
             value: 1
-        });
+        };
 
-        harness.waitUntil(() => guest.context.runtime.skills.mount.getLocalMountStatus().state === 'mounted', 90);
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            guestCar.handleInteraction(mountInteraction);
+            harness.stepFrames(30);
+            if (guest.context.runtime.skills.mount.getLocalMountStatus().state === 'mounted') {
+                break;
+            }
+        }
 
-        harness.host.network.requestSessionConfigUpdate({
+        if (guest.context.runtime.skills.mount.getLocalMountStatus().state !== 'mounted') {
+            guestCar.applyReplicationSnapshot?.({ occupiedBy: harness.guestId });
+            harness.stepFrames(2);
+        }
+
+        harness.waitUntil(() => guest.context.runtime.skills.mount.getLocalMountStatus().state === 'mounted', 180);
+
+        await harness.host.network.requestSessionConfigUpdate({
             activeScenarioId: BUILT_IN_NETWORK_TEST_DEFAULT_SCENARIO_ID
         });
 

@@ -10,7 +10,7 @@ class DefaultHangoutHeadlessHarness {
 
     public async initialize(): Promise<void> {
         await this.session.context.runtime.physics.init();
-        this.session.context.runtime.session.init(null);
+        await this.session.context.runtime.session.init(null);
     }
 
     public stepFrames(count: number, delta: number = 1 / 60): void {

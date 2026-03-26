@@ -165,10 +165,10 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
         });
     }
 
-    public requestSessionConfigUpdate(payload: PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]): void {
+    public async requestSessionConfigUpdate(payload: PacketPayloadMap[typeof PACKET_TYPES.SESSION_CONFIG_UPDATE]): Promise<void> {
         // Reuse the shared host-side config transition path so admin-triggered
         // scenario changes behave exactly like any other authoritative update.
-        this.authoritativeHost.applySessionConfigUpdate(payload);
+        await this.authoritativeHost.applySessionConfigUpdate(payload);
     }
 
     private nowMs(): number {

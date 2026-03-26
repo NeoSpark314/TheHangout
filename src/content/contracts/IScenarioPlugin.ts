@@ -17,5 +17,5 @@ export interface IScenarioPlugin {
     maxPlayers?: number;
     capabilities?: IScenarioPluginCapabilities;
     objectModules?: ReadonlyArray<IObjectModule>;
-    create(): IScenarioModule;
+    create(): IScenarioModule | Promise<IScenarioModule>;
 }

@@ -87,31 +87,35 @@ function createPlugin(options: { exposeMetadata: boolean }) {
 }
 
 describe('ScenarioManager object module indexing', () => {
-    it('uses plugin metadata for object-module lookup without extra scenario construction', () => {
+    it('uses plugin metadata for object-module lookup without scenario construction', () => {
         const app = new AppContext();
         const { plugin, getCreateCalls } = createPlugin({ exposeMetadata: true });
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
 
-        expect(getCreateCalls()).toBe(1);
+        expect(getCreateCalls()).toBe(0);
         expect(session.getObjectModuleDefinition('test-object-module')).toBeTruthy();
-        expect(getCreateCalls()).toBe(1);
+        expect(getCreateCalls()).toBe(0);
     });
 
-    it('falls back to a one-time scenario instantiation when plugin metadata is absent', () => {
+    it('learns object modules after the lazy scenario is initialized', async () => {
         const app = new AppContext();
         const { plugin, getCreateCalls } = createPlugin({ exposeMetadata: false });
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
 
-        expect(getCreateCalls()).toBe(2);
+        expect(getCreateCalls()).toBe(0);
+        expect(session.getObjectModuleDefinition('test-object-module')).toBeUndefined();
+
+        await session.init(null);
+
+        expect(getCreateCalls()).toBe(1);
         expect(session.getObjectModuleDefinition('test-object-module')).toBeTruthy();
-        expect(getCreateCalls()).toBe(2);
     });
 });
 
 describe('ScenarioManager lifecycle split', () => {
-    it('loads world and visuals when rendering is available', () => {
+    it('loads world and visuals when rendering is available', async () => {
         const app = new AppContext();
         app.setRuntime('render', { scene: new THREE.Scene() } as any);
         const calls: string[] = [];
@@ -124,12 +128,12 @@ describe('ScenarioManager lifecycle split', () => {
         };
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
-        session.init(new THREE.Scene());
+        await session.init(new THREE.Scene());
 
         expect(calls).toEqual(['loadWorld', 'loadVisuals']);
     });
 
-    it('loads only world when rendering is unavailable', () => {
+    it('loads only world when rendering is unavailable', async () => {
         const app = new AppContext();
         const calls: string[] = [];
         const plugin: IScenarioPlugin = {
@@ -141,12 +145,12 @@ describe('ScenarioManager lifecycle split', () => {
         };
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
-        session.init(null);
+        await session.init(null);
 
         expect(calls).toEqual(['loadWorld']);
     });
 
-    it('unloads visuals before world during reload', () => {
+    it('unloads visuals before world during reload', async () => {
         const app = new AppContext();
         app.setRuntime('render', { scene: new THREE.Scene() } as any);
         app.setRuntime('entity', { entities: new Map() } as any);
@@ -162,15 +166,15 @@ describe('ScenarioManager lifecycle split', () => {
         };
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
-        session.init(new THREE.Scene());
+        await session.init(new THREE.Scene());
         calls.length = 0;
 
-        session.applySessionConfigUpdate({ seed: 2 });
+        await session.applySessionConfigUpdate({ seed: 2 });
 
         expect(calls).toEqual(['unloadVisuals', 'unloadWorld', 'loadWorld', 'loadVisuals']);
     });
 
-    it('increments scenario epoch on reload when no epoch is supplied', () => {
+    it('increments scenario epoch on reload when no epoch is supplied', async () => {
         const app = new AppContext();
         app.setRuntime('render', { scene: new THREE.Scene() } as any);
         app.setRuntime('entity', { entities: new Map() } as any);
@@ -186,14 +190,14 @@ describe('ScenarioManager lifecycle split', () => {
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
         const initialEpoch = app.sessionConfig.scenarioEpoch;
-        session.init(new THREE.Scene());
+        await session.init(new THREE.Scene());
 
-        session.applySessionConfigUpdate({ seed: 2 });
+        await session.applySessionConfigUpdate({ seed: 2 });
 
         expect(app.sessionConfig.scenarioEpoch).toBe(initialEpoch + 1);
     });
 
-    it('applies an incoming scenario epoch during scenario switch', () => {
+    it('applies an incoming scenario epoch during scenario switch', async () => {
         const app = new AppContext();
         app.setRuntime('render', { scene: new THREE.Scene() } as any);
         app.setRuntime('entity', { entities: new Map() } as any);
@@ -215,9 +219,9 @@ describe('ScenarioManager lifecycle split', () => {
         };
 
         const session = new ScenarioManager(app, [firstPlugin, secondPlugin], firstPlugin.id);
-        session.init(new THREE.Scene());
+        await session.init(new THREE.Scene());
 
-        session.applySessionConfigUpdate({
+        await session.applySessionConfigUpdate({
             activeScenarioId: secondPlugin.id,
             scenarioEpoch: 9
         });
@@ -226,7 +230,7 @@ describe('ScenarioManager lifecycle split', () => {
         expect(app.sessionConfig.scenarioEpoch).toBe(9);
     });
 
-    it('throws when scenario teardown leaves behind scenario-owned entities', () => {
+    it('throws when scenario teardown leaves behind scenario-owned entities', async () => {
         const app = new AppContext();
         app.setRuntime('render', { scene: new THREE.Scene() } as any);
         app.setRuntime('entity', {
@@ -252,12 +256,12 @@ describe('ScenarioManager lifecycle split', () => {
         };
 
         const session = new ScenarioManager(app, [plugin], plugin.id);
-        session.init(new THREE.Scene());
+        await session.init(new THREE.Scene());
 
-        expect(() => session.applySessionConfigUpdate({ seed: 2 })).toThrow(/Scenario teardown left runtime-owned state behind/);
+        await expect(session.applySessionConfigUpdate({ seed: 2 })).rejects.toThrow(/Scenario teardown left runtime-owned state behind/);
     });
 
-    it('closes open menu UI before switching scenarios', () => {
+    it('closes open menu UI before switching scenarios', async () => {
         const app = new AppContext();
         app.isMenuOpen = true;
         const closeMenu = vi.fn(() => {
@@ -284,7 +288,7 @@ describe('ScenarioManager lifecycle split', () => {
 
         const session = new ScenarioManager(app, [firstPlugin, secondPlugin], firstPlugin.id);
 
-        session.switchScenario(secondPlugin.id);
+        await session.switchScenario(secondPlugin.id);
 
         expect(closeMenu).toHaveBeenCalledTimes(1);
         expect(app.isMenuOpen).toBe(false);

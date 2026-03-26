@@ -116,11 +116,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         });
 
         this.registerRoleAwareHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, {
-            host: (_senderId, payload) => {
-                this.authoritativeHost.applySessionConfigUpdate(payload);
+            host: async (_senderId, payload) => {
+                await this.authoritativeHost.applySessionConfigUpdate(payload);
             },
-            guest: (_senderId, payload) => {
-                this.context.runtime.session.applySessionConfigUpdate(payload);
+            guest: async (_senderId, payload) => {
+                await this.context.runtime.session.applySessionConfigUpdate(payload);
                 const network = this.context.runtime.network as any;
                 const localId = this.context.isLocalServer ? network.localPeerId : this.context.runtime.network.peer?.id;
                 if (localId) {
@@ -256,11 +256,11 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
 
     private registerHandler<K extends keyof PacketPayloadMap & number>(
         type: K,
-        handle: (senderId: string, payload: PacketPayloadMap[K]) => void
+        handle: (senderId: string, payload: PacketPayloadMap[K]) => void | Promise<void>
     ): void {
         this.dispatcher.registerHandler(type, {
             handle: (senderId, payload) => {
-                handle(senderId, payload as PacketPayloadMap[K]);
+                return handle(senderId, payload as PacketPayloadMap[K]);
             }
         });
     }
@@ -268,17 +268,17 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
     private registerRoleAwareHandler<K extends keyof PacketPayloadMap & number>(
         type: K,
         handlers: {
-            host?: (senderId: string, payload: PacketPayloadMap[K]) => void;
-            guest?: (senderId: string, payload: PacketPayloadMap[K]) => void;
+            host?: (senderId: string, payload: PacketPayloadMap[K]) => void | Promise<void>;
+            guest?: (senderId: string, payload: PacketPayloadMap[K]) => void | Promise<void>;
         }
     ): void {
-        this.registerHandler(type, (senderId, payload) => {
+        this.registerHandler(type, async (senderId, payload) => {
             if (this.context.isHost) {
-                handlers.host?.(senderId, payload);
+                await handlers.host?.(senderId, payload);
                 return;
             }
 
-            handlers.guest?.(senderId, payload);
+            await handlers.guest?.(senderId, payload);
         });
     }
 
@@ -484,9 +484,9 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         };
     }
 
-    public requestSessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+    public async requestSessionConfigUpdate(payload: ISessionConfigUpdatePayload): Promise<void> {
         if (this.context.isHost) {
-            this.applySessionConfigUpdate(payload);
+            await this.applySessionConfigUpdate(payload);
             return;
         }
 
@@ -525,13 +525,13 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.sendData(sessionId, PACKET_TYPES.SCENARIO_ACTION_REQUEST, request);
     }
 
-    public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+    public async applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): Promise<void> {
         if (this.context.isHost) {
-            this.authoritativeHost.applySessionConfigUpdate(payload);
+            await this.authoritativeHost.applySessionConfigUpdate(payload);
             return;
         }
 
-        this.context.runtime.session.applySessionConfigUpdate(payload);
+        await this.context.runtime.session.applySessionConfigUpdate(payload);
         this.broadcast(PACKET_TYPES.SESSION_CONFIG_UPDATE, { ...this.context.sessionConfig });
     }
 

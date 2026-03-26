@@ -305,7 +305,7 @@ export class Engine {
             await runtime.physics.init();
 
             if (runtime.render && runtime.session) {
-                runtime.session.init(runtime.render.scene);
+                await runtime.session.init(runtime.render.scene);
             }
 
             runtime.vrUi?.init();

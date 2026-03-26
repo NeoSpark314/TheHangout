@@ -80,8 +80,8 @@ export class AuthoritativeSessionHost {
         });
 
         dispatcher.registerHandler(PACKET_TYPES.SESSION_CONFIG_UPDATE, {
-            handle: (_senderId: string, payload: ISessionConfigUpdatePayload) => {
-                this.applySessionConfigUpdate(payload);
+            handle: async (_senderId: string, payload: ISessionConfigUpdatePayload) => {
+                await this.applySessionConfigUpdate(payload);
             }
         });
 
@@ -147,7 +147,7 @@ export class AuthoritativeSessionHost {
         });
     }
 
-    public applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): void {
+    public async applySessionConfigUpdate(payload: ISessionConfigUpdatePayload): Promise<void> {
         let broadcastDone = false;
         const broadcastAfterApply = () => {
             if (broadcastDone) return;
@@ -172,7 +172,7 @@ export class AuthoritativeSessionHost {
             });
         }
 
-        const applied = this.context.runtime.session.applySessionConfigUpdate(payload, () => {
+        const applied = await this.context.runtime.session.applySessionConfigUpdate(payload, () => {
             broadcastAfterApply();
         });
         if (!applied) {
