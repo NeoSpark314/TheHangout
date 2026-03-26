@@ -260,10 +260,10 @@ describe('ScenarioManager lifecycle split', () => {
     it('closes open menu UI before switching scenarios', () => {
         const app = new AppContext();
         app.isMenuOpen = true;
-        const closeFlatMenu = vi.fn();
-        const closeMenu = vi.fn();
-        app.setRuntime('ui', { closeMenu: closeFlatMenu } as any);
-        app.setRuntime('vrUi', { closeMenu } as any);
+        const closeMenu = vi.fn(() => {
+            app.isMenuOpen = false;
+        });
+        app.setRuntime('menu', { close: closeMenu } as any);
         app.setRuntime('entity', { entities: new Map() } as any);
         app.setRuntime('skills', { drawing: { clear: () => {} }, mount: {}, interaction: {} } as any);
         app.setRuntime('physics', { flushPendingRemovals: () => {} } as any);
@@ -286,7 +286,6 @@ describe('ScenarioManager lifecycle split', () => {
 
         session.switchScenario(secondPlugin.id);
 
-        expect(closeFlatMenu).toHaveBeenCalledTimes(1);
         expect(closeMenu).toHaveBeenCalledTimes(1);
         expect(app.isMenuOpen).toBe(false);
     });

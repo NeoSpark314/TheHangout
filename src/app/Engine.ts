@@ -1,6 +1,7 @@
 import { AppContext } from './AppContext';
 import { SimulationLoop } from './SimulationLoop';
 import { FlatUiRuntime } from '../ui/flat/FlatUiRuntime';
+import { MenuRuntime } from '../ui/MenuRuntime';
 import { NetworkRuntime } from '../network/transport/NetworkRuntime';
 import { PhysicsRuntime } from '../physics/runtime/PhysicsRuntime';
 import { PhysicsAuthorityRuntime } from '../physics/runtime/PhysicsAuthorityRuntime';
@@ -115,7 +116,7 @@ export class Engine {
         this.context.setRuntime('entity', new EntityRegistry(this.context));
         this.context.setRuntime('replication', new FeatureReplicationService(this.context));
         this.context.setRuntime('remoteDesktop', new RemoteDesktopFeature(this.context));
-        this.context.setRuntime('ui', new FlatUiRuntime(this.context));
+        this.context.setRuntime('flatUi', new FlatUiRuntime(this.context));
         this.context.setRuntime('network', new NetworkRuntime(this.context));
         this.context.setRuntime('media', new VoiceRuntime(this.context));
         this.context.setRuntime('render', new RenderRuntime(this.context));
@@ -139,6 +140,7 @@ export class Engine {
             interaction: new InteractionSkill(this.context)
         });
         this.context.setRuntime('vrUi', new VrUiRuntime(this.context));
+        this.context.setRuntime('menu', new MenuRuntime(this.context));
         this.context.setRuntime('debugRender', new DebugRenderRuntime(this.context));
         this.context.setRuntime('particles', new ParticleEffectSystem(this.context.runtime.render.scene));
         this.context.setRuntime('social', new SocialFeature(this.context, this.context.runtime.particles));
@@ -215,7 +217,7 @@ export class Engine {
         this.addGameplaySystem(runtime.particles);
         this.addGameplaySystem(runtime.worldTransition);
         this.addGameplaySystem(runtime.remoteDesktop);
-        this.addAlwaysSystem(runtime.ui);
+        this.addAlwaysSystem(runtime.flatUi);
         this.addAlwaysSystem(runtime.hud);
         this.addGameplaySystem(runtime.vrUi);
         this.addGameplaySystem(runtime.debugRender);

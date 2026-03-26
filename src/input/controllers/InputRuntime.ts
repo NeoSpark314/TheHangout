@@ -256,7 +256,7 @@ export class InputRuntime implements IUpdatable {
             }
         }
 
-        runtime.ui?.handleControllerCursor(
+        runtime.flatUi?.handleControllerCursor(
             delta,
             this.gamepad.move,
             this.gamepad.wasPressed(0),

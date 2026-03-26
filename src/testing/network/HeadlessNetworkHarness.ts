@@ -69,7 +69,10 @@ function ensureCanvasContextMock(): void {
     if (canvasContextInstalled || typeof HTMLCanvasElement === 'undefined') return;
 
     const context = new Proxy({
-        measureText: () => ({ width: 0 })
+        measureText: () => ({ width: 0 }),
+        createLinearGradient: () => ({
+            addColorStop: () => { }
+        })
     } as Record<string, unknown>, {
         get(target, prop: string | symbol) {
             if (prop in target) return target[prop as keyof typeof target];

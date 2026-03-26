@@ -223,7 +223,7 @@ export class FlatUiRuntime implements IUpdatable {
         if (this.mobileMenuBtn) {
             this.mobileMenuBtn.addEventListener('click', () => {
                 if (this.mobileHudEnabled) {
-                    this.context.runtime.vrUi?.toggle2DMenu();
+                    this.context.runtime.menu?.toggle();
                 }
             });
         }
@@ -880,6 +880,10 @@ export class FlatUiRuntime implements IUpdatable {
         }
     }
 
+    public openMenu(): void {
+        this.showOverlay();
+    }
+
     private ensureAudioContextResumed(): void {
         if (this.context.runtime.render && this.context.runtime.render.audioListener) {
             if (this.context.runtime.render.audioListener.context.state === 'suspended') {
@@ -1076,6 +1080,10 @@ export class FlatUiRuntime implements IUpdatable {
         }
 
         this.showOverlay();
+    }
+
+    public toggleMenu(): void {
+        this.toggleOverlay();
     }
 
     private hideElement(element: HTMLElement): void {

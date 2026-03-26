@@ -649,10 +649,10 @@ export class VrUiRuntime implements IUpdatable {
         }
 
         this.menuIntentHandler = () => {
-            this.toggle2DMenu();
+            this.context.runtime.menu?.toggle();
         };
         this.menuOpenRecenterIntentHandler = () => {
-            this.openMenuWithRecenter();
+            this.context.runtime.menu?.open({ recenter: true });
         };
 
         eventBus.on(EVENTS.INTENT_MENU_TOGGLE, this.menuIntentHandler);
@@ -680,24 +680,7 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     public toggle2DMenu(): void {
-        const isVR = !!this.context.runtime.render?.isXRPresenting();
-        this.context.isMenuOpen = !this.context.isMenuOpen;
-
-        if (isVR) {
-            if (this.context.isMenuOpen && !this.hasInitialVrMenuRecentered) {
-                this.tablet?.recenterInFrontOfView();
-                this.tablet?.update(0);
-                this.hasInitialVrMenuRecentered = true;
-            }
-            this.tablet?.setVisible(this.context.isMenuOpen);
-            return;
-        }
-
-        if (this.context.isMenuOpen) {
-            this.show2DMenu();
-        } else {
-            this.hide2DMenu();
-        }
+        this.toggleMenu();
     }
 
     public closeMenu(): void {
@@ -707,6 +690,10 @@ export class VrUiRuntime implements IUpdatable {
         this.tablet?.setVisible(false);
         this.hide2DMenu();
         this.tablet?.ui.markDirty();
+    }
+
+    public isReady(): boolean {
+        return !!this.tablet;
     }
 
     private show2DMenu(): void {
@@ -802,18 +789,35 @@ export class VrUiRuntime implements IUpdatable {
     }
 
     public openMenuWithRecenter(): void {
+        this.openMenu({ recenter: true });
+    }
+
+    public openMenu(options: { recenter?: boolean } = {}): void {
         const isVR = !!this.context.runtime.render?.isXRPresenting();
         this.context.isMenuOpen = true;
 
         if (isVR) {
-            this.tablet?.recenterInFrontOfView();
-            this.tablet?.update(0);
+            const shouldRecenter = options.recenter || !this.hasInitialVrMenuRecentered;
+            if (shouldRecenter) {
+                this.tablet?.recenterInFrontOfView();
+                this.tablet?.update(0);
+                this.hasInitialVrMenuRecentered = true;
+            }
             this.tablet?.setVisible(true);
-            this.hasInitialVrMenuRecentered = true;
+            this.tablet?.ui.markDirty();
             return;
         }
 
         this.show2DMenu();
+    }
+
+    public toggleMenu(): void {
+        if (this.context.isMenuOpen) {
+            this.closeMenu();
+            return;
+        }
+
+        this.openMenu();
     }
 
     public handleControllerCursor(

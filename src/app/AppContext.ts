@@ -28,6 +28,7 @@ import type { ReplicationDebugRuntime } from '../network/replication/Replication
 import type { NotificationRuntime } from './notifications/NotificationRuntime';
 import type { ScenarioActionRuntime } from '../content/runtime/ScenarioActionRuntime';
 import type { WorldTransitionRuntime } from '../render/effects/WorldTransitionRuntime';
+import type { MenuRuntime } from '../ui/MenuRuntime';
 import { AvatarRenderMode, DEFAULT_AVATAR_COLOR, IAvatarConfig } from '../shared/contracts/IAvatar';
 
 export interface IScenarioConfig {
@@ -49,7 +50,7 @@ export type AvatarPoseOverride = 'none' | 'vrm-tpose';
 
 export interface IEngineRuntime {
     entity: EntityRegistry;
-    ui: FlatUiRuntime;
+    flatUi: FlatUiRuntime;
     network: NetworkRuntime;
     media: VoiceRuntime;
     render: RenderRuntime;
@@ -78,6 +79,7 @@ export interface ISkillsRuntime {
 export interface IGameSessionRuntime {
     player: PlayerPresenceService;
     session: ScenarioManager;
+    menu: MenuRuntime;
     skills: ISkillsRuntime;
     vrUi: VrUiRuntime;
     social: SocialFeature;

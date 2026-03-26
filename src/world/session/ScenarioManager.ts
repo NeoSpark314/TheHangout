@@ -488,9 +488,7 @@ export class ScenarioManager implements IUpdatable {
     private closeMenuUiForScenarioTransition(): void {
         if (!this.context.isMenuOpen) return;
 
-        this.context.runtime.vrUi?.closeMenu?.();
-        this.context.runtime.ui?.closeMenu?.();
-        this.context.isMenuOpen = false;
+        this.context.runtime.menu?.close();
     }
 
     private assertScenarioTeardownClean(
