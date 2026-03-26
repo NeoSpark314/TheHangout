@@ -328,9 +328,14 @@ describe('InputRuntime', () => {
     it('clears latched XR bubble interaction when it is no longer eligible', async () => {
         const context = createContext();
         const { GrabSkill } = await import('../../skills/GrabSkill');
+        const createGrabSkill = (hand: 'left' | 'right') => {
+            const skill = Object.create((GrabSkill as any).prototype);
+            skill.getSingleInteractableHoldingHand = () => hand;
+            return skill;
+        };
         (context.runtime.render.isXRPresenting as any).mockReturnValue(true);
         context.localPlayer = {
-            getSkill: vi.fn(() => new GrabSkill('right'))
+            getSkill: vi.fn(() => createGrabSkill('right'))
         } as any;
 
         const runtime = new InputRuntime(context);
@@ -338,7 +343,7 @@ describe('InputRuntime', () => {
         expect(runtime.isXRBubbleInteractionLatched('right')).toBe(true);
 
         context.localPlayer = {
-            getSkill: vi.fn(() => new GrabSkill('left'))
+            getSkill: vi.fn(() => createGrabSkill('left'))
         } as any;
 
         runtime.update(0.016);

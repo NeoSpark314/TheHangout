@@ -159,7 +159,7 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
     public broadcastNotification(message: string): void {
         this.broadcast(PACKET_TYPES.SESSION_NOTIFICATION, {
             kind: 'system',
-            message: message,
+            message,
             level: 'info',
             sentAt: this.nowMs()
         });

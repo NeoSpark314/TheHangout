@@ -449,11 +449,6 @@ export class NetworkRuntime implements IUpdatable, INetworkTransport {
         this.synchronizer.syncEntityNow(entityId, forceFullState);
     }
 
-    public broadcastOwnershipTransfer(entityId: string, newOwnerId: string | null): void {
-        if (!this.context.isHost) return;
-        this.authoritativeHost.broadcastOwnershipTransfer(entityId, newOwnerId);
-    }
-
     public getDebugStatus(): {
         role: 'host' | 'guest';
         transport: 'peerjs' | 'relay' | 'disconnected';
