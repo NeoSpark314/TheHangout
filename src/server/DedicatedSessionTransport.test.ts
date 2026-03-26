@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppContext } from '../app/AppContext';
 import { PACKET_TYPES } from '../shared/constants/Constants';
+import { EntityType } from '../shared/contracts/IEntityState';
 import { DedicatedSessionTransport } from './DedicatedSessionTransport';
 
 const hostInstances: any[] = [];
@@ -28,7 +29,8 @@ function createContext(): AppContext {
         recordNetworkReceived: vi.fn()
     } as any);
     context.setRuntime('entity', {
-        removeEntity: vi.fn()
+        removeEntity: vi.fn(),
+        getEntity: vi.fn(() => null)
     } as any);
     return context;
 }
@@ -148,5 +150,40 @@ describe('DedicatedSessionTransport', () => {
         const notificationEnvelope = JSON.parse(lastCall[0]);
         expect(notificationEnvelope.type).toBe(PACKET_TYPES.SESSION_NOTIFICATION);
         expect(notificationEnvelope.payload.message).toBe('Server maintenance');
+    });
+
+    it('syncs a single entity immediately through the dedicated transport API', () => {
+        const transport = new DedicatedSessionTransport();
+        const context = createContext();
+        const ws = createSocket();
+        const getNetworkState = vi.fn(() => ({
+            id: 'prop-a',
+            type: EntityType.PHYSICS_PROP,
+            p: [0, 1, 2],
+            q: [0, 0, 0, 1],
+            v: [0, 0, 0],
+            b: null,
+            ownerId: null
+        }));
+        (context.runtime.entity.getEntity as any).mockReturnValue({
+            id: 'prop-a',
+            type: EntityType.PHYSICS_PROP,
+            isDestroyed: false,
+            getNetworkState
+        });
+
+        transport.setContext(context);
+        transport.addClient('peer-a', ws);
+        transport.syncEntityNow('prop-a', true);
+
+        expect(getNetworkState).toHaveBeenCalledWith(true);
+        const lastCall = ws.send.mock.calls[ws.send.mock.calls.length - 1];
+        const envelope = JSON.parse(lastCall[0]);
+        expect(envelope.type).toBe(PACKET_TYPES.STATE_UPDATE);
+        expect(envelope.payload[0]).toMatchObject({
+            id: 'prop-a',
+            type: EntityType.PHYSICS_PROP,
+            scenarioEpoch: context.sessionConfig.scenarioEpoch
+        });
     });
 });

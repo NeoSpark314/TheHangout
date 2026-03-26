@@ -1,6 +1,7 @@
 import { AppContext } from '../app/AppContext';
 import { IUpdatable } from '../shared/contracts/IUpdatable';
 import { PACKET_TYPES } from '../shared/constants/Constants';
+import { INetworkable } from '../shared/contracts/INetworkable';
 import { NetworkDispatcher } from '../network/protocol/PacketDispatcher';
 import { INetworkTransport } from '../network/replication/StateSynchronizer';
 import { EntityType } from '../shared/contracts/IEntityState';
@@ -135,6 +136,24 @@ export class DedicatedSessionTransport implements IUpdatable, INetworkTransport 
 
         stats.lastMessageAt = Date.now();
         stats.latency = payload;
+    }
+
+    public syncEntityNow(entityId: string, forceFullState: boolean = false): void {
+        const entity = this.context.runtime.entity?.getEntity(entityId);
+        if (!entity || entity.isDestroyed) return;
+
+        const networkable = entity as unknown as INetworkable<unknown>;
+        if (!networkable.getNetworkState) return;
+
+        const state = networkable.getNetworkState(forceFullState);
+        if (!state) return;
+
+        this.broadcast(PACKET_TYPES.STATE_UPDATE, [{
+            id: entity.id,
+            type: entity.type as EntityType,
+            scenarioEpoch: this.context.sessionConfig.scenarioEpoch,
+            state
+        }]);
     }
 
     public getPeerAdminStats(peerId: string): {
